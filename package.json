@@ -1,0 +1,19 @@
+{
+  "name": "autowebgame",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "compile:esm": "node node_modules/typescript/bin/tsc -p tsconfig.runtime.json && node tests/patch-esm-imports.mjs",
+    "test:bot": "npm run compile:esm && node tests/bot-intel-check.mjs",
+    "test:input": "npm run compile:esm && node tests/input-transition-check.mjs",
+    "test:spawn": "npm run compile:esm && node tests/spawn-escape-check.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5"
+  }
+}

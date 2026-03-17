@@ -1,0 +1,12 @@
+node_modules/
+dist/
+output/
+
+.vite.log
+.vite.err
+.vite-live.log
+.vite-live.err
+
+*.log
+*.tmp
+*.bak
