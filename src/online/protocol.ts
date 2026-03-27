@@ -55,11 +55,15 @@ export interface MatchStartConfig {
   roomCode: string;
   role: OnlineRole;
   localPlayerId: PlayerId;
-  remotePlayerId: PlayerId;
+  activePlayerIds: PlayerId[];
   characterSelections: Record<PlayerId, number>;
 }
 
 export interface OnlineGameSnapshot {
+  serverTimeMs: number;
+  serverTick: number;
+  frameId: number;
+  ackedInputSeq: Record<PlayerId, number>;
   mode: Mode;
   breakableTiles: string[];
   powerUps: PowerUpState[];
@@ -80,13 +84,19 @@ export interface OnlineGameSnapshot {
   showDangerOverlay: boolean;
   showBombPreview: boolean;
   selectedCharacterIndex: Record<PlayerId, number>;
+  activePlayerIds: PlayerId[];
 }
 
 export interface OnlineGameFrame {
+  serverTimeMs: number;
+  serverTick: number;
+  frameId: number;
+  ackedInputSeq: Record<PlayerId, number>;
   mode: Mode;
   players: Record<PlayerId, PlayerState>;
   bombs: BombState[];
   flames: FlameState[];
+  nextBombId: number;
   score: MatchScore;
   roundNumber: number;
   roundTimeMs: number;
@@ -98,12 +108,13 @@ export interface OnlineGameFrame {
   suddenDeathTickMs: number;
   suddenDeathIndex: number;
   selectedCharacterIndex: Record<PlayerId, number>;
+  activePlayerIds: PlayerId[];
 }
 
 export interface OnlineSessionBridge {
   role: OnlineRole | null;
   roomCode: string | null;
-  sendGuestInput(input: OnlineInputState): void;
+  sendGuestInput(input: OnlineInputState, inputSeq: number): void;
   sendHostSnapshot(snapshot: OnlineGameSnapshot): void;
 }
 
@@ -163,6 +174,7 @@ export interface ServerQuickMatchStateMessage {
   type: "quick-match-state";
   queued: number;
   searching: boolean;
+  countdownMs: number | null;
 }
 
 export interface ServerChatMessage {
@@ -203,6 +215,7 @@ export interface LeaveLobbyMessage {
 export interface ClaimSeatMessage {
   type: "claim-seat";
   seat: PlayerId;
+  characterIndex?: number;
 }
 
 export interface SetCharacterMessage {
@@ -217,6 +230,8 @@ export interface SetReadyMessage {
 
 export interface GuestInputMessage {
   type: "guest-input";
+  inputSeq: number;
+  sentAtMs: number;
   input: OnlineInputState;
 }
 
@@ -227,6 +242,7 @@ export interface HostSnapshotMessage {
 
 export interface QuickMatchMessage {
   type: "quick-match";
+  characterIndex?: number;
 }
 
 export interface QuickMatchCancelMessage {

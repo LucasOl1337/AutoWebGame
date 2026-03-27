@@ -1,5 +1,6 @@
 import type { CharacterRosterEntry } from "../app/assets";
 import { assetUrl } from "../app/asset-url";
+import { ALL_PLAYER_IDS } from "../core/types";
 import type { PlayerId } from "../core/types";
 import type {
   ChatEntry,
@@ -31,6 +32,11 @@ interface SessionElements {
   createButton: HTMLButtonElement;
   quickMatchButton: HTMLButtonElement;
   quickMatchMeta: HTMLParagraphElement;
+  selectorPortrait: HTMLImageElement;
+  selectorName: HTMLParagraphElement;
+  selectorNote: HTMLParagraphElement;
+  selectorPrev: HTMLButtonElement;
+  selectorNext: HTMLButtonElement;
   stageEyebrow: HTMLParagraphElement;
   stageTitle: HTMLHeadingElement;
   stageDescription: HTMLParagraphElement;
@@ -45,6 +51,8 @@ interface SessionElements {
   chatSend: HTMLButtonElement;
   status: HTMLParagraphElement;
 }
+
+const LOBBY_MAX_PLAYERS = 4;
 
 export class OnlineSessionClient implements OnlineSessionBridge {
   public role: OnlineRole | null = null;
@@ -63,16 +71,20 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private reconnectAttempts = 0;
   private quickMatchSearching = false;
   private quickMatchQueuedCount = 0;
+  private quickMatchCountdownMs: number | null = null;
+  private preferredCharacterIndex = 0;
 
   constructor(root: HTMLElement, app: OnlineGameAppBridge, roster: CharacterRosterEntry[]) {
     this.app = app;
     this.roster = roster;
     this.pendingAutoJoinRoom = this.readRoomFromLocation();
+    this.preferredCharacterIndex = this.readPreferredCharacterIndex();
     this.elements = this.render(root);
     this.canvasObserver = new MutationObserver(() => this.mountCanvas(root));
     this.canvasObserver.observe(root, { childList: true });
     this.mountCanvas(root);
     this.bindEvents();
+    this.renderCharacterSelector();
     this.renderQuickMatchState();
     this.renderLobbyList();
     this.renderStage();
@@ -80,11 +92,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.connect();
   }
 
-  public sendGuestInput(input: OnlineInputState): void {
+  public sendGuestInput(input: OnlineInputState, inputSeq: number): void {
     if (this.role !== "guest") {
       return;
     }
-    this.send({ type: "guest-input", input });
+    this.send({ type: "guest-input", input, inputSeq, sentAtMs: Date.now() });
   }
 
   public sendHostSnapshot(snapshot: OnlineGameSnapshot): void {
@@ -142,7 +154,19 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     });
 
     this.elements.quickMatchButton.addEventListener("click", () => {
-      this.send({ type: this.quickMatchSearching ? "quick-match-cancel" : "quick-match" });
+      this.send(
+        this.quickMatchSearching
+          ? { type: "quick-match-cancel" }
+          : { type: "quick-match", characterIndex: this.preferredCharacterIndex },
+      );
+    });
+
+    this.elements.selectorPrev.addEventListener("click", () => {
+      this.updatePreferredCharacter(this.preferredCharacterIndex - 1);
+    });
+
+    this.elements.selectorNext.addEventListener("click", () => {
+      this.updatePreferredCharacter(this.preferredCharacterIndex + 1);
     });
 
     this.elements.copyButton.addEventListener("click", async () => {
@@ -165,20 +189,38 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.sendChat();
     });
     this.elements.chatInput.addEventListener("keydown", (event) => {
+      event.stopPropagation();
       if (event.key === "Enter") {
         event.preventDefault();
         this.sendChat();
       }
     });
+    this.elements.chatInput.addEventListener("keyup", (event) => {
+      event.stopPropagation();
+    });
+    this.elements.chatInput.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+    });
+    this.elements.chatInput.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
   }
 
   private sendChat(): void {
+    if (!this.currentLobby) {
+      this.setStatus("Join a room before sending chat.");
+      return;
+    }
     const body = this.elements.chatInput.value.trim();
     if (!body) {
       return;
     }
-    this.send({ type: "chat-send", body });
+    if (!this.send({ type: "chat-send", body })) {
+      this.setStatus("Chat temporarily unavailable. Reconnecting...");
+      return;
+    }
     this.elements.chatInput.value = "";
+    this.elements.chatInput.focus();
   }
 
   private handleMessage(rawMessage: unknown): void {
@@ -199,6 +241,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.lobbies = message.lobbies;
         this.quickMatchQueuedCount = message.quickMatchQueued;
         this.quickMatchSearching = message.searchingQuickMatch;
+        this.quickMatchCountdownMs = null;
+        this.syncPreferredCharacterFromLobby();
+        this.renderCharacterSelector();
         this.renderLobbyList();
         this.renderQuickMatchState();
         this.renderStage();
@@ -216,6 +261,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.role = message.role;
         this.currentLobby = message.lobby;
         this.roomCode = message.lobby.roomCode;
+        this.syncPreferredCharacterFromLobby();
+        this.renderCharacterSelector();
         this.app.attachOnlineSession(this);
         this.updateLocation(message.lobby.roomCode);
         this.renderStage();
@@ -225,6 +272,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       case "lobby-updated":
         this.currentLobby = message.lobby;
         this.roomCode = message.lobby.roomCode;
+        this.syncPreferredCharacterFromLobby();
+        this.renderCharacterSelector();
         this.renderStage();
         this.renderLobbyList();
         break;
@@ -232,6 +281,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.role = null;
         this.roomCode = null;
         this.currentLobby = null;
+        this.renderCharacterSelector();
         this.updateLocation(null);
         this.app.detachOnlineSession();
         this.renderStage();
@@ -241,6 +291,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       case "match-started":
         this.role = message.config.role;
         this.roomCode = message.config.roomCode;
+        this.syncPreferredCharacterFromMatchConfig(message.config);
+        this.renderCharacterSelector();
         this.app.startOnlineMatch(message.config);
         this.elements.shell.dataset.state = "match";
         this.renderStage();
@@ -264,12 +316,13 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       case "quick-match-state":
         this.quickMatchQueuedCount = message.queued;
         this.quickMatchSearching = message.searching;
+        this.quickMatchCountdownMs = message.countdownMs;
         this.renderQuickMatchState();
         break;
       case "peer-left":
         this.app.clearOnlinePeer();
         this.elements.shell.dataset.state = "lobby";
-        this.setStatus("The other pilot left. The room is open again.");
+        this.setStatus("A pilot left. The room is open again.");
         break;
       case "error":
         this.setStatus(message.message);
@@ -292,7 +345,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     brand.innerHTML = `
       <p>Global lobby</p>
       <h1>Mistbridge Arena</h1>
-      <span>Public rooms. Two locked slots. Fast start.</span>
+      <span>Public rooms. Up to 4 pilots. Quick match fills from 2 to 4.</span>
     `;
 
     const createPanel = document.createElement("div");
@@ -322,10 +375,45 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     createPanel.append(createTitle, createButton, quickMatchButton, quickMatchMeta);
 
+    const selectorPanel = document.createElement("section");
+    selectorPanel.className = "lobby-selector";
+
+    const selectorHeading = document.createElement("div");
+    selectorHeading.className = "lobby-selector__heading";
+    selectorHeading.textContent = "Selected pilot";
+
+    const selectorPortrait = document.createElement("img");
+    selectorPortrait.className = "lobby-selector__portrait";
+    selectorPortrait.alt = "Selected character";
+    selectorPortrait.width = 112;
+    selectorPortrait.height = 112;
+
+    const selectorName = document.createElement("p");
+    selectorName.className = "lobby-selector__name";
+
+    const selectorNote = document.createElement("p");
+    selectorNote.className = "lobby-selector__note";
+
+    const selectorActions = document.createElement("div");
+    selectorActions.className = "lobby-selector__actions";
+
+    const selectorPrev = document.createElement("button");
+    selectorPrev.className = "lobby-button";
+    selectorPrev.type = "button";
+    selectorPrev.textContent = "Prev";
+
+    const selectorNext = document.createElement("button");
+    selectorNext.className = "lobby-button";
+    selectorNext.type = "button";
+    selectorNext.textContent = "Next";
+
+    selectorActions.append(selectorPrev, selectorNext);
+    selectorPanel.append(selectorHeading, selectorPortrait, selectorName, selectorNote, selectorActions);
+
     const browserList = document.createElement("div");
     browserList.className = "lobby-browser__list";
 
-    browser.append(brand, createPanel, browserList);
+    browser.append(brand, createPanel, selectorPanel, browserList);
 
     const stage = document.createElement("section");
     stage.className = "lobby-stage";
@@ -397,10 +485,13 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const seats = {
       1: document.createElement("div"),
       2: document.createElement("div"),
+      3: document.createElement("div"),
+      4: document.createElement("div"),
     } as Record<PlayerId, HTMLDivElement>;
-    seats[1].className = "lobby-seat";
-    seats[2].className = "lobby-seat";
-    seatsWrap.append(seats[1], seats[2]);
+    for (const playerId of ALL_PLAYER_IDS) {
+      seats[playerId].className = "lobby-seat";
+      seatsWrap.append(seats[playerId]);
+    }
     seatsPanel.append(seatsHeading, seatsWrap);
 
     const chatPanel = document.createElement("section");
@@ -420,6 +511,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     chatInput.maxLength = 280;
     chatInput.name = "chat-message";
     chatInput.autocomplete = "off";
+    chatInput.spellcheck = false;
+    chatInput.autocapitalize = "off";
     chatInput.setAttribute("aria-label", "Type a message");
 
     const chatSend = document.createElement("button");
@@ -449,6 +542,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       createButton,
       quickMatchButton,
       quickMatchMeta,
+      selectorPortrait,
+      selectorName,
+      selectorNote,
+      selectorPrev,
+      selectorNext,
       stageEyebrow,
       stageTitle,
       stageDescription,
@@ -488,14 +586,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       title.textContent = lobby.title;
 
       const meta = document.createElement("span");
-      meta.textContent = `${lobby.roomCode} | ${lobby.occupantCount}/2 pilots | ${lobby.status}`;
+      meta.textContent = `${lobby.roomCode} | ${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} pilots | ${lobby.status}`;
 
       const seatStrip = document.createElement("div");
       seatStrip.className = "lobby-card__seats";
-      seatStrip.append(
-        this.renderSeatPill("P1", lobby.seats[1]),
-        this.renderSeatPill("P2", lobby.seats[2]),
-      );
+      seatStrip.append(...ALL_PLAYER_IDS.map((playerId) => this.renderSeatPill(`P${playerId}`, lobby.seats[playerId])));
 
       card.append(title, meta, seatStrip);
       card.addEventListener("click", () => {
@@ -509,14 +604,58 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     }
   }
 
+  private renderCharacterSelector(): void {
+    const selected = this.getCharacter(this.preferredCharacterIndex);
+    this.elements.selectorPortrait.src = assetUrl(`/assets/characters/${selected.id}/south.png`);
+    this.elements.selectorName.textContent = selected.name;
+    this.elements.selectorNote.textContent = this.currentLobby?.selfSeat
+      ? "Applied to your claimed slot and reused for quick match."
+      : "This pilot is used for quick match and your next claimed slot.";
+  }
+
+  private updatePreferredCharacter(nextIndex: number): void {
+    this.preferredCharacterIndex = this.wrapCharacterIndex(nextIndex);
+    this.persistPreferredCharacterIndex();
+    this.renderCharacterSelector();
+
+    if (this.quickMatchSearching) {
+      this.send({ type: "quick-match", characterIndex: this.preferredCharacterIndex });
+    }
+
+    if (this.currentLobby?.selfSeat && this.currentLobby.status === "open") {
+      this.send({ type: "set-character", characterIndex: this.preferredCharacterIndex });
+    }
+  }
+
+  private syncPreferredCharacterFromLobby(): void {
+    const selfSeat = this.currentLobby?.selfSeat;
+    if (!selfSeat) {
+      return;
+    }
+    const seat = this.currentLobby?.seats[selfSeat];
+    if (!seat) {
+      return;
+    }
+    this.preferredCharacterIndex = this.wrapCharacterIndex(seat.characterIndex);
+    this.persistPreferredCharacterIndex();
+  }
+
+  private syncPreferredCharacterFromMatchConfig(config: MatchStartConfig): void {
+    const selected = config.characterSelections[config.localPlayerId] ?? this.preferredCharacterIndex;
+    this.preferredCharacterIndex = this.wrapCharacterIndex(selected);
+    this.persistPreferredCharacterIndex();
+  }
+
   private renderQuickMatchState(): void {
     this.elements.quickMatchButton.textContent = this.quickMatchSearching ? "Cancel search" : "Find quick match";
     this.elements.quickMatchButton.dataset.searching = this.quickMatchSearching ? "true" : "false";
     this.elements.quickMatchMeta.textContent = this.quickMatchSearching
-      ? "Searching for another pilot..."
+      ? this.quickMatchQueuedCount >= 2 && this.quickMatchCountdownMs !== null
+        ? `${this.quickMatchQueuedCount} pilots locked. Match starts in ${Math.max(1, Math.ceil(this.quickMatchCountdownMs / 1000))}s unless more join.`
+        : "Searching for pilots..."
       : this.quickMatchQueuedCount > 0
         ? `${this.quickMatchQueuedCount} pilot${this.quickMatchQueuedCount === 1 ? "" : "s"} in quick-match queue`
-        : "Jump into a live match as soon as two players queue.";
+        : "Jump into a live match as soon as two players queue. Up to four can enter the same match.";
   }
 
   private renderSeatPill(label: string, seat: LobbySummary["seats"][PlayerId]): HTMLElement {
@@ -534,13 +673,14 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.elements.stageEyebrow.textContent = "Global matchmaking";
       this.elements.stageTitle.textContent = "Choose a room and step into the arena";
       this.elements.stageDescription.textContent =
-        "Create a public lobby or join one from the live board. Once both pilots lock a slot and confirm their character, the match starts automatically.";
-      this.elements.stageMeta.textContent = "Public rooms - Seat lock P1/P2 - Character select - Instant match start";
+        "Create a public lobby or join one from the live board. Once at least two occupied slots are ready, the match starts. Quick match waits 5 seconds at 2 pilots to let 3rd and 4th join.";
+      this.elements.stageMeta.textContent = "Public rooms - Up to 4 pilots - Character select - Quick match fill window";
       this.elements.inviteInput.value = "";
       this.elements.copyButton.disabled = true;
       this.elements.leaveButton.disabled = true;
-      this.elements.seats[1].replaceChildren(this.buildEmptySeat(1));
-      this.elements.seats[2].replaceChildren(this.buildEmptySeat(2));
+      for (const playerId of ALL_PLAYER_IDS) {
+        this.elements.seats[playerId].replaceChildren(this.buildEmptySeat(playerId));
+      }
       this.renderChat();
       window.requestAnimationFrame(() => {
         window.dispatchEvent(new Event("resize"));
@@ -553,14 +693,15 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.elements.stageTitle.textContent = lobby.title;
     this.elements.stageDescription.textContent = lobby.status === "playing"
       ? "Match in progress. The room stays locked until one of the pilots leaves."
-      : "Claim a side, browse the roster, and lock your ready state. Both pilots ready starts the round.";
+      : "Claim a side, browse the roster, and lock your ready state. Any group of 2 to 4 occupied slots can launch once every occupied slot is ready.";
     this.elements.stageMeta.textContent =
-      `${lobby.roomCode} - ${lobby.occupantCount}/2 pilots - ${lobby.status === "playing" ? "Live match" : "Waiting room"}`;
+      `${lobby.roomCode} - ${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} pilots - ${lobby.status === "playing" ? "Live match" : "Waiting room"}`;
     this.elements.inviteInput.value = this.buildInviteUrl(lobby.roomCode);
     this.elements.copyButton.disabled = false;
     this.elements.leaveButton.disabled = false;
-    this.elements.seats[1].replaceChildren(this.buildSeatContent(1, lobby));
-    this.elements.seats[2].replaceChildren(this.buildSeatContent(2, lobby));
+    for (const playerId of ALL_PLAYER_IDS) {
+      this.elements.seats[playerId].replaceChildren(this.buildSeatContent(playerId, lobby));
+    }
     this.renderChat();
     window.requestAnimationFrame(() => {
       window.dispatchEvent(new Event("resize"));
@@ -631,7 +772,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     const placeholder = document.createElement("div");
     placeholder.className = "lobby-seat__placeholder";
-    placeholder.textContent = "Claim this side to choose a character and ready up.";
+    placeholder.textContent = "Claim this side, use the left roster panel, then lock ready.";
 
     header.append(slot, title, state);
     wrap.append(header, placeholder);
@@ -695,26 +836,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       claimButton.type = "button";
       claimButton.textContent = `Claim P${playerId}`;
       claimButton.addEventListener("click", () => {
-        this.send({ type: "claim-seat", seat: playerId });
+        this.send({ type: "claim-seat", seat: playerId, characterIndex: this.preferredCharacterIndex });
       });
       actions.appendChild(claimButton);
     } else if (isSelf && lobby.status === "open") {
-      const prevButton = document.createElement("button");
-      prevButton.className = "lobby-button";
-      prevButton.type = "button";
-      prevButton.textContent = "Prev";
-      prevButton.addEventListener("click", () => {
-        this.send({ type: "set-character", characterIndex: this.wrapCharacterIndex(seat.characterIndex - 1) });
-      });
-
-      const nextButton = document.createElement("button");
-      nextButton.className = "lobby-button";
-      nextButton.type = "button";
-      nextButton.textContent = "Next";
-      nextButton.addEventListener("click", () => {
-        this.send({ type: "set-character", characterIndex: this.wrapCharacterIndex(seat.characterIndex + 1) });
-      });
-
       const readyButton = document.createElement("button");
       readyButton.className = `lobby-button ${seat.ready ? "lobby-button--danger" : "lobby-button--primary"}`;
       readyButton.type = "button";
@@ -723,7 +848,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.send({ type: "set-ready", ready: !seat.ready });
       });
 
-      actions.append(prevButton, nextButton, readyButton);
+      const info = document.createElement("span");
+      info.className = "lobby-seat__hint";
+      info.textContent = "Pilot selection is controlled from the left panel.";
+
+      actions.append(readyButton, info);
     } else {
       const info = document.createElement("span");
       info.className = "lobby-seat__hint";
@@ -769,15 +898,35 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     return ((index % total) + total) % total;
   }
 
+  private readPreferredCharacterIndex(): number {
+    if (typeof window === "undefined") {
+      return 0;
+    }
+    const stored = window.localStorage.getItem("mistbridge-preferred-character-index");
+    const value = Number(stored);
+    if (Number.isNaN(value)) {
+      return 0;
+    }
+    return this.wrapCharacterIndex(value);
+  }
+
+  private persistPreferredCharacterIndex(): void {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem("mistbridge-preferred-character-index", String(this.preferredCharacterIndex));
+  }
+
   private setStatus(message: string): void {
     this.elements.status.textContent = message;
   }
 
-  private send(payload: object): void {
+  private send(payload: object): boolean {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-      return;
+      return false;
     }
     this.socket.send(JSON.stringify(payload));
+    return true;
   }
 
   private buildInviteUrl(roomCode: string): string {

@@ -32,12 +32,17 @@ import {
   type GameAssets,
 } from "./assets";
 import { SpriteTrimCache, type SpriteTrimBounds } from "./sprite-trim-cache";
+import {
+  ALL_PLAYER_IDS,
+  MENU_PLAYER_IDS,
+} from "../core/types";
 import type {
   ArenaState,
   BombState,
   Direction,
   FlameState,
   MatchScore,
+  MenuPlayerId,
   Mode,
   PixelCoord,
   PlayerId,
@@ -75,7 +80,7 @@ const LANE_SNAP_THRESHOLD = TILE_SIZE * 0.45;
 const LANE_LOCK_THRESHOLD = 3;
 const LANE_SETTLE_EPSILON = 0.35;
 const LANE_SNAP_FACTOR = 2.6;
-const CHARACTER_MENU_KEYS: Record<PlayerId, string> = {
+const CHARACTER_MENU_KEYS: Record<MenuPlayerId, string> = {
   1: "KeyG",
   2: "KeyK",
 };
@@ -89,7 +94,7 @@ const BOT_PREEMPTIVE_ESCAPE_STEPS = 4;
 const BOT_DIRECTION_CONFIRM_FRAMES = 2;
 const WALK_FRAME_MS = 100;
 const SPAWN_PROTECTION_MS = 2200;
-const SUDDEN_DEATH_ELAPSED_MS = 20_000;
+const SUDDEN_DEATH_ELAPSED_MS = 40_000;
 const SUDDEN_DEATH_START_MS = ROUND_DURATION_MS - SUDDEN_DEATH_ELAPSED_MS;
 const SUDDEN_DEATH_TICK_MS = 800;
 const SUDDEN_DEATH_FLAME_MS = 900;
@@ -104,16 +109,25 @@ const ONLINE_RENDER_SMOOTHING = 0.48;
 const ONLINE_INTERPOLATION_DELAY_MS = 52;
 const ONLINE_EXTRAPOLATION_MS = 42;
 const ONLINE_VELOCITY_LEAD_MS = 18;
-const ONLINE_LOCAL_INPUT_LEAD_MS = 42;
 const ONLINE_MAX_VISUAL_LEAD_PX = TILE_SIZE * 0.34;
 const ONLINE_SAMPLE_BUFFER_SIZE = 12;
-const ONLINE_INPUT_HEARTBEAT_MS = 90;
+const PLAYER_SPAWNS: Record<PlayerId, { tile: TileCoord; direction: Direction }> = {
+  1: { tile: { x: 2, y: 1 }, direction: "down" },
+  2: { tile: { x: GRID_WIDTH - 3, y: 1 }, direction: "down" },
+  3: { tile: { x: 2, y: GRID_HEIGHT - 2 }, direction: "up" },
+  4: { tile: { x: GRID_WIDTH - 3, y: GRID_HEIGHT - 2 }, direction: "up" },
+};
 
 interface OnlineRenderSample {
   receivedAtMs: number;
   serverTimeMs: number;
   serverTick: number;
   players: Record<PlayerId, { position: PixelCoord; velocity: PixelCoord }>;
+}
+
+interface PendingOnlineInput {
+  seq: number;
+  input: OnlineInputState;
 }
 
 function createNeutralOnlineInput(): OnlineInputState {
@@ -132,10 +146,43 @@ function cloneOnlineInputState(input: OnlineInputState): OnlineInputState {
   };
 }
 
-function sameOnlineInputState(a: OnlineInputState, b: OnlineInputState): boolean {
-  return a.direction === b.direction
-    && a.bombPressed === b.bombPressed
-    && a.detonatePressed === b.detonatePressed;
+function createEmptyDirectionalSprites(): DirectionalSprites {
+  return {
+    up: null,
+    down: null,
+    left: null,
+    right: null,
+    idle: { up: [], down: [], left: [], right: [] },
+    walk: { up: [], down: [], left: [], right: [] },
+  };
+}
+
+function createPlayerRecord<T>(factory: (playerId: PlayerId) => T): Record<PlayerId, T> {
+  return {
+    1: factory(1),
+    2: factory(2),
+    3: factory(3),
+    4: factory(4),
+  };
+}
+
+function createBooleanPlayerRecord(value: boolean): Record<PlayerId, boolean> {
+  return createPlayerRecord(() => value);
+}
+
+function createNumberPlayerRecord(value: number): Record<PlayerId, number> {
+  return createPlayerRecord(() => value);
+}
+
+function createDirectionPlayerRecord(value: Direction | null): Record<PlayerId, Direction | null> {
+  return createPlayerRecord(() => value);
+}
+
+function normalizeActivePlayerIds(playerIds: PlayerId[]): PlayerId[] {
+  const unique = Array.from(new Set(playerIds.filter((playerId): playerId is PlayerId => (
+    ALL_PLAYER_IDS as readonly number[]
+  ).includes(playerId)))) as PlayerId[];
+  return unique.length > 0 ? unique : [1, 2];
 }
 
 function createHeadlessCanvas(): {
@@ -202,18 +249,15 @@ export class GameApp {
   private readonly assets: GameAssets;
   private readonly headless: boolean;
   private onlineSession: OnlineSessionBridge | null = null;
+  private activePlayerIds: PlayerId[] = [1, 2];
   private onlineLocalPlayerId: PlayerId = 1;
-  private onlineRemotePlayerId: PlayerId = 2;
-  private onlineLocalInput: OnlineInputState = createNeutralOnlineInput();
-  private onlineRemoteInput: OnlineInputState = createNeutralOnlineInput();
+  private onlineInputs: Record<PlayerId, OnlineInputState> = createPlayerRecord(() => createNeutralOnlineInput());
   private onlineSnapshotCooldownMs = 0;
-  private visualPlayerPositions: Record<PlayerId, PixelCoord> = {
-    1: { x: 0, y: 0 },
-    2: { x: 0, y: 0 },
-  };
+  private visualPlayerPositions: Record<PlayerId, PixelCoord> = createPlayerRecord(() => ({ x: 0, y: 0 }));
   private onlineRenderSamples: OnlineRenderSample[] = [];
-  private onlineGuestLastSentInput: OnlineInputState = createNeutralOnlineInput();
-  private onlineGuestInputHeartbeatMs = 0;
+  private onlineNextInputSeq = 0;
+  private onlinePendingInputs: PendingOnlineInput[] = [];
+  private onlineObservedRoundNumber: number | null = null;
 
   private lastTimestamp = 0;
   private accumulatorMs = 0;
@@ -225,9 +269,9 @@ export class GameApp {
   private flames: FlameState[] = [];
   private nextBombId = 1;
 
-  private menuReady: Record<PlayerId, boolean> = { 1: false, 2: false };
-  private rematchReady: Record<PlayerId, boolean> = { 1: false, 2: false };
-  private score: MatchScore = { 1: 0, 2: 0 };
+  private menuReady: Record<PlayerId, boolean> = createBooleanPlayerRecord(false);
+  private rematchReady: Record<PlayerId, boolean> = createBooleanPlayerRecord(false);
+  private score: MatchScore = { 1: 0, 2: 0, 3: 0, 4: 0 };
   private roundNumber = 1;
   private roundTimeMs = ROUND_DURATION_MS;
   private paused = false;
@@ -237,9 +281,9 @@ export class GameApp {
   private automationControlledPlayer: PlayerId = 2;
   private botEnabled = this.automationMode;
   private botBombCooldownMs = 0;
-  private botCommittedDirection: Record<PlayerId, Direction | null> = { 1: null, 2: null };
-  private botPendingReverseDirection: Record<PlayerId, Direction | null> = { 1: null, 2: null };
-  private botPendingReverseFrames: Record<PlayerId, number> = { 1: 0, 2: 0 };
+  private botCommittedDirection: Record<PlayerId, Direction | null> = createDirectionPlayerRecord(null);
+  private botPendingReverseDirection: Record<PlayerId, Direction | null> = createDirectionPlayerRecord(null);
+  private botPendingReverseFrames: Record<PlayerId, number> = createNumberPlayerRecord(0);
   private animationClockMs = 0;
   private suddenDeathActive = false;
   private suddenDeathTickMs = SUDDEN_DEATH_TICK_MS;
@@ -248,10 +292,10 @@ export class GameApp {
   private showDangerOverlay = false;
   private showBombPreview = false;
   private readonly characterRoster: CharacterRosterEntry[];
-  private selectedCharacterIndex: Record<PlayerId, number> = { 1: 0, 2: 0 };
-  private pendingCharacterIndex: Record<PlayerId, number> = { 1: 0, 2: 0 };
-  private characterLocked: Record<PlayerId, boolean> = { 1: true, 2: true };
-  private characterMenuOpen: Record<PlayerId, boolean> = { 1: false, 2: false };
+  private selectedCharacterIndex: Record<PlayerId, number> = createNumberPlayerRecord(0);
+  private pendingCharacterIndex: Record<PlayerId, number> = createNumberPlayerRecord(0);
+  private characterLocked: Record<PlayerId, boolean> = createBooleanPlayerRecord(true);
+  private characterMenuOpen: Record<PlayerId, boolean> = createBooleanPlayerRecord(false);
   private readonly spriteTrimCache = new SpriteTrimCache();
 
   constructor(root: HTMLElement, assets: GameAssets) {
@@ -280,40 +324,50 @@ export class GameApp {
       this.input = new InputManager(window);
     }
     const configuredRoster = this.assets.characterRoster ?? [];
+    const fallbackRoster: CharacterRosterEntry[] = [
+      { id: "default-p1", name: "Default P1", size: null, sprites: this.assets.players[1] ?? createEmptyDirectionalSprites() },
+      { id: "default-p2", name: "Default P2", size: null, sprites: this.assets.players[2] ?? createEmptyDirectionalSprites() },
+    ];
     this.characterRoster = configuredRoster.length > 0
       ? configuredRoster
-      : [
-          { id: "default-p1", name: "Default P1", size: null, sprites: this.assets.players[1] },
-          { id: "default-p2", name: "Default P2", size: null, sprites: this.assets.players[2] },
-        ];
+      : fallbackRoster;
     const playerOneIndex = this.findDefaultCharacterIndex(1, 0);
     const playerTwoIndex = this.findDefaultCharacterIndex(2, Math.min(1, this.characterRoster.length - 1));
-    this.selectedCharacterIndex = { 1: playerOneIndex, 2: playerTwoIndex };
+    this.selectedCharacterIndex = {
+      1: playerOneIndex,
+      2: playerTwoIndex,
+      3: this.findDefaultCharacterIndex(3, playerOneIndex),
+      4: this.findDefaultCharacterIndex(4, playerTwoIndex),
+    };
     this.pendingCharacterIndex = { ...this.selectedCharacterIndex };
   }
 
   public attachOnlineSession(session: OnlineSessionBridge): void {
     this.onlineSession = session;
+    this.activePlayerIds = [1, 2];
     this.botEnabled = false;
-    this.menuReady = { 1: false, 2: false };
-    this.rematchReady = { 1: false, 2: false };
+    this.menuReady = createBooleanPlayerRecord(false);
+    this.rematchReady = createBooleanPlayerRecord(false);
     this.onlineLocalPlayerId = 1;
-    this.onlineRemotePlayerId = 2;
-    this.onlineLocalInput = createNeutralOnlineInput();
-    this.onlineRemoteInput = createNeutralOnlineInput();
-    this.onlineGuestLastSentInput = createNeutralOnlineInput();
-    this.onlineGuestInputHeartbeatMs = 0;
+    this.onlineInputs = createPlayerRecord(() => createNeutralOnlineInput());
+    this.onlineNextInputSeq = 0;
+    this.onlinePendingInputs = [];
+    this.onlineObservedRoundNumber = null;
     this.onlineRenderSamples = [];
     this.syncPlayerLabels();
   }
 
   public startOnlineMatch(config: MatchStartConfig): void {
+    this.activePlayerIds = normalizeActivePlayerIds(config.activePlayerIds);
     this.onlineLocalPlayerId = config.localPlayerId;
-    this.onlineRemotePlayerId = config.remotePlayerId;
+    this.onlineNextInputSeq = 0;
+    this.onlinePendingInputs = [];
+    this.onlineInputs = createPlayerRecord(() => createNeutralOnlineInput());
+    this.onlineRenderSamples = [];
     this.selectedCharacterIndex = { ...config.characterSelections };
     this.pendingCharacterIndex = { ...config.characterSelections };
-    this.characterLocked = { 1: true, 2: true };
-    this.characterMenuOpen = { 1: false, 2: false };
+    this.characterLocked = createBooleanPlayerRecord(true);
+    this.characterMenuOpen = createBooleanPlayerRecord(false);
 
     if (config.role === "host") {
       this.startMatch();
@@ -324,8 +378,11 @@ export class GameApp {
     this.matchWinner = null;
     this.paused = false;
     this.roundOutcome = null;
-    this.menuReady = { 1: true, 2: true };
-    this.rematchReady = { 1: false, 2: false };
+    this.menuReady = createBooleanPlayerRecord(false);
+    this.rematchReady = createBooleanPlayerRecord(false);
+    for (const playerId of this.activePlayerIds) {
+      this.menuReady[playerId] = true;
+    }
   }
 
   public applyOnlineSnapshot(snapshot: OnlineGameSnapshot): void {
@@ -342,10 +399,7 @@ export class GameApp {
         collected: powerUp.collected,
       })),
     };
-    this.players = {
-      1: this.clonePlayerState(snapshot.players[1]),
-      2: this.clonePlayerState(snapshot.players[2]),
-    };
+    this.players = createPlayerRecord((playerId) => this.clonePlayerState(snapshot.players[playerId]));
     this.bombs = snapshot.bombs.map((bomb) => ({
       ...bomb,
       tile: { ...bomb.tile },
@@ -371,12 +425,16 @@ export class GameApp {
     this.showBombPreview = snapshot.showBombPreview;
     this.selectedCharacterIndex = { ...snapshot.selectedCharacterIndex };
     this.pendingCharacterIndex = { ...snapshot.selectedCharacterIndex };
-    this.characterLocked = { 1: true, 2: true };
-    this.characterMenuOpen = { 1: false, 2: false };
+    this.characterLocked = createBooleanPlayerRecord(true);
+    this.characterMenuOpen = createBooleanPlayerRecord(false);
+    this.activePlayerIds = normalizeActivePlayerIds(snapshot.activePlayerIds);
     this.botEnabled = false;
+    this.resetOnlineRoundBuffers(snapshot.roundNumber);
     this.pushOnlineRenderSample(snapshot.serverTimeMs, snapshot.serverTick, snapshot.players);
+    this.nextBombId = snapshot.nextBombId;
+    this.reconcileGuestState(snapshot.ackedInputSeq[this.onlineLocalPlayerId] ?? 0);
 
-    if (previousMode !== "match" || this.visualPlayerPositions[1].x === 0 || this.visualPlayerPositions[2].x === 0) {
+    if (previousMode !== "match" || this.visualPlayerPositions[this.onlineLocalPlayerId].x === 0) {
       this.syncVisualPlayerPositions();
     }
   }
@@ -384,10 +442,7 @@ export class GameApp {
   public applyOnlineFrame(frame: OnlineGameFrame): void {
     const previousMode = this.mode;
     this.mode = frame.mode;
-    this.players = {
-      1: this.clonePlayerState(frame.players[1]),
-      2: this.clonePlayerState(frame.players[2]),
-    };
+    this.players = createPlayerRecord((playerId) => this.clonePlayerState(frame.players[playerId]));
     this.bombs = frame.bombs.map((bomb) => ({
       ...bomb,
       tile: { ...bomb.tile },
@@ -408,28 +463,33 @@ export class GameApp {
     this.suddenDeathIndex = frame.suddenDeathIndex;
     this.selectedCharacterIndex = { ...frame.selectedCharacterIndex };
     this.pendingCharacterIndex = { ...frame.selectedCharacterIndex };
+    this.activePlayerIds = normalizeActivePlayerIds(frame.activePlayerIds);
+    this.nextBombId = frame.nextBombId;
+    this.resetOnlineRoundBuffers(frame.roundNumber);
     this.pushOnlineRenderSample(frame.serverTimeMs, frame.serverTick, frame.players);
+    this.reconcileGuestState(frame.ackedInputSeq[this.onlineLocalPlayerId] ?? 0);
 
-    if (previousMode !== "match" || this.visualPlayerPositions[1].x === 0 || this.visualPlayerPositions[2].x === 0) {
+    if (previousMode !== "match" || this.visualPlayerPositions[this.onlineLocalPlayerId].x === 0) {
       this.syncVisualPlayerPositions();
     }
   }
 
   public clearOnlinePeer(): void {
-    this.onlineLocalInput = createNeutralOnlineInput();
-    this.onlineRemoteInput = createNeutralOnlineInput();
-    this.onlineGuestLastSentInput = createNeutralOnlineInput();
-    this.onlineGuestInputHeartbeatMs = 0;
+    this.onlineInputs = createPlayerRecord(() => createNeutralOnlineInput());
+    this.onlineNextInputSeq = 0;
+    this.onlinePendingInputs = [];
+    this.onlineObservedRoundNumber = null;
     this.onlineRenderSamples = [];
     this.botEnabled = false;
-    this.menuReady = { 1: false, 2: false };
+    this.menuReady = createBooleanPlayerRecord(false);
   }
 
   public receiveOnlineGuestInput(input: OnlineInputState): void {
-    this.onlineRemoteInput = {
+    const playerInput = this.onlineInputs[2];
+    this.onlineInputs[2] = {
       direction: input.direction,
-      bombPressed: this.onlineRemoteInput.bombPressed || input.bombPressed,
-      detonatePressed: this.onlineRemoteInput.detonatePressed || input.detonatePressed,
+      bombPressed: playerInput.bombPressed || input.bombPressed,
+      detonatePressed: playerInput.detonatePressed || input.detonatePressed,
     };
   }
 
@@ -501,8 +561,7 @@ export class GameApp {
     const availableWidth = Math.max(160, viewportWidth - viewportPadding);
     const availableHeight = Math.max(160, viewportHeight - viewportPadding);
     const fitScale = Math.min(availableWidth / CANVAS_WIDTH, availableHeight / CANVAS_HEIGHT);
-    const integerScale = Math.floor(fitScale);
-    const displayScale = integerScale >= 1 ? integerScale : Math.max(0.5, Math.min(1, fitScale));
+    const displayScale = Math.max(0.5, fitScale);
     const displayWidth = Math.max(1, Math.round(CANVAS_WIDTH * displayScale));
     const displayHeight = Math.max(1, Math.round(CANVAS_HEIGHT * displayScale));
     this.canvas.style.width = `${displayWidth}px`;
@@ -514,27 +573,24 @@ export class GameApp {
       return;
     }
     const localBindings = KEY_BINDINGS[1];
-    this.onlineLocalInput.direction = this.input.getMovementDirection(1);
-    this.onlineLocalInput.bombPressed = this.onlineLocalInput.bombPressed || this.input.consumePress(localBindings.bomb);
-    this.onlineLocalInput.detonatePressed = this.onlineLocalInput.detonatePressed
-      || this.input.consumePress(localBindings.detonate);
+    const input = this.onlineInputs[this.onlineLocalPlayerId];
+    input.direction = this.input.getMovementDirection(1);
+    input.bombPressed = input.bombPressed || this.input.consumePress(localBindings.bomb);
+    input.detonatePressed = input.detonatePressed || this.input.consumePress(localBindings.detonate);
   }
 
-  private forwardGuestInput(deltaMs: number): void {
+  private forwardGuestInput(): void {
     if (this.onlineSession?.role !== "guest") {
       return;
     }
-    this.onlineGuestInputHeartbeatMs -= deltaMs;
-    const nextInput = cloneOnlineInputState(this.onlineLocalInput);
-    const shouldSend = !sameOnlineInputState(nextInput, this.onlineGuestLastSentInput)
-      || this.onlineGuestInputHeartbeatMs <= 0;
-    if (shouldSend) {
-      this.onlineSession.sendGuestInput(nextInput);
-      this.onlineGuestLastSentInput = cloneOnlineInputState(nextInput);
-      this.onlineGuestInputHeartbeatMs = ONLINE_INPUT_HEARTBEAT_MS;
+    const nextInput = cloneOnlineInputState(this.onlineInputs[this.onlineLocalPlayerId]);
+    const inputSeq = this.onlineNextInputSeq + 1;
+    this.onlineNextInputSeq = inputSeq;
+    this.onlineSession.sendGuestInput(nextInput, inputSeq);
+    this.onlinePendingInputs.push({ seq: inputSeq, input: nextInput });
+    if (this.onlinePendingInputs.length > 180) {
+      this.onlinePendingInputs.splice(0, this.onlinePendingInputs.length - 180);
     }
-    this.onlineLocalInput.bombPressed = false;
-    this.onlineLocalInput.detonatePressed = false;
   }
 
   private flushOnlineSnapshot(deltaMs: number): void {
@@ -558,6 +614,8 @@ export class GameApp {
       mode: this.mode,
       serverTimeMs: 0,
       serverTick: 0,
+      frameId: 0,
+      ackedInputSeq: createNumberPlayerRecord(0),
       breakableTiles: Array.from(this.arena.breakable),
       powerUps: this.arena.powerUps.map((powerUp) => ({
         type: powerUp.type,
@@ -565,10 +623,7 @@ export class GameApp {
         revealed: powerUp.revealed,
         collected: powerUp.collected,
       })),
-      players: {
-        1: this.clonePlayerState(this.players[1]),
-        2: this.clonePlayerState(this.players[2]),
-      },
+      players: createPlayerRecord((playerId) => this.clonePlayerState(this.players[playerId])),
       bombs: this.bombs.map((bomb) => ({
         ...bomb,
         tile: { ...bomb.tile },
@@ -591,6 +646,7 @@ export class GameApp {
       showDangerOverlay: this.showDangerOverlay,
       showBombPreview: this.showBombPreview,
       selectedCharacterIndex: { ...this.selectedCharacterIndex },
+      activePlayerIds: [...this.activePlayerIds],
     };
   }
 
@@ -613,7 +669,8 @@ export class GameApp {
     }
 
     if (this.onlineSession?.role === "guest") {
-      this.forwardGuestInput(deltaMs);
+      this.forwardGuestInput();
+      this.updateGuestLocalPrediction(deltaMs);
       return;
     }
 
@@ -636,46 +693,34 @@ export class GameApp {
     }
   }
 
-  public startServerAuthoritativeMatch(characterSelections: Record<PlayerId, number>): void {
+  public startServerAuthoritativeMatch(activePlayerIds: PlayerId[], characterSelections: Record<PlayerId, number>): void {
     this.onlineSession = {
       role: "host",
       roomCode: "server",
-      sendGuestInput: () => undefined,
+      sendGuestInput: (_input: OnlineInputState, _inputSeq: number) => undefined,
       sendHostSnapshot: () => undefined,
     };
+    this.activePlayerIds = normalizeActivePlayerIds(activePlayerIds);
     this.onlineLocalPlayerId = 1;
-    this.onlineRemotePlayerId = 2;
-    this.onlineLocalInput = createNeutralOnlineInput();
-    this.onlineRemoteInput = createNeutralOnlineInput();
-    this.onlineGuestLastSentInput = createNeutralOnlineInput();
-    this.onlineGuestInputHeartbeatMs = 0;
+    this.onlineInputs = createPlayerRecord(() => createNeutralOnlineInput());
+    this.onlineNextInputSeq = 0;
+    this.onlinePendingInputs = [];
+    this.onlineObservedRoundNumber = null;
     this.onlineRenderSamples = [];
     this.selectedCharacterIndex = { ...characterSelections };
     this.pendingCharacterIndex = { ...characterSelections };
-    this.characterLocked = { 1: true, 2: true };
-    this.characterMenuOpen = { 1: false, 2: false };
+    this.characterLocked = createBooleanPlayerRecord(true);
+    this.characterMenuOpen = createBooleanPlayerRecord(false);
     this.botEnabled = false;
     this.startMatch();
   }
 
   public setServerPlayerInput(playerId: PlayerId, input: OnlineInputState): void {
-    const nextInput = {
+    const target = this.onlineInputs[playerId];
+    this.onlineInputs[playerId] = {
       direction: input.direction,
-      bombPressed: input.bombPressed,
-      detonatePressed: input.detonatePressed,
-    };
-    if (playerId === 1) {
-      this.onlineLocalInput = {
-        direction: nextInput.direction,
-        bombPressed: this.onlineLocalInput.bombPressed || nextInput.bombPressed,
-        detonatePressed: this.onlineLocalInput.detonatePressed || nextInput.detonatePressed,
-      };
-      return;
-    }
-    this.onlineRemoteInput = {
-      direction: nextInput.direction,
-      bombPressed: this.onlineRemoteInput.bombPressed || nextInput.bombPressed,
-      detonatePressed: this.onlineRemoteInput.detonatePressed || nextInput.detonatePressed,
+      bombPressed: target.bombPressed || input.bombPressed,
+      detonatePressed: target.detonatePressed || input.detonatePressed,
     };
   }
 
@@ -692,10 +737,7 @@ export class GameApp {
   }
 
   private syncVisualPlayerPositions(): void {
-    this.visualPlayerPositions = {
-      1: this.getPlayerPixelPositionFromState(this.players[1]),
-      2: this.getPlayerPixelPositionFromState(this.players[2]),
-    };
+    this.visualPlayerPositions = createPlayerRecord((playerId) => this.getPlayerPixelPositionFromState(this.players[playerId]));
   }
 
   private pushOnlineRenderSample(
@@ -710,16 +752,10 @@ export class GameApp {
       receivedAtMs: performance.now(),
       serverTimeMs,
       serverTick,
-      players: {
-        1: {
-          position: this.getPlayerPixelPositionFromState(players[1]),
-          velocity: { x: players[1].velocity.x, y: players[1].velocity.y },
-        },
-        2: {
-          position: this.getPlayerPixelPositionFromState(players[2]),
-          velocity: { x: players[2].velocity.x, y: players[2].velocity.y },
-        },
-      },
+      players: createPlayerRecord((playerId) => ({
+        position: this.getPlayerPixelPositionFromState(players[playerId]),
+        velocity: { x: players[playerId].velocity.x, y: players[playerId].velocity.y },
+      })),
     };
     const previousSample = this.onlineRenderSamples[this.onlineRenderSamples.length - 1] ?? null;
     if (previousSample && previousSample.serverTick === sample.serverTick) {
@@ -732,6 +768,95 @@ export class GameApp {
     }
   }
 
+  private updateGuestLocalPrediction(deltaMs: number): void {
+    if (!this.onlineSession || this.onlineSession.role !== "guest" || this.mode !== "match" || this.paused || this.roundOutcome) {
+      return;
+    }
+
+    const localId = this.onlineLocalPlayerId;
+    const player = this.players[localId];
+    if (!player || !player.alive) {
+      return;
+    }
+
+    player.spawnProtectionMs = Math.max(0, player.spawnProtectionMs - deltaMs);
+    player.flameGuardMs = Math.max(0, player.flameGuardMs - deltaMs);
+
+    if (this.consumeOnlineBombPress(localId)) {
+      this.placeBomb(player);
+    }
+    if (this.consumeOnlineDetonatePress(localId)) {
+      this.triggerRemoteDetonation(player);
+    }
+
+    const direction = this.getMovementDirection(localId);
+    if (direction) {
+      const actualDirection = this.resolveMovementDirection(player, direction, deltaMs);
+      player.direction = actualDirection;
+      this.movePlayer(player, actualDirection, deltaMs);
+    } else {
+      player.velocity.x = 0;
+      player.velocity.y = 0;
+    }
+    player.tile = this.getTileFromPosition(player.position);
+  }
+
+  private reconcileGuestState(ackedInputSeq: number): void {
+    if (!this.onlineSession || this.onlineSession.role !== "guest") {
+      return;
+    }
+    if (this.mode !== "match") {
+      this.onlinePendingInputs = [];
+      return;
+    }
+
+    this.onlinePendingInputs = this.onlinePendingInputs.filter((pending) => pending.seq > ackedInputSeq);
+    const localPlayer = this.players[this.onlineLocalPlayerId];
+    if (!localPlayer || !localPlayer.alive) {
+      return;
+    }
+
+    for (const pending of this.onlinePendingInputs) {
+      this.applyPredictedInputStep(localPlayer, pending.input, FIXED_STEP_MS);
+    }
+  }
+
+  private resetOnlineRoundBuffers(roundNumber: number): void {
+    if (!this.onlineSession) {
+      return;
+    }
+    if (this.onlineObservedRoundNumber === roundNumber) {
+      return;
+    }
+    this.onlineObservedRoundNumber = roundNumber;
+    this.onlinePendingInputs = [];
+    this.onlineRenderSamples = [];
+    this.onlineInputs = createPlayerRecord(() => createNeutralOnlineInput());
+    this.syncVisualPlayerPositions();
+  }
+
+  private applyPredictedInputStep(player: PlayerState, input: OnlineInputState, deltaMs: number): void {
+    player.spawnProtectionMs = Math.max(0, player.spawnProtectionMs - deltaMs);
+    player.flameGuardMs = Math.max(0, player.flameGuardMs - deltaMs);
+
+    if (input.bombPressed) {
+      this.placeBomb(player);
+    }
+    if (input.detonatePressed) {
+      this.triggerRemoteDetonation(player);
+    }
+
+    if (input.direction) {
+      const actualDirection = this.resolveMovementDirection(player, input.direction, deltaMs);
+      player.direction = actualDirection;
+      this.movePlayer(player, actualDirection, deltaMs);
+    } else {
+      player.velocity.x = 0;
+      player.velocity.y = 0;
+    }
+    player.tile = this.getTileFromPosition(player.position);
+  }
+
   private updateVisualPlayerPositions(deltaMs: number): void {
     if (this.headless || !this.onlineSession) {
       this.syncVisualPlayerPositions();
@@ -740,33 +865,16 @@ export class GameApp {
 
     const frameBlend = 1 - Math.pow(1 - ONLINE_RENDER_SMOOTHING, Math.max(1, deltaMs) / FIXED_STEP_MS);
     const nowMs = typeof performance === "undefined" ? 0 : performance.now();
-    for (const id of [1, 2] as const) {
+    for (const id of this.activePlayerIds) {
       const player = this.players[id];
       const target = this.getPlayerPixelPositionFromState(player);
-      let projected = this.projectNetworkPlayerPosition(id, nowMs, target, player.velocity);
-
-      const current = this.visualPlayerPositions[id];
-      const localDirection = this.onlineLocalInput.direction;
-      const shouldPredictLocalPlayer =
-        id === this.onlineLocalPlayerId
-        && this.mode === "match"
-        && player.alive
-        && localDirection
-        && !this.paused
-        && !this.roundOutcome;
-
-      if (shouldPredictLocalPlayer) {
-        const leadDirection = directionDelta[localDirection];
-        const moveSpeed = this.getMoveSpeed(player);
-        projected = {
-          x: current.x + leadDirection.x * moveSpeed * (deltaMs / 1000),
-          y: current.y + leadDirection.y * moveSpeed * (deltaMs / 1000),
-        };
-        projected = {
-          x: projected.x + leadDirection.x * moveSpeed * (ONLINE_LOCAL_INPUT_LEAD_MS / 1000),
-          y: projected.y + leadDirection.y * moveSpeed * (ONLINE_LOCAL_INPUT_LEAD_MS / 1000),
-        };
+      if (id === this.onlineLocalPlayerId) {
+        this.visualPlayerPositions[id] = target;
+        continue;
       }
+
+      let projected = this.projectNetworkPlayerPosition(id, nowMs, target, player.velocity);
+      const current = this.visualPlayerPositions[id];
 
       const offsetX = projected.x - target.x;
       const offsetY = projected.y - target.y;
@@ -780,12 +888,8 @@ export class GameApp {
       }
 
       this.visualPlayerPositions[id] = {
-        x: shouldPredictLocalPlayer
-          ? current.x + (projected.x - current.x) * 0.72
-          : current.x + (projected.x - current.x) * frameBlend,
-        y: shouldPredictLocalPlayer
-          ? current.y + (projected.y - current.y) * 0.72
-          : current.y + (projected.y - current.y) * frameBlend,
+        x: current.x + (projected.x - current.x) * frameBlend,
+        y: current.y + (projected.y - current.y) * frameBlend,
       };
     }
   }
@@ -863,7 +967,9 @@ export class GameApp {
     }
 
     if (this.automationMode && this.input.consumePress("Enter")) {
-      this.menuReady = { 1: true, 2: this.botEnabled };
+      this.menuReady = createBooleanPlayerRecord(false);
+      this.menuReady[1] = true;
+      this.menuReady[2] = this.botEnabled;
     }
     this.handleReadyInput(this.menuReady);
     if (this.menuReady[1] && this.menuReady[2]) {
@@ -930,11 +1036,13 @@ export class GameApp {
     }
 
     if (this.automationMode && this.input.consumePress("Enter")) {
-      this.rematchReady = { 1: true, 2: this.botEnabled };
+      this.rematchReady = createBooleanPlayerRecord(false);
+      this.rematchReady[1] = true;
+      this.rematchReady[2] = this.botEnabled;
     }
     this.handleReadyInput(this.rematchReady);
     if (this.rematchReady[1] && this.rematchReady[2]) {
-      this.menuReady = { 1: false, 2: false };
+      this.menuReady = createBooleanPlayerRecord(false);
       this.startMatch();
     }
   }
@@ -949,7 +1057,7 @@ export class GameApp {
   }
 
   private handleCharacterSelectionInput(): void {
-    for (const id of [1, 2] as const) {
+    for (const id of MENU_PLAYER_IDS) {
       if (!this.input.consumePress(CHARACTER_MENU_KEYS[id])) {
         continue;
       }
@@ -961,7 +1069,7 @@ export class GameApp {
       }
     }
 
-    for (const id of [1, 2] as const) {
+    for (const id of MENU_PLAYER_IDS) {
       if (!this.characterMenuOpen[id]) {
         continue;
       }
@@ -993,17 +1101,17 @@ export class GameApp {
   }
 
   private isAnyCharacterMenuOpen(): boolean {
-    return this.characterMenuOpen[1] || this.characterMenuOpen[2];
+    return MENU_PLAYER_IDS.some((playerId) => this.characterMenuOpen[playerId]);
   }
 
   private startMatch(): void {
     // Prevent queued key presses from previous screens leaking into active gameplay.
     this.input.clearPresses();
-    this.menuReady = { 1: false, 2: false };
-    this.score = { 1: 0, 2: 0 };
+    this.menuReady = createBooleanPlayerRecord(false);
+    this.score = { 1: 0, 2: 0, 3: 0, 4: 0 };
     this.roundNumber = 1;
     this.matchWinner = null;
-    this.rematchReady = { 1: false, 2: false };
+    this.rematchReady = createBooleanPlayerRecord(false);
     this.resetRound();
     this.mode = "match";
   }
@@ -1018,9 +1126,9 @@ export class GameApp {
     this.roundOutcome = null;
     this.paused = false;
     this.botBombCooldownMs = 0;
-    this.botCommittedDirection = { 1: null, 2: null };
-    this.botPendingReverseDirection = { 1: null, 2: null };
-    this.botPendingReverseFrames = { 1: 0, 2: 0 };
+    this.botCommittedDirection = createDirectionPlayerRecord(null);
+    this.botPendingReverseDirection = createDirectionPlayerRecord(null);
+    this.botPendingReverseFrames = createNumberPlayerRecord(0);
     this.animationClockMs = 0;
     this.suddenDeathActive = false;
     this.suddenDeathTickMs = SUDDEN_DEATH_TICK_MS;
@@ -1029,20 +1137,19 @@ export class GameApp {
   }
 
   private createPlayers(): Record<PlayerId, PlayerState> {
-    const players = {
-      1: this.createPlayer(1, "P1", { x: 2, y: 1 }, "down"),
-      2: this.createPlayer(2, this.isBotControlled(2) ? "BOT" : "P2", { x: GRID_WIDTH - 3, y: GRID_HEIGHT - 2 }, "up"),
-    };
-    this.visualPlayerPositions = {
-      1: this.getPlayerPixelPositionFromState(players[1]),
-      2: this.getPlayerPixelPositionFromState(players[2]),
-    };
+    const players = createPlayerRecord((playerId) => {
+      const spawn = PLAYER_SPAWNS[playerId];
+      const name = playerId === 2 && this.isBotControlled(2) ? "BOT" : `P${playerId}`;
+      return this.createPlayer(playerId, name, spawn.tile, spawn.direction, this.activePlayerIds.includes(playerId));
+    });
+    this.visualPlayerPositions = createPlayerRecord((playerId) => this.getPlayerPixelPositionFromState(players[playerId]));
     return players;
   }
 
   private syncPlayerLabels(): void {
-    this.players[1].name = "P1";
-    this.players[2].name = this.isBotControlled(2) ? "BOT" : "P2";
+    for (const playerId of ALL_PLAYER_IDS) {
+      this.players[playerId].name = playerId === 2 && this.isBotControlled(2) ? "BOT" : `P${playerId}`;
+    }
   }
 
   private getCharacterEntry(index: number): CharacterRosterEntry {
@@ -1089,15 +1196,22 @@ export class GameApp {
     return `${name.slice(0, maxLength - 3)}...`;
   }
 
-  private createPlayer(id: PlayerId, name: string, tile: TileCoord, direction: Direction): PlayerState {
+  private createPlayer(
+    id: PlayerId,
+    name: string,
+    tile: TileCoord,
+    direction: Direction,
+    active: boolean,
+  ): PlayerState {
     const center = this.getTileCenter(tile);
     return {
       id,
       name,
+      active,
       tile: { ...tile },
       position: center,
       velocity: { x: 0, y: 0 },
-      alive: true,
+      alive: active,
       direction,
       lastMoveDirection: null,
       maxBombs: 1,
@@ -1114,7 +1228,7 @@ export class GameApp {
   }
 
   private updatePlayers(deltaMs: number): void {
-    for (const id of [1, 2] as const) {
+    for (const id of this.activePlayerIds) {
       const player = this.players[id];
       if (!player.alive) {
         continue;
@@ -1127,8 +1241,11 @@ export class GameApp {
         ? this.automationControlledPlayer === id && this.input.consumePress("Space")
         : false;
       const onlineBomb = this.consumeOnlineBombPress(id);
+      const nativeBindings = MENU_PLAYER_IDS.includes(id as MenuPlayerId)
+        ? KEY_BINDINGS[id as MenuPlayerId]
+        : null;
       const nativeBomb = this.shouldUseNativeControls()
-        ? this.input.consumePress(KEY_BINDINGS[id].bomb)
+        ? nativeBindings ? this.input.consumePress(nativeBindings.bomb) : false
         : false;
       const wantsBomb = botDecision?.placeBomb || automationBomb || nativeBomb || onlineBomb;
       if (wantsBomb) {
@@ -1140,7 +1257,7 @@ export class GameApp {
       const wantsDetonate = botDecision?.detonate
         || this.consumeOnlineDetonatePress(id)
         || (this.shouldUseNativeControls()
-          ? this.input.consumePress(KEY_BINDINGS[id].detonate)
+          ? nativeBindings ? this.input.consumePress(nativeBindings.detonate) : false
           : false);
       if (wantsDetonate) {
         this.triggerRemoteDetonation(player);
@@ -1172,12 +1289,10 @@ export class GameApp {
     if (this.isBotControlled(id)) {
       return null;
     }
-    if (this.onlineSession?.role === "host") {
-      if (id === this.onlineLocalPlayerId) {
-        return this.onlineLocalInput.direction;
-      }
-      if (id === this.onlineRemotePlayerId) {
-        return this.onlineRemoteInput.direction;
+    if (this.onlineSession) {
+      const input = this.onlineInputs[id];
+      if (input) {
+        return input.direction;
       }
     }
     if (this.automationMode) {
@@ -1186,29 +1301,28 @@ export class GameApp {
       }
       return null;
     }
-    return this.input.getMovementDirection(id);
+    if (MENU_PLAYER_IDS.includes(id as MenuPlayerId)) {
+      return this.input.getMovementDirection(id as MenuPlayerId);
+    }
+    return null;
   }
 
   private isBotControlled(id: PlayerId): boolean {
-    return id === 2 && this.botEnabled;
+    return id === 2 && this.botEnabled && this.activePlayerIds.includes(2);
   }
 
   private shouldUseNativeControls(): boolean {
-    if (this.onlineSession?.role === "host") {
+    if (this.onlineSession) {
       return false;
     }
     return true;
   }
 
   private consumeOnlineBombPress(id: PlayerId): boolean {
-    if (this.onlineSession?.role !== "host") {
+    if (!this.onlineSession) {
       return false;
     }
-    const source = id === this.onlineLocalPlayerId
-      ? this.onlineLocalInput
-      : id === this.onlineRemotePlayerId
-        ? this.onlineRemoteInput
-        : null;
+    const source = this.onlineInputs[id];
     if (!source) {
       return false;
     }
@@ -1218,14 +1332,10 @@ export class GameApp {
   }
 
   private consumeOnlineDetonatePress(id: PlayerId): boolean {
-    if (this.onlineSession?.role !== "host") {
+    if (!this.onlineSession) {
       return false;
     }
-    const source = id === this.onlineLocalPlayerId
-      ? this.onlineLocalInput
-      : id === this.onlineRemotePlayerId
-        ? this.onlineRemoteInput
-        : null;
+    const source = this.onlineInputs[id];
     if (!source) {
       return false;
     }
@@ -2225,7 +2335,7 @@ export class GameApp {
   }
 
   private isAnyPlayerOnTile(tile: TileCoord): boolean {
-    for (const id of [1, 2] as const) {
+    for (const id of this.activePlayerIds) {
       const player = this.players[id];
       if (!player.alive) {
         continue;
@@ -2531,7 +2641,7 @@ export class GameApp {
 
   private resolvePlayerDeathsFromFlames(): void {
     const flameKeys = new Set(this.flames.map((flame) => tileKey(flame.tile.x, flame.tile.y)));
-    for (const id of [1, 2] as const) {
+    for (const id of this.activePlayerIds) {
       const player = this.players[id];
       if (!player.alive) {
         continue;
@@ -2556,7 +2666,7 @@ export class GameApp {
   }
 
   private collectPowerUps(): void {
-    for (const id of [1, 2] as const) {
+    for (const id of this.activePlayerIds) {
       const player = this.players[id];
       if (!player.alive) {
         continue;
@@ -2591,8 +2701,8 @@ export class GameApp {
   }
 
   private evaluateRoundState(): void {
-    const alivePlayers = ([1, 2] as const).filter((id) => this.players[id].alive);
-    if (alivePlayers.length === 2) {
+    const alivePlayers = this.activePlayerIds.filter((id) => this.players[id].alive);
+    if (alivePlayers.length > 1) {
       return;
     }
     if (alivePlayers.length === 0) {
@@ -2618,19 +2728,14 @@ export class GameApp {
   }
 
   private advanceAfterRound(): void {
-    if (this.score[1] >= TARGET_WINS) {
-      this.matchWinner = 1;
-      this.rematchReady = { 1: false, 2: false };
-      this.input.clearPresses();
-      this.mode = "match-result";
-      return;
-    }
-    if (this.score[2] >= TARGET_WINS) {
-      this.matchWinner = 2;
-      this.rematchReady = { 1: false, 2: false };
-      this.input.clearPresses();
-      this.mode = "match-result";
-      return;
+    for (const playerId of this.activePlayerIds) {
+      if (this.score[playerId] >= TARGET_WINS) {
+        this.matchWinner = playerId;
+        this.rematchReady = createBooleanPlayerRecord(false);
+        this.input.clearPresses();
+        this.mode = "match-result";
+        return;
+      }
     }
     this.input.clearPresses();
     this.roundNumber += 1;
@@ -2788,125 +2893,36 @@ export class GameApp {
   }
 
   private renderMenu(): void {
+    this.renderArena();
+
+    this.ctx.fillStyle = "rgba(5, 10, 18, 0.84)";
+    this.ctx.fillRect(18, 18, CANVAS_WIDTH - 36, 54);
+    this.ctx.strokeStyle = "rgba(150, 201, 242, 0.24)";
+    this.ctx.lineWidth = 1.5;
+    this.ctx.strokeRect(18.5, 18.5, CANVAS_WIDTH - 37, 53);
+
+    this.ctx.textAlign = "left";
     this.ctx.fillStyle = "#edf3ff";
-    this.ctx.font = "bold 30px 'Trebuchet MS', sans-serif";
-    this.ctx.textAlign = "center";
-    this.ctx.fillText("MISTBRIDGE ARENA", CANVAS_WIDTH / 2, 86);
+    this.ctx.font = "bold 22px 'Trebuchet MS', sans-serif";
+    this.ctx.fillText("MISTBRIDGE ARENA", 32, 42);
 
-    this.ctx.fillStyle = "#a8c8e8";
-    this.ctx.font = "bold 12px monospace";
-    this.ctx.fillText("Clifftop ruins. Tight corridors. First to 2 rounds.", CANVAS_WIDTH / 2, 112);
+    this.ctx.fillStyle = "#b6d1e6";
+    this.ctx.font = "bold 10px monospace";
+    this.ctx.fillText("WASD move   Q bomb   E ready", 32, 58);
 
-    this.ctx.fillStyle = "rgba(10, 18, 31, 0.84)";
-    this.ctx.fillRect(40, 132, 400, 292);
-    this.ctx.strokeStyle = "rgba(150, 201, 242, 0.46)";
-    this.ctx.lineWidth = 2;
-    this.ctx.strokeRect(40.5, 132.5, 399, 291);
-
-    this.drawMenuSection(
-      56,
-      152,
-      174,
-      94,
-      "P1 PILOT",
-      [
-        "Move  WASD",
-        "Bomb  Q",
-        "Detonate  R",
-        "Ready  E",
-        "Skin menu  G",
-      ],
-      PLAYER_COLORS[1].primary,
-    );
-    this.drawMenuSection(
-      250,
-      152,
-      174,
-      94,
-      this.botEnabled ? "P2 / BOT" : "P2 PILOT",
-      this.botEnabled
-        ? ["Move  Arrows", "Bomb  O", "Detonate  U", "Ready  P", "Toggle BOT  B"]
-        : ["Move  Arrows", "Bomb  O", "Detonate  U", "Ready  P", "Skin menu  K"],
-      PLAYER_COLORS[2].primary,
-    );
-
-    this.drawMenuSection(
-      56,
-      260,
-      368,
-      78,
-      "MATCH OPTIONS",
-      [
-        `Danger overlay  ${this.showDangerOverlay ? "ON" : "OFF"}`,
-        `Blast preview  ${this.showBombPreview ? "ON" : "OFF"}`,
-        "Fullscreen  F   Pause  Esc",
-        "Character menu browse  Up/Down + Ready",
-      ],
-      "#c2d9ec",
-    );
-
-    this.drawReadyPanel(
-      56,
-      340,
-      1,
-      this.menuReady[1],
-      `Main hero: ${this.getCharacterLabel(1, 16)}`,
-      `P1 / ${this.getCharacterLabel(1, 14)}`,
-    );
-    this.drawReadyPanel(
-      246,
-      340,
-      2,
-      this.menuReady[2],
-      this.botEnabled
-        ? `Main hero: ${this.getCharacterLabel(2, 14)}`
-        : `Main hero: ${this.getCharacterLabel(2, 16)}`,
-      `${this.getPlayerSlotLabel(2)} / ${this.getCharacterLabel(2, 12)}`,
-    );
+    this.ctx.fillStyle = "rgba(5, 10, 18, 0.86)";
+    this.ctx.fillRect(24, CANVAS_HEIGHT - 62, CANVAS_WIDTH - 48, 36);
+    this.ctx.strokeStyle = "rgba(150, 201, 242, 0.18)";
+    this.ctx.strokeRect(24.5, CANVAS_HEIGHT - 61.5, CANVAS_WIDTH - 49, 35);
 
     this.ctx.textAlign = "center";
-    this.ctx.font = "bold 11px monospace";
-    this.ctx.fillStyle = this.menuReady[1] && this.menuReady[2] ? "#f7ebc3" : "#b9d3e8";
-    this.ctx.fillText(
-      this.menuReady[1] && this.menuReady[2]
-        ? "Loading arena..."
-        : (this.botEnabled ? "Press E to start vs BOT." : "Both pilots must ready up."),
-      CANVAS_WIDTH / 2,
-      438,
-    );
+    this.ctx.fillStyle = "#d7e7f6";
+    this.ctx.font = "bold 10px monospace";
+    this.ctx.fillText("Choose your pilot in the lobby panel. Quick match uses your selected character.", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 40);
 
     if (this.isAnyCharacterMenuOpen()) {
       this.renderCharacterSelectionOverlay();
     }
-  }
-
-  private drawMenuSection(
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    title: string,
-    lines: string[],
-    accent: string,
-  ): void {
-    this.ctx.fillStyle = "rgba(6, 13, 24, 0.88)";
-    this.ctx.fillRect(x, y, width, height);
-    this.ctx.strokeStyle = "rgba(173, 211, 244, 0.2)";
-    this.ctx.lineWidth = 1.5;
-    this.ctx.strokeRect(x + 0.5, y + 0.5, width - 1, height - 1);
-    this.ctx.fillStyle = accent;
-    this.ctx.fillRect(x, y, width, 3);
-
-    this.ctx.textAlign = "left";
-    this.ctx.fillStyle = accent;
-    this.ctx.font = "bold 11px monospace";
-    this.ctx.fillText(title, x + 10, y + 16);
-
-    this.ctx.fillStyle = "#dbe8f5";
-    this.ctx.font = "10px monospace";
-    lines.forEach((line, index) => {
-      this.ctx.fillText(line, x + 10, y + 34 + index * 14);
-    });
   }
 
   private drawMenuPortrait(x: number, y: number, playerId: PlayerId): void {
@@ -3035,57 +3051,42 @@ export class GameApp {
     this.ctx.fillStyle = "rgba(158, 214, 255, 0.18)";
     this.ctx.fillRect(0, HUD_HEIGHT - 2, CANVAS_WIDTH, 2);
 
-    this.drawHudPanel(10, 8, 64, 36, "rgba(183, 223, 255, 0.6)");
-    this.drawHudPanel(84, 8, 118, 36, "rgba(108, 244, 255, 0.65)");
-    this.drawHudPanel(206, 6, 68, 40, "rgba(244, 248, 255, 0.55)");
-    this.drawHudPanel(278, 8, 118, 36, "rgba(255, 139, 91, 0.65)");
-    this.drawHudPanel(406, 8, 64, 36, "rgba(183, 223, 255, 0.6)");
-
     this.ctx.textAlign = "left";
     this.ctx.font = "bold 8px monospace";
-    this.drawHudText("ROUND", 18, 20, "#d8eaf8", "rgba(4, 10, 19, 0.9)");
-    this.drawHudText("GOAL", 18, 36, "#d8eaf8", "rgba(4, 10, 19, 0.9)");
-    this.ctx.textAlign = "right";
-    this.ctx.font = "bold 13px monospace";
-    this.drawHudText(String(this.roundNumber), 64, 21, "#f7fbff", "rgba(4, 10, 19, 0.9)");
-    this.drawHudText(String(TARGET_WINS), 64, 37, "#f7fbff", "rgba(4, 10, 19, 0.9)");
-
-    this.ctx.textAlign = "center";
-    this.ctx.font = "bold 8px monospace";
-    this.drawHudText("TIME", 240, 18, "#b8cde2", "rgba(4, 10, 19, 0.9)");
-    this.ctx.font = "bold 16px monospace";
+    this.drawHudText(`R${this.roundNumber}`, 12, 15, "#d8eaf8", "rgba(4, 10, 19, 0.9)");
+    this.drawHudText(`GOAL ${TARGET_WINS}`, 12, 29, "#d8eaf8", "rgba(4, 10, 19, 0.9)");
     this.drawHudText(
-      Math.ceil(this.roundTimeMs / 1000).toString().padStart(2, "0"),
-      240,
-      36,
-      "#f7fbff",
+      this.showDangerOverlay ? "DANGER ON" : "DANGER OFF",
+      12,
+      43,
+      this.showDangerOverlay ? "rgba(255, 213, 163, 0.96)" : "rgba(176, 197, 218, 0.82)",
       "rgba(4, 10, 19, 0.9)",
     );
 
-    this.renderPlayerHud(1, 143, 8);
-    this.renderPlayerHud(2, 337, 8);
-
     this.ctx.textAlign = "center";
     this.ctx.font = "bold 8px monospace";
-    this.drawHudText("MODE", 438, 20, "#b8cde2", "rgba(4, 10, 19, 0.9)");
-    this.ctx.font = "bold 11px monospace";
-    this.drawHudText(this.botEnabled ? "VS BOT" : "VS P2", 438, 36, "#f7fbff", "rgba(4, 10, 19, 0.9)");
-    this.ctx.font = "7px monospace";
+    this.drawHudText("TIME", CANVAS_WIDTH / 2, 15, "#b8cde2", "rgba(4, 10, 19, 0.9)");
+    this.ctx.font = "bold 16px monospace";
     this.drawHudText(
-      this.showDangerOverlay ? "DANGER ON" : "DANGER OFF",
-      438,
-      47,
-      this.showDangerOverlay ? "rgba(255, 213, 163, 0.96)" : "rgba(176, 197, 218, 0.82)",
+      Math.ceil(this.roundTimeMs / 1000).toString().padStart(2, "0"),
+      CANVAS_WIDTH / 2,
+      31,
+      "#f7fbff",
       "rgba(4, 10, 19, 0.9)",
     );
     this.ctx.font = "7px monospace";
     this.drawHudText(
       this.showBombPreview ? "BLAST ON" : "BLAST OFF",
-      438,
-      56,
+      CANVAS_WIDTH / 2,
+      44,
       this.showBombPreview ? "rgba(183, 247, 232, 0.96)" : "rgba(176, 197, 218, 0.82)",
       "rgba(4, 10, 19, 0.9)",
     );
+
+    const slotWidth = (CANVAS_WIDTH - 8) / Math.max(1, this.activePlayerIds.length);
+    this.activePlayerIds.forEach((playerId, index) => {
+      this.renderPlayerHud(playerId, 6 + index * slotWidth, 17, slotWidth - 6);
+    });
 
     if (!this.roundOutcome) {
       this.ctx.textAlign = "center";
@@ -3105,38 +3106,29 @@ export class GameApp {
     }
   }
 
-  private renderPlayerHud(playerId: PlayerId, centerX: number, y: number): void {
-      const player = this.players[playerId];
-      const palette = PLAYER_COLORS[playerId];
-      const heroName = this.getCharacterLabel(playerId, 14);
-      const slotLabel = this.getPlayerSlotLabel(playerId);
-      this.ctx.textAlign = "center";
-      this.ctx.fillStyle = palette.primary;
-      this.ctx.font = "bold 12px monospace";
-      this.drawHudText(`${heroName} ${this.score[playerId]}`, centerX, y + 13, palette.primary, "rgba(4, 10, 19, 0.9)");
-      this.ctx.fillStyle = "#dbefff";
-      this.ctx.font = "bold 7px monospace";
-      this.drawHudText(slotLabel, centerX, y + 22, "rgba(214, 233, 248, 0.92)", "rgba(4, 10, 19, 0.85)");
-      this.ctx.font = "8px monospace";
-      this.drawHudText(
-        `B ${player.maxBombs}   F ${player.flameRange}   S ${player.speedLevel}   R ${player.remoteLevel}   H ${player.shieldCharges}   P ${player.bombPassLevel}   K ${player.kickLevel}`,
-        centerX,
-        y + 31,
-        "#dbefff",
-        "rgba(4, 10, 19, 0.9)",
-      );
-    const status = this.isBotControlled(playerId)
-      ? player.alive
-        ? "BOT ONLINE"
-        : "BOT DOWN"
-      : player.alive
-        ? "ONLINE"
-        : "DOWN";
-      const statusLabel = player.flameGuardMs > 0 && player.alive ? `${status} GUARD` : status;
-      this.ctx.fillStyle = player.alive ? "rgba(218, 245, 255, 0.9)" : "rgba(210, 220, 231, 0.55)";
-      this.ctx.font = "bold 7px monospace";
-      this.drawHudText(statusLabel, centerX, y + 41, player.alive ? "rgba(218, 245, 255, 0.9)" : "rgba(210, 220, 231, 0.55)", "rgba(4, 10, 19, 0.8)");
-    }
+  private renderPlayerHud(playerId: PlayerId, x: number, y: number, width: number): void {
+    const player = this.players[playerId];
+    const palette = PLAYER_COLORS[playerId];
+    const title = `${this.getPlayerSlotLabel(playerId)} ${this.score[playerId]}`;
+    const statLine = `B${player.maxBombs} F${player.flameRange} S${player.speedLevel}`;
+    const status = player.alive ? (player.flameGuardMs > 0 ? "GUARD" : "LIVE") : "DOWN";
+
+    this.drawHudPanel(x, y, width, 30, palette.glow);
+    this.ctx.textAlign = "left";
+    this.ctx.font = "bold 9px monospace";
+    this.drawHudText(title, x + 6, y + 11, palette.primary, "rgba(4, 10, 19, 0.9)");
+    this.ctx.font = "7px monospace";
+    this.drawHudText(
+      this.shortenCharacterName(this.getCharacterLabel(playerId, 12), 12),
+      x + 6,
+      y + 21,
+      "#dbefff",
+      "rgba(4, 10, 19, 0.9)",
+    );
+    this.ctx.textAlign = "right";
+    this.drawHudText(status, x + width - 6, y + 11, player.alive ? "#e5fff7" : "rgba(210, 220, 231, 0.55)", "rgba(4, 10, 19, 0.85)");
+    this.drawHudText(statLine, x + width - 6, y + 21, "#dbefff", "rgba(4, 10, 19, 0.85)");
+  }
 
   private renderArena(): void {
     const centerX = Math.floor(GRID_WIDTH / 2);
@@ -3152,7 +3144,10 @@ export class GameApp {
         const key = tileKey(x, y);
         const isCenterLane = x === centerX || y === centerY;
         const isSideLane = x === sideColumn || x === farSideColumn || y === sideRow || y === farSideRow;
-        const isSpawnBay = (x <= 2 && y <= 2) || (x >= GRID_WIDTH - 3 && y >= GRID_HEIGHT - 3);
+        const isSpawnBay = (x <= 2 && y <= 2)
+          || (x >= GRID_WIDTH - 3 && y <= 2)
+          || (x <= 2 && y >= GRID_HEIGHT - 3)
+          || (x >= GRID_WIDTH - 3 && y >= GRID_HEIGHT - 3);
         let baseTone = (x + y) % 2 === 0 ? "#10233d" : "#0b1830";
         if (isSideLane) {
           baseTone = (x + y) % 2 === 0 ? "#112946" : "#0d2140";
@@ -3209,7 +3204,7 @@ export class GameApp {
       this.drawFlame(flame);
     }
 
-    for (const id of [1, 2] as const) {
+    for (const id of this.activePlayerIds) {
       this.drawPlayer(this.players[id]);
     }
 
@@ -3285,6 +3280,9 @@ export class GameApp {
   }
 
   private getBombPreviewPlayerId(): PlayerId {
+    if (this.onlineSession) {
+      return this.onlineLocalPlayerId;
+    }
     if (this.automationMode) {
       return this.automationControlledPlayer;
     }
@@ -3477,6 +3475,9 @@ export class GameApp {
   }
 
   private drawPlayer(player: PlayerState): void {
+    if (!player.active) {
+      return;
+    }
     const position = this.getPlayerPixelPosition(player);
     const palette = PLAYER_COLORS[player.id];
     const x = position.x;
@@ -3618,8 +3619,13 @@ export class GameApp {
   private renderMatchResult(): void {
     this.drawCenterOverlay(
       this.matchWinner ? `${this.players[this.matchWinner].name} wins the match!` : "Match complete",
-      "Both pilots press Ready for a rematch.",
+      this.onlineSession
+        ? "Leave the lobby or queue another quick match for the next game."
+        : "Both pilots press Ready for a rematch.",
     );
+    if (this.onlineSession) {
+      return;
+    }
     this.drawReadyPanel(92, 332, 1, this.rematchReady[1], "Press E to rematch");
     this.drawReadyPanel(
       252,
@@ -3705,7 +3711,8 @@ export class GameApp {
         origin: { x: ARENA_OFFSET_X, y: ARENA_OFFSET_Y },
         coordinates: "origin top-left, x to right, y to bottom",
       },
-      players: ([1, 2] as const).map((id) => {
+      activePlayerIds: [...this.activePlayerIds],
+      players: this.activePlayerIds.map((id) => {
         const player = this.players[id];
         const tile = this.getTileFromPosition(player.position);
         const pixel = this.getPlayerPixelPosition(player);

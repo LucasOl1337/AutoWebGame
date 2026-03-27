@@ -63,7 +63,7 @@ button {
   height: calc(100dvh - 32px);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(248px, 296px) minmax(0, 1fr);
+  grid-template-columns: minmax(226px, 272px) minmax(0, 1fr);
   gap: 16px;
   overflow: hidden;
 }
@@ -115,7 +115,7 @@ button {
 .lobby-browser {
   padding: 20px;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 18px;
 }
 
@@ -158,6 +158,62 @@ button {
   border: 1px solid rgba(160, 201, 236, 0.1);
   border-radius: 20px;
   background: rgba(6, 12, 21, 0.56);
+}
+
+.lobby-selector {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(160, 201, 236, 0.1);
+  border-radius: 20px;
+  background: rgba(6, 12, 21, 0.56);
+  text-align: center;
+}
+
+.lobby-selector__heading {
+  width: 100%;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-align: left;
+}
+
+.lobby-selector__portrait {
+  width: 112px;
+  height: 112px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  border-radius: 18px;
+  border: 1px solid rgba(165, 205, 236, 0.14);
+  background:
+    radial-gradient(circle at top, rgba(121, 216, 255, 0.14), transparent 48%),
+    rgba(8, 15, 25, 0.92);
+}
+
+.lobby-selector__name,
+.lobby-selector__note {
+  margin: 0;
+}
+
+.lobby-selector__name {
+  font-size: 1.02rem;
+  font-weight: 700;
+}
+
+.lobby-selector__note {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.lobby-selector__actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .lobby-quickmatch-meta {
@@ -326,16 +382,16 @@ button {
 }
 
 .lobby-stage {
-  padding: 20px 22px;
+  padding: 18px 20px;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 14px;
+  gap: 12px;
 }
 
 .lobby-stage__top {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 340px);
+  gap: 12px;
   align-items: start;
 }
 
@@ -372,15 +428,15 @@ button {
 .lobby-stage__invite {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 10px;
+  gap: 8px;
   align-content: start;
 }
 
 .lobby-stage__workspace {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(296px, 340px);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(264px, 300px);
+  gap: 12px;
 }
 
 .lobby-stage__viewport,
@@ -396,7 +452,7 @@ button {
 .lobby-stage__viewport {
   display: grid;
   place-items: center;
-  padding: 18px;
+  padding: 10px;
   overflow: hidden;
 }
 
@@ -412,7 +468,7 @@ button {
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 14px;
+  gap: 12px;
 }
 
 .lobby-stage__panel {
@@ -428,11 +484,12 @@ button {
 .lobby-seats {
   display: grid;
   gap: 10px;
+  grid-template-columns: 1fr;
 }
 
 .lobby-seat {
   min-height: 0;
-  padding: 14px;
+  padding: 12px;
   border: 1px solid rgba(160, 201, 236, 0.1);
   border-radius: 18px;
   background:
@@ -479,14 +536,14 @@ button {
 
 .lobby-seat__preview {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 60px minmax(0, 1fr);
+  gap: 10px;
   align-items: center;
 }
 
 .lobby-seat__portrait {
-  width: 72px;
-  height: 72px;
+  width: 60px;
+  height: 60px;
   object-fit: contain;
   image-rendering: pixelated;
   border-radius: 16px;
@@ -575,6 +632,7 @@ button {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
+  align-items: center;
 }
 
 .lobby-status {
@@ -599,7 +657,7 @@ canvas {
 }
 
 .lobby-shell[data-state="match"] {
-  grid-template-columns: minmax(224px, 264px) minmax(0, 1fr);
+  grid-template-columns: minmax(210px, 248px) minmax(0, 1fr);
 }
 
 .lobby-shell[data-state="match"] .lobby-browser {
@@ -612,7 +670,7 @@ canvas {
   }
 
   .lobby-stage__workspace {
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+    grid-template-columns: minmax(0, 1fr) minmax(252px, 292px);
   }
 
   .lobby-stage__title {
@@ -650,6 +708,10 @@ canvas {
   .lobby-stage__rail {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-rows: none;
+  }
+
+  .lobby-seats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .lobby-chat {

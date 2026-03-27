@@ -78,6 +78,19 @@ TODO movimento
 2026-03-16 edge-forgiveness pass
 - Player agora guarda a ultima direcao de movimento util e usa isso como fallback quando um giro novo ainda nao cabe por alinhamento de borda/corredor.
 - A logica prioriza continuar no corredor atual em vez de parar seco quando a nova direcao ainda nao tem avancao real.
+
+2026-03-27 online lobby polish pass
+- Adicionado seletor persistente de personagem na coluna esquerda; ele controla claim de slot e quick match via `preferredCharacterIndex` salvo em `localStorage`.
+- Quick match e claim-seat agora carregam o personagem escolhido no protocolo cliente/worker.
+- HUD do menu foi limpo: sairam textos legados de P2/match options e entrou uma faixa compacta com controles padrao `WASD`, `Q`, `E`.
+- Canvas agora escala ate o limite real do viewport, sem o arredondamento conservador que deixava a arena pequena.
+- Chat do lobby foi endurecido no cliente: input para de propagar teclas/clicks, nao limpa draft se o socket cair, e refoca apos envio.
+- Layout desktop foi comprimido para priorizar o playfield, com selector fixo na esquerda e cards de slot empilhados na rail direita para manter legibilidade.
+- Validado com `npm run build`, `node --check worker/index.js` e preview visual em `output/layout-after-pass-2.png`.
+
+TODO online polish
+- Validar o chat com o backend online real; a preview estatica nao sobe websocket em `/online`, entao so confirmou layout/foco visual.
+- Se quiser mais densidade competitiva, o proximo corte natural e recolher o painel de slots durante partida ativa e deixar apenas chat + status.
 - Smoke de curva/buffer adicionado em `tests/actions/corner-buffer.json` e validado em `output/corner-buffer/shot-0.png`.
 2026-03-16 player scale pass
 - Sprites dos personagens foram ampliados visualmente e ancorados pelos pes na celula, mantendo hitbox/grid intactos.
@@ -110,6 +123,21 @@ Validacao
 TODO bot
 - Quando o ambiente permitir browser spawn, rodar smoke visual em gameplay real (`tests/actions/bot-smoke.json`) e ajustar tuning (agressividade/cooldown/radius).
 - Considerar estado de "hunting" por trilha de perigo dinamica (tempo ate explosao) para rotas mais curtas e menos conservadoras.
+
+2026-03-27 four-player online pass
+- Online/worker/protocolo generalizados para `PlayerId` 1..4, com snapshots e estado de partida carregando `activePlayerIds`.
+- Quick match ajustado para fila global de ate 4 jogadores: com 2 jogadores inicia contagem de 5s; se 3 ou 4 entrarem na mesma fila antes do prazo, todos entram juntos na mesma arena.
+- Lobbies manuais agora suportam ate 4 slots; a partida abre quando houver pelo menos 2 slots ocupados e todos os slots ocupados estiverem em ready.
+- Runtime do jogo atualizado para suportar partidas com 2-4 jogadores ativos no mesmo mapa, incluindo score, HUD, snapshots online e renderizacao dos 4 personagens.
+- Spawns da arena expandidos para os 4 cantos: P1 superior esquerdo, P2 superior direito, P3 inferior esquerdo, P4 inferior direito.
+
+Validacao 2026-03-27
+- `npm run build`
+- `npm run test:spawn`
+- `npm run test:online-4p`
+
+TODO online
+- Fazer um smoke automatizado do fluxo websocket real de quick match 2p/3p/4p quando tivermos um harness dedicado para Durable Object ou uma camada de matchmaking extraida para teste unitario.
 2026-03-16 bot tactical offense sprint
 - IA do BOT recebeu comportamento tatico ofensivo novo: detectar linha de tiro de bomba (mesma linha/coluna com alcance livre) para plantar bomba mesmo sem adjacencia.
 - Adicionada busca por posicao de ataque: quando ainda nao tem linha de tiro, BOT passa a navegar para tiles de onde a bomba atingiria o P1 com rota de fuga valida.
@@ -258,6 +286,17 @@ Validacao
 - Sem erros de console nos dois smokes.
 2026-03-16 walk animation integration (Guts)
 - Iniciado pipeline de animacao de caminhada para o personagem principal Guts original (`a57a868c-f2c3-4e11-b4db-5f255c9408c4`).
+2026-03-27 PvP smoothing + network trim
+- Causa mais provavel do lag residual em PvP identificada como jitter de rede/arrival-time no cliente online, nao custo bruto do runtime: contra BOT local a simulacao segue lisa.
+- Cliente online saiu do modelo `sample anterior + atual por receivedAt` para um buffer de amostras com interpolacao por `serverTick`, o que reduz stutter quando frames chegam em rajadas irregulares.
+- Input de jogador remoto deixou de subir 60 mensagens/s cegamente: agora envia por mudanca de estado + heartbeat curto, e o servidor limpa flags edge-triggered (`bomb/detonate`) a cada tick.
+- `host-snapshot` ficou menos frequente (`10 ticks`) para aliviar parse/banda sem mexer na autoridade do servidor.
+
+Validacao
+- Build: `npm run build` (ok).
+
+TODO proximo run
+- Se ainda houver microstutter perceptivel, proximo passo de maior impacto e delta-compression real para `bombs/flames` e buffer separado de reconciliacao para o jogador local.
 - PixelLab: gerada template `walking-8-frames`; zip baixado e extraido em `output/pixellab-guts/unzipped`.
 - Frames exportados para runtime em `public/assets/sprites/player1-walk-{south,east,north,west}-0..7.png` (32 arquivos).
   - `south/north/west`: frames nativos do PixelLab.
@@ -872,3 +911,45 @@ TODO Killer Bee
 - Assim que `get_character("6ee8baa5-3277-413b-ae0e-2659b9cc52e9")` mostrar fila vazia, rodar:
   - `$env:PIXELLAB_CHARACTER_IDS='6ee8baa5-3277-413b-ae0e-2659b9cc52e9'; node scripts/import_pixellab_characters.mjs`
 - Depois validar no runtime se `idle` e `walk` entraram no manifest/import local.
+2026-03-27 roster expansion + general animation wave
+- `5474c45c-2987-43e0-af2c-a6500c836881` entrou no jogo e no manifesto com nome curto `Nico`.
+- Import sincronizado com sucesso para:
+  - `Ranni`
+  - `Killer Bee`
+  - `Nico`
+- Estado local apos sync:
+  - `Ranni`: `idle=true`, `walk=true`
+  - `Killer Bee`: `idle=true`, `walk=true`
+  - `Nico`: `idle=false`, `walk=true`
+- Wave de animacoes geral aberta no PixelLab:
+  - `Nico`: `breathing-idle` cardinal (`south/east/north/west`)
+  - `Ranni`: `running-8-frames` cardinal (`south/east/north/west`)
+  - `Ranni`: `fireball` lateral (`east/west`)
+
+TODO next sync
+- Quando `get_character("5474c45c-2987-43e0-af2c-a6500c836881")` e `get_character("03a976fb-7313-4064-a477-5bb9b0760034")` ficarem sem jobs pendentes, rodar:
+  - `$env:PIXELLAB_CHARACTER_IDS='03a976fb-7313-4064-a477-5bb9b0760034,5474c45c-2987-43e0-af2c-a6500c836881'; node scripts/import_pixellab_characters.mjs`
+2026-03-27 Ranni sync + extended site animation import
+- Importador de personagens foi ampliado para sincronizar mais familias vindas do PixelLab/site:
+  - `run-*`
+  - `cast-*`
+  - `attack-*`
+- Sync executado com sucesso para personagens sem fila travada:
+  - `Killer Bee`: `idle`, `walk`, `run`, `attack`
+  - `Nico`: `idle`, `walk`, `run`, `attack`
+- `Ranni` continua parcialmente travada por `HTTP 423` porque o ZIP dela ainda esta bloqueado por jobs pendentes no PixelLab.
+
+Wave atual da Ranni
+- Ja existentes/completos no site:
+  - `idle`
+  - `walk`
+  - `run` cardinal
+- Em fila no PixelLab:
+  - `fireball` (`east/west`)
+  - `taking-punch` (`east/west`)
+  - `walking-8-frames` (`south`) ainda fechando
+
+TODO Ranni
+- Quando `get_character("03a976fb-7313-4064-a477-5bb9b0760034")` ficar sem jobs pendentes, rodar:
+  - `$env:PIXELLAB_CHARACTER_IDS='03a976fb-7313-4064-a477-5bb9b0760034'; node scripts/import_pixellab_characters.mjs`
+- Depois conferir no manifesto local se `run`, `cast` e `attack` ficaram marcados como `true`.

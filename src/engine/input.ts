@@ -1,4 +1,4 @@
-import type { Direction, PlayerId } from "../core/types";
+import type { Direction, MenuPlayerId } from "../core/types";
 import { KEY_BINDINGS } from "../core/config";
 
 export interface InputController {
@@ -6,7 +6,7 @@ export interface InputController {
   endFrame(): void;
   clearPresses(): void;
   isDown(code: string): boolean;
-  getMovementDirection(playerId: PlayerId): Direction | null;
+  getMovementDirection(playerId: MenuPlayerId): Direction | null;
 }
 
 export class InputManager {
@@ -39,6 +39,9 @@ export class InputManager {
 
   constructor(target: Window) {
     target.addEventListener("keydown", (event) => {
+      if (this.isTypingTarget(event.target)) {
+        return;
+      }
       const code = event.code;
       if (this.reservedCodes.has(code)) {
         event.preventDefault();
@@ -89,7 +92,7 @@ export class InputManager {
     return this.keysDown.has(code);
   }
 
-  public getMovementDirection(playerId: PlayerId): Direction | null {
+  public getMovementDirection(playerId: MenuPlayerId): Direction | null {
     const binding = KEY_BINDINGS[playerId];
     const options: Array<{ code: string; direction: Direction }> = [
       { code: binding.up, direction: "up" },
@@ -107,6 +110,18 @@ export class InputManager {
     }
 
     return null;
+  }
+
+  private isTypingTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) {
+      return false;
+    }
+    if (target.isContentEditable) {
+      return true;
+    }
+    return target instanceof HTMLInputElement
+      || target instanceof HTMLTextAreaElement
+      || target instanceof HTMLSelectElement;
   }
 }
 
