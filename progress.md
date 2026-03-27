@@ -91,6 +91,13 @@ TODO movimento
 TODO online polish
 - Validar o chat com o backend online real; a preview estatica nao sobe websocket em `/online`, entao so confirmou layout/foco visual.
 - Se quiser mais densidade competitiva, o proximo corte natural e recolher o painel de slots durante partida ativa e deixar apenas chat + status.
+
+2026-03-27 AAA lobby shell pass
+- Shell online refeito por estado (`browse`, `lobby`, `match`) com foco real no playfield e rail lateral recolhida em partida.
+- HUD legado foi removido do canvas de menu; controles e copy de onboarding migraram para o DOM.
+- Match agora tenta fullscreen automaticamente ao entrar na partida e arma retry no primeiro input caso o navegador bloqueie a API sem ativacao fresca.
+- Validados screenshots locais em `output/layout-refactor-check.png` e `output/layout-match-check.png`.
+- Deploy publicado no Worker com bundles `index-B5R3Twke.js` e `index-BzsVDsDS.css`.
 - Smoke de curva/buffer adicionado em `tests/actions/corner-buffer.json` e validado em `output/corner-buffer/shot-0.png`.
 2026-03-16 player scale pass
 - Sprites dos personagens foram ampliados visualmente e ancorados pelos pes na celula, mantendo hitbox/grid intactos.

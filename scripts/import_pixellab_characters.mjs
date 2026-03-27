@@ -56,12 +56,14 @@ const RUN_ANIMATION_CANDIDATES = [
   "running-4-frames",
   "running",
 ];
+const RUN_ANIMATION_PATTERNS = ["run", "dash"];
 
 const CAST_ANIMATION_CANDIDATES = [
   "fireball",
   "throw-object",
   "drinking",
 ];
+const CAST_ANIMATION_PATTERNS = ["cast", "spell", "magic", "dark-energy", "fireball"];
 
 const ATTACK_ANIMATION_CANDIDATES = [
   "high-kick",
@@ -69,6 +71,7 @@ const ATTACK_ANIMATION_CANDIDATES = [
   "taking-punch",
   "lead-jab",
 ];
+const ATTACK_ANIMATION_PATTERNS = ["attack", "kick", "punch", "jab", "slash", "shot", "sting"];
 
 const CHARACTER_IDS = [
   "03a976fb-7313-4064-a477-5bb9b0760034",
@@ -229,9 +232,23 @@ function cleanName(rawName, characterId) {
   return `${base.slice(0, 61)}...`;
 }
 
-function getAnimationFrames(animations, candidates, direction) {
+function getAnimationFrames(animations, candidates, direction, patterns = []) {
   for (const animationName of candidates) {
     const byDirection = animations?.[animationName];
+    if (!byDirection || !Array.isArray(byDirection[direction])) {
+      continue;
+    }
+    const frames = byDirection[direction].filter((frame) => typeof frame === "string" && frame.length > 0);
+    if (frames.length > 0) {
+      return frames;
+    }
+  }
+
+  for (const [animationName, byDirection] of Object.entries(animations ?? {})) {
+    const normalizedName = animationName.toLowerCase();
+    if (!patterns.some((pattern) => normalizedName.includes(pattern))) {
+      continue;
+    }
     if (!byDirection || !Array.isArray(byDirection[direction])) {
       continue;
     }
@@ -252,7 +269,7 @@ async function copyAnimationFrames(extractDir, destinationDir, prefix, frames) {
   }
 }
 
-async function copyAnimationSet(extractDir, destinationDir, animations, candidates, prefix) {
+async function copyAnimationSet(extractDir, destinationDir, animations, candidates, prefix, patterns = []) {
   let hasFrames = false;
   for (const [direction, target] of [
     ["south", `${prefix}-south`],
@@ -260,7 +277,7 @@ async function copyAnimationSet(extractDir, destinationDir, animations, candidat
     ["north", `${prefix}-north`],
     ["west", `${prefix}-west`],
   ]) {
-    const frames = getAnimationFrames(animations, candidates, direction);
+    const frames = getAnimationFrames(animations, candidates, direction, patterns);
     if (frames.length > 0) {
       await copyAnimationFrames(extractDir, destinationDir, target, frames);
       hasFrames = true;
@@ -435,6 +452,7 @@ export async function importPixelLabCharacters() {
         animations,
         RUN_ANIMATION_CANDIDATES,
         "run",
+        RUN_ANIMATION_PATTERNS,
       );
       const hasCastFrames = await copyAnimationSet(
         extractDir,
@@ -442,6 +460,7 @@ export async function importPixelLabCharacters() {
         animations,
         CAST_ANIMATION_CANDIDATES,
         "cast",
+        CAST_ANIMATION_PATTERNS,
       );
       const hasAttackFrames = await copyAnimationSet(
         extractDir,
@@ -449,6 +468,7 @@ export async function importPixelLabCharacters() {
         animations,
         ATTACK_ANIMATION_CANDIDATES,
         "attack",
+        ATTACK_ANIMATION_PATTERNS,
       );
 
       const manifestEntry = buildManifestEntry(characterId, metadata);
