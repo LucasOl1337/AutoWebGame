@@ -72,10 +72,6 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private quickMatchSearching = false;
   private quickMatchQueuedCount = 0;
   private preferredCharacterIndex = 0;
-  private fullscreenRetryArmed = false;
-  private readonly fullscreenRetryListener = (): void => {
-    void this.requestShellFullscreen("retry");
-  };
 
   constructor(root: HTMLElement, app: OnlineGameAppBridge, roster: CharacterRosterEntry[]) {
     this.app = app;
@@ -109,62 +105,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.send({ type: "host-snapshot", snapshot });
   }
 
-  public sendMatchResultChoice(choice: "rematch" | "lobby"): void {
+  public sendMatchResultChoice(choice: "rematch" | "lobby"): boolean {
     if (this.role !== "guest") {
-      return;
+      return false;
     }
-    this.send({ type: "match-result-choice", choice });
-  }
-
-  private async requestShellFullscreen(source: "gesture" | "match-start" | "retry"): Promise<void> {
-    if (typeof document === "undefined" || typeof this.elements.shell.requestFullscreen !== "function") {
-      return;
-    }
-    if (document.fullscreenElement === this.elements.shell) {
-      this.clearFullscreenRetry();
-      return;
-    }
-
-    try {
-      await this.elements.shell.requestFullscreen();
-      this.clearFullscreenRetry();
-      window.requestAnimationFrame(() => {
-        window.dispatchEvent(new Event("resize"));
-      });
-    } catch {
-      if (source !== "gesture") {
-        this.armFullscreenRetry();
-        this.setStatus("Match live. Press any key or click once if the browser blocks fullscreen.");
-      }
-    }
-  }
-
-  private armFullscreenRetry(): void {
-    if (this.fullscreenRetryArmed || typeof window === "undefined" || typeof document === "undefined" || document.fullscreenElement) {
-      return;
-    }
-    this.fullscreenRetryArmed = true;
-    window.addEventListener("keydown", this.fullscreenRetryListener, { capture: true });
-    window.addEventListener("pointerdown", this.fullscreenRetryListener, { capture: true });
-  }
-
-  private clearFullscreenRetry(): void {
-    if (!this.fullscreenRetryArmed || typeof window === "undefined") {
-      return;
-    }
-    this.fullscreenRetryArmed = false;
-    window.removeEventListener("keydown", this.fullscreenRetryListener, { capture: true });
-    window.removeEventListener("pointerdown", this.fullscreenRetryListener, { capture: true });
-  }
-
-  private exitShellFullscreen(): void {
-    this.clearFullscreenRetry();
-    if (typeof document === "undefined") {
-      return;
-    }
-    if (document.fullscreenElement === this.elements.shell) {
-      void document.exitFullscreen();
-    }
+    return this.send({ type: "match-result-choice", choice });
   }
 
   private connect(): void {
@@ -346,7 +291,6 @@ export class OnlineSessionClient implements OnlineSessionBridge {
           if (message.lobby.status === "open" && wasMatchState) {
             this.app.clearOnlinePeer();
             this.elements.shell.dataset.state = "lobby";
-            this.exitShellFullscreen();
           }
           this.renderStage();
           this.renderLobbyList();
@@ -401,7 +345,6 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.elements.shell.dataset.state = "lobby";
         this.quickMatchSearching = false;
         this.renderQuickMatchState();
-        this.exitShellFullscreen();
         this.setStatus("A pilot left. The room is open again.");
         break;
       case "error":
