@@ -73,6 +73,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.canvasObserver.observe(root, { childList: true });
     this.mountCanvas(root);
     this.bindEvents();
+    this.renderQuickMatchState();
+    this.renderLobbyList();
+    this.renderStage();
+    this.setStatus("Connecting to global lobby...");
     this.connect();
   }
 
@@ -531,13 +535,16 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.elements.stageTitle.textContent = "Choose a room and step into the arena";
       this.elements.stageDescription.textContent =
         "Create a public lobby or join one from the live board. Once both pilots lock a slot and confirm their character, the match starts automatically.";
-      this.elements.stageMeta.textContent = "Public rooms | Seat lock P1/P2 | Character select | Instant match start";
+      this.elements.stageMeta.textContent = "Public rooms - Seat lock P1/P2 - Character select - Instant match start";
       this.elements.inviteInput.value = "";
       this.elements.copyButton.disabled = true;
       this.elements.leaveButton.disabled = true;
       this.elements.seats[1].replaceChildren(this.buildEmptySeat(1));
       this.elements.seats[2].replaceChildren(this.buildEmptySeat(2));
       this.renderChat();
+      window.requestAnimationFrame(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
       return;
     }
 
@@ -547,18 +554,23 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.elements.stageDescription.textContent = lobby.status === "playing"
       ? "Match in progress. The room stays locked until one of the pilots leaves."
       : "Claim a side, browse the roster, and lock your ready state. Both pilots ready starts the round.";
-    this.elements.stageMeta.textContent = `${lobby.roomCode} | ${lobby.occupantCount}/2 pilots | ${lobby.status === "playing" ? "Live match" : "Waiting room"}`;
+    this.elements.stageMeta.textContent =
+      `${lobby.roomCode} - ${lobby.occupantCount}/2 pilots - ${lobby.status === "playing" ? "Live match" : "Waiting room"}`;
     this.elements.inviteInput.value = this.buildInviteUrl(lobby.roomCode);
     this.elements.copyButton.disabled = false;
     this.elements.leaveButton.disabled = false;
     this.elements.seats[1].replaceChildren(this.buildSeatContent(1, lobby));
     this.elements.seats[2].replaceChildren(this.buildSeatContent(2, lobby));
     this.renderChat();
+    window.requestAnimationFrame(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
   }
 
   private renderChat(): void {
     this.elements.chatLog.replaceChildren();
     const entries = this.currentLobby?.chat ?? [];
+    const chatAvailable = Boolean(this.currentLobby);
     if (entries.length === 0) {
       const empty = document.createElement("div");
       empty.className = "lobby-chat__empty";
@@ -566,8 +578,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         ? "No messages yet. Chat is live during lobby and match."
         : "Join a room or quick match to chat.";
       this.elements.chatLog.appendChild(empty);
-      this.elements.chatInput.disabled = true;
-      this.elements.chatSend.disabled = true;
+      this.elements.chatInput.disabled = !chatAvailable;
+      this.elements.chatSend.disabled = !chatAvailable;
       return;
     }
 
@@ -575,8 +587,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.elements.chatLog.appendChild(this.renderChatEntry(entry));
     }
 
-    this.elements.chatInput.disabled = false;
-    this.elements.chatSend.disabled = false;
+    this.elements.chatInput.disabled = !chatAvailable;
+    this.elements.chatSend.disabled = !chatAvailable;
     this.elements.chatLog.scrollTop = this.elements.chatLog.scrollHeight;
   }
 
@@ -591,7 +603,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     const meta = document.createElement("div");
     meta.className = "lobby-chat__meta";
-    meta.textContent = `${entry.authorLabel} · ${new Date(entry.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    meta.textContent = `${entry.authorLabel} - ${new Date(entry.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 
     const body = document.createElement("p");
     body.className = "lobby-chat__body";
@@ -604,14 +616,25 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private buildEmptySeat(playerId: PlayerId): HTMLElement {
     const wrap = document.createElement("div");
     wrap.className = "lobby-seat__content";
-    wrap.innerHTML = `
-      <div class="lobby-seat__header">
-        <span>P${playerId}</span>
-        <strong>Open slot</strong>
-        <em>Waiting for a pilot</em>
-      </div>
-      <div class="lobby-seat__placeholder">Claim this side to choose a character and ready up.</div>
-    `;
+
+    const header = document.createElement("div");
+    header.className = "lobby-seat__header";
+
+    const slot = document.createElement("span");
+    slot.textContent = `P${playerId}`;
+
+    const title = document.createElement("strong");
+    title.textContent = "Open slot";
+
+    const state = document.createElement("em");
+    state.textContent = "Waiting for a pilot";
+
+    const placeholder = document.createElement("div");
+    placeholder.className = "lobby-seat__placeholder";
+    placeholder.textContent = "Claim this side to choose a character and ready up.";
+
+    header.append(slot, title, state);
+    wrap.append(header, placeholder);
     return wrap;
   }
 
@@ -647,10 +670,19 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     image.className = "lobby-seat__portrait";
     image.alt = character.name;
     image.src = assetUrl(`/assets/characters/${character.id}/south.png`);
+    image.width = 72;
+    image.height = 72;
 
     const characterMeta = document.createElement("div");
     characterMeta.className = "lobby-seat__meta";
-    characterMeta.innerHTML = `<p>${character.name}</p><span>${seat.ready ? "Ready" : "Not ready"}</span>`;
+
+    const characterName = document.createElement("p");
+    characterName.textContent = character.name;
+
+    const characterState = document.createElement("span");
+    characterState.textContent = seat.ready ? "Ready" : "Not ready";
+
+    characterMeta.append(characterName, characterState);
 
     preview.append(image, characterMeta);
 
@@ -709,6 +741,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       return;
     }
     this.elements.arenaViewport.replaceChildren(canvas);
+    window.requestAnimationFrame(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
   }
 
   private getCharacter(index: number): CharacterRosterEntry {
@@ -770,3 +805,4 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     return normalized || null;
   }
 }
+

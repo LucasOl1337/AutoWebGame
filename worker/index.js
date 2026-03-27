@@ -3,7 +3,7 @@ import { GameApp } from "../src/app/game-app";
 
 const STATE_VERSION = 3;
 const MATCH_TICK_MS = 1000 / 60;
-const FULL_SNAPSHOT_EVERY_TICKS = 6;
+const FULL_SNAPSHOT_EVERY_TICKS = 10;
 
 /**
  * @typedef {{
@@ -113,6 +113,9 @@ export class GlobalLobby extends DurableObject {
           this.sockets.set(attachment.clientId, websocket);
         }
       }
+
+      this.reconcileRoomsWithActiveSockets();
+      await this.persistState();
     });
   }
 
@@ -261,6 +264,7 @@ export class GlobalLobby extends DurableObject {
    */
   async handleJoinLobby(clientId, rawRoomCode) {
     this.removeFromQuickMatchQueue(clientId);
+    this.reconcileRoomsWithActiveSockets();
     const roomCode = normalizeRoomCode(rawRoomCode);
     const room = this.rooms.get(roomCode);
     if (!room) {
@@ -298,6 +302,7 @@ export class GlobalLobby extends DurableObject {
    */
   async handleLeaveLobby(clientId) {
     this.removeFromQuickMatchQueue(clientId);
+    this.reconcileRoomsWithActiveSockets();
     const room = this.findRoomForClient(clientId);
     if (!room) {
       this.sendToClient(clientId, { type: "lobby-left" });
@@ -452,6 +457,7 @@ export class GlobalLobby extends DurableObject {
    * @param {unknown} rawBody
    */
   async handleChatSend(clientId, rawBody) {
+    this.reconcileRoomsWithActiveSockets();
     const room = this.findRoomForClient(clientId);
     if (!room) {
       return;
@@ -585,6 +591,7 @@ export class GlobalLobby extends DurableObject {
       await this.releaseClientFromRoom(room, clientId);
       this.broadcastLobbyList();
     }
+    this.reconcileRoomsWithActiveSockets();
     this.broadcastQuickMatchState();
   }
 
@@ -652,6 +659,7 @@ export class GlobalLobby extends DurableObject {
   }
 
   broadcastLobbyList() {
+    this.reconcileRoomsWithActiveSockets();
     const lobbies = this.buildLobbyList();
     for (const websocket of this.sockets.values()) {
       this.send(websocket, { type: "lobby-list", lobbies });
@@ -661,6 +669,10 @@ export class GlobalLobby extends DurableObject {
   buildLobbyList() {
     return Array.from(this.rooms.values())
       .map((room) => this.serializeLobbySummary(room))
+      .filter((room) => {
+        const sourceRoom = this.rooms.get(room.roomCode);
+        return Boolean(sourceRoom && (sourceRoom.clients.size > 0 || room.occupantCount > 0 || room.status === "playing"));
+      })
       .sort((a, b) => {
         if (a.status !== b.status) {
           return a.status === "open" ? -1 : 1;
@@ -673,6 +685,7 @@ export class GlobalLobby extends DurableObject {
    * @param {LobbyRoom} room
    */
   serializeLobbySummary(room) {
+    this.sanitizeRoomOccupancy(room);
     const seats = {
       1: { ...room.seats[1] },
       2: { ...room.seats[2] },
@@ -789,6 +802,63 @@ export class GlobalLobby extends DurableObject {
     }
   }
 
+  reconcileRoomsWithActiveSockets() {
+    let changed = false;
+    for (const [roomCode, room] of this.rooms.entries()) {
+      if (this.sanitizeRoomOccupancy(room)) {
+        changed = true;
+      }
+      if (!room.seats[1].clientId && !room.seats[2].clientId && room.clients.size === 0) {
+        this.stopRoomMatch(roomCode);
+        this.rooms.delete(roomCode);
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  /**
+   * @param {LobbyRoom} room
+   */
+  sanitizeRoomOccupancy(room) {
+    let changed = false;
+    const activeClients = new Set(
+      Array.from(room.clients).filter((clientId) => this.sockets.has(clientId)),
+    );
+
+    if (activeClients.size !== room.clients.size) {
+      room.clients = activeClients;
+      changed = true;
+    }
+
+    for (const seatId of [1, 2]) {
+      const seat = room.seats[seatId];
+      if (seat.clientId && !this.sockets.has(seat.clientId)) {
+        room.seats[seatId] = createEmptySeat();
+        changed = true;
+      } else if (seat.clientId) {
+        room.clients.add(seat.clientId);
+      }
+    }
+
+    if (room.hostClientId && !this.sockets.has(room.hostClientId)) {
+      room.hostClientId = null;
+      changed = true;
+    }
+
+    if (room.status === "playing" && (!room.seats[1].clientId || !room.seats[2].clientId)) {
+      this.stopRoomMatch(room.roomCode);
+      room.status = "open";
+      room.seats[1].ready = false;
+      room.seats[2].ready = false;
+      this.appendRoomSystemMessage(room, "Match reset after a pilot disconnected.");
+      changed = true;
+    }
+
+    this.refreshSeatLabels(room);
+    return changed;
+  }
+
   /**
    * @param {WebSocket} websocket
    * @returns {string | null}
@@ -891,6 +961,10 @@ export class GlobalLobby extends DurableObject {
     match.game.setServerPlayerInput(1, match.inputs[1]);
     match.game.setServerPlayerInput(2, match.inputs[2]);
     match.game.advanceServerSimulation(MATCH_TICK_MS);
+    match.inputs[1].bombPressed = false;
+    match.inputs[1].detonatePressed = false;
+    match.inputs[2].bombPressed = false;
+    match.inputs[2].detonatePressed = false;
     match.tick += 1;
     this.broadcastFrame(roomCode);
     if (match.tick % FULL_SNAPSHOT_EVERY_TICKS === 0) {
@@ -911,6 +985,8 @@ export class GlobalLobby extends DurableObject {
     this.broadcastToRoom(room, {
       type: "host-frame",
       frame: {
+        serverTimeMs: Date.now(),
+        serverTick: match.tick,
         mode: snapshot.mode,
         players: snapshot.players,
         bombs: snapshot.bombs,
@@ -942,7 +1018,11 @@ export class GlobalLobby extends DurableObject {
     const snapshot = match.game.exportOnlineSnapshot();
     this.broadcastToRoom(room, {
       type: "host-snapshot",
-      snapshot,
+      snapshot: {
+        ...snapshot,
+        serverTimeMs: Date.now(),
+        serverTick: match.tick,
+      },
     });
   }
 

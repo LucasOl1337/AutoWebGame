@@ -101,15 +101,41 @@ const PLAYER_SPRITE_HEIGHT_SCALE = 1.45;
 const PLAYER_SPRITE_MAX_WIDTH_SCALE = 1.2;
 const ONLINE_SNAPSHOT_INTERVAL_MS = 50;
 const ONLINE_RENDER_SMOOTHING = 0.48;
-const ONLINE_INTERPOLATION_DELAY_MS = 34;
+const ONLINE_INTERPOLATION_DELAY_MS = 52;
 const ONLINE_EXTRAPOLATION_MS = 42;
 const ONLINE_VELOCITY_LEAD_MS = 18;
 const ONLINE_LOCAL_INPUT_LEAD_MS = 42;
 const ONLINE_MAX_VISUAL_LEAD_PX = TILE_SIZE * 0.34;
+const ONLINE_SAMPLE_BUFFER_SIZE = 12;
+const ONLINE_INPUT_HEARTBEAT_MS = 90;
 
 interface OnlineRenderSample {
   receivedAtMs: number;
+  serverTimeMs: number;
+  serverTick: number;
   players: Record<PlayerId, { position: PixelCoord; velocity: PixelCoord }>;
+}
+
+function createNeutralOnlineInput(): OnlineInputState {
+  return {
+    direction: null,
+    bombPressed: false,
+    detonatePressed: false,
+  };
+}
+
+function cloneOnlineInputState(input: OnlineInputState): OnlineInputState {
+  return {
+    direction: input.direction,
+    bombPressed: input.bombPressed,
+    detonatePressed: input.detonatePressed,
+  };
+}
+
+function sameOnlineInputState(a: OnlineInputState, b: OnlineInputState): boolean {
+  return a.direction === b.direction
+    && a.bombPressed === b.bombPressed
+    && a.detonatePressed === b.detonatePressed;
 }
 
 function createHeadlessCanvas(): {
@@ -178,23 +204,16 @@ export class GameApp {
   private onlineSession: OnlineSessionBridge | null = null;
   private onlineLocalPlayerId: PlayerId = 1;
   private onlineRemotePlayerId: PlayerId = 2;
-  private onlineLocalInput: OnlineInputState = {
-    direction: null,
-    bombPressed: false,
-    detonatePressed: false,
-  };
-  private onlineRemoteInput: OnlineInputState = {
-    direction: null,
-    bombPressed: false,
-    detonatePressed: false,
-  };
+  private onlineLocalInput: OnlineInputState = createNeutralOnlineInput();
+  private onlineRemoteInput: OnlineInputState = createNeutralOnlineInput();
   private onlineSnapshotCooldownMs = 0;
   private visualPlayerPositions: Record<PlayerId, PixelCoord> = {
     1: { x: 0, y: 0 },
     2: { x: 0, y: 0 },
   };
-  private onlineRenderPrevious: OnlineRenderSample | null = null;
-  private onlineRenderCurrent: OnlineRenderSample | null = null;
+  private onlineRenderSamples: OnlineRenderSample[] = [];
+  private onlineGuestLastSentInput: OnlineInputState = createNeutralOnlineInput();
+  private onlineGuestInputHeartbeatMs = 0;
 
   private lastTimestamp = 0;
   private accumulatorMs = 0;
@@ -280,16 +299,11 @@ export class GameApp {
     this.rematchReady = { 1: false, 2: false };
     this.onlineLocalPlayerId = 1;
     this.onlineRemotePlayerId = 2;
-    this.onlineLocalInput = {
-      direction: null,
-      bombPressed: false,
-      detonatePressed: false,
-    };
-    this.onlineRemoteInput = {
-      direction: null,
-      bombPressed: false,
-      detonatePressed: false,
-    };
+    this.onlineLocalInput = createNeutralOnlineInput();
+    this.onlineRemoteInput = createNeutralOnlineInput();
+    this.onlineGuestLastSentInput = createNeutralOnlineInput();
+    this.onlineGuestInputHeartbeatMs = 0;
+    this.onlineRenderSamples = [];
     this.syncPlayerLabels();
   }
 
@@ -360,7 +374,7 @@ export class GameApp {
     this.characterLocked = { 1: true, 2: true };
     this.characterMenuOpen = { 1: false, 2: false };
     this.botEnabled = false;
-    this.pushOnlineRenderSample(snapshot.players);
+    this.pushOnlineRenderSample(snapshot.serverTimeMs, snapshot.serverTick, snapshot.players);
 
     if (previousMode !== "match" || this.visualPlayerPositions[1].x === 0 || this.visualPlayerPositions[2].x === 0) {
       this.syncVisualPlayerPositions();
@@ -394,7 +408,7 @@ export class GameApp {
     this.suddenDeathIndex = frame.suddenDeathIndex;
     this.selectedCharacterIndex = { ...frame.selectedCharacterIndex };
     this.pendingCharacterIndex = { ...frame.selectedCharacterIndex };
-    this.pushOnlineRenderSample(frame.players);
+    this.pushOnlineRenderSample(frame.serverTimeMs, frame.serverTick, frame.players);
 
     if (previousMode !== "match" || this.visualPlayerPositions[1].x === 0 || this.visualPlayerPositions[2].x === 0) {
       this.syncVisualPlayerPositions();
@@ -402,16 +416,11 @@ export class GameApp {
   }
 
   public clearOnlinePeer(): void {
-    this.onlineLocalInput = {
-      direction: null,
-      bombPressed: false,
-      detonatePressed: false,
-    };
-    this.onlineRemoteInput = {
-      direction: null,
-      bombPressed: false,
-      detonatePressed: false,
-    };
+    this.onlineLocalInput = createNeutralOnlineInput();
+    this.onlineRemoteInput = createNeutralOnlineInput();
+    this.onlineGuestLastSentInput = createNeutralOnlineInput();
+    this.onlineGuestInputHeartbeatMs = 0;
+    this.onlineRenderSamples = [];
     this.botEnabled = false;
     this.menuReady = { 1: false, 2: false };
   }
@@ -483,12 +492,14 @@ export class GameApp {
     if (!("style" in this.canvas)) {
       return;
     }
-    const viewportWidth = typeof window.innerWidth === "number" ? window.innerWidth : CANVAS_WIDTH + CANVAS_VIEWPORT_PADDING;
-    const viewportHeight = typeof window.innerHeight === "number"
-      ? window.innerHeight
-      : CANVAS_HEIGHT + CANVAS_VIEWPORT_PADDING;
-    const availableWidth = Math.max(160, viewportWidth - CANVAS_VIEWPORT_PADDING);
-    const availableHeight = Math.max(160, viewportHeight - CANVAS_VIEWPORT_PADDING);
+    const viewport = this.canvas.parentElement;
+    const viewportWidth = viewport?.clientWidth
+      ?? (typeof window.innerWidth === "number" ? window.innerWidth : CANVAS_WIDTH + CANVAS_VIEWPORT_PADDING);
+    const viewportHeight = viewport?.clientHeight
+      ?? (typeof window.innerHeight === "number" ? window.innerHeight : CANVAS_HEIGHT + CANVAS_VIEWPORT_PADDING);
+    const viewportPadding = viewport ? 12 : CANVAS_VIEWPORT_PADDING;
+    const availableWidth = Math.max(160, viewportWidth - viewportPadding);
+    const availableHeight = Math.max(160, viewportHeight - viewportPadding);
     const fitScale = Math.min(availableWidth / CANVAS_WIDTH, availableHeight / CANVAS_HEIGHT);
     const integerScale = Math.floor(fitScale);
     const displayScale = integerScale >= 1 ? integerScale : Math.max(0.5, Math.min(1, fitScale));
@@ -509,11 +520,19 @@ export class GameApp {
       || this.input.consumePress(localBindings.detonate);
   }
 
-  private forwardGuestInput(): void {
+  private forwardGuestInput(deltaMs: number): void {
     if (this.onlineSession?.role !== "guest") {
       return;
     }
-    this.onlineSession.sendGuestInput({ ...this.onlineLocalInput });
+    this.onlineGuestInputHeartbeatMs -= deltaMs;
+    const nextInput = cloneOnlineInputState(this.onlineLocalInput);
+    const shouldSend = !sameOnlineInputState(nextInput, this.onlineGuestLastSentInput)
+      || this.onlineGuestInputHeartbeatMs <= 0;
+    if (shouldSend) {
+      this.onlineSession.sendGuestInput(nextInput);
+      this.onlineGuestLastSentInput = cloneOnlineInputState(nextInput);
+      this.onlineGuestInputHeartbeatMs = ONLINE_INPUT_HEARTBEAT_MS;
+    }
     this.onlineLocalInput.bombPressed = false;
     this.onlineLocalInput.detonatePressed = false;
   }
@@ -537,6 +556,8 @@ export class GameApp {
   private createOnlineSnapshot(): OnlineGameSnapshot {
     return {
       mode: this.mode,
+      serverTimeMs: 0,
+      serverTick: 0,
       breakableTiles: Array.from(this.arena.breakable),
       powerUps: this.arena.powerUps.map((powerUp) => ({
         type: powerUp.type,
@@ -592,7 +613,7 @@ export class GameApp {
     }
 
     if (this.onlineSession?.role === "guest") {
-      this.forwardGuestInput();
+      this.forwardGuestInput(deltaMs);
       return;
     }
 
@@ -624,16 +645,11 @@ export class GameApp {
     };
     this.onlineLocalPlayerId = 1;
     this.onlineRemotePlayerId = 2;
-    this.onlineLocalInput = {
-      direction: null,
-      bombPressed: false,
-      detonatePressed: false,
-    };
-    this.onlineRemoteInput = {
-      direction: null,
-      bombPressed: false,
-      detonatePressed: false,
-    };
+    this.onlineLocalInput = createNeutralOnlineInput();
+    this.onlineRemoteInput = createNeutralOnlineInput();
+    this.onlineGuestLastSentInput = createNeutralOnlineInput();
+    this.onlineGuestInputHeartbeatMs = 0;
+    this.onlineRenderSamples = [];
     this.selectedCharacterIndex = { ...characterSelections };
     this.pendingCharacterIndex = { ...characterSelections };
     this.characterLocked = { 1: true, 2: true };
@@ -682,13 +698,18 @@ export class GameApp {
     };
   }
 
-  private pushOnlineRenderSample(players: Record<PlayerId, PlayerState>): void {
+  private pushOnlineRenderSample(
+    serverTimeMs: number,
+    serverTick: number,
+    players: Record<PlayerId, PlayerState>,
+  ): void {
     if (this.headless || typeof performance === "undefined") {
       return;
     }
-    this.onlineRenderPrevious = this.onlineRenderCurrent;
-    this.onlineRenderCurrent = {
+    const sample = {
       receivedAtMs: performance.now(),
+      serverTimeMs,
+      serverTick,
       players: {
         1: {
           position: this.getPlayerPixelPositionFromState(players[1]),
@@ -700,6 +721,15 @@ export class GameApp {
         },
       },
     };
+    const previousSample = this.onlineRenderSamples[this.onlineRenderSamples.length - 1] ?? null;
+    if (previousSample && previousSample.serverTick === sample.serverTick) {
+      this.onlineRenderSamples[this.onlineRenderSamples.length - 1] = sample;
+    } else {
+      this.onlineRenderSamples.push(sample);
+      if (this.onlineRenderSamples.length > ONLINE_SAMPLE_BUFFER_SIZE) {
+        this.onlineRenderSamples.splice(0, this.onlineRenderSamples.length - ONLINE_SAMPLE_BUFFER_SIZE);
+      }
+    }
   }
 
   private updateVisualPlayerPositions(deltaMs: number): void {
@@ -766,34 +796,46 @@ export class GameApp {
     fallbackPosition: PixelCoord,
     fallbackVelocity: PixelCoord,
   ): PixelCoord {
-    const currentSample = this.onlineRenderCurrent?.players[playerId] ?? null;
-    if (!currentSample || !this.onlineRenderCurrent) {
+    const samples = this.onlineRenderSamples;
+    const latestSample = samples[samples.length - 1] ?? null;
+    const currentSample = latestSample?.players[playerId] ?? null;
+    if (!currentSample || !latestSample) {
       return {
         x: fallbackPosition.x + fallbackVelocity.x * (ONLINE_VELOCITY_LEAD_MS / 1000),
         y: fallbackPosition.y + fallbackVelocity.y * (ONLINE_VELOCITY_LEAD_MS / 1000),
       };
     }
 
-    const previousSample = this.onlineRenderPrevious?.players[playerId] ?? null;
     const renderAtMs = nowMs - ONLINE_INTERPOLATION_DELAY_MS;
-    if (
-      previousSample
-      && this.onlineRenderPrevious
-      && this.onlineRenderCurrent.receivedAtMs > this.onlineRenderPrevious.receivedAtMs
-      && renderAtMs <= this.onlineRenderCurrent.receivedAtMs
-    ) {
-      const spanMs = this.onlineRenderCurrent.receivedAtMs - this.onlineRenderPrevious.receivedAtMs;
-      const alpha = Math.max(
-        0,
-        Math.min(1, (renderAtMs - this.onlineRenderPrevious.receivedAtMs) / spanMs),
-      );
+    const oldestSample = samples[0] ?? latestSample;
+    if (renderAtMs <= oldestSample.receivedAtMs) {
+      const oldestPlayer = oldestSample.players[playerId];
       return {
-        x: previousSample.position.x + (currentSample.position.x - previousSample.position.x) * alpha,
-        y: previousSample.position.y + (currentSample.position.y - previousSample.position.y) * alpha,
+        x: oldestPlayer.position.x,
+        y: oldestPlayer.position.y,
       };
     }
 
-    const extrapolationMs = Math.max(0, Math.min(ONLINE_EXTRAPOLATION_MS, renderAtMs - this.onlineRenderCurrent.receivedAtMs));
+    for (let index = 1; index < samples.length; index += 1) {
+      const previous = samples[index - 1];
+      const next = samples[index];
+      if (renderAtMs < previous.receivedAtMs || renderAtMs > next.receivedAtMs) {
+        continue;
+      }
+      const previousSample = previous.players[playerId];
+      const nextSample = next.players[playerId];
+      const spanMs = Math.max(1, next.receivedAtMs - previous.receivedAtMs);
+      const alpha = Math.max(0, Math.min(1, (renderAtMs - previous.receivedAtMs) / spanMs));
+      return {
+        x: previousSample.position.x + (nextSample.position.x - previousSample.position.x) * alpha,
+        y: previousSample.position.y + (nextSample.position.y - previousSample.position.y) * alpha,
+      };
+    }
+
+    const extrapolationMs = Math.max(
+      0,
+      Math.min(ONLINE_EXTRAPOLATION_MS, renderAtMs - latestSample.receivedAtMs),
+    );
     return {
       x: currentSample.position.x + currentSample.velocity.x * (extrapolationMs / 1000),
       y: currentSample.position.y + currentSample.velocity.y * (extrapolationMs / 1000),
