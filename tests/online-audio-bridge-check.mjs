@@ -260,6 +260,8 @@ game.applyOnlineFrame({
   activePlayerIds: [1, 2],
 });
 
+const placementCalls = [...calls];
+
 game.applyOnlineSnapshot({
   serverTimeMs: 100,
   serverTick: 2,
@@ -319,9 +321,11 @@ const expected = [
   "roundWin",
 ];
 
-const pass = expected.every((key) => calls.includes(key));
+const pass = placementCalls.length === 1
+  && placementCalls[0] === "bombPlace"
+  && expected.every((key) => calls.includes(key));
 
-console.log(JSON.stringify({ calls, expected, pass }, null, 2));
+console.log(JSON.stringify({ placementCalls, calls, expected, pass }, null, 2));
 
 if (!pass) {
   process.exit(1);

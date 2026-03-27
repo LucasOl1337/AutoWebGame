@@ -606,7 +606,7 @@ export class GameApp {
     if (startedSuddenDeath) {
       this.soundManager.playOneShot("suddenDeath");
     }
-    if (removedBombs > 0 || (newFlames > 0 && !startedSuddenDeath)) {
+    if (removedBombs > 0) {
       this.soundManager.playOneShot("bombExplode");
     }
     if (newFlames > 0) {
@@ -1575,7 +1575,7 @@ export class GameApp {
 
       const botDecision = this.isBotControlled(id) ? this.getBotDecision(player) : null;
       const automationBomb = this.automationMode
-        ? this.automationControlledPlayer === id && this.input.consumePress("KeyX")
+        ? this.automationControlledPlayer === id && this.input.consumePress("Space")
         : false;
       const onlineBomb = this.consumeOnlineBombPress(id);
       const nativeBindings = MENU_PLAYER_IDS.includes(id as MenuPlayerId)
@@ -3878,7 +3878,7 @@ export class GameApp {
     const idleFrames = baseSprites.idle?.[player.direction] ?? [];
     const walkFrames = baseSprites.walk?.[player.direction] ?? [];
     const runFrames = baseSprites.run?.[player.direction] ?? [];
-    const castFrames = baseSprites.cast?.[player.direction] ?? [];
+    const castFrames = this.getAnimationFramesForDirection(baseSprites.cast, player.direction);
     const prefersRunMovement = activeCharacter.animations?.walk === false && activeCharacter.animations?.run !== false;
     const channelingSkill = player.skill.id === "ranni-ice-blink" && player.skill.phase === "channeling";
     const movementFrames = prefersRunMovement
@@ -3981,6 +3981,35 @@ export class GameApp {
     sprite: HTMLImageElement,
   ): SpriteTrimBounds | null {
     return this.spriteTrimCache.getBounds(sprite);
+  }
+
+  private getAnimationFramesForDirection(
+    cycle: Record<Direction, HTMLImageElement[]> | undefined,
+    preferredDirection: Direction,
+  ): HTMLImageElement[] {
+    if (!cycle) {
+      return [];
+    }
+    const preferred = cycle[preferredDirection] ?? [];
+    if (preferred.length > 0) {
+      return preferred;
+    }
+    const fallbackOrder: Direction[] = [
+      "down",
+      "right",
+      "left",
+      "up",
+    ];
+    for (const direction of fallbackOrder) {
+      if (direction === preferredDirection) {
+        continue;
+      }
+      const frames = cycle[direction] ?? [];
+      if (frames.length > 0) {
+        return frames;
+      }
+    }
+    return [];
   }
 
   private getRenderableSprite(
