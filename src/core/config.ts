@@ -1,3 +1,5 @@
+import type { MenuPlayerId, PlayerId } from "./types";
+
 export const CANVAS_WIDTH = 480;
 export const CANVAS_HEIGHT = 480;
 export const HUD_HEIGHT = 52;
@@ -23,7 +25,7 @@ export const MAX_BOMB_PASS_LEVEL = 1;
 export const MAX_KICK_LEVEL = 1;
 export const TARGET_WINS = 2;
 
-export const PLAYER_COLORS = {
+export const PLAYER_COLORS: Record<PlayerId, { primary: string; secondary: string; glow: string }> = {
   1: {
     primary: "#6cf4ff",
     secondary: "#1f8db2",
@@ -34,9 +36,27 @@ export const PLAYER_COLORS = {
     secondary: "#b24d22",
     glow: "rgba(255, 139, 91, 0.45)",
   },
-} as const;
+  3: {
+    primary: "#8eff87",
+    secondary: "#3b8b32",
+    glow: "rgba(142, 255, 135, 0.45)",
+  },
+  4: {
+    primary: "#ffd769",
+    secondary: "#b0871d",
+    glow: "rgba(255, 215, 105, 0.45)",
+  },
+};
 
-export const KEY_BINDINGS = {
+export const KEY_BINDINGS: Record<MenuPlayerId, {
+  up: string;
+  down: string;
+  left: string;
+  right: string;
+  bomb: string;
+  detonate: string;
+  ready: string;
+}> = {
   1: {
     up: "KeyW",
     down: "KeyS",
@@ -55,4 +75,4 @@ export const KEY_BINDINGS = {
     detonate: "KeyU",
     ready: "KeyP",
   },
-} as const;
+};

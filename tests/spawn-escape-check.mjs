@@ -4,7 +4,9 @@ import { createArena, tileKey } from "../output/esm/game/arena.js";
 const arena = createArena();
 const spawns = [
   { id: 1, tile: { x: 2, y: 1 } },
-  { id: 2, tile: { x: GRID_WIDTH - 3, y: GRID_HEIGHT - 2 } },
+  { id: 2, tile: { x: GRID_WIDTH - 3, y: 1 } },
+  { id: 3, tile: { x: 2, y: GRID_HEIGHT - 2 } },
+  { id: 4, tile: { x: GRID_WIDTH - 3, y: GRID_HEIGHT - 2 } },
 ];
 
 const neighbors = (tile) => ([

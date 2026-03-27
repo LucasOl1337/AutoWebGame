@@ -60,6 +60,7 @@ import type {
   OnlineInputState,
   OnlineSessionBridge,
 } from "../online/protocol";
+import { SoundManager, SFX_MANIFEST } from "./sound-manager";
 
 declare global {
   interface Window {
@@ -297,6 +298,7 @@ export class GameApp {
   private characterLocked: Record<PlayerId, boolean> = createBooleanPlayerRecord(true);
   private characterMenuOpen: Record<PlayerId, boolean> = createBooleanPlayerRecord(false);
   private readonly spriteTrimCache = new SpriteTrimCache();
+  private readonly soundManager = new SoundManager();
 
   constructor(root: HTMLElement, assets: GameAssets) {
     this.root = root;
@@ -504,6 +506,7 @@ export class GameApp {
     if (this.headless) {
       return;
     }
+    this.soundManager.loadSounds(SFX_MANIFEST).catch(console.error);
     this.root.appendChild(this.canvas);
     this.syncCanvasDisplaySize();
     this.mode = "menu";
@@ -1107,6 +1110,8 @@ export class GameApp {
   private startMatch(): void {
     // Prevent queued key presses from previous screens leaking into active gameplay.
     this.input.clearPresses();
+    this.soundManager.playOneShot("matchStart", 0.9);
+    void this.requestPresentationFullscreen();
     this.menuReady = createBooleanPlayerRecord(false);
     this.score = { 1: 0, 2: 0, 3: 0, 4: 0 };
     this.roundNumber = 1;
@@ -2460,6 +2465,7 @@ export class GameApp {
     });
     this.nextBombId += 1;
     player.activeBombs += 1;
+    this.soundManager.playOneShot("bombPlace", 0.7);
     return true;
   }
 
@@ -2504,6 +2510,7 @@ export class GameApp {
 
     const [bomb] = this.bombs.splice(index, 1);
     this.players[bomb.ownerId].activeBombs = Math.max(0, this.players[bomb.ownerId].activeBombs - 1);
+    this.soundManager.playOneShot("bombExplode", 0.7);
 
     const flameTiles = new Set<string>();
     const range = bomb.flameRange;
@@ -2528,16 +2535,20 @@ export class GameApp {
 
         if (this.arena.breakable.has(key)) {
           this.arena.breakable.delete(key);
+          this.soundManager.playOneShot("crateBreak", 0.6);
           this.revealPowerUpAt(key);
           break;
         }
       }
     }
 
+    let ignited = false;
     flameTiles.forEach((key) => {
       const [xText, yText] = key.split(",");
       this.addFlame({ x: Number(xText), y: Number(yText) });
+      ignited = true;
     });
+    if (ignited) this.soundManager.playOneShot("flameIgnite", 0.6);
 
     this.resolvePlayerDeathsFromFlames();
   }
@@ -2588,6 +2599,7 @@ export class GameApp {
     }
     if (this.arena.breakable.has(key)) {
       this.arena.breakable.delete(key);
+      this.soundManager.playOneShot("crateBreak", 0.6);
       this.revealPowerUpAt(key);
     }
     const bomb = this.bombs.find((item) => item.tile.x === tile.x && item.tile.y === tile.y);
@@ -2659,6 +2671,7 @@ export class GameApp {
           player.flameGuardMs = SHIELD_GUARD_MS;
           continue;
         }
+        this.soundManager.playOneShot("playerDeath", 0.9);
         player.alive = false;
         player.velocity = { x: 0, y: 0 };
       }
@@ -2680,6 +2693,7 @@ export class GameApp {
         }
         if (powerUp.tile.x === tile.x && powerUp.tile.y === tile.y) {
           powerUp.collected = true;
+          this.soundManager.playOneShot("powerupCollect", 0.8);
           if (powerUp.type === "bomb-up") {
             player.maxBombs = Math.min(MAX_BOMBS, player.maxBombs + 1);
           } else if (powerUp.type === "flame-up") {
@@ -2716,6 +2730,10 @@ export class GameApp {
     if (this.roundOutcome) {
       return;
     }
+    const clinchesMatch = winner ? this.score[winner] + 1 >= TARGET_WINS : false;
+    if (reason === "elimination" || winner) {
+      this.soundManager.playOneShot(clinchesMatch ? "matchWin" : "roundWin", clinchesMatch ? 0.9 : 0.8);
+    }
     if (winner) {
       this.score[winner] += 1;
     }
@@ -2747,7 +2765,26 @@ export class GameApp {
       await document.exitFullscreen();
       return;
     }
-    await this.canvas.requestFullscreen();
+    await this.getFullscreenTarget().requestFullscreen();
+  }
+
+  private async requestPresentationFullscreen(): Promise<void> {
+    if (typeof document === "undefined" || document.fullscreenElement) {
+      return;
+    }
+    try {
+      await this.getFullscreenTarget().requestFullscreen();
+    } catch {
+      // Browsers can reject programmatic fullscreen without a fresh user activation.
+    }
+  }
+
+  private getFullscreenTarget(): HTMLElement {
+    const shell = this.root.querySelector(".lobby-shell");
+    if (shell instanceof HTMLElement) {
+      return shell;
+    }
+    return this.canvas;
   }
 
   private getPlayerPixelPositionFromState(player: PlayerState): PixelCoord {
@@ -2894,31 +2931,6 @@ export class GameApp {
 
   private renderMenu(): void {
     this.renderArena();
-
-    this.ctx.fillStyle = "rgba(5, 10, 18, 0.84)";
-    this.ctx.fillRect(18, 18, CANVAS_WIDTH - 36, 54);
-    this.ctx.strokeStyle = "rgba(150, 201, 242, 0.24)";
-    this.ctx.lineWidth = 1.5;
-    this.ctx.strokeRect(18.5, 18.5, CANVAS_WIDTH - 37, 53);
-
-    this.ctx.textAlign = "left";
-    this.ctx.fillStyle = "#edf3ff";
-    this.ctx.font = "bold 22px 'Trebuchet MS', sans-serif";
-    this.ctx.fillText("MISTBRIDGE ARENA", 32, 42);
-
-    this.ctx.fillStyle = "#b6d1e6";
-    this.ctx.font = "bold 10px monospace";
-    this.ctx.fillText("WASD move   Q bomb   E ready", 32, 58);
-
-    this.ctx.fillStyle = "rgba(5, 10, 18, 0.86)";
-    this.ctx.fillRect(24, CANVAS_HEIGHT - 62, CANVAS_WIDTH - 48, 36);
-    this.ctx.strokeStyle = "rgba(150, 201, 242, 0.18)";
-    this.ctx.strokeRect(24.5, CANVAS_HEIGHT - 61.5, CANVAS_WIDTH - 49, 35);
-
-    this.ctx.textAlign = "center";
-    this.ctx.fillStyle = "#d7e7f6";
-    this.ctx.font = "bold 10px monospace";
-    this.ctx.fillText("Choose your pilot in the lobby panel. Quick match uses your selected character.", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 40);
 
     if (this.isAnyCharacterMenuOpen()) {
       this.renderCharacterSelectionOverlay();

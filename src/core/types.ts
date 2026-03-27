@@ -1,6 +1,10 @@
-export type PlayerId = 1 | 2;
+export type PlayerId = 1 | 2 | 3 | 4;
+export type MenuPlayerId = 1 | 2;
+export const ALL_PLAYER_IDS = [1, 2, 3, 4] as const;
+export const MENU_PLAYER_IDS = [1, 2] as const;
 export type Mode = "boot" | "menu" | "match" | "match-result";
 export type Direction = "up" | "down" | "left" | "right";
+export type FlameStyle = "normal" | "arcane" | "shadow";
 export type PowerUpType =
   | "bomb-up"
   | "flame-up"
@@ -23,6 +27,7 @@ export interface PixelCoord {
 export interface PlayerState {
   id: PlayerId;
   name: string;
+  active: boolean;
   tile: TileCoord;
   position: PixelCoord;
   velocity: PixelCoord;
@@ -37,6 +42,8 @@ export interface PlayerState {
   shieldCharges: number;
   bombPassLevel: number;
   kickLevel: number;
+  specialCooldownMs: number;
+  specialFeedbackMs: number;
   flameGuardMs: number;
   spawnProtectionMs: number;
 }
@@ -53,6 +60,7 @@ export interface BombState {
 export interface FlameState {
   tile: TileCoord;
   remainingMs: number;
+  style?: FlameStyle;
 }
 
 export interface PowerUpState {
@@ -71,6 +79,8 @@ export interface ArenaState {
 export interface MatchScore {
   1: number;
   2: number;
+  3: number;
+  4: number;
 }
 
 export interface RoundOutcome {

@@ -126,6 +126,8 @@ function createOpenTiles(): Set<string> {
     }
   };
   addSpawnZone(1, 1, 1, 1);
+  addSpawnZone(GRID_WIDTH - 2, 1, -1, 1);
+  addSpawnZone(1, GRID_HEIGHT - 2, 1, -1);
   addSpawnZone(GRID_WIDTH - 2, GRID_HEIGHT - 2, -1, -1);
 
   // Main combat lanes: quick spawn exits plus a contested central cross.

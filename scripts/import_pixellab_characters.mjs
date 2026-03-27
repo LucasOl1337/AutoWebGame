@@ -25,6 +25,12 @@ export const PINNED_CHARACTERS = [
   },
 ];
 
+const CHARACTER_NAME_OVERRIDES = {
+  "03a976fb-7313-4064-a477-5bb9b0760034": "Ranni",
+  "6ee8baa5-3277-413b-ae0e-2659b9cc52e9": "Killer Bee",
+  "5474c45c-2987-43e0-af2c-a6500c836881": "Nico",
+};
+
 const WALK_ANIMATION_CANDIDATES = [
   "walking-8-frames",
   "walking-6-frames",
@@ -42,6 +48,26 @@ const IDLE_ANIMATION_CANDIDATES = [
   "breathing-idle",
   "fight-stance-idle-8-frames",
   "crouching",
+];
+
+const RUN_ANIMATION_CANDIDATES = [
+  "running-8-frames",
+  "running-6-frames",
+  "running-4-frames",
+  "running",
+];
+
+const CAST_ANIMATION_CANDIDATES = [
+  "fireball",
+  "throw-object",
+  "drinking",
+];
+
+const ATTACK_ANIMATION_CANDIDATES = [
+  "high-kick",
+  "cross-punch",
+  "taking-punch",
+  "lead-jab",
 ];
 
 const CHARACTER_IDS = [
@@ -189,9 +215,9 @@ function getRotationPath(rotations, key, fallback) {
 }
 
 function cleanName(rawName, characterId) {
-  const pinned = PINNED_CHARACTERS.find((entry) => entry.id === characterId) ?? null;
-  if (pinned?.name) {
-    return pinned.name;
+  const overrideName = CHARACTER_NAME_OVERRIDES[characterId];
+  if (overrideName) {
+    return overrideName;
   }
   const base = (rawName ?? "").replace(/\s+/g, " ").trim();
   if (!base) {
@@ -226,6 +252,23 @@ async function copyAnimationFrames(extractDir, destinationDir, prefix, frames) {
   }
 }
 
+async function copyAnimationSet(extractDir, destinationDir, animations, candidates, prefix) {
+  let hasFrames = false;
+  for (const [direction, target] of [
+    ["south", `${prefix}-south`],
+    ["east", `${prefix}-east`],
+    ["north", `${prefix}-north`],
+    ["west", `${prefix}-west`],
+  ]) {
+    const frames = getAnimationFrames(animations, candidates, direction);
+    if (frames.length > 0) {
+      await copyAnimationFrames(extractDir, destinationDir, target, frames);
+      hasFrames = true;
+    }
+  }
+  return hasFrames;
+}
+
 export function buildManifestEntry(characterId, metadata) {
   const pinned = PINNED_CHARACTERS.find((entry) => entry.id === characterId) ?? null;
   return {
@@ -235,6 +278,9 @@ export function buildManifestEntry(characterId, metadata) {
     animations: {
       idle: false,
       walk: false,
+      run: false,
+      cast: false,
+      attack: false,
     },
     pinned: Boolean(pinned),
     defaultSlot: pinned?.defaultSlot,
@@ -369,38 +415,49 @@ export async function importPixelLabCharacters() {
       await copyFile(path.join(extractDir, north), path.join(destinationDir, "north.png"));
       await copyFile(path.join(extractDir, west), path.join(destinationDir, "west.png"));
 
-      let hasWalkFrames = false;
-      for (const [direction, target] of [
-        ["south", "walk-south"],
-        ["east", "walk-east"],
-        ["north", "walk-north"],
-        ["west", "walk-west"],
-      ]) {
-        const frames = getAnimationFrames(animations, WALK_ANIMATION_CANDIDATES, direction);
-        if (frames.length > 0) {
-          await copyAnimationFrames(extractDir, destinationDir, target, frames);
-          hasWalkFrames = true;
-        }
-      }
-
-      let hasIdleFrames = false;
-      for (const [direction, target] of [
-        ["south", "idle-south"],
-        ["east", "idle-east"],
-        ["north", "idle-north"],
-        ["west", "idle-west"],
-      ]) {
-        const frames = getAnimationFrames(animations, IDLE_ANIMATION_CANDIDATES, direction);
-        if (frames.length > 0) {
-          await copyAnimationFrames(extractDir, destinationDir, target, frames);
-          hasIdleFrames = true;
-        }
-      }
+      const hasWalkFrames = await copyAnimationSet(
+        extractDir,
+        destinationDir,
+        animations,
+        WALK_ANIMATION_CANDIDATES,
+        "walk",
+      );
+      const hasIdleFrames = await copyAnimationSet(
+        extractDir,
+        destinationDir,
+        animations,
+        IDLE_ANIMATION_CANDIDATES,
+        "idle",
+      );
+      const hasRunFrames = await copyAnimationSet(
+        extractDir,
+        destinationDir,
+        animations,
+        RUN_ANIMATION_CANDIDATES,
+        "run",
+      );
+      const hasCastFrames = await copyAnimationSet(
+        extractDir,
+        destinationDir,
+        animations,
+        CAST_ANIMATION_CANDIDATES,
+        "cast",
+      );
+      const hasAttackFrames = await copyAnimationSet(
+        extractDir,
+        destinationDir,
+        animations,
+        ATTACK_ANIMATION_CANDIDATES,
+        "attack",
+      );
 
       const manifestEntry = buildManifestEntry(characterId, metadata);
       manifestEntry.animations = {
         idle: hasIdleFrames,
         walk: hasWalkFrames,
+        run: hasRunFrames,
+        cast: hasCastFrames,
+        attack: hasAttackFrames,
       };
       manifest.push(manifestEntry);
       imported += 1;

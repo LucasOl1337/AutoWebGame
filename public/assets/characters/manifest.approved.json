@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-03-27T15:26:59.475Z",
-  "totalRequested": 2,
+  "generatedAt": "2026-03-27T19:02:51.477Z",
+  "totalRequested": 3,
   "imported": 2,
-  "skipped": 0,
+  "skipped": 1,
   "invalid": false,
   "characters": [
     {
@@ -13,7 +13,7 @@
         "height": 160
       },
       "animations": {
-        "idle": false,
+        "idle": true,
         "walk": true
       },
       "pinned": true,
@@ -28,8 +28,11 @@
         "height": 124
       },
       "animations": {
-        "idle": false,
-        "walk": true
+        "idle": true,
+        "walk": true,
+        "run": true,
+        "cast": false,
+        "attack": true
       },
       "pinned": true,
       "defaultSlot": 2,
@@ -477,11 +480,19 @@
     },
     {
       "id": "5474c45c-2987-43e0-af2c-a6500c836881",
-      "name": "Nico is a ruthless dark-energy fighter. Distinctive features ...",
+      "name": "Nico",
       "size": {
         "width": 116,
         "height": 116
-      }
+      },
+      "animations": {
+        "idle": true,
+        "walk": true,
+        "run": true,
+        "cast": false,
+        "attack": true
+      },
+      "pinned": false
     },
     {
       "id": "93811930-cc11-4cb7-b3b5-f250bb2ecf27",

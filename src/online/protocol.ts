@@ -17,6 +17,7 @@ export interface OnlineInputState {
   direction: Direction | null;
   bombPressed: boolean;
   detonatePressed: boolean;
+  specialPressed: boolean;
 }
 
 export interface LobbySeatState {

@@ -113,15 +113,15 @@ export class InputManager {
   }
 
   private isTypingTarget(target: EventTarget | null): boolean {
-    if (!(target instanceof HTMLElement)) {
+    if (typeof HTMLElement === "undefined" || !(target instanceof HTMLElement)) {
       return false;
     }
     if (target.isContentEditable) {
       return true;
     }
-    return target instanceof HTMLInputElement
-      || target instanceof HTMLTextAreaElement
-      || target instanceof HTMLSelectElement;
+    return (typeof HTMLInputElement !== "undefined" && target instanceof HTMLInputElement)
+      || (typeof HTMLTextAreaElement !== "undefined" && target instanceof HTMLTextAreaElement)
+      || (typeof HTMLSelectElement !== "undefined" && target instanceof HTMLSelectElement);
   }
 }
 

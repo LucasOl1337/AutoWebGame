@@ -1,0 +1,7 @@
+.git
+.wrangler
+dist
+node_modules
+output
+*.log
+*.zip
