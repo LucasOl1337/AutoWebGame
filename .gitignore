@@ -10,3 +10,5 @@ output/
 *.log
 *.tmp
 *.bak
+.arena-smoke.pid
+.wrangler/

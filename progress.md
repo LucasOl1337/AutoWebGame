@@ -857,3 +857,18 @@ Validacao 2026-03-27 power-ups
 TODO 2026-03-27
 - Rodar smoke visual em browser para ver os dois novos pickups no tabuleiro real e ajustar contraste se o `kick-up` parecer escuro demais em fundo claro.
 - Se quisermos expandir mais a camada de perks, os proximos candidatos naturais sao `line-bomb`, `flame-pass` ou `throw-bomb`.
+2026-03-27 Killer Bee animation queue
+- PixelLab: aberta bateria nova focada no `Killer Bee` (`6ee8baa5-3277-413b-ae0e-2659b9cc52e9`).
+- Ja completos no personagem:
+  - `breathing-idle`: south, west, north, south-east, east, south-west, north-west
+- Em processamento quando esta nota foi escrita:
+  - `breathing-idle`: north-east
+  - `walking-8-frames`: south, east, north, west
+  - `running-8-frames`: south, north
+  - `high-kick`: east, west
+- Gargalo atual: dois jobs de `walking-8-frames` ficaram presos/mais lentos, entao o ZIP do personagem ainda pode responder `423` ate a fila zerar.
+
+TODO Killer Bee
+- Assim que `get_character("6ee8baa5-3277-413b-ae0e-2659b9cc52e9")` mostrar fila vazia, rodar:
+  - `$env:PIXELLAB_CHARACTER_IDS='6ee8baa5-3277-413b-ae0e-2659b9cc52e9'; node scripts/import_pixellab_characters.mjs`
+- Depois validar no runtime se `idle` e `walk` entraram no manifest/import local.

@@ -46,10 +46,11 @@ import type {
   RoundOutcome,
   TileCoord,
 } from "../core/types";
-import { InputManager } from "../engine/input";
+import { InputManager, NoopInputManager, type InputController } from "../engine/input";
 import { createArena, tileKey } from "../game/arena";
 import type {
   MatchStartConfig,
+  OnlineGameFrame,
   OnlineGameSnapshot,
   OnlineInputState,
   OnlineSessionBridge,
@@ -99,6 +100,54 @@ const CANVAS_VIEWPORT_PADDING = 32;
 const PLAYER_SPRITE_HEIGHT_SCALE = 1.45;
 const PLAYER_SPRITE_MAX_WIDTH_SCALE = 1.2;
 const ONLINE_SNAPSHOT_INTERVAL_MS = 50;
+const ONLINE_RENDER_SMOOTHING = 0.48;
+const ONLINE_INTERPOLATION_DELAY_MS = 34;
+const ONLINE_EXTRAPOLATION_MS = 42;
+const ONLINE_VELOCITY_LEAD_MS = 18;
+const ONLINE_LOCAL_INPUT_LEAD_MS = 42;
+const ONLINE_MAX_VISUAL_LEAD_PX = TILE_SIZE * 0.34;
+
+interface OnlineRenderSample {
+  receivedAtMs: number;
+  players: Record<PlayerId, { position: PixelCoord; velocity: PixelCoord }>;
+}
+
+function createHeadlessCanvas(): {
+  width: number;
+  height: number;
+  style: Record<string, string>;
+  setAttribute: () => void;
+  getContext: (_kind?: string) => CanvasRenderingContext2D;
+} {
+  const noop = () => undefined;
+  const fakeContext = {
+    setTransform: noop,
+    clearRect: noop,
+    fillRect: noop,
+    strokeRect: noop,
+    beginPath: noop,
+    moveTo: noop,
+    lineTo: noop,
+    closePath: noop,
+    stroke: noop,
+    fill: noop,
+    arc: noop,
+    ellipse: noop,
+    drawImage: noop,
+    fillText: noop,
+    strokeText: noop,
+    save: noop,
+    restore: noop,
+  } as unknown as CanvasRenderingContext2D;
+  fakeContext.imageSmoothingEnabled = false;
+  return {
+    width: CANVAS_WIDTH * CANVAS_BACKBUFFER_SCALE,
+    height: CANVAS_HEIGHT * CANVAS_BACKBUFFER_SCALE,
+    style: {},
+    setAttribute: noop,
+    getContext: () => fakeContext,
+  };
+}
 
 interface BotDecision {
   direction: Direction | null;
@@ -122,9 +171,10 @@ interface MovementOption {
 export class GameApp {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
-  private readonly input: InputManager;
+  private readonly input: InputController;
   private readonly root: HTMLElement;
   private readonly assets: GameAssets;
+  private readonly headless: boolean;
   private onlineSession: OnlineSessionBridge | null = null;
   private onlineLocalPlayerId: PlayerId = 1;
   private onlineRemotePlayerId: PlayerId = 2;
@@ -139,6 +189,12 @@ export class GameApp {
     detonatePressed: false,
   };
   private onlineSnapshotCooldownMs = 0;
+  private visualPlayerPositions: Record<PlayerId, PixelCoord> = {
+    1: { x: 0, y: 0 },
+    2: { x: 0, y: 0 },
+  };
+  private onlineRenderPrevious: OnlineRenderSample | null = null;
+  private onlineRenderCurrent: OnlineRenderSample | null = null;
 
   private lastTimestamp = 0;
   private accumulatorMs = 0;
@@ -158,7 +214,7 @@ export class GameApp {
   private paused = false;
   private roundOutcome: RoundOutcome | null = null;
   private matchWinner: PlayerId | null = null;
-  private readonly automationMode = navigator.webdriver;
+  private readonly automationMode = typeof navigator !== "undefined" ? navigator.webdriver : false;
   private automationControlledPlayer: PlayerId = 2;
   private botEnabled = this.automationMode;
   private botBombCooldownMs = 0;
@@ -182,19 +238,28 @@ export class GameApp {
   constructor(root: HTMLElement, assets: GameAssets) {
     this.root = root;
     this.assets = assets;
-    this.canvas = document.createElement("canvas");
-    this.canvas.width = CANVAS_WIDTH * CANVAS_BACKBUFFER_SCALE;
-    this.canvas.height = CANVAS_HEIGHT * CANVAS_BACKBUFFER_SCALE;
-    this.canvas.setAttribute("aria-label", "Mistbridge Arena game canvas");
+    this.headless = typeof document === "undefined" || typeof window === "undefined";
 
-    const ctx = this.canvas.getContext("2d");
-    if (!ctx) {
-      throw new Error("Canvas 2D context not available");
+    if (this.headless) {
+      const fakeCanvas = createHeadlessCanvas();
+      this.canvas = fakeCanvas as unknown as HTMLCanvasElement;
+      this.ctx = fakeCanvas.getContext("2d") as CanvasRenderingContext2D;
+      this.input = new NoopInputManager();
+    } else {
+      this.canvas = document.createElement("canvas");
+      this.canvas.width = CANVAS_WIDTH * CANVAS_BACKBUFFER_SCALE;
+      this.canvas.height = CANVAS_HEIGHT * CANVAS_BACKBUFFER_SCALE;
+      this.canvas.setAttribute("aria-label", "Mistbridge Arena game canvas");
+
+      const ctx = this.canvas.getContext("2d");
+      if (!ctx) {
+        throw new Error("Canvas 2D context not available");
+      }
+      this.ctx = ctx;
+      this.ctx.setTransform(CANVAS_BACKBUFFER_SCALE, 0, 0, CANVAS_BACKBUFFER_SCALE, 0, 0);
+      this.ctx.imageSmoothingEnabled = false;
+      this.input = new InputManager(window);
     }
-    this.ctx = ctx;
-    this.ctx.setTransform(CANVAS_BACKBUFFER_SCALE, 0, 0, CANVAS_BACKBUFFER_SCALE, 0, 0);
-    this.ctx.imageSmoothingEnabled = false;
-    this.input = new InputManager(window);
     const configuredRoster = this.assets.characterRoster ?? [];
     this.characterRoster = configuredRoster.length > 0
       ? configuredRoster
@@ -250,6 +315,7 @@ export class GameApp {
   }
 
   public applyOnlineSnapshot(snapshot: OnlineGameSnapshot): void {
+    const previousMode = this.mode;
     const baseArena = createArena();
     this.mode = snapshot.mode;
     this.arena = {
@@ -294,6 +360,45 @@ export class GameApp {
     this.characterLocked = { 1: true, 2: true };
     this.characterMenuOpen = { 1: false, 2: false };
     this.botEnabled = false;
+    this.pushOnlineRenderSample(snapshot.players);
+
+    if (previousMode !== "match" || this.visualPlayerPositions[1].x === 0 || this.visualPlayerPositions[2].x === 0) {
+      this.syncVisualPlayerPositions();
+    }
+  }
+
+  public applyOnlineFrame(frame: OnlineGameFrame): void {
+    const previousMode = this.mode;
+    this.mode = frame.mode;
+    this.players = {
+      1: this.clonePlayerState(frame.players[1]),
+      2: this.clonePlayerState(frame.players[2]),
+    };
+    this.bombs = frame.bombs.map((bomb) => ({
+      ...bomb,
+      tile: { ...bomb.tile },
+    }));
+    this.flames = frame.flames.map((flame) => ({
+      ...flame,
+      tile: { ...flame.tile },
+    }));
+    this.score = { ...frame.score };
+    this.roundNumber = frame.roundNumber;
+    this.roundTimeMs = frame.roundTimeMs;
+    this.paused = frame.paused;
+    this.roundOutcome = frame.roundOutcome ? { ...frame.roundOutcome } : null;
+    this.matchWinner = frame.matchWinner;
+    this.animationClockMs = frame.animationClockMs;
+    this.suddenDeathActive = frame.suddenDeathActive;
+    this.suddenDeathTickMs = frame.suddenDeathTickMs;
+    this.suddenDeathIndex = frame.suddenDeathIndex;
+    this.selectedCharacterIndex = { ...frame.selectedCharacterIndex };
+    this.pendingCharacterIndex = { ...frame.selectedCharacterIndex };
+    this.pushOnlineRenderSample(frame.players);
+
+    if (previousMode !== "match" || this.visualPlayerPositions[1].x === 0 || this.visualPlayerPositions[2].x === 0) {
+      this.syncVisualPlayerPositions();
+    }
   }
 
   public clearOnlinePeer(): void {
@@ -327,6 +432,9 @@ export class GameApp {
   }
 
   public start(): void {
+    if (this.headless) {
+      return;
+    }
     this.root.appendChild(this.canvas);
     this.syncCanvasDisplaySize();
     this.mode = "menu";
@@ -348,6 +456,7 @@ export class GameApp {
       this.accumulatorMs -= FIXED_STEP_MS;
     }
 
+    this.updateVisualPlayerPositions(deltaMs);
     this.render();
     this.input.endFrame();
     window.requestAnimationFrame(this.loop);
@@ -368,6 +477,9 @@ export class GameApp {
   }
 
   private readonly syncCanvasDisplaySize = (): void => {
+    if (this.headless || typeof window === "undefined") {
+      return;
+    }
     if (!("style" in this.canvas)) {
       return;
     }
@@ -390,10 +502,11 @@ export class GameApp {
     if (!this.onlineSession) {
       return;
     }
+    const localBindings = KEY_BINDINGS[1];
     this.onlineLocalInput.direction = this.input.getMovementDirection(1);
-    this.onlineLocalInput.bombPressed = this.onlineLocalInput.bombPressed || this.input.consumePress(KEY_BINDINGS[1].bomb);
+    this.onlineLocalInput.bombPressed = this.onlineLocalInput.bombPressed || this.input.consumePress(localBindings.bomb);
     this.onlineLocalInput.detonatePressed = this.onlineLocalInput.detonatePressed
-      || this.input.consumePress(KEY_BINDINGS[1].detonate);
+      || this.input.consumePress(localBindings.detonate);
   }
 
   private forwardGuestInput(): void {
@@ -474,7 +587,7 @@ export class GameApp {
       void this.toggleFullscreen();
     }
 
-    if (this.onlineSession) {
+    if (this.onlineSession && !this.headless) {
       this.captureOnlineLocalInput();
     }
 
@@ -500,6 +613,191 @@ export class GameApp {
     if (this.onlineSession?.role === "host") {
       this.flushOnlineSnapshot(deltaMs);
     }
+  }
+
+  public startServerAuthoritativeMatch(characterSelections: Record<PlayerId, number>): void {
+    this.onlineSession = {
+      role: "host",
+      roomCode: "server",
+      sendGuestInput: () => undefined,
+      sendHostSnapshot: () => undefined,
+    };
+    this.onlineLocalPlayerId = 1;
+    this.onlineRemotePlayerId = 2;
+    this.onlineLocalInput = {
+      direction: null,
+      bombPressed: false,
+      detonatePressed: false,
+    };
+    this.onlineRemoteInput = {
+      direction: null,
+      bombPressed: false,
+      detonatePressed: false,
+    };
+    this.selectedCharacterIndex = { ...characterSelections };
+    this.pendingCharacterIndex = { ...characterSelections };
+    this.characterLocked = { 1: true, 2: true };
+    this.characterMenuOpen = { 1: false, 2: false };
+    this.botEnabled = false;
+    this.startMatch();
+  }
+
+  public setServerPlayerInput(playerId: PlayerId, input: OnlineInputState): void {
+    const nextInput = {
+      direction: input.direction,
+      bombPressed: input.bombPressed,
+      detonatePressed: input.detonatePressed,
+    };
+    if (playerId === 1) {
+      this.onlineLocalInput = {
+        direction: nextInput.direction,
+        bombPressed: this.onlineLocalInput.bombPressed || nextInput.bombPressed,
+        detonatePressed: this.onlineLocalInput.detonatePressed || nextInput.detonatePressed,
+      };
+      return;
+    }
+    this.onlineRemoteInput = {
+      direction: nextInput.direction,
+      bombPressed: this.onlineRemoteInput.bombPressed || nextInput.bombPressed,
+      detonatePressed: this.onlineRemoteInput.detonatePressed || nextInput.detonatePressed,
+    };
+  }
+
+  public advanceServerSimulation(deltaMs: number): void {
+    const steps = Math.max(1, Math.round(deltaMs / FIXED_STEP_MS));
+    for (let step = 0; step < steps; step += 1) {
+      this.update(FIXED_STEP_MS);
+    }
+    this.input.endFrame();
+  }
+
+  public exportOnlineSnapshot(): OnlineGameSnapshot {
+    return this.createOnlineSnapshot();
+  }
+
+  private syncVisualPlayerPositions(): void {
+    this.visualPlayerPositions = {
+      1: this.getPlayerPixelPositionFromState(this.players[1]),
+      2: this.getPlayerPixelPositionFromState(this.players[2]),
+    };
+  }
+
+  private pushOnlineRenderSample(players: Record<PlayerId, PlayerState>): void {
+    if (this.headless || typeof performance === "undefined") {
+      return;
+    }
+    this.onlineRenderPrevious = this.onlineRenderCurrent;
+    this.onlineRenderCurrent = {
+      receivedAtMs: performance.now(),
+      players: {
+        1: {
+          position: this.getPlayerPixelPositionFromState(players[1]),
+          velocity: { x: players[1].velocity.x, y: players[1].velocity.y },
+        },
+        2: {
+          position: this.getPlayerPixelPositionFromState(players[2]),
+          velocity: { x: players[2].velocity.x, y: players[2].velocity.y },
+        },
+      },
+    };
+  }
+
+  private updateVisualPlayerPositions(deltaMs: number): void {
+    if (this.headless || !this.onlineSession) {
+      this.syncVisualPlayerPositions();
+      return;
+    }
+
+    const frameBlend = 1 - Math.pow(1 - ONLINE_RENDER_SMOOTHING, Math.max(1, deltaMs) / FIXED_STEP_MS);
+    const nowMs = typeof performance === "undefined" ? 0 : performance.now();
+    for (const id of [1, 2] as const) {
+      const player = this.players[id];
+      const target = this.getPlayerPixelPositionFromState(player);
+      let projected = this.projectNetworkPlayerPosition(id, nowMs, target, player.velocity);
+
+      const current = this.visualPlayerPositions[id];
+      const localDirection = this.onlineLocalInput.direction;
+      const shouldPredictLocalPlayer =
+        id === this.onlineLocalPlayerId
+        && this.mode === "match"
+        && player.alive
+        && localDirection
+        && !this.paused
+        && !this.roundOutcome;
+
+      if (shouldPredictLocalPlayer) {
+        const leadDirection = directionDelta[localDirection];
+        const moveSpeed = this.getMoveSpeed(player);
+        projected = {
+          x: current.x + leadDirection.x * moveSpeed * (deltaMs / 1000),
+          y: current.y + leadDirection.y * moveSpeed * (deltaMs / 1000),
+        };
+        projected = {
+          x: projected.x + leadDirection.x * moveSpeed * (ONLINE_LOCAL_INPUT_LEAD_MS / 1000),
+          y: projected.y + leadDirection.y * moveSpeed * (ONLINE_LOCAL_INPUT_LEAD_MS / 1000),
+        };
+      }
+
+      const offsetX = projected.x - target.x;
+      const offsetY = projected.y - target.y;
+      const offsetDistance = Math.hypot(offsetX, offsetY);
+      if (offsetDistance > ONLINE_MAX_VISUAL_LEAD_PX && offsetDistance > 0.001) {
+        const scale = ONLINE_MAX_VISUAL_LEAD_PX / offsetDistance;
+        projected = {
+          x: target.x + offsetX * scale,
+          y: target.y + offsetY * scale,
+        };
+      }
+
+      this.visualPlayerPositions[id] = {
+        x: shouldPredictLocalPlayer
+          ? current.x + (projected.x - current.x) * 0.72
+          : current.x + (projected.x - current.x) * frameBlend,
+        y: shouldPredictLocalPlayer
+          ? current.y + (projected.y - current.y) * 0.72
+          : current.y + (projected.y - current.y) * frameBlend,
+      };
+    }
+  }
+
+  private projectNetworkPlayerPosition(
+    playerId: PlayerId,
+    nowMs: number,
+    fallbackPosition: PixelCoord,
+    fallbackVelocity: PixelCoord,
+  ): PixelCoord {
+    const currentSample = this.onlineRenderCurrent?.players[playerId] ?? null;
+    if (!currentSample || !this.onlineRenderCurrent) {
+      return {
+        x: fallbackPosition.x + fallbackVelocity.x * (ONLINE_VELOCITY_LEAD_MS / 1000),
+        y: fallbackPosition.y + fallbackVelocity.y * (ONLINE_VELOCITY_LEAD_MS / 1000),
+      };
+    }
+
+    const previousSample = this.onlineRenderPrevious?.players[playerId] ?? null;
+    const renderAtMs = nowMs - ONLINE_INTERPOLATION_DELAY_MS;
+    if (
+      previousSample
+      && this.onlineRenderPrevious
+      && this.onlineRenderCurrent.receivedAtMs > this.onlineRenderPrevious.receivedAtMs
+      && renderAtMs <= this.onlineRenderCurrent.receivedAtMs
+    ) {
+      const spanMs = this.onlineRenderCurrent.receivedAtMs - this.onlineRenderPrevious.receivedAtMs;
+      const alpha = Math.max(
+        0,
+        Math.min(1, (renderAtMs - this.onlineRenderPrevious.receivedAtMs) / spanMs),
+      );
+      return {
+        x: previousSample.position.x + (currentSample.position.x - previousSample.position.x) * alpha,
+        y: previousSample.position.y + (currentSample.position.y - previousSample.position.y) * alpha,
+      };
+    }
+
+    const extrapolationMs = Math.max(0, Math.min(ONLINE_EXTRAPOLATION_MS, renderAtMs - this.onlineRenderCurrent.receivedAtMs));
+    return {
+      x: currentSample.position.x + currentSample.velocity.x * (extrapolationMs / 1000),
+      y: currentSample.position.y + currentSample.velocity.y * (extrapolationMs / 1000),
+    };
   }
 
   private updateMenu(): void {
@@ -689,10 +987,15 @@ export class GameApp {
   }
 
   private createPlayers(): Record<PlayerId, PlayerState> {
-    return {
+    const players = {
       1: this.createPlayer(1, "P1", { x: 2, y: 1 }, "down"),
       2: this.createPlayer(2, this.isBotControlled(2) ? "BOT" : "P2", { x: GRID_WIDTH - 3, y: GRID_HEIGHT - 2 }, "up"),
     };
+    this.visualPlayerPositions = {
+      1: this.getPlayerPixelPositionFromState(players[1]),
+      2: this.getPlayerPixelPositionFromState(players[2]),
+    };
+    return players;
   }
 
   private syncPlayerLabels(): void {
@@ -2300,11 +2603,18 @@ export class GameApp {
     await this.canvas.requestFullscreen();
   }
 
-  private getPlayerPixelPosition(player: PlayerState): PixelCoord {
+  private getPlayerPixelPositionFromState(player: PlayerState): PixelCoord {
     return {
       x: ARENA_OFFSET_X + player.position.x - TILE_SIZE * 0.5,
       y: ARENA_OFFSET_Y + player.position.y - TILE_SIZE * 0.5,
     };
+  }
+
+  private getPlayerPixelPosition(player: PlayerState): PixelCoord {
+    if (this.headless) {
+      return this.getPlayerPixelPositionFromState(player);
+    }
+    return this.visualPlayerPositions[player.id] ?? this.getPlayerPixelPositionFromState(player);
   }
 
   private render(): void {

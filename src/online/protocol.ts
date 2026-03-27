@@ -39,6 +39,16 @@ export interface LobbyState extends LobbySummary {
   selfClientId: string;
   selfSeat: PlayerId | null;
   isHost: boolean;
+  chat: ChatEntry[];
+}
+
+export interface ChatEntry {
+  id: string;
+  authorClientId: string | null;
+  authorLabel: string;
+  body: string;
+  createdAt: number;
+  system?: boolean;
 }
 
 export interface MatchStartConfig {
@@ -72,6 +82,24 @@ export interface OnlineGameSnapshot {
   selectedCharacterIndex: Record<PlayerId, number>;
 }
 
+export interface OnlineGameFrame {
+  mode: Mode;
+  players: Record<PlayerId, PlayerState>;
+  bombs: BombState[];
+  flames: FlameState[];
+  score: MatchScore;
+  roundNumber: number;
+  roundTimeMs: number;
+  paused: boolean;
+  roundOutcome: RoundOutcome | null;
+  matchWinner: PlayerId | null;
+  animationClockMs: number;
+  suddenDeathActive: boolean;
+  suddenDeathTickMs: number;
+  suddenDeathIndex: number;
+  selectedCharacterIndex: Record<PlayerId, number>;
+}
+
 export interface OnlineSessionBridge {
   role: OnlineRole | null;
   roomCode: string | null;
@@ -83,6 +111,8 @@ export interface ServerHelloMessage {
   type: "hello";
   clientId: string;
   lobbies: LobbySummary[];
+  quickMatchQueued: number;
+  searchingQuickMatch: boolean;
 }
 
 export interface ServerLobbyListMessage {
@@ -119,9 +149,26 @@ export interface ServerSnapshotMessage {
   snapshot: OnlineGameSnapshot;
 }
 
+export interface ServerFrameMessage {
+  type: "host-frame";
+  frame: OnlineGameFrame;
+}
+
 export interface ServerErrorMessage {
   type: "error";
   message: string;
+}
+
+export interface ServerQuickMatchStateMessage {
+  type: "quick-match-state";
+  queued: number;
+  searching: boolean;
+}
+
+export interface ServerChatMessage {
+  type: "chat-message";
+  roomCode: string;
+  entry: ChatEntry;
 }
 
 export type ServerMessage =
@@ -133,7 +180,10 @@ export type ServerMessage =
   | ServerMatchStartedMessage
   | ServerPeerLeftMessage
   | GuestInputMessage
+  | ServerFrameMessage
   | ServerSnapshotMessage
+  | ServerQuickMatchStateMessage
+  | ServerChatMessage
   | ServerErrorMessage;
 
 export interface CreateLobbyMessage {
@@ -175,6 +225,19 @@ export interface HostSnapshotMessage {
   snapshot: OnlineGameSnapshot;
 }
 
+export interface QuickMatchMessage {
+  type: "quick-match";
+}
+
+export interface QuickMatchCancelMessage {
+  type: "quick-match-cancel";
+}
+
+export interface ChatSendMessage {
+  type: "chat-send";
+  body: string;
+}
+
 export type ClientMessage =
   | CreateLobbyMessage
   | JoinLobbyMessage
@@ -183,4 +246,7 @@ export type ClientMessage =
   | SetCharacterMessage
   | SetReadyMessage
   | GuestInputMessage
+  | QuickMatchMessage
+  | QuickMatchCancelMessage
+  | ChatSendMessage
   | HostSnapshotMessage;

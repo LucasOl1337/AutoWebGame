@@ -1,6 +1,14 @@
 import type { Direction, PlayerId } from "../core/types";
 import { KEY_BINDINGS } from "../core/config";
 
+export interface InputController {
+  consumePress(code: string): boolean;
+  endFrame(): void;
+  clearPresses(): void;
+  isDown(code: string): boolean;
+  getMovementDirection(playerId: PlayerId): Direction | null;
+}
+
 export class InputManager {
   private keysDown = new Set<string>();
   private pressCounts = new Map<string, number>();
@@ -98,6 +106,28 @@ export class InputManager {
       }
     }
 
+    return null;
+  }
+}
+
+export class NoopInputManager implements InputController {
+  public consumePress(): boolean {
+    return false;
+  }
+
+  public endFrame(): void {
+    // Intentionally empty for headless runtimes.
+  }
+
+  public clearPresses(): void {
+    // Intentionally empty for headless runtimes.
+  }
+
+  public isDown(): boolean {
+    return false;
+  }
+
+  public getMovementDirection(): Direction | null {
     return null;
   }
 }

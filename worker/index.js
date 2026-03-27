@@ -1,4 +1,9 @@
 import { DurableObject } from "cloudflare:workers";
+import { GameApp } from "../src/app/game-app";
+
+const STATE_VERSION = 3;
+const MATCH_TICK_MS = 1000 / 60;
+const FULL_SNAPSHOT_EVERY_TICKS = 6;
 
 /**
  * @typedef {{
@@ -6,8 +11,9 @@ import { DurableObject } from "cloudflare:workers";
  *   title: string;
  *   status: "open" | "playing";
  *   createdAt: number;
- *   hostClientId: string | null;
+  *   hostClientId: string | null;
  *   clients: Set<string>;
+ *   chat: ChatEntry[];
  *   seats: {
  *     1: LobbySeat;
  *     2: LobbySeat;
@@ -20,6 +26,15 @@ import { DurableObject } from "cloudflare:workers";
  *   characterIndex: number;
  *   ready: boolean;
  * }} LobbySeat
+ *
+ * @typedef {{
+ *   id: string;
+ *   authorClientId: string | null;
+ *   authorLabel: string;
+ *   body: string;
+ *   createdAt: number;
+ *   system?: boolean;
+ * }} ChatEntry
  */
 
 export default {
@@ -51,6 +66,10 @@ export class GlobalLobby extends DurableObject {
   rooms = new Map();
   /** @type {Map<string, WebSocket>} */
   sockets = new Map();
+  /** @type {string[]} */
+  quickMatchQueue = [];
+  /** @type {Map<string, { game: GameApp, inputs: { 1: import("../src/online/protocol").OnlineInputState, 2: import("../src/online/protocol").OnlineInputState }, timer: ReturnType<typeof setInterval> | null, tick: number }>} */
+  matches = new Map();
   /** @type {Promise<void>} */
   ready;
 
@@ -62,7 +81,10 @@ export class GlobalLobby extends DurableObject {
     super(ctx, env);
     this.ready = this.ctx.blockConcurrencyWhile(async () => {
       const stored = await this.ctx.storage.get("state");
-      const persistedRooms = stored && typeof stored === "object" && Array.isArray(stored.rooms)
+      const persistedRooms = stored
+        && typeof stored === "object"
+        && stored.version === STATE_VERSION
+        && Array.isArray(stored.rooms)
         ? stored.rooms
         : [];
 
@@ -72,13 +94,14 @@ export class GlobalLobby extends DurableObject {
           {
             roomCode: room.roomCode,
             title: room.title,
-            status: room.status,
+            status: "open",
             createdAt: room.createdAt,
-            hostClientId: room.hostClientId,
+            hostClientId: null,
             clients: new Set(room.clients),
+            chat: Array.isArray(room.chat) ? room.chat.slice(-40) : [],
             seats: {
-              1: room.seats[1],
-              2: room.seats[2],
+              1: { ...room.seats[1], ready: false },
+              2: { ...room.seats[2], ready: false },
             },
           },
         ]),
@@ -107,7 +130,13 @@ export class GlobalLobby extends DurableObject {
     this.ctx.acceptWebSocket(server);
     server.serializeAttachment({ clientId });
     this.sockets.set(clientId, server);
-    this.send(server, { type: "hello", clientId, lobbies: this.buildLobbyList() });
+    this.send(server, {
+      type: "hello",
+      clientId,
+      lobbies: this.buildLobbyList(),
+      quickMatchQueued: this.quickMatchQueue.length,
+      searchingQuickMatch: this.quickMatchQueue.includes(clientId),
+    });
 
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -156,11 +185,18 @@ export class GlobalLobby extends DurableObject {
       case "set-ready":
         await this.handleSetReady(clientId, payload.ready);
         break;
-      case "guest-input":
-        this.relayGuestInput(clientId, payload);
+      case "quick-match":
+        await this.handleQuickMatch(clientId);
         break;
-      case "host-snapshot":
-        this.relayHostSnapshot(clientId, payload);
+      case "quick-match-cancel":
+        this.removeFromQuickMatchQueue(clientId);
+        this.broadcastQuickMatchState();
+        break;
+      case "chat-send":
+        await this.handleChatSend(clientId, payload.body);
+        break;
+      case "guest-input":
+        this.capturePlayerInput(clientId, payload.input);
         break;
       default:
         break;
@@ -190,6 +226,7 @@ export class GlobalLobby extends DurableObject {
    * @param {string} rawTitle
    */
   async handleCreateLobby(clientId, rawTitle) {
+    this.removeFromQuickMatchQueue(clientId);
     const currentRoom = this.findRoomForClient(clientId);
     if (currentRoom) {
       await this.releaseClientFromRoom(currentRoom, clientId);
@@ -202,8 +239,9 @@ export class GlobalLobby extends DurableObject {
       title: normalizeLobbyTitle(rawTitle),
       createdAt: Date.now(),
       status: "open",
-      hostClientId: clientId,
+      hostClientId: null,
       clients: new Set([clientId]),
+      chat: [],
       seats: {
         1: createEmptySeat(),
         2: createEmptySeat(),
@@ -211,10 +249,10 @@ export class GlobalLobby extends DurableObject {
     };
 
     this.rooms.set(roomCode, room);
-    this.assignSeat(room, 1, clientId);
     await this.persistState();
     this.sendJoinedLobby(clientId, room);
     this.broadcastLobbyList();
+    this.broadcastQuickMatchState();
   }
 
   /**
@@ -222,10 +260,23 @@ export class GlobalLobby extends DurableObject {
    * @param {string} rawRoomCode
    */
   async handleJoinLobby(clientId, rawRoomCode) {
+    this.removeFromQuickMatchQueue(clientId);
     const roomCode = normalizeRoomCode(rawRoomCode);
     const room = this.rooms.get(roomCode);
     if (!room) {
       this.sendToClient(clientId, { type: "error", message: "Lobby not found." });
+      return;
+    }
+
+    const alreadySeated = room.seats[1].clientId === clientId || room.seats[2].clientId === clientId;
+    const seatsFull = Boolean(room.seats[1].clientId && room.seats[2].clientId);
+    if (!alreadySeated && seatsFull) {
+      this.sendToClient(clientId, {
+        type: "error",
+        message: room.status === "playing"
+          ? "Match already in progress. Pick another open arena."
+          : "Lobby full. Pick another arena or wait for a slot.",
+      });
       return;
     }
 
@@ -239,21 +290,25 @@ export class GlobalLobby extends DurableObject {
     this.sendJoinedLobby(clientId, room);
     this.broadcastLobbyToMembers(room);
     this.broadcastLobbyList();
+    this.broadcastQuickMatchState();
   }
 
   /**
    * @param {string} clientId
    */
   async handleLeaveLobby(clientId) {
+    this.removeFromQuickMatchQueue(clientId);
     const room = this.findRoomForClient(clientId);
     if (!room) {
       this.sendToClient(clientId, { type: "lobby-left" });
+      this.broadcastQuickMatchState();
       return;
     }
 
     await this.releaseClientFromRoom(room, clientId);
     this.sendToClient(clientId, { type: "lobby-left" });
     this.broadcastLobbyList();
+    this.broadcastQuickMatchState();
   }
 
   /**
@@ -337,6 +392,94 @@ export class GlobalLobby extends DurableObject {
   }
 
   /**
+   * @param {string} clientId
+   */
+  async handleQuickMatch(clientId) {
+    const activeRoom = this.findRoomForClient(clientId);
+    if (activeRoom) {
+      await this.releaseClientFromRoom(activeRoom, clientId);
+      this.sendToClient(clientId, { type: "lobby-left" });
+    }
+
+    if (this.quickMatchQueue.includes(clientId)) {
+      this.broadcastQuickMatchState();
+      return;
+    }
+
+    const opponentId = this.quickMatchQueue.find((queuedClientId) => queuedClientId !== clientId && this.sockets.has(queuedClientId)) ?? null;
+    if (!opponentId) {
+      this.quickMatchQueue.push(clientId);
+      this.broadcastQuickMatchState();
+      this.sendToClient(clientId, { type: "error", message: "Searching for a quick match..." });
+      return;
+    }
+
+    this.removeFromQuickMatchQueue(opponentId);
+    this.removeFromQuickMatchQueue(clientId);
+
+    const roomCode = this.createRoomCode();
+    const room = {
+      roomCode,
+      title: "Quick Match",
+      createdAt: Date.now(),
+      status: "open",
+      hostClientId: null,
+      clients: new Set([opponentId, clientId]),
+      chat: [],
+      seats: {
+        1: createEmptySeat(),
+        2: createEmptySeat(),
+      },
+    };
+
+    this.assignSeat(room, 1, opponentId);
+    this.assignSeat(room, 2, clientId);
+    room.seats[1].ready = true;
+    room.seats[2].ready = true;
+    this.rooms.set(roomCode, room);
+    this.appendRoomSystemMessage(room, "Quick match found. Arena sync locked.");
+    await this.persistState();
+    this.sendJoinedLobby(opponentId, room);
+    this.sendJoinedLobby(clientId, room);
+    this.broadcastLobbyToMembers(room);
+    this.broadcastLobbyList();
+    this.broadcastQuickMatchState();
+    await this.maybeStartMatch(room);
+  }
+
+  /**
+   * @param {string} clientId
+   * @param {unknown} rawBody
+   */
+  async handleChatSend(clientId, rawBody) {
+    const room = this.findRoomForClient(clientId);
+    if (!room) {
+      return;
+    }
+
+    const body = String(rawBody || "").trim().slice(0, 280);
+    if (!body) {
+      return;
+    }
+
+    const entry = {
+      id: createId("msg"),
+      authorClientId: clientId,
+      authorLabel: this.resolveChatAuthorLabel(room, clientId),
+      body,
+      createdAt: Date.now(),
+    };
+    room.chat.push(entry);
+    room.chat = room.chat.slice(-40);
+    await this.persistState();
+    this.broadcastToRoom(room, {
+      type: "chat-message",
+      roomCode: room.roomCode,
+      entry,
+    });
+  }
+
+  /**
    * @param {LobbyRoom} room
    */
   async maybeStartMatch(room) {
@@ -346,14 +489,17 @@ export class GlobalLobby extends DurableObject {
 
     const p1 = room.seats[1];
     const p2 = room.seats[2];
-    if (!p1.clientId || !p2.clientId || !p1.ready || !p2.ready || !room.hostClientId) {
+    if (!p1.clientId || !p2.clientId || !p1.ready || !p2.ready) {
       return;
     }
+
+    room.clients = new Set([p1.clientId, p2.clientId]);
+    room.hostClientId = p1.clientId;
 
     room.status = "playing";
     this.refreshSeatLabels(room);
 
-    const hostSeat = room.hostClientId === p1.clientId ? 1 : 2;
+    const hostSeat = 1;
     const guestSeat = hostSeat === 1 ? 2 : 1;
     const hostClientId = room.hostClientId;
     const guestClientId = room.seats[guestSeat].clientId;
@@ -370,13 +516,13 @@ export class GlobalLobby extends DurableObject {
 
     await this.persistState();
 
-    this.sendToClient(hostClientId, {
+    this.sendToClient(p1.clientId, {
       type: "match-started",
       config: {
         roomCode: room.roomCode,
-        role: "host",
-        localPlayerId: hostSeat,
-        remotePlayerId: guestSeat,
+        role: "guest",
+        localPlayerId: 1,
+        remotePlayerId: 2,
         characterSelections,
       },
     });
@@ -386,11 +532,15 @@ export class GlobalLobby extends DurableObject {
       config: {
         roomCode: room.roomCode,
         role: "guest",
-        localPlayerId: guestSeat,
-        remotePlayerId: hostSeat,
+        localPlayerId: 2,
+        remotePlayerId: 1,
         characterSelections,
       },
     });
+
+    this.startRoomMatch(room, characterSelections);
+    this.appendRoomSystemMessage(room, "Match started. Good luck.");
+    await this.persistState();
 
     this.broadcastLobbyToMembers(room);
     this.broadcastLobbyList();
@@ -400,34 +550,23 @@ export class GlobalLobby extends DurableObject {
    * @param {string} clientId
    * @param {unknown} payload
    */
-  relayGuestInput(clientId, payload) {
+  capturePlayerInput(clientId, input) {
     const room = this.findRoomForClient(clientId);
-    if (!room || room.status !== "playing" || !room.hostClientId) {
+    if (!room || room.status !== "playing") {
       return;
     }
 
-    if (room.hostClientId === clientId) {
+    const seat = this.findSeatForClient(room, clientId);
+    const match = this.matches.get(room.roomCode);
+    if (!seat || !match) {
       return;
     }
 
-    this.sendToClient(room.hostClientId, payload);
-  }
-
-  /**
-   * @param {string} clientId
-   * @param {unknown} payload
-   */
-  relayHostSnapshot(clientId, payload) {
-    const room = this.findRoomForClient(clientId);
-    if (!room || room.status !== "playing" || room.hostClientId !== clientId) {
-      return;
-    }
-
-    for (const memberId of room.clients) {
-      if (memberId !== clientId) {
-        this.sendToClient(memberId, payload);
-      }
-    }
+    match.inputs[seat] = {
+      direction: input?.direction ?? null,
+      bombPressed: Boolean(input?.bombPressed),
+      detonatePressed: Boolean(input?.detonatePressed),
+    };
   }
 
   /**
@@ -440,11 +579,13 @@ export class GlobalLobby extends DurableObject {
     }
 
     this.sockets.delete(clientId);
+    this.removeFromQuickMatchQueue(clientId);
     const room = this.findRoomForClient(clientId);
     if (room) {
       await this.releaseClientFromRoom(room, clientId);
       this.broadcastLobbyList();
     }
+    this.broadcastQuickMatchState();
   }
 
   /**
@@ -461,14 +602,16 @@ export class GlobalLobby extends DurableObject {
     }
 
     if (room.hostClientId === clientId) {
-      room.hostClientId = room.seats[1].clientId || room.seats[2].clientId || null;
+      room.hostClientId = null;
     }
 
     if (room.status === "playing") {
+      this.stopRoomMatch(room.roomCode);
       room.status = "open";
       room.seats[1].ready = false;
       room.seats[2].ready = false;
       this.refreshSeatLabels(room);
+      this.appendRoomSystemMessage(room, "A pilot left the match. Room reopened.");
       this.broadcastToRoom(room, { type: "peer-left" });
     } else {
       this.refreshSeatLabels(room);
@@ -503,7 +646,7 @@ export class GlobalLobby extends DurableObject {
   sendJoinedLobby(clientId, room) {
     this.sendToClient(clientId, {
       type: "lobby-joined",
-      role: clientId === room.hostClientId ? "host" : "guest",
+      role: "guest",
       lobby: this.serializeLobbyForClient(room, clientId),
     });
   }
@@ -554,7 +697,8 @@ export class GlobalLobby extends DurableObject {
       ...this.serializeLobbySummary(room),
       selfClientId: clientId,
       selfSeat: this.findSeatForClient(room, clientId),
-      isHost: room.hostClientId === clientId,
+      isHost: false,
+      chat: room.chat.slice(-40),
     };
   }
 
@@ -581,7 +725,7 @@ export class GlobalLobby extends DurableObject {
   assignSeat(room, seat, clientId) {
     room.seats[seat] = {
       clientId,
-      displayName: room.hostClientId === clientId ? "Host" : `Pilot ${seat}`,
+      displayName: `Pilot ${seat}`,
       characterIndex: room.seats[seat].characterIndex ?? seat - 1,
       ready: false,
     };
@@ -597,7 +741,7 @@ export class GlobalLobby extends DurableObject {
         seat.displayName = null;
         continue;
       }
-      seat.displayName = seat.clientId === room.hostClientId ? "Host" : `Pilot ${seatId}`;
+      seat.displayName = `Pilot ${seatId}`;
     }
   }
 
@@ -678,6 +822,7 @@ export class GlobalLobby extends DurableObject {
     }
 
     await this.ctx.storage.put("state", {
+      version: STATE_VERSION,
       rooms: Array.from(this.rooms.values()).map((room) => ({
         roomCode: room.roomCode,
         title: room.title,
@@ -685,12 +830,166 @@ export class GlobalLobby extends DurableObject {
         createdAt: room.createdAt,
         hostClientId: room.hostClientId,
         clients: Array.from(room.clients),
+        chat: room.chat.slice(-40),
         seats: {
           1: room.seats[1],
           2: room.seats[2],
         },
       })),
     });
+  }
+
+  /**
+   * @param {LobbyRoom} room
+   * @param {Record<1 | 2, number>} characterSelections
+   */
+  startRoomMatch(room, characterSelections) {
+    this.stopRoomMatch(room.roomCode);
+    const game = createServerGame();
+    game.startServerAuthoritativeMatch(characterSelections);
+    const match = {
+      game,
+      inputs: {
+        1: createNeutralInput(),
+        2: createNeutralInput(),
+      },
+      timer: null,
+      tick: 0,
+    };
+    match.timer = setInterval(() => {
+      this.tickRoomMatch(room.roomCode);
+    }, MATCH_TICK_MS);
+    this.matches.set(room.roomCode, match);
+    this.broadcastSnapshot(room.roomCode);
+  }
+
+  /**
+   * @param {string} roomCode
+   */
+  stopRoomMatch(roomCode) {
+    const match = this.matches.get(roomCode);
+    if (!match) {
+      return;
+    }
+    if (match.timer) {
+      clearInterval(match.timer);
+    }
+    this.matches.delete(roomCode);
+  }
+
+  /**
+   * @param {string} roomCode
+   */
+  tickRoomMatch(roomCode) {
+    const room = this.rooms.get(roomCode);
+    const match = this.matches.get(roomCode);
+    if (!room || !match || room.status !== "playing") {
+      this.stopRoomMatch(roomCode);
+      return;
+    }
+
+    match.game.setServerPlayerInput(1, match.inputs[1]);
+    match.game.setServerPlayerInput(2, match.inputs[2]);
+    match.game.advanceServerSimulation(MATCH_TICK_MS);
+    match.tick += 1;
+    this.broadcastFrame(roomCode);
+    if (match.tick % FULL_SNAPSHOT_EVERY_TICKS === 0) {
+      this.broadcastSnapshot(roomCode);
+    }
+  }
+
+  /**
+   * @param {string} roomCode
+   */
+  broadcastFrame(roomCode) {
+    const room = this.rooms.get(roomCode);
+    const match = this.matches.get(roomCode);
+    if (!room || !match) {
+      return;
+    }
+    const snapshot = match.game.exportOnlineSnapshot();
+    this.broadcastToRoom(room, {
+      type: "host-frame",
+      frame: {
+        mode: snapshot.mode,
+        players: snapshot.players,
+        bombs: snapshot.bombs,
+        flames: snapshot.flames,
+        score: snapshot.score,
+        roundNumber: snapshot.roundNumber,
+        roundTimeMs: snapshot.roundTimeMs,
+        paused: snapshot.paused,
+        roundOutcome: snapshot.roundOutcome,
+        matchWinner: snapshot.matchWinner,
+        animationClockMs: snapshot.animationClockMs,
+        suddenDeathActive: snapshot.suddenDeathActive,
+        suddenDeathTickMs: snapshot.suddenDeathTickMs,
+        suddenDeathIndex: snapshot.suddenDeathIndex,
+        selectedCharacterIndex: snapshot.selectedCharacterIndex,
+      },
+    });
+  }
+
+  /**
+   * @param {string} roomCode
+   */
+  broadcastSnapshot(roomCode) {
+    const room = this.rooms.get(roomCode);
+    const match = this.matches.get(roomCode);
+    if (!room || !match) {
+      return;
+    }
+    const snapshot = match.game.exportOnlineSnapshot();
+    this.broadcastToRoom(room, {
+      type: "host-snapshot",
+      snapshot,
+    });
+  }
+
+  broadcastQuickMatchState() {
+    const queued = this.quickMatchQueue.length;
+    for (const [clientId, websocket] of this.sockets.entries()) {
+      this.send(websocket, {
+        type: "quick-match-state",
+        queued,
+        searching: this.quickMatchQueue.includes(clientId),
+      });
+    }
+  }
+
+  /**
+   * @param {string} clientId
+   */
+  removeFromQuickMatchQueue(clientId) {
+    this.quickMatchQueue = this.quickMatchQueue.filter((queuedClientId) => queuedClientId !== clientId);
+  }
+
+  /**
+   * @param {LobbyRoom} room
+   * @param {string} body
+   */
+  appendRoomSystemMessage(room, body) {
+    room.chat.push({
+      id: createId("msg"),
+      authorClientId: null,
+      authorLabel: "System",
+      body,
+      createdAt: Date.now(),
+      system: true,
+    });
+    room.chat = room.chat.slice(-40);
+  }
+
+  /**
+   * @param {LobbyRoom} room
+   * @param {string} clientId
+   */
+  resolveChatAuthorLabel(room, clientId) {
+    const seat = this.findSeatForClient(room, clientId);
+    if (seat) {
+      return `P${seat}`;
+    }
+    return "Pilot";
   }
 }
 
@@ -714,4 +1013,42 @@ function normalizeLobbyTitle(title) {
 
 function createId(prefix) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function createNeutralInput() {
+  return {
+    direction: null,
+    bombPressed: false,
+    detonatePressed: false,
+  };
+}
+
+function createServerGame() {
+  return new GameApp(
+    /** @type {HTMLElement} */ ({ appendChild() {} }),
+    {
+      floor: null,
+      wall: null,
+      players: {
+        1: { up: null, down: null, left: null, right: null, idle: { up: [], down: [], left: [], right: [] }, walk: { up: [], down: [], left: [], right: [] } },
+        2: { up: null, down: null, left: null, right: null, idle: { up: [], down: [], left: [], right: [] }, walk: { up: [], down: [], left: [], right: [] } },
+      },
+      props: {
+        wall: null,
+        crate: null,
+        bomb: null,
+        flame: null,
+      },
+      powerUps: {
+        "bomb-up": null,
+        "flame-up": null,
+        "speed-up": null,
+        "remote-up": null,
+        "shield-up": null,
+        "bomb-pass-up": null,
+        "kick-up": null,
+      },
+      characterRoster: [],
+    },
+  );
 }
