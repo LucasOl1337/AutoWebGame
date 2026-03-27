@@ -315,7 +315,7 @@ export class GameApp {
       this.canvas = document.createElement("canvas");
       this.canvas.width = CANVAS_WIDTH * CANVAS_BACKBUFFER_SCALE;
       this.canvas.height = CANVAS_HEIGHT * CANVAS_BACKBUFFER_SCALE;
-      this.canvas.setAttribute("aria-label", "Mistbridge Arena game canvas");
+      this.canvas.setAttribute("aria-label", "BOMBA game canvas");
 
       const ctx = this.canvas.getContext("2d");
       if (!ctx) {

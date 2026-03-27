@@ -155,7 +155,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
   private bindEvents(): void {
     this.elements.createButton.addEventListener("click", () => {
-      const title = this.elements.createTitle.value.trim() || "Open Arena";
+      const title = this.elements.createTitle.value.trim() || "BOMBA";
       this.send({ type: "create-lobby", title });
     });
 
@@ -261,7 +261,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
           this.send({ type: "join-lobby", roomCode: this.pendingAutoJoinRoom });
           this.pendingAutoJoinRoom = null;
         }
-        this.setStatus("Global lobby online. Create a room or enter an arena in the live board.");
+        this.setStatus("Bomba board online. Create a room or enter quick match.");
         break;
       case "lobby-list":
         this.lobbies = message.lobbies;
@@ -345,7 +345,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.elements.shell.dataset.state = "lobby";
         this.quickMatchSearching = false;
         this.renderQuickMatchState();
-        this.setStatus("A pilot left. The room is open again.");
+        this.setStatus("A bomber left. The room is open again.");
         break;
       case "error":
         this.quickMatchSearching = false;
@@ -368,9 +368,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const brand = document.createElement("div");
     brand.className = "lobby-brand";
     brand.innerHTML = `
-      <p>Global lobby</p>
-      <h1>Mistbridge Arena</h1>
-      <span>Public rooms. Up to 4 pilots. Quick match claims an open slot.</span>
+      <p>Bomba board</p>
+      <h1>BOMBA</h1>
+      <span>Public rooms. Claim a slot. Drop in fast.</span>
     `;
 
     const createPanel = document.createElement("div");
@@ -379,7 +379,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const createTitle = document.createElement("input");
     createTitle.className = "lobby-create__input";
     createTitle.type = "text";
-    createTitle.placeholder = "Lobby name";
+    createTitle.placeholder = "Room name";
     createTitle.maxLength = 36;
     createTitle.name = "lobby-name";
     createTitle.autocomplete = "off";
@@ -388,12 +388,12 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const createButton = document.createElement("button");
     createButton.className = "lobby-button lobby-button--primary";
     createButton.type = "button";
-    createButton.textContent = "Create lobby";
+    createButton.textContent = "Create room";
 
     const quickMatchButton = document.createElement("button");
     quickMatchButton.className = "lobby-button lobby-button--quickmatch";
     quickMatchButton.type = "button";
-    quickMatchButton.textContent = "Find quick match";
+    quickMatchButton.textContent = "Find match";
 
     const quickMatchMeta = document.createElement("p");
     quickMatchMeta.className = "lobby-quickmatch-meta";
@@ -405,7 +405,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     const selectorHeading = document.createElement("div");
     selectorHeading.className = "lobby-selector__heading";
-    selectorHeading.textContent = "Selected pilot";
+    selectorHeading.textContent = "Selected bomber";
 
     const selectorPortrait = document.createElement("img");
     selectorPortrait.className = "lobby-selector__portrait";
@@ -524,7 +524,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     const chatHeading = document.createElement("div");
     chatHeading.className = "lobby-stage__panel-heading";
-    chatHeading.textContent = "Arena feed";
+    chatHeading.textContent = "Bomb feed";
 
     const chatLog = document.createElement("div");
     chatLog.className = "lobby-chat__log";
@@ -594,7 +594,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     if (this.lobbies.length === 0) {
       const empty = document.createElement("div");
       empty.className = "lobby-browser__empty";
-      empty.textContent = "No live lobbies. Start the next arena.";
+      empty.textContent = "No live rooms. Start the next bomb.";
       this.elements.browserList.appendChild(empty);
       return;
     }
@@ -668,7 +668,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   }
 
   private renderQuickMatchState(): void {
-    this.elements.quickMatchButton.textContent = this.quickMatchSearching ? "Finding room..." : "Find quick match";
+    this.elements.quickMatchButton.textContent = this.quickMatchSearching ? "Finding room..." : "Find match";
     this.elements.quickMatchButton.dataset.searching = this.quickMatchSearching ? "true" : "false";
     this.elements.quickMatchButton.disabled = this.quickMatchSearching;
     this.elements.quickMatchMeta.textContent = this.quickMatchSearching
@@ -692,10 +692,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const lobby = this.currentLobby;
     if (!lobby) {
       this.elements.shell.dataset.state = "browse";
-      this.elements.stageEyebrow.textContent = "Global matchmaking";
-      this.elements.stageTitle.textContent = "Queue into Mistbridge";
+      this.elements.stageEyebrow.textContent = "Global board";
+      this.elements.stageTitle.textContent = "BOMBA";
       this.elements.stageDescription.textContent =
-        "Build a squad, pick your pilot, and jump into a public room. Quick match claims an open slot or creates one if needed.";
+        "Create a room or use quick match to drop into the live fight.";
       this.elements.stageMeta.textContent = "Public rooms · 2-4 pilots · WASD move · Q bomb · E ready";
       this.elements.inviteInput.value = "";
       this.elements.copyButton.disabled = true;
@@ -711,10 +711,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     }
 
     this.elements.shell.dataset.state = lobby.status === "playing" ? "match" : "lobby";
-    this.elements.stageEyebrow.textContent = lobby.status === "playing" ? "Match live" : "Open arena";
+    this.elements.stageEyebrow.textContent = lobby.status === "playing" ? "Live room" : "Open board";
     this.elements.stageTitle.textContent = lobby.title;
     this.elements.stageDescription.textContent = lobby.status === "playing"
-      ? "The arena is live. Comms and slot status stay docked off the playfield."
+      ? "The room is live. Chat and slot locks stay on the rail."
       : "Claim a side, lock your pilot, and enter match flow as soon as every occupied slot is ready.";
     this.elements.stageMeta.textContent =
       `${lobby.roomCode} · ${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} pilots · ${lobby.status === "playing" ? "Live match" : "Ready room"} · WASD / Q / E / F`;
@@ -739,7 +739,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       empty.className = "lobby-chat__empty";
       empty.textContent = this.currentLobby
         ? "No messages yet. Chat is live during lobby and match."
-        : "Join a room or quick match to chat.";
+        : "Join a room or match queue to chat.";
       this.elements.chatLog.appendChild(empty);
       this.elements.chatInput.disabled = !chatAvailable;
       this.elements.chatSend.disabled = !chatAvailable;

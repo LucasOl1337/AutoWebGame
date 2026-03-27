@@ -14,13 +14,13 @@
   --text: #eef6ff;
   --muted: #8ea3b7;
   --muted-strong: #cbd9e7;
-  --cyan: #79d8ff;
-  --cyan-soft: rgba(121, 216, 255, 0.12);
-  --danger: #ff8a72;
+  --cyan: #ffb45a;
+  --cyan-soft: rgba(255, 180, 90, 0.14);
+  --danger: #ff6f5f;
   background:
-    radial-gradient(circle at 12% 8%, rgba(90, 172, 255, 0.18), transparent 26%),
-    radial-gradient(circle at 82% 10%, rgba(121, 216, 255, 0.08), transparent 20%),
-    radial-gradient(circle at 88% 90%, rgba(255, 150, 105, 0.12), transparent 24%),
+    radial-gradient(circle at 12% 8%, rgba(255, 173, 76, 0.18), transparent 26%),
+    radial-gradient(circle at 82% 10%, rgba(255, 204, 120, 0.08), transparent 20%),
+    radial-gradient(circle at 88% 90%, rgba(255, 111, 95, 0.12), transparent 24%),
     linear-gradient(180deg, #13233b 0%, #08111d 42%, #03070e 100%);
   color: var(--text);
 }
@@ -194,7 +194,7 @@ button {
   border-radius: 20px;
   border: 1px solid rgba(165, 205, 236, 0.14);
   background:
-    radial-gradient(circle at top, rgba(121, 216, 255, 0.14), transparent 48%),
+    radial-gradient(circle at top, rgba(255, 180, 90, 0.14), transparent 48%),
     rgba(8, 15, 25, 0.92);
 }
 
@@ -293,20 +293,20 @@ button {
 }
 
 .lobby-button--primary {
-  background: linear-gradient(180deg, #338bc5, #175b90);
+  background: linear-gradient(180deg, #ffb24a, #c96e14);
 }
 
 .lobby-button--danger {
-  background: linear-gradient(180deg, #93483d, #662a23);
+  background: linear-gradient(180deg, #b64b3e, #6f241c);
 }
 
 .lobby-button--quickmatch {
   grid-column: 1 / -1;
-  background: linear-gradient(180deg, #29567e, #173650);
+  background: linear-gradient(180deg, #8b4d13, #3d2209);
 }
 
 .lobby-button--quickmatch[data-searching="true"] {
-  background: linear-gradient(180deg, #8a682b, #5d4316);
+  background: linear-gradient(180deg, #c9771d, #7d460f);
 }
 
 .lobby-quickmatch-meta {
@@ -463,7 +463,7 @@ button {
 }
 
 .lobby-stage__viewport:empty::before {
-  content: "Arena feed initializing";
+  content: "Bomb feed initializing";
   color: var(--muted);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -501,7 +501,7 @@ button {
   border-radius: 20px;
   background:
     linear-gradient(180deg, rgba(10, 17, 28, 0.96), rgba(7, 12, 21, 0.9)),
-    radial-gradient(circle at top right, rgba(121, 216, 255, 0.05), transparent 40%);
+    radial-gradient(circle at top right, rgba(255, 180, 90, 0.05), transparent 40%);
 }
 
 .lobby-seat__content {
@@ -558,7 +558,7 @@ button {
   border-radius: 16px;
   border: 1px solid rgba(165, 205, 236, 0.14);
   background:
-    radial-gradient(circle at top, rgba(121, 216, 255, 0.14), transparent 48%),
+    radial-gradient(circle at top, rgba(255, 180, 90, 0.14), transparent 48%),
     rgba(8, 15, 25, 0.92);
 }
 

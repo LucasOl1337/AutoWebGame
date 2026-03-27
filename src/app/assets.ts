@@ -279,7 +279,7 @@ export async function loadGameAssets(): Promise<GameAssets> {
   const fallbackRoster: CharacterRosterEntry[] = [
     {
       id: "default-p1",
-      name: "Mistbridge Ranger Cyan",
+      name: "Bomba Ranger Cyan",
       size: null,
       sprites: playerOne,
       pinned: true,
@@ -288,7 +288,7 @@ export async function loadGameAssets(): Promise<GameAssets> {
     },
     {
       id: "default-p2",
-      name: "Mistbridge Ranger Amber",
+      name: "Bomba Ranger Amber",
       size: null,
       sprites: playerTwo,
       pinned: true,

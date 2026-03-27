@@ -275,8 +275,8 @@ export class GlobalLobby extends DurableObject {
       this.sendToClient(clientId, {
         type: "error",
         message: room.status === "playing"
-          ? "Match already in progress. Pick another open arena."
-          : "Lobby full. Pick another arena or wait for a slot.",
+          ? "Match already in progress. Pick another open room."
+          : "Lobby full. Pick another room or wait for a slot.",
       });
       return;
     }
@@ -1108,7 +1108,7 @@ export class GlobalLobby extends DurableObject {
     const roomCode = this.createRoomCode();
     const room = {
       roomCode,
-      title: "Quick Match",
+      title: "BOMBA",
       createdAt: Date.now(),
       status: "open",
       hostClientId: null,
@@ -1243,7 +1243,7 @@ function normalizeRoomCode(roomCode) {
 
 function normalizeLobbyTitle(title) {
   const normalized = String(title || "").trim();
-  return normalized ? normalized.slice(0, 36) : "Open Arena";
+  return normalized ? normalized.slice(0, 36) : "BOMBA";
 }
 
 function normalizeCharacterIndex(rawCharacterIndex, fallback) {
