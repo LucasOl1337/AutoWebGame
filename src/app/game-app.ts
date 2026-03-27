@@ -40,7 +40,6 @@ import type {
   ArenaState,
   BombState,
   Direction,
-  FlameStyle,
   FlameState,
   MatchScore,
   MenuPlayerId,
@@ -61,7 +60,6 @@ import type {
   OnlineInputState,
   OnlineSessionBridge,
 } from "../online/protocol";
-import { SoundManager, SFX_MANIFEST } from "./sound-manager";
 
 declare global {
   interface Window {
@@ -106,11 +104,6 @@ const CANVAS_BACKBUFFER_SCALE = 2;
 const CANVAS_VIEWPORT_PADDING = 32;
 const PLAYER_SPRITE_HEIGHT_SCALE = 1.45;
 const PLAYER_SPRITE_MAX_WIDTH_SCALE = 1.2;
-const SPECIAL_SKILL_INPUT = "Space";
-const SPECIAL_FEEDBACK_MS = 420;
-const SPECIAL_GUARD_MS = 360;
-const SPECIAL_EFFECT_MS = 260;
-const SPECIAL_PULSE_RADIUS = TILE_SIZE * 0.4;
 const ONLINE_SNAPSHOT_INTERVAL_MS = 50;
 const ONLINE_RENDER_SMOOTHING = 0.48;
 const ONLINE_INTERPOLATION_DELAY_MS = 52;
@@ -137,30 +130,11 @@ interface PendingOnlineInput {
   input: OnlineInputState;
 }
 
-type CharacterSkillKind = "arcane-bolt" | "stinger-dash" | "dark-rift" | "combat-step";
-
-interface CharacterSkillDefinition {
-  kind: CharacterSkillKind;
-  name: string;
-  cooldownMs: number;
-  accent: string;
-}
-
-interface CharacterSkillEffect {
-  ownerId: PlayerId;
-  kind: CharacterSkillKind;
-  accent: string;
-  remainingMs: number;
-  durationMs: number;
-  tiles: TileCoord[];
-}
-
 function createNeutralOnlineInput(): OnlineInputState {
   return {
     direction: null,
     bombPressed: false,
     detonatePressed: false,
-    specialPressed: false,
   };
 }
 
@@ -169,7 +143,6 @@ function cloneOnlineInputState(input: OnlineInputState): OnlineInputState {
     direction: input.direction,
     bombPressed: input.bombPressed,
     detonatePressed: input.detonatePressed,
-    specialPressed: input.specialPressed,
   };
 }
 
@@ -300,7 +273,7 @@ export class GameApp {
   private nextBombId = 1;
 
   private menuReady: Record<PlayerId, boolean> = createBooleanPlayerRecord(false);
-  private rematchReady: Record<PlayerId, boolean> = createBooleanPlayerRecord(false);
+  private matchResultChoice: Record<PlayerId, "rematch" | "lobby" | null> = createPlayerRecord(() => null);
   private score: MatchScore = { 1: 0, 2: 0, 3: 0, 4: 0 };
   private roundNumber = 1;
   private roundTimeMs = ROUND_DURATION_MS;
@@ -315,7 +288,6 @@ export class GameApp {
   private botPendingReverseDirection: Record<PlayerId, Direction | null> = createDirectionPlayerRecord(null);
   private botPendingReverseFrames: Record<PlayerId, number> = createNumberPlayerRecord(0);
   private animationClockMs = 0;
-  private specialEffects: CharacterSkillEffect[] = [];
   private suddenDeathActive = false;
   private suddenDeathTickMs = SUDDEN_DEATH_TICK_MS;
   private suddenDeathIndex = 0;
@@ -328,7 +300,6 @@ export class GameApp {
   private characterLocked: Record<PlayerId, boolean> = createBooleanPlayerRecord(true);
   private characterMenuOpen: Record<PlayerId, boolean> = createBooleanPlayerRecord(false);
   private readonly spriteTrimCache = new SpriteTrimCache();
-  private readonly soundManager = new SoundManager();
 
   constructor(root: HTMLElement, assets: GameAssets) {
     this.root = root;
@@ -379,7 +350,7 @@ export class GameApp {
     this.activePlayerIds = [1, 2];
     this.botEnabled = false;
     this.menuReady = createBooleanPlayerRecord(false);
-    this.rematchReady = createBooleanPlayerRecord(false);
+    this.matchResultChoice = createPlayerRecord(() => null);
     this.onlineLocalPlayerId = 1;
     this.onlineInputs = createPlayerRecord(() => createNeutralOnlineInput());
     this.onlineNextInputSeq = 0;
@@ -400,6 +371,7 @@ export class GameApp {
     this.pendingCharacterIndex = { ...config.characterSelections };
     this.characterLocked = createBooleanPlayerRecord(true);
     this.characterMenuOpen = createBooleanPlayerRecord(false);
+    this.matchResultChoice = createPlayerRecord(() => null);
 
     if (config.role === "host") {
       this.startMatch();
@@ -411,7 +383,6 @@ export class GameApp {
     this.paused = false;
     this.roundOutcome = null;
     this.menuReady = createBooleanPlayerRecord(false);
-    this.rematchReady = createBooleanPlayerRecord(false);
     for (const playerId of this.activePlayerIds) {
       this.menuReady[playerId] = true;
     }
@@ -461,6 +432,7 @@ export class GameApp {
     this.characterMenuOpen = createBooleanPlayerRecord(false);
     this.activePlayerIds = normalizeActivePlayerIds(snapshot.activePlayerIds);
     this.botEnabled = false;
+    this.matchResultChoice = createPlayerRecord(() => null);
     this.resetOnlineRoundBuffers(snapshot.roundNumber);
     this.pushOnlineRenderSample(snapshot.serverTimeMs, snapshot.serverTick, snapshot.players);
     this.nextBombId = snapshot.nextBombId;
@@ -507,13 +479,37 @@ export class GameApp {
   }
 
   public clearOnlinePeer(): void {
+    this.resetToLobbyState();
     this.onlineInputs = createPlayerRecord(() => createNeutralOnlineInput());
     this.onlineNextInputSeq = 0;
     this.onlinePendingInputs = [];
     this.onlineObservedRoundNumber = null;
     this.onlineRenderSamples = [];
     this.botEnabled = false;
+  }
+
+  private resetToLobbyState(): void {
+    this.input.clearPresses();
+    this.mode = "menu";
+    this.activePlayerIds = [1, 2];
+    this.onlineLocalPlayerId = 1;
     this.menuReady = createBooleanPlayerRecord(false);
+    this.matchResultChoice = createPlayerRecord(() => null);
+    this.score = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    this.roundNumber = 1;
+    this.matchWinner = null;
+    this.paused = false;
+    this.roundOutcome = null;
+    this.botBombCooldownMs = 0;
+    this.botCommittedDirection = createDirectionPlayerRecord(null);
+    this.botPendingReverseDirection = createDirectionPlayerRecord(null);
+    this.botPendingReverseFrames = createNumberPlayerRecord(0);
+    this.animationClockMs = 0;
+    this.suddenDeathActive = false;
+    this.suddenDeathTickMs = SUDDEN_DEATH_TICK_MS;
+    this.suddenDeathIndex = 0;
+    this.suddenDeathPath = this.buildSuddenDeathPath();
+    this.resetRound();
   }
 
   public receiveOnlineGuestInput(input: OnlineInputState): void {
@@ -522,7 +518,6 @@ export class GameApp {
       direction: input.direction,
       bombPressed: playerInput.bombPressed || input.bombPressed,
       detonatePressed: playerInput.detonatePressed || input.detonatePressed,
-      specialPressed: playerInput.specialPressed || input.specialPressed,
     };
   }
 
@@ -537,7 +532,6 @@ export class GameApp {
     if (this.headless) {
       return;
     }
-    this.soundManager.loadSounds(SFX_MANIFEST).catch(console.error);
     this.root.appendChild(this.canvas);
     this.syncCanvasDisplaySize();
     this.mode = "menu";
@@ -567,7 +561,6 @@ export class GameApp {
 
   private registerWindowHooks(): void {
     window.addEventListener("resize", this.syncCanvasDisplaySize);
-    window.addEventListener("fullscreenchange", this.syncCanvasDisplaySize);
     window.render_game_to_text = () => this.renderGameToText();
     window.advanceTime = (ms: number) => {
       const steps = Math.max(1, Math.round(ms / FIXED_STEP_MS));
@@ -611,7 +604,6 @@ export class GameApp {
     input.direction = this.input.getMovementDirection(1);
     input.bombPressed = input.bombPressed || this.input.consumePress(localBindings.bomb);
     input.detonatePressed = input.detonatePressed || this.input.consumePress(localBindings.detonate);
-    input.specialPressed = input.specialPressed || this.input.consumePress(SPECIAL_SKILL_INPUT);
   }
 
   private forwardGuestInput(): void {
@@ -695,18 +687,21 @@ export class GameApp {
   }
 
   private update(deltaMs: number): void {
-    if (this.input.consumePress("KeyF")) {
-      void this.toggleFullscreen();
+    if (this.onlineSession?.role === "guest") {
+      if (this.mode === "match") {
+        if (!this.headless) {
+          this.captureOnlineLocalInput();
+        }
+        this.forwardGuestInput();
+        this.updateGuestLocalPrediction(deltaMs);
+      } else if (this.mode === "match-result") {
+        this.updateMatchResult();
+      }
+      return;
     }
 
     if (this.onlineSession && !this.headless) {
       this.captureOnlineLocalInput();
-    }
-
-    if (this.onlineSession?.role === "guest") {
-      this.forwardGuestInput();
-      this.updateGuestLocalPrediction(deltaMs);
-      return;
     }
 
     switch (this.mode) {
@@ -734,6 +729,7 @@ export class GameApp {
       roomCode: "server",
       sendGuestInput: (_input: OnlineInputState, _inputSeq: number) => undefined,
       sendHostSnapshot: () => undefined,
+      sendMatchResultChoice: () => false,
     };
     this.activePlayerIds = normalizeActivePlayerIds(activePlayerIds);
     this.onlineLocalPlayerId = 1;
@@ -756,7 +752,6 @@ export class GameApp {
       direction: input.direction,
       bombPressed: target.bombPressed || input.bombPressed,
       detonatePressed: target.detonatePressed || input.detonatePressed,
-      specialPressed: target.specialPressed || input.specialPressed,
     };
   }
 
@@ -824,9 +819,6 @@ export class GameApp {
     if (this.consumeOnlineDetonatePress(localId)) {
       this.triggerRemoteDetonation(player);
     }
-    if (this.consumeOnlineSpecialPress(localId)) {
-      this.tryActivateSpecial(player);
-    }
 
     const direction = this.getMovementDirection(localId);
     if (direction) {
@@ -883,9 +875,6 @@ export class GameApp {
     }
     if (input.detonatePressed) {
       this.triggerRemoteDetonation(player);
-    }
-    if (input.specialPressed) {
-      this.tryActivateSpecial(player);
     }
 
     if (input.direction) {
@@ -1064,39 +1053,67 @@ export class GameApp {
     this.updatePlayers(deltaMs);
     this.updateBombs(deltaMs);
     this.updateFlames(deltaMs);
-    this.updateSpecialEffects(deltaMs);
     this.collectPowerUps();
     this.evaluateRoundState();
   }
 
   private updateMatchResult(): void {
-    if (this.onlineSession) {
+    if (this.onlineSession?.role === "guest") {
+      const choice = this.consumeMatchResultChoiceInputForPlayer(1);
+      if (choice) {
+        this.matchResultChoice[this.onlineLocalPlayerId] = choice;
+        this.onlineSession.sendMatchResultChoice(choice);
+        if (choice === "lobby") {
+          this.resetToLobbyState();
+        }
+      }
       return;
     }
 
     if (this.botEnabled) {
-      this.rematchReady[2] = true;
+      this.matchResultChoice[2] = "rematch";
     }
 
     if (this.automationMode && this.input.consumePress("Enter")) {
-      this.rematchReady = createBooleanPlayerRecord(false);
-      this.rematchReady[1] = true;
-      this.rematchReady[2] = this.botEnabled;
+      this.matchResultChoice = createPlayerRecord(() => null);
+      this.matchResultChoice[1] = "rematch";
+      this.matchResultChoice[2] = this.botEnabled ? "rematch" : null;
     }
-    this.handleReadyInput(this.rematchReady);
-    if (this.rematchReady[1] && this.rematchReady[2]) {
-      this.menuReady = createBooleanPlayerRecord(false);
+    for (const playerId of MENU_PLAYER_IDS) {
+      const choice = this.consumeMatchResultChoiceInputForPlayer(playerId);
+      if (choice) {
+        this.matchResultChoice[playerId] = choice;
+      }
+    }
+    if (this.matchResultChoice[1] === "lobby" || this.matchResultChoice[2] === "lobby") {
+      this.resetToLobbyState();
+      return;
+    }
+    if (this.activePlayerIds.every((playerId) => this.matchResultChoice[playerId] === "rematch")) {
       this.startMatch();
     }
   }
 
-  private handleReadyInput(target: Record<PlayerId, boolean>): void {
-    if (this.input.consumePress(KEY_BINDINGS[1].ready)) {
-      target[1] = true;
+  private handleReadyInput(readyState: Record<PlayerId, boolean>): void {
+    for (const playerId of MENU_PLAYER_IDS) {
+      if (!this.activePlayerIds.includes(playerId)) {
+        continue;
+      }
+      if (this.input.consumePress(KEY_BINDINGS[playerId].ready)) {
+        readyState[playerId] = !readyState[playerId];
+      }
     }
-    if (this.input.consumePress(KEY_BINDINGS[2].ready)) {
-      target[2] = true;
+  }
+
+  private consumeMatchResultChoiceInputForPlayer(playerId: MenuPlayerId): "rematch" | "lobby" | null {
+    const bindings = KEY_BINDINGS[playerId];
+    if (this.input.consumePress(bindings.bomb)) {
+      return "rematch";
     }
+    if (this.input.consumePress(bindings.detonate)) {
+      return "lobby";
+    }
+    return null;
   }
 
   private handleCharacterSelectionInput(): void {
@@ -1150,13 +1167,11 @@ export class GameApp {
   private startMatch(): void {
     // Prevent queued key presses from previous screens leaking into active gameplay.
     this.input.clearPresses();
-    this.soundManager.playOneShot("matchStart", 0.9);
-    void this.requestPresentationFullscreen();
     this.menuReady = createBooleanPlayerRecord(false);
+    this.matchResultChoice = createPlayerRecord(() => null);
     this.score = { 1: 0, 2: 0, 3: 0, 4: 0 };
     this.roundNumber = 1;
     this.matchWinner = null;
-    this.rematchReady = createBooleanPlayerRecord(false);
     this.resetRound();
     this.mode = "match";
   }
@@ -1166,7 +1181,6 @@ export class GameApp {
     this.players = this.createPlayers();
     this.bombs = [];
     this.flames = [];
-    this.specialEffects = [];
     this.nextBombId = 1;
     this.roundTimeMs = ROUND_DURATION_MS;
     this.roundOutcome = null;
@@ -1235,356 +1249,6 @@ export class GameApp {
     return this.isBotControlled(playerId) ? "BOT" : `P${playerId}`;
   }
 
-  private getCharacterSkillDefinition(playerId: PlayerId): CharacterSkillDefinition {
-    const entry = this.getActiveCharacterEntry(playerId);
-    const characterId = entry.id;
-    const nameKey = `${entry.name} ${entry.id}`.toLowerCase();
-    if (characterId === "03a976fb-7313-4064-a477-5bb9b0760034") {
-      return {
-        kind: "arcane-bolt",
-        name: "Arcane Bolt",
-        cooldownMs: 6500,
-        accent: "#8dd7ff",
-      };
-    }
-    if (characterId === "6ee8baa5-3277-413b-ae0e-2659b9cc52e9") {
-      return {
-        kind: "stinger-dash",
-        name: "Stinger Dash",
-        cooldownMs: 7000,
-        accent: "#ffc86d",
-      };
-    }
-    if (characterId === "5474c45c-2987-43e0-af2c-a6500c836881") {
-      return {
-        kind: "dark-rift",
-        name: "Dark Rift",
-        cooldownMs: 7600,
-        accent: "#b68cff",
-      };
-    }
-    if (/(ranni|witch|mage|wizard|sorcer|arcane|lux|merlin)/i.test(nameKey)) {
-      return {
-        kind: "arcane-bolt",
-        name: "Arcane Bolt",
-        cooldownMs: 6500,
-        accent: "#8dd7ff",
-      };
-    }
-    if (/(bee|assassin|ninja|killer|rogue|samurai|shinobi)/i.test(nameKey)) {
-      return {
-        kind: "stinger-dash",
-        name: "Stinger Dash",
-        cooldownMs: 7000,
-        accent: "#ffc86d",
-      };
-    }
-    if (/(nico|shadow|dark|void|phantom|specter|reaper)/i.test(nameKey)) {
-      return {
-        kind: "dark-rift",
-        name: "Dark Rift",
-        cooldownMs: 7600,
-        accent: "#b68cff",
-      };
-    }
-    return {
-      kind: "combat-step",
-      name: "Combat Step",
-      cooldownMs: 8000,
-      accent: "#8fffd9",
-    };
-  }
-
-  private getSpecialCooldownLabel(player: PlayerState): string {
-    const skill = this.getCharacterSkillDefinition(player.id);
-    if (player.specialCooldownMs <= 0) {
-      return `${skill.name.toUpperCase()} READY`;
-    }
-    return `${skill.name.toUpperCase()} ${(player.specialCooldownMs / 1000).toFixed(1)}s`;
-  }
-
-  private getNearestAliveEnemy(playerId: PlayerId): PlayerState | null {
-    const origin = this.players[playerId];
-    const originTile = this.getTileFromPosition(origin.position);
-    let nearest: PlayerState | null = null;
-    let nearestDistance = Number.POSITIVE_INFINITY;
-    for (const id of this.activePlayerIds) {
-      if (id === playerId) {
-        continue;
-      }
-      const candidate = this.players[id];
-      if (!candidate.alive) {
-        continue;
-      }
-      const distance = this.getTileDistance(originTile, this.getTileFromPosition(candidate.position));
-      if (distance < nearestDistance) {
-        nearest = candidate;
-        nearestDistance = distance;
-      }
-    }
-    return nearest;
-  }
-
-  private shouldBotUseSpecial(player: PlayerState): boolean {
-    if (player.specialCooldownMs > 0 || !player.alive) {
-      return false;
-    }
-    const skill = this.getCharacterSkillDefinition(player.id);
-    const enemy = this.getNearestAliveEnemy(player.id);
-    const playerTile = this.getTileFromPosition(player.position);
-    const dangerMs = this.getDangerMap().get(tileKey(playerTile.x, playerTile.y)) ?? Number.POSITIVE_INFINITY;
-    if (dangerMs <= this.getMoveDuration(player) * 2) {
-      return skill.kind === "stinger-dash" || skill.kind === "combat-step";
-    }
-    if (!enemy) {
-      return false;
-    }
-    const enemyTile = this.getTileFromPosition(enemy.position);
-    if (skill.kind === "stinger-dash") {
-      return this.getTileDistance(playerTile, enemyTile) <= 2;
-    }
-    if (skill.kind === "arcane-bolt") {
-      return this.canSkillReachTile(playerTile, enemyTile, 2);
-    }
-    if (skill.kind === "dark-rift") {
-      return this.canSkillReachTile(playerTile, enemyTile, 3) || this.hasAdjacentBreakable(playerTile);
-    }
-    return this.getTileDistance(playerTile, enemyTile) <= 1;
-  }
-
-  private tryActivateSpecial(player: PlayerState): boolean {
-    if (!player.alive || player.specialCooldownMs > 0) {
-      return false;
-    }
-    const skill = this.getCharacterSkillDefinition(player.id);
-    let activated = false;
-    if (skill.kind === "arcane-bolt") {
-      activated = this.activateArcaneBolt(player);
-    } else if (skill.kind === "stinger-dash") {
-      activated = this.activateStingerDash(player);
-    } else if (skill.kind === "dark-rift") {
-      activated = this.activateDarkRift(player);
-    } else {
-      activated = this.activateCombatStep(player);
-    }
-    if (!activated) {
-      return false;
-    }
-    player.specialCooldownMs = skill.cooldownMs;
-    player.specialFeedbackMs = SPECIAL_FEEDBACK_MS;
-    this.soundManager.playOneShot("powerupCollect", 0.55);
-    return true;
-  }
-
-  private activateArcaneBolt(player: PlayerState): boolean {
-    const tiles = this.buildSkillLineTiles(player, 2, false);
-    if (tiles.length === 0) {
-      return false;
-    }
-    this.addSpecialEffect(player.id, "arcane-bolt", "#8dd7ff", tiles);
-    this.spawnSkillFlames(tiles, 260, "arcane");
-    this.primeBombsOnTiles(tiles, 120);
-    player.flameGuardMs = Math.max(player.flameGuardMs, 220);
-    return true;
-  }
-
-  private activateDarkRift(player: PlayerState): boolean {
-    const tiles = this.buildSkillLineTiles(player, 3, true);
-    if (tiles.length === 0) {
-      return false;
-    }
-    for (const tile of tiles) {
-      const key = tileKey(tile.x, tile.y);
-      if (this.arena.breakable.has(key)) {
-        this.arena.breakable.delete(key);
-        this.soundManager.playOneShot("crateBreak", 0.45);
-        this.revealPowerUpAt(key);
-        break;
-      }
-    }
-    this.addSpecialEffect(player.id, "dark-rift", "#b68cff", tiles, 320);
-    this.spawnSkillFlames(tiles, 320, "shadow");
-    this.primeBombsOnTiles(tiles, 0);
-    return true;
-  }
-
-  private activateStingerDash(player: PlayerState): boolean {
-    const origin = this.getTileFromPosition(player.position);
-    const destination = this.getDashDestination(player, 2, true);
-    if (!destination) {
-      return false;
-    }
-    player.position = this.getTileCenter(destination);
-    player.tile = { ...destination };
-    player.velocity = { x: 0, y: 0 };
-    player.flameGuardMs = Math.max(player.flameGuardMs, SPECIAL_GUARD_MS);
-    this.addSpecialEffect(player.id, "stinger-dash", "#ffc86d", [origin, destination]);
-    return true;
-  }
-
-  private activateCombatStep(player: PlayerState): boolean {
-    const origin = this.getTileFromPosition(player.position);
-    const destination = this.getDashDestination(player, 1, false);
-    if (!destination) {
-      player.flameGuardMs = Math.max(player.flameGuardMs, SPECIAL_GUARD_MS);
-      this.addSpecialEffect(player.id, "combat-step", "#8fffd9", [origin]);
-      return true;
-    }
-    player.position = this.getTileCenter(destination);
-    player.tile = { ...destination };
-    player.velocity = { x: 0, y: 0 };
-    player.flameGuardMs = Math.max(player.flameGuardMs, SPECIAL_GUARD_MS);
-    this.addSpecialEffect(player.id, "combat-step", "#8fffd9", [origin, destination]);
-    return true;
-  }
-
-  private getDashDestination(player: PlayerState, maxSteps: number, pushBombs: boolean): TileCoord | null {
-    const delta = directionDelta[player.direction];
-    let current = this.getTileFromPosition(player.position);
-    let moved = false;
-    for (let step = 0; step < maxSteps; step += 1) {
-      const next = { x: current.x + delta.x, y: current.y + delta.y };
-      if (next.x < 0 || next.y < 0 || next.x >= GRID_WIDTH || next.y >= GRID_HEIGHT) {
-        break;
-      }
-      const key = tileKey(next.x, next.y);
-      if (this.arena.solid.has(key) || this.arena.breakable.has(key) || this.isAnotherActivePlayerOnTile(player.id, next)) {
-        break;
-      }
-      const bomb = this.getBombAtTile(next);
-      if (bomb) {
-        if (!pushBombs || !this.tryPushBombAtTile(next, player.direction, 1)) {
-          break;
-        }
-      }
-      current = next;
-      moved = true;
-    }
-    return moved ? current : null;
-  }
-
-  private buildSkillLineTiles(player: PlayerState, range: number, includeBreakableImpact: boolean): TileCoord[] {
-    const origin = this.getTileFromPosition(player.position);
-    const delta = directionDelta[player.direction];
-    const tiles: TileCoord[] = [];
-    for (let step = 1; step <= range; step += 1) {
-      const tile = { x: origin.x + delta.x * step, y: origin.y + delta.y * step };
-      if (tile.x < 0 || tile.y < 0 || tile.x >= GRID_WIDTH || tile.y >= GRID_HEIGHT) {
-        break;
-      }
-      const key = tileKey(tile.x, tile.y);
-      if (this.arena.solid.has(key)) {
-        break;
-      }
-      if (this.arena.breakable.has(key)) {
-        if (includeBreakableImpact) {
-          tiles.push(tile);
-        }
-        break;
-      }
-      tiles.push(tile);
-      if (this.getBombAtTile(tile)) {
-        break;
-      }
-    }
-    return tiles;
-  }
-
-  private canSkillReachTile(origin: TileCoord, target: TileCoord, range: number): boolean {
-    if (origin.x !== target.x && origin.y !== target.y) {
-      return false;
-    }
-    if (this.getTileDistance(origin, target) > range) {
-      return false;
-    }
-    const deltaX = Math.sign(target.x - origin.x);
-    const deltaY = Math.sign(target.y - origin.y);
-    for (let step = 1; step <= range; step += 1) {
-      const tile = { x: origin.x + deltaX * step, y: origin.y + deltaY * step };
-      if (tile.x === origin.x && tile.y === origin.y) {
-        continue;
-      }
-      const key = tileKey(tile.x, tile.y);
-      if (this.arena.solid.has(key)) {
-        return false;
-      }
-      if (tile.x === target.x && tile.y === target.y) {
-        return true;
-      }
-      if (this.arena.breakable.has(key)) {
-        return false;
-      }
-    }
-    return false;
-  }
-
-  private spawnSkillFlames(tiles: TileCoord[], remainingMs: number, style: FlameStyle): void {
-    for (const tile of tiles) {
-      const existing = this.flames.find((flame) => flame.tile.x === tile.x && flame.tile.y === tile.y);
-      if (existing) {
-        existing.remainingMs = Math.max(existing.remainingMs, remainingMs);
-        existing.style = style;
-        continue;
-      }
-      this.flames.push({
-        tile: { ...tile },
-        remainingMs,
-        style,
-      });
-    }
-  }
-
-  private addSpecialEffect(
-    ownerId: PlayerId,
-    kind: CharacterSkillKind,
-    accent: string,
-    tiles: TileCoord[],
-    durationMs: number = SPECIAL_EFFECT_MS,
-  ): void {
-    this.specialEffects.push({
-      ownerId,
-      kind,
-      accent,
-      tiles: tiles.map((tile) => ({ ...tile })),
-      remainingMs: durationMs,
-      durationMs,
-    });
-  }
-
-  public updateSpecialEffects(deltaMs: number): void {
-    for (const effect of this.specialEffects) {
-      effect.remainingMs -= deltaMs;
-    }
-    this.specialEffects = this.specialEffects.filter((effect) => effect.remainingMs > 0);
-  }
-
-  private primeBombsOnTiles(tiles: TileCoord[], fuseMs: number): void {
-    for (const tile of tiles) {
-      const bomb = this.getBombAtTile(tile);
-      if (bomb) {
-        bomb.fuseMs = Math.min(bomb.fuseMs, fuseMs);
-      }
-    }
-  }
-
-  private getBombAtTile(tile: TileCoord): BombState | null {
-    return this.bombs.find((bomb) => bomb.tile.x === tile.x && bomb.tile.y === tile.y) ?? null;
-  }
-
-  private isAnotherActivePlayerOnTile(playerId: PlayerId, tile: TileCoord): boolean {
-    return this.activePlayerIds.some((id) => {
-      if (id === playerId) {
-        return false;
-      }
-      const candidate = this.players[id];
-      if (!candidate.alive) {
-        return false;
-      }
-      const candidateTile = this.getTileFromPosition(candidate.position);
-      return candidateTile.x === tile.x && candidateTile.y === tile.y;
-    });
-  }
-
   private shortenCharacterName(name: string, maxLength = 30): string {
     if (name.length <= maxLength) {
       return name;
@@ -1618,8 +1282,6 @@ export class GameApp {
       shieldCharges: 0,
       bombPassLevel: 0,
       kickLevel: 0,
-      specialCooldownMs: 0,
-      specialFeedbackMs: 0,
       flameGuardMs: 0,
       spawnProtectionMs: SPAWN_PROTECTION_MS,
     };
@@ -1633,12 +1295,10 @@ export class GameApp {
       }
       player.spawnProtectionMs = Math.max(0, player.spawnProtectionMs - deltaMs);
       player.flameGuardMs = Math.max(0, player.flameGuardMs - deltaMs);
-      player.specialCooldownMs = Math.max(0, player.specialCooldownMs - deltaMs);
-      player.specialFeedbackMs = Math.max(0, player.specialFeedbackMs - deltaMs);
 
       const botDecision = this.isBotControlled(id) ? this.getBotDecision(player) : null;
       const automationBomb = this.automationMode
-        ? this.automationControlledPlayer === id && this.input.consumePress("BracketRight")
+        ? this.automationControlledPlayer === id && this.input.consumePress("Space")
         : false;
       const onlineBomb = this.consumeOnlineBombPress(id);
       const nativeBindings = MENU_PLAYER_IDS.includes(id as MenuPlayerId)
@@ -1661,15 +1321,6 @@ export class GameApp {
           : false);
       if (wantsDetonate) {
         this.triggerRemoteDetonation(player);
-      }
-
-      const nativeSpecial = this.shouldUseNativeControls() && id === 1
-        ? this.input.consumePress(SPECIAL_SKILL_INPUT)
-        : false;
-      const onlineSpecial = this.consumeOnlineSpecialPress(id);
-      const botSpecial = this.isBotControlled(id) && this.shouldBotUseSpecial(player);
-      if (nativeSpecial || onlineSpecial || botSpecial) {
-        this.tryActivateSpecial(player);
       }
 
       const desiredDirection = botDecision?.direction ?? this.getMovementDirection(id);
@@ -1750,19 +1401,6 @@ export class GameApp {
     }
     const pressed = source.detonatePressed;
     source.detonatePressed = false;
-    return pressed;
-  }
-
-  private consumeOnlineSpecialPress(id: PlayerId): boolean {
-    if (!this.onlineSession) {
-      return false;
-    }
-    const source = this.onlineInputs[id];
-    if (!source) {
-      return false;
-    }
-    const pressed = source.specialPressed;
-    source.specialPressed = false;
     return pressed;
   }
 
@@ -2733,8 +2371,13 @@ export class GameApp {
     return this.tryPushBombAtTile(bombTile, direction, 1);
   }
 
+  private findBombAtTile(tile: TileCoord): BombState | null {
+    const key = tileKey(tile.x, tile.y);
+    return this.bombs.find((bomb) => tileKey(bomb.tile.x, bomb.tile.y) === key) ?? null;
+  }
+
   private tryPushBombAtTile(tile: TileCoord, direction: Direction, distance: number): boolean {
-    const bomb = this.getBombAtTile(tile);
+    const bomb = this.findBombAtTile(tile);
     if (!bomb) {
       return false;
     }
@@ -2752,7 +2395,7 @@ export class GameApp {
       if (this.bombs.some((item) => item.id !== bomb.id && item.tile.x === nextTile.x && item.tile.y === nextTile.y)) {
         return false;
       }
-      if (this.isAnyPlayerOnTile(nextTile)) {
+      if (this.hasPlayerOnTile(nextTile)) {
         return false;
       }
       targetTile = nextTile;
@@ -2762,7 +2405,7 @@ export class GameApp {
     return true;
   }
 
-  private isAnyPlayerOnTile(tile: TileCoord): boolean {
+  private hasPlayerOnTile(tile: TileCoord): boolean {
     for (const id of this.activePlayerIds) {
       const player = this.players[id];
       if (!player.alive) {
@@ -2888,7 +2531,6 @@ export class GameApp {
     });
     this.nextBombId += 1;
     player.activeBombs += 1;
-    this.soundManager.playOneShot("bombPlace", 0.7);
     return true;
   }
 
@@ -2933,8 +2575,6 @@ export class GameApp {
 
     const [bomb] = this.bombs.splice(index, 1);
     this.players[bomb.ownerId].activeBombs = Math.max(0, this.players[bomb.ownerId].activeBombs - 1);
-    this.soundManager.playOneShot("bombExplode", 0.7);
-
     const flameTiles = new Set<string>();
     const range = bomb.flameRange;
     flameTiles.add(tileKey(bomb.tile.x, bomb.tile.y));
@@ -2958,21 +2598,16 @@ export class GameApp {
 
         if (this.arena.breakable.has(key)) {
           this.arena.breakable.delete(key);
-          this.soundManager.playOneShot("crateBreak", 0.6);
           this.revealPowerUpAt(key);
           break;
         }
       }
     }
 
-    let ignited = false;
     flameTiles.forEach((key) => {
       const [xText, yText] = key.split(",");
       this.addFlame({ x: Number(xText), y: Number(yText) });
-      ignited = true;
     });
-    if (ignited) this.soundManager.playOneShot("flameIgnite", 0.6);
-
     this.resolvePlayerDeathsFromFlames();
   }
 
@@ -3022,7 +2657,6 @@ export class GameApp {
     }
     if (this.arena.breakable.has(key)) {
       this.arena.breakable.delete(key);
-      this.soundManager.playOneShot("crateBreak", 0.6);
       this.revealPowerUpAt(key);
     }
     const bomb = this.bombs.find((item) => item.tile.x === tile.x && item.tile.y === tile.y);
@@ -3094,7 +2728,6 @@ export class GameApp {
           player.flameGuardMs = SHIELD_GUARD_MS;
           continue;
         }
-        this.soundManager.playOneShot("playerDeath", 0.9);
         player.alive = false;
         player.velocity = { x: 0, y: 0 };
       }
@@ -3116,7 +2749,6 @@ export class GameApp {
         }
         if (powerUp.tile.x === tile.x && powerUp.tile.y === tile.y) {
           powerUp.collected = true;
-          this.soundManager.playOneShot("powerupCollect", 0.8);
           if (powerUp.type === "bomb-up") {
             player.maxBombs = Math.min(MAX_BOMBS, player.maxBombs + 1);
           } else if (powerUp.type === "flame-up") {
@@ -3153,10 +2785,6 @@ export class GameApp {
     if (this.roundOutcome) {
       return;
     }
-    const clinchesMatch = winner ? this.score[winner] + 1 >= TARGET_WINS : false;
-    if (reason === "elimination" || winner) {
-      this.soundManager.playOneShot(clinchesMatch ? "matchWin" : "roundWin", clinchesMatch ? 0.9 : 0.8);
-    }
     if (winner) {
       this.score[winner] += 1;
     }
@@ -3172,7 +2800,7 @@ export class GameApp {
     for (const playerId of this.activePlayerIds) {
       if (this.score[playerId] >= TARGET_WINS) {
         this.matchWinner = playerId;
-        this.rematchReady = createBooleanPlayerRecord(false);
+        this.matchResultChoice = createPlayerRecord(() => null);
         this.input.clearPresses();
         this.mode = "match-result";
         return;
@@ -3181,33 +2809,6 @@ export class GameApp {
     this.input.clearPresses();
     this.roundNumber += 1;
     this.resetRound();
-  }
-
-  private async toggleFullscreen(): Promise<void> {
-    if (document.fullscreenElement) {
-      await document.exitFullscreen();
-      return;
-    }
-    await this.getFullscreenTarget().requestFullscreen();
-  }
-
-  private async requestPresentationFullscreen(): Promise<void> {
-    if (typeof document === "undefined" || document.fullscreenElement) {
-      return;
-    }
-    try {
-      await this.getFullscreenTarget().requestFullscreen();
-    } catch {
-      // Browsers can reject programmatic fullscreen without a fresh user activation.
-    }
-  }
-
-  private getFullscreenTarget(): HTMLElement {
-    const shell = this.root.querySelector(".lobby-shell");
-    if (shell instanceof HTMLElement) {
-      return shell;
-    }
-    return this.canvas;
   }
 
   private getPlayerPixelPositionFromState(player: PlayerState): PixelCoord {
@@ -3360,57 +2961,6 @@ export class GameApp {
     }
   }
 
-  private drawMenuPortrait(x: number, y: number, playerId: PlayerId): void {
-    const sprite = this.getRenderableSprite(this.getPreviewCharacterEntry(playerId).sprites, "down");
-    if (!sprite) {
-      return;
-    }
-    const srcWidth = sprite.naturalWidth || sprite.width || 1;
-    const srcHeight = sprite.naturalHeight || sprite.height || 1;
-    const menuHeight = 54;
-    const menuWidth = menuHeight * (srcWidth / srcHeight);
-    this.ctx.drawImage(
-      sprite,
-      0,
-      0,
-      srcWidth,
-      srcHeight,
-      x - menuWidth * 0.5,
-      y - 22,
-      menuWidth,
-      menuHeight,
-    );
-  }
-
-  private drawReadyPanel(
-    x: number,
-    y: number,
-    playerId: PlayerId,
-    ready: boolean,
-    hint: string,
-    nameOverride?: string,
-  ): void {
-    const palette = PLAYER_COLORS[playerId];
-    const name = nameOverride ?? this.players[playerId].name;
-    this.ctx.fillStyle = ready ? "rgba(15, 41, 58, 0.96)" : "rgba(15, 20, 30, 0.92)";
-    this.ctx.fillRect(x, y, 178, 70);
-    this.ctx.strokeStyle = ready ? palette.primary : "rgba(255,255,255,0.2)";
-    this.ctx.lineWidth = 1.5;
-    this.ctx.strokeRect(x + 0.5, y + 0.5, 177, 69);
-    this.ctx.fillStyle = ready ? palette.glow : "rgba(255,255,255,0.08)";
-    this.ctx.fillRect(x, y, 178, 3);
-    this.drawMenuPortrait(x + 24, y + 38, playerId);
-    this.ctx.fillStyle = palette.primary;
-    this.ctx.textAlign = "left";
-    this.ctx.font = "bold 10px monospace";
-    this.ctx.fillText(ready ? `${name} READY` : `${name} STANDBY`, x + 48, y + 18);
-    this.ctx.fillStyle = "#d7eefc";
-    this.ctx.font = "9px monospace";
-    this.ctx.fillText(hint, x + 48, y + 36);
-    this.ctx.fillStyle = "rgba(196, 219, 238, 0.88)";
-    this.ctx.fillText(ready ? "Status: locked in" : `Press ${playerId === 1 ? "E" : "P"} to ready`, x + 48, y + 52);
-  }
-
   private renderCharacterSelectionOverlay(): void {
     this.ctx.fillStyle = "rgba(2, 6, 12, 0.74)";
     this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -3547,8 +3097,6 @@ export class GameApp {
     const title = `${this.getPlayerSlotLabel(playerId)} ${this.score[playerId]}`;
     const statLine = `B${player.maxBombs} F${player.flameRange} S${player.speedLevel}`;
     const status = player.alive ? (player.flameGuardMs > 0 ? "GUARD" : "LIVE") : "DOWN";
-    const skill = this.getCharacterSkillDefinition(playerId);
-    const skillLabel = this.getSpecialCooldownLabel(player);
 
     this.drawHudPanel(x, y, width, 30, palette.glow);
     this.ctx.textAlign = "left";
@@ -3565,23 +3113,6 @@ export class GameApp {
     this.ctx.textAlign = "right";
     this.drawHudText(status, x + width - 6, y + 11, player.alive ? "#e5fff7" : "rgba(210, 220, 231, 0.55)", "rgba(4, 10, 19, 0.85)");
     this.drawHudText(statLine, x + width - 6, y + 21, "#dbefff", "rgba(4, 10, 19, 0.85)");
-    this.ctx.textAlign = "left";
-    this.ctx.font = "6px monospace";
-    this.drawHudText(
-      `SPACE ${this.shortenCharacterName(skill.name, 14)}`,
-      x + 6,
-      y + 28,
-      skill.accent,
-      "rgba(4, 10, 19, 0.85)",
-    );
-    this.ctx.textAlign = "right";
-    this.drawHudText(
-      this.shortenCharacterName(skillLabel, 18),
-      x + width - 6,
-      y + 28,
-      player.specialCooldownMs > 0 ? "rgba(219, 239, 255, 0.82)" : skill.accent,
-      "rgba(4, 10, 19, 0.85)",
-    );
   }
 
   private renderArena(): void {
@@ -3657,8 +3188,6 @@ export class GameApp {
     for (const flame of this.flames) {
       this.drawFlame(flame);
     }
-
-    this.drawSpecialEffects();
 
     for (const id of this.activePlayerIds) {
       this.drawPlayer(this.players[id]);
@@ -3918,19 +3447,9 @@ export class GameApp {
       this.ctx.restore();
       return;
     }
-    const outerColor = flame.style === "arcane"
-      ? `rgba(112, 207, 255, ${alpha})`
-      : flame.style === "shadow"
-        ? `rgba(158, 99, 255, ${alpha})`
-        : `rgba(255, 160, 74, ${alpha})`;
-    const innerColor = flame.style === "arcane"
-      ? `rgba(215, 248, 255, ${alpha})`
-      : flame.style === "shadow"
-        ? `rgba(232, 205, 255, ${alpha})`
-        : `rgba(255, 244, 159, ${alpha})`;
-    this.ctx.fillStyle = outerColor;
+    this.ctx.fillStyle = `rgba(255, 160, 74, ${alpha})`;
     this.ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
-    this.ctx.fillStyle = innerColor;
+    this.ctx.fillStyle = `rgba(255, 244, 159, ${alpha})`;
     this.ctx.beginPath();
     this.ctx.moveTo(x + 16, y + 5);
     this.ctx.lineTo(x + 26, y + 16);
@@ -3938,39 +3457,6 @@ export class GameApp {
     this.ctx.lineTo(x + 6, y + 16);
     this.ctx.closePath();
     this.ctx.fill();
-  }
-
-  private drawSpecialEffects(): void {
-    for (const effect of this.specialEffects) {
-      const alpha = Math.max(0.18, effect.remainingMs / effect.durationMs);
-      this.ctx.save();
-      this.ctx.strokeStyle = effect.accent;
-      this.ctx.fillStyle = effect.accent;
-      this.ctx.globalAlpha = alpha;
-      if (effect.tiles.length >= 2) {
-        const start = this.getTileCenter(effect.tiles[0]);
-        const end = this.getTileCenter(effect.tiles[effect.tiles.length - 1]);
-        this.ctx.lineWidth = effect.kind === "combat-step" ? 3 : 4;
-        this.ctx.strokeStyle = effect.accent;
-        this.ctx.beginPath();
-        this.ctx.moveTo(ARENA_OFFSET_X + start.x, ARENA_OFFSET_Y + start.y);
-        this.ctx.lineTo(ARENA_OFFSET_X + end.x, ARENA_OFFSET_Y + end.y);
-        this.ctx.stroke();
-      }
-      for (const tile of effect.tiles) {
-        const center = this.getTileCenter(tile);
-        this.ctx.beginPath();
-        this.ctx.arc(
-          ARENA_OFFSET_X + center.x,
-          ARENA_OFFSET_Y + center.y,
-          SPECIAL_PULSE_RADIUS * alpha,
-          0,
-          Math.PI * 2,
-        );
-        this.ctx.fill();
-      }
-      this.ctx.restore();
-    }
   }
 
   private drawPlayer(player: PlayerState): void {
@@ -3985,29 +3471,13 @@ export class GameApp {
     const baseSprites = this.getPlayerSprites(player.id);
     const idleFrames = baseSprites.idle?.[player.direction] ?? [];
     const walkFrames = baseSprites.walk?.[player.direction] ?? [];
-    const runFrames = baseSprites.run?.[player.direction] ?? [];
-    const castFrames = baseSprites.cast?.[player.direction] ?? [];
-    const attackFrames = baseSprites.attack?.[player.direction] ?? [];
     const moving = Math.abs(player.velocity.x) > 0.02 || Math.abs(player.velocity.y) > 0.02;
     const frameIndex = Math.floor(this.animationClockMs / WALK_FRAME_MS);
-    const skill = this.getCharacterSkillDefinition(player.id);
-    let specialFrames: HTMLImageElement[] = [];
-    if (player.specialFeedbackMs > 0) {
-      specialFrames = skill.kind === "stinger-dash"
-        ? (attackFrames.length > 0 ? attackFrames : (runFrames.length > 0 ? runFrames : walkFrames))
-        : skill.kind === "combat-step"
-          ? (runFrames.length > 0 ? runFrames : walkFrames)
-          : (castFrames.length > 0 ? castFrames : (attackFrames.length > 0 ? attackFrames : idleFrames));
-    }
-    let sprite = specialFrames.length > 0
-      ? specialFrames[frameIndex % specialFrames.length]
-      : moving && runFrames.length > 0
-        ? runFrames[frameIndex % runFrames.length]
-        : moving && walkFrames.length > 0
-          ? walkFrames[frameIndex % walkFrames.length]
-          : !moving && idleFrames.length > 0
-            ? idleFrames[frameIndex % idleFrames.length]
-            : spriteForDirection(baseSprites, player.direction);
+    let sprite = moving && walkFrames.length > 0
+      ? walkFrames[frameIndex % walkFrames.length]
+      : !moving && idleFrames.length > 0
+        ? idleFrames[frameIndex % idleFrames.length]
+        : spriteForDirection(baseSprites, player.direction);
     if (!sprite || !this.getSpriteTrimBounds(sprite)) {
       sprite = this.getRenderableSprite(baseSprites, player.direction);
     }
@@ -4016,17 +3486,6 @@ export class GameApp {
     this.ctx.beginPath();
     this.ctx.ellipse(x + TILE_SIZE * 0.5, y + TILE_SIZE - 2, TILE_SIZE * 0.4, TILE_SIZE * 0.18, 0, 0, Math.PI * 2);
     this.ctx.fill();
-
-    if (player.specialFeedbackMs > 0) {
-      const glowAlpha = Math.max(0.22, player.specialFeedbackMs / SPECIAL_FEEDBACK_MS) * 0.55;
-      this.ctx.save();
-      this.ctx.globalAlpha = glowAlpha;
-      this.ctx.fillStyle = skill.accent;
-      this.ctx.beginPath();
-      this.ctx.ellipse(x + TILE_SIZE * 0.5, y + TILE_SIZE * 0.5, TILE_SIZE * 0.42, TILE_SIZE * 0.5, 0, 0, Math.PI * 2);
-      this.ctx.fill();
-      this.ctx.restore();
-    }
 
     if (sprite) {
       const fullWidth = sprite.naturalWidth || sprite.width || 1;
@@ -4145,22 +3604,36 @@ export class GameApp {
   private renderMatchResult(): void {
     this.drawCenterOverlay(
       this.matchWinner ? `${this.players[this.matchWinner].name} wins the match!` : "Match complete",
-      this.onlineSession
-        ? "Leave the lobby or queue another quick match for the next game."
-        : "Both pilots press Ready for a rematch.",
+      "Q = Sim · R = VOLTAR PRO LOBBY",
     );
-    if (this.onlineSession) {
-      return;
-    }
-    this.drawReadyPanel(92, 332, 1, this.rematchReady[1], "Press E to rematch");
-    this.drawReadyPanel(
-      252,
-      332,
-      2,
-      this.rematchReady[2],
-      this.botEnabled ? "BOT auto-ready" : "Press P to rematch",
-      this.botEnabled ? "BOT" : "P2",
-    );
+    const localChoice = this.matchResultChoice[this.onlineLocalPlayerId];
+    this.drawChoicePanel(92, 332, "Q", "Sim", localChoice === "rematch");
+    this.drawChoicePanel(252, 332, "R", "VOLTAR PRO LOBBY", localChoice === "lobby");
+  }
+
+  private drawChoicePanel(
+    x: number,
+    y: number,
+    keyLabel: string,
+    label: string,
+    selected: boolean,
+  ): void {
+    this.ctx.fillStyle = selected ? "rgba(15, 41, 58, 0.96)" : "rgba(15, 20, 30, 0.92)";
+    this.ctx.fillRect(x, y, 178, 70);
+    this.ctx.strokeStyle = selected ? "#8bdcff" : "rgba(255,255,255,0.2)";
+    this.ctx.lineWidth = 1.5;
+    this.ctx.strokeRect(x + 0.5, y + 0.5, 177, 69);
+    this.ctx.fillStyle = selected ? "#8bdcff" : "rgba(255,255,255,0.08)";
+    this.ctx.fillRect(x, y, 178, 3);
+    this.ctx.textAlign = "left";
+    this.ctx.fillStyle = "#f4fbff";
+    this.ctx.font = "bold 10px monospace";
+    this.ctx.fillText(keyLabel, x + 12, y + 18);
+    this.ctx.fillStyle = "#d7eefc";
+    this.ctx.font = "9px monospace";
+    this.ctx.fillText(label, x + 12, y + 38);
+    this.ctx.fillStyle = "rgba(196, 219, 238, 0.88)";
+    this.ctx.fillText(selected ? "Choice locked" : `Press ${keyLabel} to select`, x + 12, y + 54);
   }
 
   private drawCenterOverlay(title: string, subtitle: string): void {
@@ -4201,7 +3674,7 @@ export class GameApp {
         remainingMs: Math.round(this.roundTimeMs),
         paused: this.paused,
         menuReady: this.menuReady,
-        rematchReady: this.rematchReady,
+        matchResultChoice: this.matchResultChoice,
         botEnabled: this.botEnabled,
         characterMenuOpen: this.characterMenuOpen,
         suddenDeath: {
@@ -4223,35 +3696,6 @@ export class GameApp {
           flameRange: this.players[previewPlayerId].flameRange,
           tiles: bombPreviewTiles,
         },
-        special: {
-          input: SPECIAL_SKILL_INPUT,
-          effects: this.specialEffects.map((effect) => ({
-            ownerId: effect.ownerId,
-            kind: effect.kind,
-            category: effect.kind === "arcane-bolt"
-              ? "spell-projectile"
-              : effect.kind === "dark-rift"
-                ? "shadow-spell"
-                : effect.kind === "stinger-dash"
-                  ? "dash-strike"
-                  : "movement-guard",
-            accent: effect.accent,
-            remainingMs: Math.round(effect.remainingMs),
-            tiles: effect.tiles.map((tile) => ({ ...tile })),
-          })),
-        },
-        skillEffects: this.specialEffects.map((effect) => ({
-          ownerId: effect.ownerId,
-          kind: effect.kind,
-          category: effect.kind === "arcane-bolt"
-            ? "spell-projectile"
-            : effect.kind === "dark-rift"
-              ? "shadow-spell"
-              : effect.kind === "stinger-dash"
-                ? "dash-strike"
-                : "movement-guard",
-          remainingMs: Math.round(effect.remainingMs),
-        })),
         automationSelectedPlayer: this.automationMode ? this.automationControlledPlayer : null,
         roundOutcome: this.roundOutcome ? {
           winner: this.roundOutcome.winner,
@@ -4299,20 +3743,6 @@ export class GameApp {
           shieldCharges: player.shieldCharges,
           bombPassLevel: player.bombPassLevel,
           kickLevel: player.kickLevel,
-          special: {
-            name: this.getCharacterSkillDefinition(id).name,
-            kind: this.getCharacterSkillDefinition(id).kind,
-            category: this.getCharacterSkillDefinition(id).kind === "arcane-bolt"
-              ? "spell-projectile"
-              : this.getCharacterSkillDefinition(id).kind === "dark-rift"
-                ? "shadow-spell"
-                : this.getCharacterSkillDefinition(id).kind === "stinger-dash"
-                  ? "dash-strike"
-                  : "movement-guard",
-            cooldownMs: Math.round(player.specialCooldownMs),
-            ready: player.specialCooldownMs <= 0,
-            feedbackMs: Math.round(player.specialFeedbackMs),
-          },
           flameGuardMs: Math.round(player.flameGuardMs),
           spawnProtectionMs: Math.round(player.spawnProtectionMs),
         };

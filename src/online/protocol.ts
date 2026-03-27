@@ -17,7 +17,6 @@ export interface OnlineInputState {
   direction: Direction | null;
   bombPressed: boolean;
   detonatePressed: boolean;
-  specialPressed: boolean;
 }
 
 export interface LobbySeatState {
@@ -117,6 +116,7 @@ export interface OnlineSessionBridge {
   roomCode: string | null;
   sendGuestInput(input: OnlineInputState, inputSeq: number): void;
   sendHostSnapshot(snapshot: OnlineGameSnapshot): void;
+  sendMatchResultChoice(choice: "rematch" | "lobby"): void;
 }
 
 export interface ServerHelloMessage {
@@ -250,6 +250,11 @@ export interface QuickMatchCancelMessage {
   type: "quick-match-cancel";
 }
 
+export interface MatchResultChoiceMessage {
+  type: "match-result-choice";
+  choice: "rematch" | "lobby";
+}
+
 export interface ChatSendMessage {
   type: "chat-send";
   body: string;
@@ -265,5 +270,6 @@ export type ClientMessage =
   | GuestInputMessage
   | QuickMatchMessage
   | QuickMatchCancelMessage
+  | MatchResultChoiceMessage
   | ChatSendMessage
   | HostSnapshotMessage;

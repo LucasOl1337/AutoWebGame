@@ -5,7 +5,6 @@ const STATE_VERSION = 3;
 const MATCH_TICK_MS = 1000 / 60;
 const FULL_SNAPSHOT_EVERY_TICKS = 6;
 const PLAYER_IDS = [1, 2, 3, 4];
-const MATCH_RESTART_DELAY_MS = 1_200;
 
 /**
  * @typedef {{
@@ -69,7 +68,7 @@ export class GlobalLobby extends DurableObject {
   quickMatchPendingClients = new Set();
   /** @type {Map<string, number>} */
   preferredCharacterSelections = new Map();
-  /** @type {Map<string, { game: GameApp, inputs: Record<1 | 2 | 3 | 4, import("../src/online/protocol").OnlineInputState & { inputSeq?: number, sentAtMs?: number }>, timer: ReturnType<typeof setInterval> | null, restartTimer: ReturnType<typeof setTimeout> | null, tick: number, activePlayerIds: Array<1 | 2 | 3 | 4>, characterSelections: Record<1 | 2 | 3 | 4, number> }>} */
+  /** @type {Map<string, { game: GameApp, inputs: Record<1 | 2 | 3 | 4, import("../src/online/protocol").OnlineInputState & { inputSeq?: number, sentAtMs?: number }>, timer: ReturnType<typeof setInterval> | null, tick: number, activePlayerIds: Array<1 | 2 | 3 | 4>, characterSelections: Record<1 | 2 | 3 | 4, number>, matchResultChoices: Record<1 | 2 | 3 | 4, "rematch" | "lobby" | null> }>} */
   matches = new Map();
   /** @type {Promise<void>} */
   ready;
@@ -198,6 +197,9 @@ export class GlobalLobby extends DurableObject {
         break;
       case "guest-input":
         this.capturePlayerInput(clientId, payload);
+        break;
+      case "match-result-choice":
+        await this.handleMatchResultChoice(clientId, payload.choice);
         break;
       default:
         break;
@@ -517,6 +519,36 @@ export class GlobalLobby extends DurableObject {
       inputSeq,
       sentAtMs: Math.max(0, Number(inputPayload?.sentAtMs) || 0),
     };
+  }
+
+  /**
+   * @param {string} clientId
+   * @param {unknown} rawChoice
+   */
+  async handleMatchResultChoice(clientId, rawChoice) {
+    this.reconcileRoomsWithActiveSockets();
+    const room = this.findRoomForClient(clientId);
+    if (!room || room.status !== "playing") {
+      return;
+    }
+
+    const seat = this.findSeatForClient(room, clientId);
+    const match = this.matches.get(room.roomCode);
+    if (!seat || !match || !match.activePlayerIds.includes(seat)) {
+      return;
+    }
+
+    const choice = rawChoice === "lobby" ? "lobby" : "rematch";
+    match.matchResultChoices[seat] = choice;
+
+    if (choice === "lobby") {
+      await this.resetRoomToLobby(room, "A pilot returned to the lobby.");
+      return;
+    }
+
+    if (match.activePlayerIds.every((seatId) => match.matchResultChoices[seatId] === "rematch")) {
+      await this.restartRoomFromLobby(room, match);
+    }
   }
 
   /**
@@ -869,10 +901,10 @@ export class GlobalLobby extends DurableObject {
       game,
       inputs: createSeatMap(() => createNeutralInput()),
       timer: null,
-      restartTimer: null,
       tick: 0,
       activePlayerIds,
       characterSelections,
+      matchResultChoices: createSeatMap(() => null),
     };
     match.timer = setInterval(() => {
       this.tickRoomMatch(room.roomCode);
@@ -891,9 +923,6 @@ export class GlobalLobby extends DurableObject {
     }
     if (match.timer) {
       clearInterval(match.timer);
-    }
-    if (match.restartTimer) {
-      clearTimeout(match.restartTimer);
     }
     this.matches.delete(roomCode);
   }
@@ -918,12 +947,9 @@ export class GlobalLobby extends DurableObject {
       match.inputs[playerId].detonatePressed = false;
     }
     match.tick += 1;
-    const snapshot = this.broadcastFrame(roomCode);
+    this.broadcastFrame(roomCode);
     if (match.tick % FULL_SNAPSHOT_EVERY_TICKS === 0) {
       this.broadcastSnapshot(roomCode);
-    }
-    if (snapshot && snapshot.mode === "match-result" && !match.restartTimer) {
-      this.scheduleMatchRestart(roomCode);
     }
   }
 
@@ -1103,41 +1129,41 @@ export class GlobalLobby extends DurableObject {
   }
 
   /**
-   * @param {string} roomCode
+   * @param {LobbyRoom} room
+   * @param {string} body
    */
-  scheduleMatchRestart(roomCode) {
-    const room = this.rooms.get(roomCode);
-    const match = this.matches.get(roomCode);
-    if (!room || !match || room.status !== "playing" || match.restartTimer) {
-      return;
+  async resetRoomToLobby(room, body) {
+    this.stopRoomMatch(room.roomCode);
+    room.status = "open";
+    const hostSeatId = PLAYER_IDS.find((seatId) => room.seats[seatId].clientId) ?? null;
+    room.hostClientId = hostSeatId ? room.seats[hostSeatId].clientId : null;
+    for (const seatId of PLAYER_IDS) {
+      room.seats[seatId].ready = false;
     }
-
-    this.appendRoomSystemMessage(room, `Match ended. Restarting in ${Math.round(MATCH_RESTART_DELAY_MS / 1000)}s.`);
+    this.refreshSeatLabels(room);
+    this.appendRoomSystemMessage(room, body);
+    await this.persistState();
     this.broadcastLobbyToMembers(room);
     this.broadcastLobbyList();
+  }
 
-    match.restartTimer = setTimeout(() => {
-      const activeRoom = this.rooms.get(roomCode);
-      const activeMatch = this.matches.get(roomCode);
-      if (!activeRoom || !activeMatch || activeRoom.status !== "playing") {
-        if (activeMatch) {
-          activeMatch.restartTimer = null;
-        }
-        return;
-      }
-
-      const snapshot = activeMatch.game.exportOnlineSnapshot();
-      if (snapshot.mode !== "match-result" || !snapshot.matchWinner) {
-        activeMatch.restartTimer = null;
-        return;
-      }
-
-      activeMatch.restartTimer = null;
-      this.sendMatchStarted(activeRoom, activeMatch.activePlayerIds, activeMatch.characterSelections);
-      this.startRoomMatch(activeRoom, activeMatch.activePlayerIds, activeMatch.characterSelections);
-      this.broadcastLobbyToMembers(activeRoom);
-      this.broadcastLobbyList();
-    }, MATCH_RESTART_DELAY_MS);
+  /**
+   * @param {LobbyRoom} room
+   * @param {{ activePlayerIds: Array<1 | 2 | 3 | 4>, characterSelections: Record<1 | 2 | 3 | 4, number> }} match
+   */
+  async restartRoomFromLobby(room, match) {
+    this.stopRoomMatch(room.roomCode);
+    room.status = "open";
+    for (const seatId of PLAYER_IDS) {
+      room.seats[seatId].ready = match.activePlayerIds.includes(seatId);
+    }
+    room.hostClientId = room.seats[match.activePlayerIds[0]]?.clientId ?? null;
+    this.refreshSeatLabels(room);
+    this.appendRoomSystemMessage(room, "Rematch accepted. Rebuilding the match.");
+    await this.persistState();
+    this.broadcastLobbyToMembers(room);
+    this.broadcastLobbyList();
+    await this.maybeStartMatch(room);
   }
 
   /**

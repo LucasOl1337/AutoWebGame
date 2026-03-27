@@ -109,6 +109,64 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.send({ type: "host-snapshot", snapshot });
   }
 
+  public sendMatchResultChoice(choice: "rematch" | "lobby"): void {
+    if (this.role !== "guest") {
+      return;
+    }
+    this.send({ type: "match-result-choice", choice });
+  }
+
+  private async requestShellFullscreen(source: "gesture" | "match-start" | "retry"): Promise<void> {
+    if (typeof document === "undefined" || typeof this.elements.shell.requestFullscreen !== "function") {
+      return;
+    }
+    if (document.fullscreenElement === this.elements.shell) {
+      this.clearFullscreenRetry();
+      return;
+    }
+
+    try {
+      await this.elements.shell.requestFullscreen();
+      this.clearFullscreenRetry();
+      window.requestAnimationFrame(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+    } catch {
+      if (source !== "gesture") {
+        this.armFullscreenRetry();
+        this.setStatus("Match live. Press any key or click once if the browser blocks fullscreen.");
+      }
+    }
+  }
+
+  private armFullscreenRetry(): void {
+    if (this.fullscreenRetryArmed || typeof window === "undefined" || typeof document === "undefined" || document.fullscreenElement) {
+      return;
+    }
+    this.fullscreenRetryArmed = true;
+    window.addEventListener("keydown", this.fullscreenRetryListener, { capture: true });
+    window.addEventListener("pointerdown", this.fullscreenRetryListener, { capture: true });
+  }
+
+  private clearFullscreenRetry(): void {
+    if (!this.fullscreenRetryArmed || typeof window === "undefined") {
+      return;
+    }
+    this.fullscreenRetryArmed = false;
+    window.removeEventListener("keydown", this.fullscreenRetryListener, { capture: true });
+    window.removeEventListener("pointerdown", this.fullscreenRetryListener, { capture: true });
+  }
+
+  private exitShellFullscreen(): void {
+    this.clearFullscreenRetry();
+    if (typeof document === "undefined") {
+      return;
+    }
+    if (document.fullscreenElement === this.elements.shell) {
+      void document.exitFullscreen();
+    }
+  }
+
   private connect(): void {
     if (this.reconnectTimer !== null) {
       window.clearTimeout(this.reconnectTimer);
@@ -160,7 +218,6 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       if (this.quickMatchSearching) {
         return;
       }
-      void this.requestShellFullscreen("gesture");
       this.quickMatchSearching = true;
       this.renderQuickMatchState();
       if (!this.send({ type: "quick-match", characterIndex: this.preferredCharacterIndex })) {
@@ -280,19 +337,26 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.setStatus("Lobby joined. Claim a slot, pick a character, then lock ready.");
         break;
       case "lobby-updated":
-        this.currentLobby = message.lobby;
-        this.roomCode = message.lobby.roomCode;
-        this.syncPreferredCharacterFromLobby();
-        this.renderCharacterSelector();
-        this.renderStage();
-        this.renderLobbyList();
-        break;
+        {
+          const wasMatchState = this.elements.shell.dataset.state === "match";
+          this.currentLobby = message.lobby;
+          this.roomCode = message.lobby.roomCode;
+          this.syncPreferredCharacterFromLobby();
+          this.renderCharacterSelector();
+          if (message.lobby.status === "open" && wasMatchState) {
+            this.app.clearOnlinePeer();
+            this.elements.shell.dataset.state = "lobby";
+            this.exitShellFullscreen();
+          }
+          this.renderStage();
+          this.renderLobbyList();
+          break;
+        }
       case "lobby-left":
         this.role = null;
         this.roomCode = null;
         this.currentLobby = null;
         this.quickMatchSearching = false;
-        this.exitShellFullscreen();
         this.renderCharacterSelector();
         this.updateLocation(null);
         this.app.detachOnlineSession();
@@ -311,8 +375,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.app.startOnlineMatch(message.config);
         this.elements.shell.dataset.state = "match";
         this.renderStage();
-        void this.requestShellFullscreen("match-start");
-        this.setStatus("Match live. Slot locks are active until the room resets.");
+        this.setStatus("Match live. Arena expanded and slot locks stay active until the room resets.");
         break;
       case "guest-input":
         this.app.receiveOnlineGuestInput(message.input);
@@ -690,7 +753,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.elements.stageTitle.textContent = "Queue into Mistbridge";
       this.elements.stageDescription.textContent =
         "Build a squad, pick your pilot, and jump into a public room. Quick match claims an open slot or creates one if needed.";
-      this.elements.stageMeta.textContent = "Public rooms · 2-4 pilots · WASD move · Q bomb · E ready · F fullscreen";
+      this.elements.stageMeta.textContent = "Public rooms · 2-4 pilots · WASD move · Q bomb · E ready";
       this.elements.inviteInput.value = "";
       this.elements.copyButton.disabled = true;
       this.elements.leaveButton.disabled = true;
@@ -861,9 +924,6 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       readyButton.type = "button";
       readyButton.textContent = seat.ready ? "Unlock" : "Lock ready";
       readyButton.addEventListener("click", () => {
-        if (!seat.ready) {
-          void this.requestShellFullscreen("gesture");
-        }
         this.send({ type: "set-ready", ready: !seat.ready });
       });
 
@@ -938,57 +998,6 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
   private setStatus(message: string): void {
     this.elements.status.textContent = message;
-  }
-
-  private async requestShellFullscreen(source: "gesture" | "match-start" | "retry"): Promise<void> {
-    if (typeof document === "undefined" || typeof this.elements.shell.requestFullscreen !== "function") {
-      return;
-    }
-    if (document.fullscreenElement === this.elements.shell) {
-      this.clearFullscreenRetry();
-      return;
-    }
-
-    try {
-      await this.elements.shell.requestFullscreen();
-      this.clearFullscreenRetry();
-      window.requestAnimationFrame(() => {
-        window.dispatchEvent(new Event("resize"));
-      });
-    } catch {
-      if (source !== "gesture") {
-        this.armFullscreenRetry();
-        this.setStatus("Match live. Press any key or click once if the browser blocks fullscreen.");
-      }
-    }
-  }
-
-  private armFullscreenRetry(): void {
-    if (this.fullscreenRetryArmed || typeof window === "undefined" || typeof document === "undefined" || document.fullscreenElement) {
-      return;
-    }
-    this.fullscreenRetryArmed = true;
-    window.addEventListener("keydown", this.fullscreenRetryListener, { capture: true });
-    window.addEventListener("pointerdown", this.fullscreenRetryListener, { capture: true });
-  }
-
-  private clearFullscreenRetry(): void {
-    if (!this.fullscreenRetryArmed || typeof window === "undefined") {
-      return;
-    }
-    this.fullscreenRetryArmed = false;
-    window.removeEventListener("keydown", this.fullscreenRetryListener, { capture: true });
-    window.removeEventListener("pointerdown", this.fullscreenRetryListener, { capture: true });
-  }
-
-  private exitShellFullscreen(): void {
-    this.clearFullscreenRetry();
-    if (typeof document === "undefined") {
-      return;
-    }
-    if (document.fullscreenElement === this.elements.shell) {
-      void document.exitFullscreen();
-    }
   }
 
   private send(payload: object): boolean {

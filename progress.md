@@ -960,3 +960,12 @@ TODO Ranni
 - Quando `get_character("03a976fb-7313-4064-a477-5bb9b0760034")` ficar sem jobs pendentes, rodar:
   - `$env:PIXELLAB_CHARACTER_IDS='03a976fb-7313-4064-a477-5bb9b0760034'; node scripts/import_pixellab_characters.mjs`
 - Depois conferir no manifesto local se `run`, `cast` e `attack` ficaram marcados como `true`.
+
+2026-03-27 match result flow fix
+- Troquei o fim de partida de rematch automático por escolha explícita: `Q = Sim` e `R = VOLTAR PRO LOBBY`.
+- `TARGET_WINS` foi ajustado para 5 e o estado de match-result agora reinicia como lobby novo em vez de reaproveitar o ciclo antigo.
+- O worker ganhou `match-result-choice` por jogador e decide entre voltar ao lobby ou recriar um match fresco via lobby aberto.
+- O cliente online passou a parar de capturar input de gameplay fora de `match`, para nao consumir Q/R no lobby.
+- Validacao concluida:
+  - `npm run compile:esm`
+  - `node --check worker/index.js`
