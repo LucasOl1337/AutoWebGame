@@ -5,6 +5,15 @@ const STATE_VERSION = 3;
 const MATCH_TICK_MS = 1000 / 60;
 const FULL_SNAPSHOT_EVERY_TICKS = 6;
 const PLAYER_IDS = [1, 2, 3, 4];
+const LEGACY_AUDIO_PATHS = new Set([
+  "/assets/audio/sfx/bomb_explode.mp3",
+  "/assets/audio/sfx/crate_break.mp3",
+  "/assets/audio/sfx/flame_ignite.mp3",
+  "/assets/audio/sfx/player_death.mp3",
+  "/assets/audio/sfx/round_win.mp3",
+  "/assets/audio/sfx/shield_block.mp3",
+  "/assets/audio/sfx/sudden_death.mp3",
+]);
 
 /**
  * @typedef {{
@@ -53,6 +62,10 @@ export default {
         return new Response("Expected websocket upgrade", { status: 426 });
       }
       return env.LOBBY.getByName("global").fetch(request);
+    }
+
+    if (LEGACY_AUDIO_PATHS.has(url.pathname)) {
+      return new Response("Not found", { status: 404 });
     }
 
     return env.ASSETS.fetch(request);
@@ -570,6 +583,7 @@ export class GlobalLobby extends DurableObject {
       direction: inputPayload?.input?.direction ?? null,
       bombPressed: Boolean(inputPayload?.input?.bombPressed),
       detonatePressed: Boolean(inputPayload?.input?.detonatePressed),
+      skillPressed: Boolean(inputPayload?.input?.skillPressed),
       inputSeq,
       sentAtMs: Math.max(0, Number(inputPayload?.sentAtMs) || 0),
     };
@@ -1000,6 +1014,7 @@ export class GlobalLobby extends DurableObject {
     for (const playerId of match.activePlayerIds) {
       match.inputs[playerId].bombPressed = false;
       match.inputs[playerId].detonatePressed = false;
+      match.inputs[playerId].skillPressed = false;
     }
     match.tick += 1;
     this.broadcastFrame(roomCode);
@@ -1320,6 +1335,7 @@ function createNeutralInput() {
     direction: null,
     bombPressed: false,
     detonatePressed: false,
+    skillPressed: false,
     inputSeq: 0,
     sentAtMs: 0,
   };
