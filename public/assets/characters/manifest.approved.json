@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-27T19:02:51.477Z",
+  "generatedAt": "2026-03-27T20:56:19.327Z",
   "totalRequested": 3,
   "imported": 2,
   "skipped": 1,
@@ -489,7 +489,7 @@
         "idle": true,
         "walk": true,
         "run": true,
-        "cast": false,
+        "cast": true,
         "attack": true
       },
       "pinned": false
