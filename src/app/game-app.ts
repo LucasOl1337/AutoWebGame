@@ -15,6 +15,7 @@ import {
   PLAYER_COLORS,
   ROUND_DURATION_MS,
   ROUND_END_DELAY_MS,
+  SKILL_KEY,
   SPEED_STEP_MS,
   TARGET_WINS,
   TILE_SIZE,
@@ -33,6 +34,7 @@ import {
 import type {
   ArenaState,
   BombState,
+  CharacterSkillId,
   Direction,
   FlameState,
   MatchScore,
@@ -97,7 +99,11 @@ const BOT_STRATEGIC_MOVE_WINDOW_STEPS = 2;
 const BOT_PREEMPTIVE_ESCAPE_STEPS = 4;
 const BOT_DIRECTION_CONFIRM_FRAMES = 2;
 const WALK_FRAME_MS = 100;
+const SKILL_FRAME_MS = 100;
 const SPAWN_PROTECTION_MS = 2200;
+const RANNI_CHARACTER_ID = "03a976fb-7313-4064-a477-5bb9b0760034";
+const RANNI_SKILL_CHANNEL_MS = 2_000;
+const RANNI_SKILL_COOLDOWN_MS = 10_000;
 const SUDDEN_DEATH_ELAPSED_MS = 40_000;
 const SUDDEN_DEATH_START_MS = ROUND_DURATION_MS - SUDDEN_DEATH_ELAPSED_MS;
 const SUDDEN_DEATH_TICK_MS = 800;
@@ -141,6 +147,7 @@ function createNeutralOnlineInput(): OnlineInputState {
     direction: null,
     bombPressed: false,
     detonatePressed: false,
+    skillPressed: false,
   };
 }
 
@@ -149,6 +156,19 @@ function cloneOnlineInputState(input: OnlineInputState): OnlineInputState {
     direction: input.direction,
     bombPressed: input.bombPressed,
     detonatePressed: input.detonatePressed,
+    skillPressed: input.skillPressed,
+  };
+}
+
+function createDefaultPlayerSkillState(skillId: CharacterSkillId | null) {
+  return {
+    id: skillId,
+    phase: "idle" as const,
+    channelRemainingMs: 0,
+    cooldownRemainingMs: 0,
+    castElapsedMs: 0,
+    projectedPosition: null,
+    projectedLastMoveDirection: null,
   };
 }
 
@@ -275,11 +295,16 @@ export class GameApp {
   private onlineNextInputSeq = 0;
   private onlinePendingInputs: PendingOnlineInput[] = [];
   private onlineObservedRoundNumber: number | null = null;
+  private onlineAudioPrimed = false;
 
   private lastTimestamp = 0;
   private accumulatorMs = 0;
 
   private mode: Mode = "boot";
+  private selectedCharacterIndex: Record<PlayerId, number> = createNumberPlayerRecord(0);
+  private pendingCharacterIndex: Record<PlayerId, number> = createNumberPlayerRecord(0);
+  private characterLocked: Record<PlayerId, boolean> = createBooleanPlayerRecord(true);
+  private characterMenuOpen: Record<PlayerId, boolean> = createBooleanPlayerRecord(false);
   private arena: ArenaState = createArena();
   private players: Record<PlayerId, PlayerState> = this.createPlayers();
   private bombs: BombState[] = [];
@@ -309,10 +334,6 @@ export class GameApp {
   private showDangerOverlay = false;
   private showBombPreview = false;
   private readonly characterRoster: CharacterRosterEntry[];
-  private selectedCharacterIndex: Record<PlayerId, number> = createNumberPlayerRecord(0);
-  private pendingCharacterIndex: Record<PlayerId, number> = createNumberPlayerRecord(0);
-  private characterLocked: Record<PlayerId, boolean> = createBooleanPlayerRecord(true);
-  private characterMenuOpen: Record<PlayerId, boolean> = createBooleanPlayerRecord(false);
   private readonly spriteTrimCache = new SpriteTrimCache();
   private readonly soundManager = new SoundManager();
 
@@ -371,6 +392,7 @@ export class GameApp {
     this.onlineNextInputSeq = 0;
     this.onlinePendingInputs = [];
     this.onlineObservedRoundNumber = null;
+    this.onlineAudioPrimed = false;
     this.onlineRenderSamples = [];
     this.syncPlayerLabels();
   }
@@ -381,6 +403,7 @@ export class GameApp {
     this.onlineNextInputSeq = 0;
     this.onlinePendingInputs = [];
     this.onlineInputs = createPlayerRecord(() => createNeutralOnlineInput());
+    this.onlineAudioPrimed = false;
     this.onlineRenderSamples = [];
     this.selectedCharacterIndex = { ...config.characterSelections };
     this.pendingCharacterIndex = { ...config.characterSelections };
@@ -406,6 +429,16 @@ export class GameApp {
 
   public applyOnlineSnapshot(snapshot: OnlineGameSnapshot): void {
     const previousMode = this.mode;
+    this.playOnlineAudioTransition({
+      bombs: snapshot.bombs,
+      flames: snapshot.flames,
+      players: snapshot.players,
+      roundOutcome: snapshot.roundOutcome,
+      matchWinner: snapshot.matchWinner,
+      suddenDeathActive: snapshot.suddenDeathActive,
+      breakableTiles: snapshot.breakableTiles,
+      powerUps: snapshot.powerUps,
+    });
     const baseArena = createArena();
     this.mode = snapshot.mode;
     this.arena = {
@@ -457,10 +490,19 @@ export class GameApp {
     if (previousMode !== "match" || this.visualPlayerPositions[this.onlineLocalPlayerId].x === 0) {
       this.syncVisualPlayerPositions();
     }
+    this.onlineAudioPrimed = true;
   }
 
   public applyOnlineFrame(frame: OnlineGameFrame): void {
     const previousMode = this.mode;
+    this.playOnlineAudioTransition({
+      bombs: frame.bombs,
+      flames: frame.flames,
+      players: frame.players,
+      roundOutcome: frame.roundOutcome,
+      matchWinner: frame.matchWinner,
+      suddenDeathActive: frame.suddenDeathActive,
+    });
     this.mode = frame.mode;
     this.players = createPlayerRecord((playerId) => this.clonePlayerState(frame.players[playerId]));
     this.bombs = frame.bombs.map((bomb) => ({
@@ -492,6 +534,7 @@ export class GameApp {
     if (previousMode !== "match" || this.visualPlayerPositions[this.onlineLocalPlayerId].x === 0) {
       this.syncVisualPlayerPositions();
     }
+    this.onlineAudioPrimed = true;
   }
 
   public clearOnlinePeer(): void {
@@ -500,6 +543,7 @@ export class GameApp {
     this.onlineNextInputSeq = 0;
     this.onlinePendingInputs = [];
     this.onlineObservedRoundNumber = null;
+    this.onlineAudioPrimed = false;
     this.onlineRenderSamples = [];
     this.botEnabled = false;
   }
@@ -525,7 +569,92 @@ export class GameApp {
     this.suddenDeathTickMs = SUDDEN_DEATH_TICK_MS;
     this.suddenDeathIndex = 0;
     this.suddenDeathPath = this.buildSuddenDeathPath();
+    this.onlineAudioPrimed = false;
     this.resetRound();
+  }
+
+  private playOnlineAudioTransition(next: {
+    bombs: BombState[];
+    flames: FlameState[];
+    players: Record<PlayerId, PlayerState>;
+    roundOutcome: RoundOutcome | null;
+    matchWinner: PlayerId | null;
+    suddenDeathActive: boolean;
+    breakableTiles?: string[];
+    powerUps?: PowerUpState[];
+  }): void {
+    if (
+      this.headless
+      || this.onlineSession?.role !== "guest"
+      || !this.onlineAudioPrimed
+    ) {
+      return;
+    }
+
+    const previousBombIds = new Set(this.bombs.map((bomb) => bomb.id));
+    const nextBombIds = new Set(next.bombs.map((bomb) => bomb.id));
+    const addedBombs = next.bombs.filter((bomb) => !previousBombIds.has(bomb.id)).length;
+    const removedBombs = this.bombs.filter((bomb) => !nextBombIds.has(bomb.id)).length;
+
+    const previousFlames = new Set(this.flames.map((flame) => tileKey(flame.tile.x, flame.tile.y)));
+    const newFlames = next.flames.filter((flame) => !previousFlames.has(tileKey(flame.tile.x, flame.tile.y))).length;
+    const startedSuddenDeath = !this.suddenDeathActive && next.suddenDeathActive;
+
+    if (addedBombs > 0) {
+      this.soundManager.playOneShot("bombPlace");
+    }
+    if (startedSuddenDeath) {
+      this.soundManager.playOneShot("suddenDeath");
+    }
+    if (removedBombs > 0 || (newFlames > 0 && !startedSuddenDeath)) {
+      this.soundManager.playOneShot("bombExplode");
+    }
+    if (newFlames > 0) {
+      this.soundManager.playOneShot("flameIgnite");
+    }
+
+    if (next.breakableTiles && this.arena.breakable.size > new Set(next.breakableTiles).size) {
+      this.soundManager.playOneShot("crateBreak");
+    }
+
+    if (next.powerUps && this.didCollectRemotePowerUp(next.powerUps)) {
+      this.soundManager.playOneShot("powerupCollect");
+    }
+
+    if (this.didConsumeRemoteShield(next.players)) {
+      this.soundManager.playOneShot("shieldBlock");
+    }
+
+    if (this.didLoseRemotePlayer(next.players)) {
+      this.soundManager.playOneShot("playerDeath");
+    }
+
+    if (!this.roundOutcome && next.roundOutcome) {
+      this.soundManager.playOneShot(next.matchWinner ? "matchWin" : "roundWin");
+    }
+  }
+
+  private didCollectRemotePowerUp(nextPowerUps: PowerUpState[]): boolean {
+    const previousCollected = new Set(
+      this.arena.powerUps
+        .filter((powerUp) => powerUp.collected)
+        .map((powerUp) => `${powerUp.type}:${tileKey(powerUp.tile.x, powerUp.tile.y)}`),
+    );
+    return nextPowerUps.some((powerUp) => (
+      powerUp.collected
+      && !previousCollected.has(`${powerUp.type}:${tileKey(powerUp.tile.x, powerUp.tile.y)}`)
+    ));
+  }
+
+  private didConsumeRemoteShield(nextPlayers: Record<PlayerId, PlayerState>): boolean {
+    return this.activePlayerIds.some((playerId) => (
+      this.players[playerId].shieldCharges > nextPlayers[playerId].shieldCharges
+      && nextPlayers[playerId].alive
+    ));
+  }
+
+  private didLoseRemotePlayer(nextPlayers: Record<PlayerId, PlayerState>): boolean {
+    return this.activePlayerIds.some((playerId) => this.players[playerId].alive && !nextPlayers[playerId].alive);
   }
 
   public receiveOnlineGuestInput(input: OnlineInputState): void {
@@ -534,6 +663,7 @@ export class GameApp {
       direction: input.direction,
       bombPressed: playerInput.bombPressed || input.bombPressed,
       detonatePressed: playerInput.detonatePressed || input.detonatePressed,
+      skillPressed: playerInput.skillPressed || input.skillPressed,
     };
   }
 
@@ -622,6 +752,7 @@ export class GameApp {
     input.direction = this.input.getMovementDirection(1);
     input.bombPressed = input.bombPressed || this.input.consumePress(localBindings.bomb);
     input.detonatePressed = input.detonatePressed || this.input.consumePress(localBindings.detonate);
+    input.skillPressed = input.skillPressed || this.input.consumePress(SKILL_KEY);
   }
 
   private forwardGuestInput(): void {
@@ -696,11 +827,16 @@ export class GameApp {
   }
 
   private clonePlayerState(player: PlayerState): PlayerState {
+    const skill = player.skill ?? createDefaultPlayerSkillState(this.getPlayerSkillId(player.id));
     return {
       ...player,
       tile: { ...player.tile },
       position: { ...player.position },
       velocity: { ...player.velocity },
+      skill: {
+        ...skill,
+        projectedPosition: skill.projectedPosition ? { ...skill.projectedPosition } : null,
+      },
     };
   }
 
@@ -770,6 +906,7 @@ export class GameApp {
       direction: input.direction,
       bombPressed: target.bombPressed || input.bombPressed,
       detonatePressed: target.detonatePressed || input.detonatePressed,
+      skillPressed: target.skillPressed || input.skillPressed,
     };
   }
 
@@ -827,27 +964,16 @@ export class GameApp {
     if (!player || !player.alive) {
       return;
     }
-
-    player.spawnProtectionMs = Math.max(0, player.spawnProtectionMs - deltaMs);
-    player.flameGuardMs = Math.max(0, player.flameGuardMs - deltaMs);
-
-    if (this.consumeOnlineBombPress(localId)) {
-      this.placeBomb(player);
-    }
-    if (this.consumeOnlineDetonatePress(localId)) {
-      this.triggerRemoteDetonation(player);
-    }
-
-    const direction = this.getMovementDirection(localId);
-    if (direction) {
-      const actualDirection = this.resolveMovementDirection(player, direction, deltaMs);
-      player.direction = actualDirection;
-      this.movePlayer(player, actualDirection, deltaMs);
-    } else {
-      player.velocity.x = 0;
-      player.velocity.y = 0;
-    }
-    player.tile = this.getTileFromPosition(player.position);
+    this.simulatePlayerInputStep(
+      player,
+      {
+        direction: this.getMovementDirection(localId),
+        bombPressed: this.consumeOnlineBombPress(localId),
+        detonatePressed: this.consumeOnlineDetonatePress(localId),
+        skillPressed: this.consumeOnlineSkillPress(localId),
+      },
+      deltaMs,
+    );
   }
 
   private reconcileGuestState(ackedInputSeq: number): void {
@@ -885,11 +1011,27 @@ export class GameApp {
   }
 
   private applyPredictedInputStep(player: PlayerState, input: OnlineInputState, deltaMs: number): void {
+    this.simulatePlayerInputStep(player, input, deltaMs);
+  }
+
+  private simulatePlayerInputStep(player: PlayerState, input: OnlineInputState, deltaMs: number): boolean {
     player.spawnProtectionMs = Math.max(0, player.spawnProtectionMs - deltaMs);
     player.flameGuardMs = Math.max(0, player.flameGuardMs - deltaMs);
+    this.syncPlayerSkill(player);
+    this.advancePlayerSkillTimers(player, deltaMs);
 
+    if (input.skillPressed) {
+      this.activatePlayerSkill(player);
+    }
+
+    if (this.updatePlayerSkillChannel(player, input.direction, deltaMs)) {
+      player.tile = this.getTileFromPosition(player.position);
+      return false;
+    }
+
+    let placedBomb = false;
     if (input.bombPressed) {
-      this.placeBomb(player);
+      placedBomb = this.placeBomb(player);
     }
     if (input.detonatePressed) {
       this.triggerRemoteDetonation(player);
@@ -904,6 +1046,115 @@ export class GameApp {
       player.velocity.y = 0;
     }
     player.tile = this.getTileFromPosition(player.position);
+    return placedBomb;
+  }
+
+  private syncPlayerSkill(player: PlayerState): void {
+    const expectedSkillId = this.getPlayerSkillId(player.id);
+    if (player.skill.id === expectedSkillId) {
+      return;
+    }
+    player.skill = createDefaultPlayerSkillState(expectedSkillId);
+  }
+
+  private advancePlayerSkillTimers(player: PlayerState, deltaMs: number): void {
+    if (player.skill.phase !== "cooldown") {
+      return;
+    }
+    player.skill.cooldownRemainingMs = Math.max(0, player.skill.cooldownRemainingMs - deltaMs);
+    if (player.skill.cooldownRemainingMs <= 0) {
+      player.skill.phase = "idle";
+      player.skill.castElapsedMs = 0;
+    }
+  }
+
+  private activatePlayerSkill(player: PlayerState): void {
+    if (!player.alive || player.skill.id !== "ranni-ice-blink" || player.skill.phase !== "idle") {
+      return;
+    }
+    player.skill.phase = "channeling";
+    player.skill.channelRemainingMs = RANNI_SKILL_CHANNEL_MS;
+    player.skill.castElapsedMs = 0;
+    player.skill.projectedPosition = { ...player.position };
+    player.skill.projectedLastMoveDirection = player.lastMoveDirection;
+    player.velocity.x = 0;
+    player.velocity.y = 0;
+  }
+
+  private updatePlayerSkillChannel(player: PlayerState, desiredDirection: Direction | null, deltaMs: number): boolean {
+    if (player.skill.id !== "ranni-ice-blink" || player.skill.phase !== "channeling") {
+      return false;
+    }
+
+    player.velocity.x = 0;
+    player.velocity.y = 0;
+    if (!player.skill.projectedPosition) {
+      player.skill.projectedPosition = { ...player.position };
+    }
+    if (desiredDirection) {
+      const simulated = this.simulateProjectedMovement(
+        player,
+        player.skill.projectedPosition,
+        desiredDirection,
+        player.skill.projectedLastMoveDirection,
+        deltaMs,
+      );
+      player.skill.projectedPosition = simulated.position;
+      player.skill.projectedLastMoveDirection = simulated.lastMoveDirection;
+      player.direction = simulated.direction;
+    }
+
+    player.skill.channelRemainingMs = Math.max(0, player.skill.channelRemainingMs - deltaMs);
+    player.skill.castElapsedMs += deltaMs;
+    if (player.skill.channelRemainingMs <= 0) {
+      this.finishRanniBlink(player);
+    }
+    return true;
+  }
+
+  private finishRanniBlink(player: PlayerState): void {
+    if (player.skill.id !== "ranni-ice-blink") {
+      return;
+    }
+    const target = player.skill.projectedPosition ?? player.position;
+    if (this.canOccupyPosition(player, target)) {
+      player.position = { ...target };
+      player.tile = this.getTileFromPosition(player.position);
+    }
+    if (player.skill.projectedLastMoveDirection) {
+      player.lastMoveDirection = player.skill.projectedLastMoveDirection;
+      player.direction = player.skill.projectedLastMoveDirection;
+    }
+    player.velocity.x = 0;
+    player.velocity.y = 0;
+    player.skill.phase = "cooldown";
+    player.skill.channelRemainingMs = 0;
+    player.skill.cooldownRemainingMs = RANNI_SKILL_COOLDOWN_MS;
+    player.skill.castElapsedMs = 0;
+    player.skill.projectedPosition = null;
+    player.skill.projectedLastMoveDirection = null;
+  }
+
+  private simulateProjectedMovement(
+    player: PlayerState,
+    startPosition: PixelCoord,
+    desiredDirection: Direction,
+    projectedLastMoveDirection: Direction | null,
+    deltaMs: number,
+  ): { position: PixelCoord; lastMoveDirection: Direction | null; direction: Direction } {
+    const ghost = this.clonePlayerState(player);
+    ghost.position = { ...startPosition };
+    ghost.tile = this.getTileFromPosition(startPosition);
+    ghost.velocity = { x: 0, y: 0 };
+    ghost.lastMoveDirection = projectedLastMoveDirection;
+    const actualDirection = this.resolveMovementDirection(ghost, desiredDirection, deltaMs);
+    ghost.direction = actualDirection;
+    this.movePlayerSimulated(ghost, actualDirection, deltaMs);
+    return {
+      position: { ...ghost.position },
+      lastMoveDirection: ghost.lastMoveDirection,
+      direction: ghost.direction,
+    };
   }
 
   private updateVisualPlayerPositions(deltaMs: number): void {
@@ -1260,6 +1511,14 @@ export class GameApp {
     return this.getActiveCharacterEntry(playerId).sprites;
   }
 
+  private getPlayerSkillId(playerId: PlayerId): CharacterSkillId | null {
+    const characterId = this.getActiveCharacterEntry(playerId).id;
+    if (characterId === RANNI_CHARACTER_ID) {
+      return "ranni-ice-blink";
+    }
+    return null;
+  }
+
   private getCharacterLabel(playerId: PlayerId, maxLength = 18): string {
     return this.shortenCharacterName(this.getActiveCharacterEntry(playerId).name, maxLength);
   }
@@ -1303,6 +1562,7 @@ export class GameApp {
       kickLevel: 0,
       flameGuardMs: 0,
       spawnProtectionMs: SPAWN_PROTECTION_MS,
+      skill: createDefaultPlayerSkillState(null),
     };
   }
 
@@ -1312,12 +1572,10 @@ export class GameApp {
       if (!player.alive) {
         continue;
       }
-      player.spawnProtectionMs = Math.max(0, player.spawnProtectionMs - deltaMs);
-      player.flameGuardMs = Math.max(0, player.flameGuardMs - deltaMs);
 
       const botDecision = this.isBotControlled(id) ? this.getBotDecision(player) : null;
       const automationBomb = this.automationMode
-        ? this.automationControlledPlayer === id && this.input.consumePress("Space")
+        ? this.automationControlledPlayer === id && this.input.consumePress("KeyX")
         : false;
       const onlineBomb = this.consumeOnlineBombPress(id);
       const nativeBindings = MENU_PLAYER_IDS.includes(id as MenuPlayerId)
@@ -1338,27 +1596,31 @@ export class GameApp {
         || (this.shouldUseNativeControls()
           ? nativeBindings ? this.input.consumePress(nativeBindings.detonate) : false
           : false);
-      if (wantsDetonate) {
-        this.triggerRemoteDetonation(player);
-      }
+      const wantsSkill = this.consumeOnlineSkillPress(id)
+        || (this.shouldUseNativeControls()
+          ? id === 1 && this.input.consumePress(SKILL_KEY)
+          : false);
 
       const desiredDirection = botDecision?.direction ?? this.getMovementDirection(id);
       const direction = this.isBotControlled(id)
         ? this.getStableBotDirection(player, desiredDirection, deltaMs)
         : desiredDirection;
-      if (direction) {
-        const actualDirection = this.resolveMovementDirection(player, direction, deltaMs);
-        if (this.isBotControlled(id)) {
-          this.rememberBotDirection(id, actualDirection);
-        }
-        player.direction = actualDirection;
-        this.movePlayer(player, actualDirection, deltaMs);
-      } else {
-        player.velocity.x = 0;
-        player.velocity.y = 0;
+      const placedBomb = this.simulatePlayerInputStep(
+        player,
+        {
+          direction,
+          bombPressed: wantsBomb,
+          detonatePressed: wantsDetonate,
+          skillPressed: wantsSkill,
+        },
+        deltaMs,
+      );
+      if (this.isBotControlled(id) && direction && player.skill.phase !== "channeling") {
+        this.rememberBotDirection(id, player.direction);
       }
-
-      player.tile = this.getTileFromPosition(player.position);
+      if (placedBomb && botDecision?.placeBomb && this.isBotControlled(id)) {
+        this.botBombCooldownMs = BOT_BOMB_COOLDOWN_MS;
+      }
     }
 
     this.resolvePlayerDeathsFromFlames();
@@ -1420,6 +1682,19 @@ export class GameApp {
     }
     const pressed = source.detonatePressed;
     source.detonatePressed = false;
+    return pressed;
+  }
+
+  private consumeOnlineSkillPress(id: PlayerId): boolean {
+    if (!this.onlineSession) {
+      return false;
+    }
+    const source = this.onlineInputs[id];
+    if (!source) {
+      return false;
+    }
+    const pressed = source.skillPressed;
+    source.skillPressed = false;
     return pressed;
   }
 
@@ -2312,10 +2587,18 @@ export class GameApp {
   }
 
   private movePlayer(player: PlayerState, direction: Direction, deltaMs: number): void {
+    this.movePlayerInternal(player, direction, deltaMs, true);
+  }
+
+  private movePlayerSimulated(player: PlayerState, direction: Direction, deltaMs: number): void {
+    this.movePlayerInternal(player, direction, deltaMs, false);
+  }
+
+  private movePlayerInternal(player: PlayerState, direction: Direction, deltaMs: number, allowBombPush: boolean): void {
     const start = { ...player.position };
     let option = this.evaluateMovementOption(player, direction, deltaMs);
 
-    if (!option.combinedFree && !option.forwardOnlyFree && option.canAdvanceForward) {
+    if (allowBombPush && !option.combinedFree && !option.forwardOnlyFree && option.canAdvanceForward) {
       const pushed = this.tryPushBomb(player, direction);
       if (pushed) {
         option = this.evaluateMovementOption(player, direction, deltaMs);
@@ -2764,6 +3047,7 @@ export class GameApp {
         }
         player.alive = false;
         player.velocity = { x: 0, y: 0 };
+        player.skill = createDefaultPlayerSkillState(player.skill.id);
         this.soundManager.playOneShot("playerDeath");
       }
     }
@@ -3138,7 +3422,13 @@ export class GameApp {
     const palette = PLAYER_COLORS[playerId];
     const title = `${this.getPlayerSlotLabel(playerId)} ${this.score[playerId]}`;
     const statLine = `B${player.maxBombs} F${player.flameRange} S${player.speedLevel}`;
-    const status = player.alive ? (player.flameGuardMs > 0 ? "GUARD" : "LIVE") : "DOWN";
+    const status = !player.alive
+      ? "DOWN"
+      : player.skill.phase === "channeling"
+        ? "ICE"
+        : player.flameGuardMs > 0
+          ? "GUARD"
+          : "LIVE";
     const skillSlots = this.getHudSkillSlots(playerId);
 
     this.drawHudPanel(x, y, width, 36, palette.glow);
@@ -3588,13 +3878,18 @@ export class GameApp {
     const idleFrames = baseSprites.idle?.[player.direction] ?? [];
     const walkFrames = baseSprites.walk?.[player.direction] ?? [];
     const runFrames = baseSprites.run?.[player.direction] ?? [];
+    const castFrames = baseSprites.cast?.[player.direction] ?? [];
     const prefersRunMovement = activeCharacter.animations?.walk === false && activeCharacter.animations?.run !== false;
+    const channelingSkill = player.skill.id === "ranni-ice-blink" && player.skill.phase === "channeling";
     const movementFrames = prefersRunMovement
       ? (runFrames.length > 0 ? runFrames : walkFrames)
       : (walkFrames.length > 0 ? walkFrames : runFrames);
     const moving = Math.abs(player.velocity.x) > 0.02 || Math.abs(player.velocity.y) > 0.02;
     const frameIndex = Math.floor(this.animationClockMs / WALK_FRAME_MS);
-    let sprite = moving && movementFrames.length > 0
+    const castFrameIndex = Math.floor(player.skill.castElapsedMs / SKILL_FRAME_MS);
+    let sprite = channelingSkill && castFrames.length > 0
+      ? castFrames[castFrameIndex % castFrames.length]
+      : moving && movementFrames.length > 0
       ? movementFrames[frameIndex % movementFrames.length]
       : !moving && idleFrames.length > 0
         ? idleFrames[frameIndex % idleFrames.length]
@@ -3635,6 +3930,9 @@ export class GameApp {
         spriteHeight,
       );
       this.ctx.restore();
+      if (channelingSkill) {
+        this.drawIcePrisonOverlay(spriteX, spriteY, spriteWidth, spriteHeight, player.skill.channelRemainingMs);
+      }
       return;
     }
 
@@ -3661,7 +3959,22 @@ export class GameApp {
       this.ctx.fillRect(x + 18, y + 18, 4, 4);
     }
 
+    if (channelingSkill) {
+      this.drawIcePrisonOverlay(x + 4, y + 2, TILE_SIZE - 8, TILE_SIZE + 8, player.skill.channelRemainingMs);
+    }
+
     this.ctx.globalAlpha = 1;
+  }
+
+  private drawIcePrisonOverlay(x: number, y: number, width: number, height: number, remainingMs: number): void {
+    const pulse = 0.7 + 0.3 * Math.sin((remainingMs / 120) * Math.PI);
+    this.ctx.save();
+    this.ctx.fillStyle = `rgba(171, 232, 255, ${0.22 + pulse * 0.18})`;
+    this.ctx.fillRect(x - 2, y - 3, width + 4, height + 5);
+    this.ctx.strokeStyle = `rgba(216, 247, 255, ${0.48 + pulse * 0.24})`;
+    this.ctx.lineWidth = 1;
+    this.ctx.strokeRect(x - 1.5, y - 2.5, width + 3, height + 4);
+    this.ctx.restore();
   }
 
   private getSpriteTrimBounds(
@@ -3873,6 +4186,12 @@ export class GameApp {
           })),
           flameGuardMs: Math.round(player.flameGuardMs),
           spawnProtectionMs: Math.round(player.spawnProtectionMs),
+          skill: {
+            id: player.skill.id,
+            phase: player.skill.phase,
+            channelRemainingMs: Math.round(player.skill.channelRemainingMs),
+            cooldownRemainingMs: Math.round(player.skill.cooldownRemainingMs),
+          },
         };
       }),
       bombs: this.bombs.map((bomb) => ({
