@@ -153,6 +153,40 @@ button {
   line-height: 1.5;
 }
 
+.lobby-brand__stats {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.lobby-brand__stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(168, 205, 235, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.lobby-brand__stat-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.lobby-brand__stat-value {
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .lobby-create,
 .lobby-selector {
   padding: 16px;
@@ -395,7 +429,7 @@ button {
 
 .lobby-stage__top {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+  grid-template-columns: minmax(0, 1fr) minmax(330px, 430px);
   gap: 14px;
   align-items: end;
 }
@@ -431,16 +465,22 @@ button {
 
 .lobby-stage__invite {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) repeat(2, minmax(112px, max-content));
   gap: 8px;
+  align-items: center;
   align-content: start;
+}
+
+.lobby-stage__invite .lobby-button {
+  min-width: 112px;
+  white-space: nowrap;
 }
 
 .lobby-stage__workspace {
   position: relative;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(286px, 330px);
+  grid-template-columns: minmax(0, 1fr) minmax(330px, 400px);
   gap: 14px;
   align-items: stretch;
 }
@@ -473,7 +513,7 @@ button {
 .lobby-stage__rail {
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(220px, 1fr);
+  grid-template-rows: auto minmax(290px, 1fr);
   gap: 14px;
 }
 
@@ -577,6 +617,8 @@ button {
 
 .lobby-seat__actions .lobby-button {
   min-height: 38px;
+  min-width: 98px;
+  white-space: nowrap;
 }
 
 .lobby-chat {
@@ -585,7 +627,7 @@ button {
 }
 
 .lobby-chat__log {
-  min-height: 140px;
+  min-height: 220px;
   overflow: auto;
   display: flex;
   flex-direction: column;
@@ -607,8 +649,8 @@ button {
 }
 
 .lobby-chat__entry[data-self="true"] {
-  border-color: rgba(121, 216, 255, 0.24);
-  background: rgba(121, 216, 255, 0.08);
+  border-color: rgba(255, 180, 90, 0.24);
+  background: rgba(255, 180, 90, 0.08);
 }
 
 .lobby-chat__entry[data-system="true"] {
@@ -634,9 +676,19 @@ button {
 
 .lobby-chat__composer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 84px;
+  gap: 8px;
   align-items: center;
+}
+
+.lobby-chat__composer .lobby-button {
+  min-height: 40px;
+  width: 100%;
+}
+
+.lobby-chat__input {
+  min-height: 40px;
+  height: 40px;
 }
 
 .lobby-status {
@@ -679,40 +731,41 @@ canvas {
 }
 
 .lobby-shell[data-state="match"] .lobby-stage__workspace {
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+  gap: 12px;
   min-height: 0;
   height: 100%;
 }
 
 .lobby-shell[data-state="match"] .lobby-stage__viewport {
   height: 100%;
+  min-height: 0;
   padding: 10px;
 }
 
 .lobby-shell[data-state="match"] .lobby-stage__rail {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: min(280px, 21vw);
-  max-height: calc(100% - 24px);
-  pointer-events: none;
-  z-index: 3;
+  position: relative;
+  width: auto;
+  max-height: 100%;
+  min-height: 0;
+  pointer-events: auto;
+  z-index: 1;
 }
 
 .lobby-shell[data-state="match"] .lobby-stage__panel {
-  pointer-events: auto;
   background:
     linear-gradient(180deg, rgba(7, 13, 22, 0.88), rgba(4, 9, 17, 0.84)),
     radial-gradient(circle at top, rgba(121, 216, 255, 0.08), transparent 52%);
 }
 
 .lobby-shell[data-state="match"] .lobby-stage__panel--seats {
-  max-height: 44%;
+  max-height: 52%;
   overflow: auto;
 }
 
 .lobby-shell[data-state="match"] .lobby-chat {
-  min-height: 180px;
+  min-height: 250px;
 }
 
 .lobby-shell[data-state="match"] canvas {
@@ -726,7 +779,7 @@ canvas {
   }
 
   .lobby-stage__workspace {
-    grid-template-columns: minmax(0, 1fr) minmax(270px, 308px);
+    grid-template-columns: minmax(0, 1fr) minmax(310px, 360px);
   }
 }
 
@@ -749,7 +802,7 @@ canvas {
   }
 
   .lobby-shell[data-state="match"] .lobby-stage__rail {
-    width: min(300px, 30vw);
+    width: auto;
   }
 }
 

@@ -192,7 +192,7 @@ async function loadCycleFromTemplate(
 
 async function loadCharacterManifest(): Promise<CharacterManifestEntry[]> {
   try {
-    const response = await fetch(assetUrl("/assets/characters/manifest.json"), { cache: "force-cache" });
+    const response = await fetch(assetUrl("/assets/characters/manifest.json"), { cache: "no-store" });
     if (!response.ok) {
       return [];
     }

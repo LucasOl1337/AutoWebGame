@@ -123,6 +123,7 @@ export interface ServerHelloMessage {
   type: "hello";
   clientId: string;
   lobbies: LobbySummary[];
+  onlineUsers: number;
   quickMatchQueued: number;
   searchingQuickMatch: boolean;
 }
@@ -130,6 +131,7 @@ export interface ServerHelloMessage {
 export interface ServerLobbyListMessage {
   type: "lobby-list";
   lobbies: LobbySummary[];
+  onlineUsers: number;
 }
 
 export interface ServerLobbyJoinedMessage {
@@ -176,6 +178,7 @@ export interface ServerQuickMatchStateMessage {
   queued: number;
   searching: boolean;
   countdownMs: number | null;
+  onlineUsers: number;
 }
 
 export interface ServerChatMessage {

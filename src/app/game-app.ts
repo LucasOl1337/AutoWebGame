@@ -11,12 +11,6 @@ import {
   GRID_WIDTH,
   HUD_HEIGHT,
   KEY_BINDINGS,
-  MAX_BOMBS,
-  MAX_BOMB_PASS_LEVEL,
-  MAX_KICK_LEVEL,
-  MAX_RANGE,
-  MAX_SHIELD_CHARGES,
-  MAX_SPEED_LEVEL,
   MIN_MOVE_MS,
   PLAYER_COLORS,
   ROUND_DURATION_MS,
@@ -52,7 +46,16 @@ import type {
   TileCoord,
 } from "../core/types";
 import { InputManager, NoopInputManager, type InputController } from "../engine/input";
-import { createArena, tileKey } from "../game/arena";
+import { createArena, isWrapPortalTile, tileKey } from "../game/arena";
+import {
+  applyPowerUpToPlayer,
+  formatControlKey,
+  getPowerUpDefinition,
+  getPowerUpLevel,
+  getPowerUpPriorityScore,
+  type SkillPowerUpType,
+  SKILL_POWER_UP_TYPES,
+} from "../core/powerups";
 import type {
   MatchStartConfig,
   OnlineGameFrame,
@@ -111,6 +114,8 @@ const ONLINE_EXTRAPOLATION_MS = 42;
 const ONLINE_VELOCITY_LEAD_MS = 18;
 const ONLINE_MAX_VISUAL_LEAD_PX = TILE_SIZE * 0.34;
 const ONLINE_SAMPLE_BUFFER_SIZE = 12;
+const ARENA_PIXEL_WIDTH = GRID_WIDTH * TILE_SIZE;
+const ARENA_PIXEL_HEIGHT = GRID_HEIGHT * TILE_SIZE;
 const PLAYER_SPAWNS: Record<PlayerId, { tile: TileCoord; direction: Direction }> = {
   1: { tile: { x: 2, y: 1 }, direction: "down" },
   2: { tile: { x: GRID_WIDTH - 3, y: 1 }, direction: "down" },
@@ -242,6 +247,14 @@ interface MovementOption {
   combinedFree: boolean;
   laneOnlyFree: boolean;
   forwardOnlyFree: boolean;
+}
+
+interface HudSkillSlot {
+  type: SkillPowerUpType;
+  level: number;
+  acquired: boolean;
+  keyLabel: string | null;
+  valueLabel: string;
 }
 
 export class GameApp {
@@ -1869,46 +1882,7 @@ export class GameApp {
   }
 
   private getPowerUpPriority(player: PlayerState, type: PowerUpState["type"]): number {
-    if (type === "bomb-up") {
-      if (player.maxBombs >= MAX_BOMBS) {
-        return 0;
-      }
-      return 300 + (MAX_BOMBS - player.maxBombs) * 40;
-    }
-    if (type === "flame-up") {
-      if (player.flameRange >= MAX_RANGE) {
-        return 0;
-      }
-      return 260 + (MAX_RANGE - player.flameRange) * 40;
-    }
-    if (type === "remote-up") {
-      if (player.remoteLevel >= 1) {
-        return 0;
-      }
-      return 220;
-    }
-    if (type === "bomb-pass-up") {
-      if (player.bombPassLevel >= MAX_BOMB_PASS_LEVEL) {
-        return 0;
-      }
-      return 240;
-    }
-    if (type === "kick-up") {
-      if (player.kickLevel >= MAX_KICK_LEVEL) {
-        return 0;
-      }
-      return 230;
-    }
-    if (type === "shield-up") {
-      if (player.shieldCharges >= MAX_SHIELD_CHARGES) {
-        return 0;
-      }
-      return 200 + (MAX_SHIELD_CHARGES - player.shieldCharges) * 30;
-    }
-    if (player.speedLevel >= MAX_SPEED_LEVEL) {
-      return 0;
-    }
-    return 120 + (MAX_SPEED_LEVEL - player.speedLevel) * 25;
+    return getPowerUpPriorityScore(player, type);
   }
 
   private getSuddenDeathPressureDirection(player: PlayerState, danger: Map<string, number>): Direction | null {
@@ -2081,6 +2055,9 @@ export class GameApp {
       for (let step = 1; step <= range; step += 1) {
         const x = origin.x + delta.x * step;
         const y = origin.y + delta.y * step;
+        if (x < 0 || y < 0 || x >= GRID_WIDTH || y >= GRID_HEIGHT) {
+          break;
+        }
         const key = tileKey(x, y);
         if (this.arena.solid.has(key)) {
           break;
@@ -2207,8 +2184,45 @@ export class GameApp {
     this.botCommittedDirection[playerId] = direction;
   }
 
+  private normalizeTileAxis(value: number, size: number): number {
+    const wrapped = value % size;
+    return wrapped < 0 ? wrapped + size : wrapped;
+  }
+
+  private normalizeTile(tile: TileCoord): TileCoord {
+    return {
+      x: this.normalizeTileAxis(tile.x, GRID_WIDTH),
+      y: this.normalizeTileAxis(tile.y, GRID_HEIGHT),
+    };
+  }
+
+  private normalizeAxisPosition(value: number, span: number): number {
+    const wrapped = value % span;
+    return wrapped < 0 ? wrapped + span : wrapped;
+  }
+
+  private normalizeArenaPosition(position: PixelCoord): PixelCoord {
+    return {
+      x: this.normalizeAxisPosition(position.x, ARENA_PIXEL_WIDTH),
+      y: this.normalizeAxisPosition(position.y, ARENA_PIXEL_HEIGHT),
+    };
+  }
+
+  private getWrappedDelta(current: number, previous: number, span: number): number {
+    let delta = current - previous;
+    if (delta > span * 0.5) {
+      delta -= span;
+    } else if (delta < -span * 0.5) {
+      delta += span;
+    }
+    return delta;
+  }
+
   private positionChanged(from: PixelCoord, to: PixelCoord): boolean {
-    return Math.abs(to.x - from.x) > 0.01 || Math.abs(to.y - from.y) > 0.01;
+    return (
+      Math.abs(this.getWrappedDelta(to.x, from.x, ARENA_PIXEL_WIDTH)) > 0.01
+      || Math.abs(this.getWrappedDelta(to.y, from.y, ARENA_PIXEL_HEIGHT)) > 0.01
+    );
   }
 
   private canMovementOptionAdvance(from: PixelCoord, option: MovementOption): boolean {
@@ -2269,13 +2283,13 @@ export class GameApp {
       }
     }
 
-    const combinedMove = { x: nextX, y: nextY };
-    const laneOnlyMove = horizontal
+    const combinedMove = this.normalizeArenaPosition({ x: nextX, y: nextY });
+    const laneOnlyMove = this.normalizeArenaPosition(horizontal
       ? { x: player.position.x, y: nextY }
-      : { x: nextX, y: player.position.y };
-    const forwardOnlyMove = horizontal
+      : { x: nextX, y: player.position.y });
+    const forwardOnlyMove = this.normalizeArenaPosition(horizontal
       ? { x: nextX, y: player.position.y }
-      : { x: player.position.x, y: nextY };
+      : { x: player.position.x, y: nextY });
 
     return {
       direction,
@@ -2303,10 +2317,10 @@ export class GameApp {
     }
 
     if (option.combinedFree && this.positionChanged(start, option.combinedMove)) {
-      player.position = option.combinedMove;
+      player.position = this.normalizeArenaPosition(option.combinedMove);
       player.velocity = {
-        x: (player.position.x - start.x) / (deltaMs / 1000),
-        y: (player.position.y - start.y) / (deltaMs / 1000),
+        x: this.getWrappedDelta(player.position.x, start.x, ARENA_PIXEL_WIDTH) / (deltaMs / 1000),
+        y: this.getWrappedDelta(player.position.y, start.y, ARENA_PIXEL_HEIGHT) / (deltaMs / 1000),
       };
       if (
         Math.abs(player.position.x - start.x) > 0.01 ||
@@ -2319,18 +2333,18 @@ export class GameApp {
 
     let moved = false;
     if (option.laneOnlyFree && this.positionChanged(start, option.laneOnlyMove)) {
-      player.position = option.laneOnlyMove;
+      player.position = this.normalizeArenaPosition(option.laneOnlyMove);
       moved = true;
     }
     if (option.forwardOnlyFree && !moved && this.positionChanged(start, option.forwardOnlyMove)) {
-      player.position = option.forwardOnlyMove;
+      player.position = this.normalizeArenaPosition(option.forwardOnlyMove);
       moved = true;
     }
 
     player.velocity = moved
       ? {
-          x: (player.position.x - start.x) / (deltaMs / 1000),
-          y: (player.position.y - start.y) / (deltaMs / 1000),
+          x: this.getWrappedDelta(player.position.x, start.x, ARENA_PIXEL_WIDTH) / (deltaMs / 1000),
+          y: this.getWrappedDelta(player.position.y, start.y, ARENA_PIXEL_HEIGHT) / (deltaMs / 1000),
         }
       : { x: 0, y: 0 };
 
@@ -2344,6 +2358,7 @@ export class GameApp {
     if (!option.horizontal && Math.abs(player.position.x - option.laneTarget) <= LANE_SETTLE_EPSILON) {
       player.position.x = option.laneTarget;
     }
+    player.position = this.normalizeArenaPosition(player.position);
   }
 
   private arePerpendicular(a: Direction, b: Direction): boolean {
@@ -2367,12 +2382,13 @@ export class GameApp {
     }
     const fromTile = this.getTileFromPosition(player.position);
     const delta = directionDelta[direction];
-    const bombTile = { x: fromTile.x + delta.x, y: fromTile.y + delta.y };
+    const bombTile = this.normalizeTile({ x: fromTile.x + delta.x, y: fromTile.y + delta.y });
     return this.tryPushBombAtTile(bombTile, direction, 1);
   }
 
   private findBombAtTile(tile: TileCoord): BombState | null {
-    const key = tileKey(tile.x, tile.y);
+    const normalized = this.normalizeTile(tile);
+    const key = tileKey(normalized.x, normalized.y);
     return this.bombs.find((bomb) => tileKey(bomb.tile.x, bomb.tile.y) === key) ?? null;
   }
 
@@ -2384,10 +2400,7 @@ export class GameApp {
     const delta = directionDelta[direction];
     let targetTile = { ...bomb.tile };
     for (let step = 0; step < distance; step += 1) {
-      const nextTile = { x: targetTile.x + delta.x, y: targetTile.y + delta.y };
-      if (nextTile.x < 0 || nextTile.y < 0 || nextTile.x >= GRID_WIDTH || nextTile.y >= GRID_HEIGHT) {
-        return false;
-      }
+      const nextTile = this.normalizeTile({ x: targetTile.x + delta.x, y: targetTile.y + delta.y });
       const targetKey = tileKey(nextTile.x, nextTile.y);
       if (this.arena.solid.has(targetKey) || this.arena.breakable.has(targetKey)) {
         return false;
@@ -2400,19 +2413,20 @@ export class GameApp {
       }
       targetTile = nextTile;
     }
-    bomb.tile = targetTile;
+    bomb.tile = this.normalizeTile(targetTile);
     bomb.ownerCanPass = false;
     return true;
   }
 
   private hasPlayerOnTile(tile: TileCoord): boolean {
+    const normalizedTile = this.normalizeTile(tile);
     for (const id of this.activePlayerIds) {
       const player = this.players[id];
       if (!player.alive) {
         continue;
       }
       const playerTile = this.getTileFromPosition(player.position);
-      if (playerTile.x === tile.x && playerTile.y === tile.y) {
+      if (playerTile.x === normalizedTile.x && playerTile.y === normalizedTile.y) {
         return true;
       }
     }
@@ -2420,10 +2434,11 @@ export class GameApp {
   }
 
   private canOccupyPosition(player: PlayerState, position: PixelCoord): boolean {
-    const left = position.x - PLAYER_HITBOX_HALF;
-    const right = position.x + PLAYER_HITBOX_HALF;
-    const top = position.y - PLAYER_HITBOX_HALF;
-    const bottom = position.y + PLAYER_HITBOX_HALF;
+    const wrapped = this.normalizeArenaPosition(position);
+    const left = wrapped.x - PLAYER_HITBOX_HALF;
+    const right = wrapped.x + PLAYER_HITBOX_HALF;
+    const top = wrapped.y - PLAYER_HITBOX_HALF;
+    const bottom = wrapped.y + PLAYER_HITBOX_HALF;
 
     const minTileX = Math.floor(left / TILE_SIZE);
     const maxTileX = Math.floor((right - 0.001) / TILE_SIZE);
@@ -2442,17 +2457,14 @@ export class GameApp {
   }
 
   private isTileBlockedForPlayer(player: PlayerState, tileX: number, tileY: number): boolean {
-    if (tileX < 0 || tileY < 0 || tileX >= GRID_WIDTH || tileY >= GRID_HEIGHT) {
-      return true;
-    }
-
-    const key = tileKey(tileX, tileY);
+    const normalized = this.normalizeTile({ x: tileX, y: tileY });
+    const key = tileKey(normalized.x, normalized.y);
     if (this.arena.solid.has(key) || this.arena.breakable.has(key)) {
       return true;
     }
 
     for (const bomb of this.bombs) {
-      if (bomb.tile.x !== tileX || bomb.tile.y !== tileY) {
+      if (bomb.tile.x !== normalized.x || bomb.tile.y !== normalized.y) {
         continue;
       }
       if (player.bombPassLevel > 0) {
@@ -2468,16 +2480,18 @@ export class GameApp {
   }
 
   private getTileCenter(tile: TileCoord): PixelCoord {
+    const normalized = this.normalizeTile(tile);
     return {
-      x: tile.x * TILE_SIZE + TILE_SIZE * 0.5,
-      y: tile.y * TILE_SIZE + TILE_SIZE * 0.5,
+      x: normalized.x * TILE_SIZE + TILE_SIZE * 0.5,
+      y: normalized.y * TILE_SIZE + TILE_SIZE * 0.5,
     };
   }
 
   private getTileFromPosition(position: PixelCoord): TileCoord {
+    const wrapped = this.normalizeArenaPosition(position);
     return {
-      x: Math.max(0, Math.min(GRID_WIDTH - 1, Math.floor(position.x / TILE_SIZE))),
-      y: Math.max(0, Math.min(GRID_HEIGHT - 1, Math.floor(position.y / TILE_SIZE))),
+      x: this.normalizeTileAxis(Math.floor(wrapped.x / TILE_SIZE), GRID_WIDTH),
+      y: this.normalizeTileAxis(Math.floor(wrapped.y / TILE_SIZE), GRID_HEIGHT),
     };
   }
 
@@ -2583,6 +2597,9 @@ export class GameApp {
       for (let step = 1; step <= range; step += 1) {
         const x = bomb.tile.x + direction.x * step;
         const y = bomb.tile.y + direction.y * step;
+        if (x < 0 || y < 0 || x >= GRID_WIDTH || y >= GRID_HEIGHT) {
+          break;
+        }
         const key = tileKey(x, y);
         if (this.arena.solid.has(key)) {
           break;
@@ -2749,21 +2766,7 @@ export class GameApp {
         }
         if (powerUp.tile.x === tile.x && powerUp.tile.y === tile.y) {
           powerUp.collected = true;
-          if (powerUp.type === "bomb-up") {
-            player.maxBombs = Math.min(MAX_BOMBS, player.maxBombs + 1);
-          } else if (powerUp.type === "flame-up") {
-            player.flameRange = Math.min(MAX_RANGE, player.flameRange + 1);
-          } else if (powerUp.type === "remote-up") {
-            player.remoteLevel = 1;
-          } else if (powerUp.type === "bomb-pass-up") {
-            player.bombPassLevel = Math.min(MAX_BOMB_PASS_LEVEL, player.bombPassLevel + 1);
-          } else if (powerUp.type === "kick-up") {
-            player.kickLevel = Math.min(MAX_KICK_LEVEL, player.kickLevel + 1);
-          } else if (powerUp.type === "shield-up") {
-            player.shieldCharges = Math.min(MAX_SHIELD_CHARGES, player.shieldCharges + 1);
-          } else {
-            player.speedLevel = Math.min(MAX_SPEED_LEVEL, player.speedLevel + 1);
-          }
+          applyPowerUpToPlayer(player, powerUp.type);
         }
       }
     }
@@ -3036,26 +3039,47 @@ export class GameApp {
     this.ctx.fillStyle = "rgba(158, 214, 255, 0.18)";
     this.ctx.fillRect(0, HUD_HEIGHT - 2, CANVAS_WIDTH, 2);
 
+    const playerCount = Math.max(1, this.activePlayerIds.length);
+    const twoPlayerLayout = playerCount === 2;
+    const hudPanelY = 20;
+
+    if (twoPlayerLayout) {
+      const panelWidth = 168;
+      const leftPlayerId = this.activePlayerIds[0];
+      const rightPlayerId = this.activePlayerIds[1];
+      if (leftPlayerId !== undefined) {
+        this.renderPlayerHud(leftPlayerId, 8, hudPanelY, panelWidth);
+      }
+      if (rightPlayerId !== undefined) {
+        this.renderPlayerHud(rightPlayerId, CANVAS_WIDTH - panelWidth - 8, hudPanelY, panelWidth);
+      }
+    } else {
+      const slotWidth = (CANVAS_WIDTH - 10) / playerCount;
+      this.activePlayerIds.forEach((playerId, index) => {
+        this.renderPlayerHud(playerId, 5 + index * slotWidth, hudPanelY, slotWidth - 5);
+      });
+    }
+
     this.ctx.textAlign = "left";
     this.ctx.font = "bold 8px monospace";
-    this.drawHudText(`R${this.roundNumber}`, 12, 15, "#d8eaf8", "rgba(4, 10, 19, 0.9)");
-    this.drawHudText(`GOAL ${TARGET_WINS}`, 12, 29, "#d8eaf8", "rgba(4, 10, 19, 0.9)");
+    this.drawHudText(`R${this.roundNumber}`, 12, 14, "#d8eaf8", "rgba(4, 10, 19, 0.9)");
+    this.drawHudText(`GOAL ${TARGET_WINS}`, 12, 27, "#d8eaf8", "rgba(4, 10, 19, 0.9)");
     this.drawHudText(
       this.showDangerOverlay ? "DANGER ON" : "DANGER OFF",
       12,
-      43,
+      HUD_HEIGHT - 9,
       this.showDangerOverlay ? "rgba(255, 213, 163, 0.96)" : "rgba(176, 197, 218, 0.82)",
       "rgba(4, 10, 19, 0.9)",
     );
 
     this.ctx.textAlign = "center";
     this.ctx.font = "bold 8px monospace";
-    this.drawHudText("TIME", CANVAS_WIDTH / 2, 15, "#b8cde2", "rgba(4, 10, 19, 0.9)");
+    this.drawHudText("TIME", CANVAS_WIDTH / 2, 14, "#b8cde2", "rgba(4, 10, 19, 0.9)");
     this.ctx.font = "bold 16px monospace";
     this.drawHudText(
       Math.ceil(this.roundTimeMs / 1000).toString().padStart(2, "0"),
       CANVAS_WIDTH / 2,
-      31,
+      30,
       "#f7fbff",
       "rgba(4, 10, 19, 0.9)",
     );
@@ -3063,27 +3087,22 @@ export class GameApp {
     this.drawHudText(
       this.showBombPreview ? "BLAST ON" : "BLAST OFF",
       CANVAS_WIDTH / 2,
-      44,
+      HUD_HEIGHT - 9,
       this.showBombPreview ? "rgba(183, 247, 232, 0.96)" : "rgba(176, 197, 218, 0.82)",
       "rgba(4, 10, 19, 0.9)",
     );
-
-    const slotWidth = (CANVAS_WIDTH - 8) / Math.max(1, this.activePlayerIds.length);
-    this.activePlayerIds.forEach((playerId, index) => {
-      this.renderPlayerHud(playerId, 6 + index * slotWidth, 17, slotWidth - 6);
-    });
 
     if (!this.roundOutcome) {
       this.ctx.textAlign = "center";
       this.ctx.font = "bold 8px monospace";
       if (this.suddenDeathActive) {
-        this.drawHudText("SUDDEN DEATH", 240, 48, "#ffb58f", "rgba(4, 10, 19, 0.9)");
+        this.drawHudText("SUDDEN DEATH", 240, HUD_HEIGHT - 22, "#ffb58f", "rgba(4, 10, 19, 0.9)");
       } else {
         const untilSuddenDeath = Math.max(0, this.roundTimeMs - SUDDEN_DEATH_START_MS);
         this.drawHudText(
           `SD ${Math.ceil(untilSuddenDeath / 1000)}s`,
           240,
-          48,
+          HUD_HEIGHT - 22,
           "rgba(203, 222, 238, 0.82)",
           "rgba(4, 10, 19, 0.9)",
         );
@@ -3097,22 +3116,107 @@ export class GameApp {
     const title = `${this.getPlayerSlotLabel(playerId)} ${this.score[playerId]}`;
     const statLine = `B${player.maxBombs} F${player.flameRange} S${player.speedLevel}`;
     const status = player.alive ? (player.flameGuardMs > 0 ? "GUARD" : "LIVE") : "DOWN";
+    const skillSlots = this.getHudSkillSlots(playerId);
 
-    this.drawHudPanel(x, y, width, 30, palette.glow);
+    this.drawHudPanel(x, y, width, 36, palette.glow);
     this.ctx.textAlign = "left";
-    this.ctx.font = "bold 9px monospace";
-    this.drawHudText(title, x + 6, y + 11, palette.primary, "rgba(4, 10, 19, 0.9)");
-    this.ctx.font = "7px monospace";
+    this.ctx.font = "bold 8px monospace";
+    this.drawHudText(title, x + 6, y + 10, palette.primary, "rgba(4, 10, 19, 0.9)");
+    this.ctx.font = "6px monospace";
     this.drawHudText(
       this.shortenCharacterName(this.getCharacterLabel(playerId, 12), 12),
       x + 6,
-      y + 21,
+      y + 18,
       "#dbefff",
       "rgba(4, 10, 19, 0.9)",
     );
     this.ctx.textAlign = "right";
-    this.drawHudText(status, x + width - 6, y + 11, player.alive ? "#e5fff7" : "rgba(210, 220, 231, 0.55)", "rgba(4, 10, 19, 0.85)");
-    this.drawHudText(statLine, x + width - 6, y + 21, "#dbefff", "rgba(4, 10, 19, 0.85)");
+    this.drawHudText(status, x + width - 6, y + 10, player.alive ? "#e5fff7" : "rgba(210, 220, 231, 0.55)", "rgba(4, 10, 19, 0.85)");
+    this.drawHudText(statLine, x + width - 6, y + 18, "#dbefff", "rgba(4, 10, 19, 0.85)");
+
+    const insetX = x + 4;
+    const insetY = y + 22;
+    const insetWidth = Math.max(12, width - 8);
+    const gap = 2;
+    const slotCount = skillSlots.length;
+    const slotWidth = Math.max(10, Math.floor((insetWidth - gap * (slotCount - 1)) / slotCount));
+    for (let index = 0; index < slotCount; index += 1) {
+      const slot = skillSlots[index];
+      const slotX = insetX + index * (slotWidth + gap);
+      this.drawHudSkillSlot(slotX, insetY, slotWidth, 10, slot);
+    }
+  }
+
+  private getHudSkillSlots(playerId: PlayerId): HudSkillSlot[] {
+    const player = this.players[playerId];
+    const detonateKeyLabel = this.getDetonateHudKeyLabel(playerId);
+
+    return SKILL_POWER_UP_TYPES.map((type) => {
+      const level = getPowerUpLevel(player, type);
+      let valueLabel = "--";
+      if (type === "shield-up") {
+        valueLabel = `x${level}`;
+      } else if (type === "remote-up") {
+        if (level > 0) {
+          valueLabel = "ON";
+        } else {
+          valueLabel = "--";
+        }
+      } else {
+        valueLabel = level > 0 ? "ON" : "--";
+      }
+
+      return {
+        type,
+        level,
+        acquired: level > 0,
+        keyLabel: type === "remote-up" && level > 0 ? detonateKeyLabel : null,
+        valueLabel,
+      } satisfies HudSkillSlot;
+    });
+  }
+
+  private getDetonateHudKeyLabel(playerId: PlayerId): string | null {
+    if (this.onlineSession) {
+      if (playerId !== this.onlineLocalPlayerId) {
+        return null;
+      }
+      return formatControlKey(KEY_BINDINGS[1].detonate);
+    }
+    if (MENU_PLAYER_IDS.includes(playerId as MenuPlayerId)) {
+      return formatControlKey(KEY_BINDINGS[playerId as MenuPlayerId].detonate);
+    }
+    return null;
+  }
+
+  private drawHudSkillSlot(x: number, y: number, width: number, height: number, slot: HudSkillSlot): void {
+    const definition = getPowerUpDefinition(slot.type);
+    const tint = slot.acquired ? definition.tint : "rgba(173, 196, 217, 0.35)";
+    this.ctx.fillStyle = slot.acquired ? "rgba(7, 18, 31, 0.88)" : "rgba(7, 15, 26, 0.62)";
+    this.ctx.fillRect(x, y, width, height);
+    this.ctx.strokeStyle = slot.acquired ? tint : "rgba(156, 190, 220, 0.2)";
+    this.ctx.strokeRect(x + 0.5, y + 0.5, Math.max(1, width - 1), Math.max(1, height - 1));
+
+    const icon = this.assets.powerUps[slot.type];
+    if (icon) {
+      this.ctx.globalAlpha = slot.acquired ? 1 : 0.4;
+      this.ctx.drawImage(icon, x + 1, y + 1, 8, 8);
+      this.ctx.globalAlpha = 1;
+    } else {
+      this.ctx.textAlign = "center";
+      this.ctx.font = "bold 6px monospace";
+      this.drawHudText(definition.shortLabel, x + 5, y + 7, tint, "rgba(4, 10, 19, 0.9)");
+    }
+
+    this.ctx.textAlign = "left";
+    this.ctx.font = "bold 6px monospace";
+    const valueColor = slot.acquired ? "#e9f7ff" : "rgba(169, 192, 214, 0.62)";
+    this.drawHudText(slot.valueLabel, x + 11, y + 7, valueColor, "rgba(4, 10, 19, 0.9)");
+    if (slot.keyLabel && width >= 24) {
+      this.ctx.textAlign = "right";
+      this.ctx.font = "6px monospace";
+      this.drawHudText(slot.keyLabel, x + width - 2, y + 7, tint, "rgba(4, 10, 19, 0.9)");
+    }
   }
 
   private renderArena(): void {
@@ -3127,6 +3231,7 @@ export class GameApp {
         const screenX = ARENA_OFFSET_X + x * TILE_SIZE;
         const screenY = ARENA_OFFSET_Y + y * TILE_SIZE;
         const key = tileKey(x, y);
+        const isWrapPortal = isWrapPortalTile(x, y);
         const isCenterLane = x === centerX || y === centerY;
         const isSideLane = x === sideColumn || x === farSideColumn || y === sideRow || y === farSideRow;
         const isSpawnBay = (x <= 2 && y <= 2)
@@ -3143,9 +3248,12 @@ export class GameApp {
         if (isSpawnBay) {
           baseTone = (x + y) % 2 === 0 ? "#163656" : "#13304f";
         }
+        if (isWrapPortal) {
+          baseTone = (x + y) % 2 === 0 ? "#1f3a52" : "#183149";
+        }
         const floorSprite = isSpawnBay
           ? this.assets.floor.spawn
-          : isCenterLane || isSideLane
+          : isWrapPortal || isCenterLane || isSideLane
             ? this.assets.floor.lane
             : this.assets.floor.base;
         if (floorSprite) {
@@ -3168,6 +3276,11 @@ export class GameApp {
           this.drawWall(screenX, screenY);
         } else if (this.arena.breakable.has(key)) {
           this.drawCrate(screenX, screenY);
+        } else if (isWrapPortal) {
+          this.ctx.strokeStyle = "rgba(158, 230, 255, 0.48)";
+          this.ctx.strokeRect(screenX + 6.5, screenY + 6.5, TILE_SIZE - 13, TILE_SIZE - 13);
+          this.ctx.fillStyle = "rgba(126, 206, 255, 0.1)";
+          this.ctx.fillRect(screenX + 11, screenY + 11, TILE_SIZE - 22, TILE_SIZE - 22);
         }
       }
     }
@@ -3380,37 +3493,16 @@ export class GameApp {
       this.ctx.drawImage(sprite, x, y, TILE_SIZE, TILE_SIZE);
       return;
     }
-    const colors = {
-      "bomb-up": "#f4d35e",
-      "flame-up": "#ff7d66",
-      "speed-up": "#7cffb2",
-      "remote-up": "#8cd6ff",
-      "shield-up": "#a98bff",
-      "bomb-pass-up": "#75f0ff",
-      "kick-up": "#ffb46b",
-    } as const;
+    const definition = getPowerUpDefinition(powerUp.type);
 
     this.ctx.fillStyle = "rgba(6, 14, 28, 0.75)";
     this.ctx.fillRect(x + 8, y + 8, 16, 16);
-    this.ctx.fillStyle = colors[powerUp.type];
+    this.ctx.fillStyle = definition.tint;
     this.ctx.fillRect(x + 10, y + 10, 12, 12);
     this.ctx.fillStyle = "#041120";
     this.ctx.font = "bold 10px monospace";
     this.ctx.textAlign = "center";
-    const label = powerUp.type === "bomb-up"
-      ? "B"
-      : powerUp.type === "flame-up"
-        ? "F"
-        : powerUp.type === "remote-up"
-          ? "R"
-          : powerUp.type === "shield-up"
-            ? "H"
-            : powerUp.type === "bomb-pass-up"
-              ? "P"
-              : powerUp.type === "kick-up"
-                ? "K"
-            : "S";
-    this.ctx.fillText(label, x + 16, y + 19);
+    this.ctx.fillText(definition.shortLabel, x + 16, y + 19);
   }
 
   private drawBomb(bomb: BombState): void {
@@ -3468,13 +3560,19 @@ export class GameApp {
     const x = position.x;
     const y = position.y;
     const alpha = player.alive ? 1 : 0.35;
+    const activeCharacter = this.getActiveCharacterEntry(player.id);
     const baseSprites = this.getPlayerSprites(player.id);
     const idleFrames = baseSprites.idle?.[player.direction] ?? [];
     const walkFrames = baseSprites.walk?.[player.direction] ?? [];
+    const runFrames = baseSprites.run?.[player.direction] ?? [];
+    const prefersRunMovement = activeCharacter.animations?.walk === false && activeCharacter.animations?.run !== false;
+    const movementFrames = prefersRunMovement
+      ? (runFrames.length > 0 ? runFrames : walkFrames)
+      : (walkFrames.length > 0 ? walkFrames : runFrames);
     const moving = Math.abs(player.velocity.x) > 0.02 || Math.abs(player.velocity.y) > 0.02;
     const frameIndex = Math.floor(this.animationClockMs / WALK_FRAME_MS);
-    let sprite = moving && walkFrames.length > 0
-      ? walkFrames[frameIndex % walkFrames.length]
+    let sprite = moving && movementFrames.length > 0
+      ? movementFrames[frameIndex % movementFrames.length]
       : !moving && idleFrames.length > 0
         ? idleFrames[frameIndex % idleFrames.length]
         : spriteForDirection(baseSprites, player.direction);
@@ -3743,6 +3841,13 @@ export class GameApp {
           shieldCharges: player.shieldCharges,
           bombPassLevel: player.bombPassLevel,
           kickLevel: player.kickLevel,
+          skillSlots: this.getHudSkillSlots(id).map((slot) => ({
+            type: slot.type,
+            acquired: slot.acquired,
+            level: slot.level,
+            value: slot.valueLabel,
+            key: slot.keyLabel,
+          })),
           flameGuardMs: Math.round(player.flameGuardMs),
           spawnProtectionMs: Math.round(player.spawnProtectionMs),
         };

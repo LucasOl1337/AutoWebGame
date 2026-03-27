@@ -134,9 +134,12 @@ export class GlobalLobby extends DurableObject {
       type: "hello",
       clientId,
       lobbies: this.buildLobbyList(),
+      onlineUsers: this.sockets.size,
       quickMatchQueued: this.countOpenQuickMatchRooms(),
       searchingQuickMatch: this.quickMatchPendingClients.has(clientId),
     });
+    this.broadcastLobbyList();
+    this.broadcastQuickMatchState();
 
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -401,7 +404,15 @@ export class GlobalLobby extends DurableObject {
   async handleQuickMatch(clientId, rawCharacterIndex) {
     this.quickMatchPendingClients.add(clientId);
     try {
+      this.reconcileRoomsWithActiveSockets();
       const activeRoom = this.findRoomForClient(clientId);
+      if (activeRoom && activeRoom.status === "open") {
+        const reusedCurrentLobby = await this.readyClientForQuickMatch(activeRoom, clientId, rawCharacterIndex);
+        if (reusedCurrentLobby) {
+          return;
+        }
+      }
+
       const previousRoomCode = activeRoom?.roomCode ?? null;
       if (activeRoom) {
         await this.releaseClientFromRoom(activeRoom, clientId);
@@ -420,6 +431,49 @@ export class GlobalLobby extends DurableObject {
       this.quickMatchPendingClients.delete(clientId);
       this.broadcastQuickMatchState();
     }
+  }
+
+  /**
+   * @param {LobbyRoom} room
+   * @param {string} clientId
+   * @param {unknown} rawCharacterIndex
+   * @returns {Promise<boolean>}
+   */
+  async readyClientForQuickMatch(room, clientId, rawCharacterIndex) {
+    let seatId = this.findSeatForClient(room, clientId);
+    let claimedNewSeat = false;
+    if (!seatId) {
+      for (const candidateSeatId of PLAYER_IDS) {
+        if (!room.seats[candidateSeatId].clientId) {
+          seatId = candidateSeatId;
+          break;
+        }
+      }
+      if (!seatId) {
+        return false;
+      }
+      this.assignSeat(room, seatId, clientId, rawCharacterIndex);
+      claimedNewSeat = true;
+    } else {
+      room.seats[seatId].characterIndex = normalizeCharacterIndex(
+        rawCharacterIndex,
+        room.seats[seatId].characterIndex ?? ((seatId - 1) % 2),
+      );
+    }
+
+    room.clients.add(clientId);
+    room.seats[seatId].ready = true;
+    this.refreshSeatLabels(room);
+    if (claimedNewSeat) {
+      this.appendRoomSystemMessage(room, `Quick match claimed slot P${seatId}.`);
+    }
+
+    await this.persistState();
+    this.sendJoinedLobby(clientId, room);
+    this.broadcastLobbyToMembers(room);
+    this.broadcastLobbyList();
+    void this.maybeStartMatch(room);
+    return true;
   }
 
   /**
@@ -566,9 +620,9 @@ export class GlobalLobby extends DurableObject {
     const room = this.findRoomForClient(clientId);
     if (room) {
       await this.releaseClientFromRoom(room, clientId);
-      this.broadcastLobbyList();
     }
     this.reconcileRoomsWithActiveSockets();
+    this.broadcastLobbyList();
     this.broadcastQuickMatchState();
   }
 
@@ -639,8 +693,9 @@ export class GlobalLobby extends DurableObject {
   broadcastLobbyList() {
     this.reconcileRoomsWithActiveSockets();
     const lobbies = this.buildLobbyList();
+    const onlineUsers = this.sockets.size;
     for (const websocket of this.sockets.values()) {
-      this.send(websocket, { type: "lobby-list", lobbies });
+      this.send(websocket, { type: "lobby-list", lobbies, onlineUsers });
     }
   }
 
@@ -1016,12 +1071,14 @@ export class GlobalLobby extends DurableObject {
 
   broadcastQuickMatchState() {
     const queued = this.countOpenQuickMatchRooms();
+    const onlineUsers = this.sockets.size;
     for (const [clientId, websocket] of this.sockets.entries()) {
       this.send(websocket, {
         type: "quick-match-state",
         queued,
         searching: this.quickMatchPendingClients.has(clientId),
         countdownMs: null,
+        onlineUsers,
       });
     }
   }

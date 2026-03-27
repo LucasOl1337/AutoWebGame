@@ -28,6 +28,9 @@ interface OnlineGameAppBridge {
 interface SessionElements {
   shell: HTMLDivElement;
   browserList: HTMLDivElement;
+  onlineUsersValue: HTMLSpanElement;
+  openRoomsValue: HTMLSpanElement;
+  liveRoomsValue: HTMLSpanElement;
   createTitle: HTMLInputElement;
   createButton: HTMLButtonElement;
   quickMatchButton: HTMLButtonElement;
@@ -71,6 +74,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private reconnectAttempts = 0;
   private quickMatchSearching = false;
   private quickMatchQueuedCount = 0;
+  private onlineUsers = 0;
   private preferredCharacterIndex = 0;
 
   constructor(root: HTMLElement, app: OnlineGameAppBridge, roster: CharacterRosterEntry[]) {
@@ -84,6 +88,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.mountCanvas(root);
     this.bindEvents();
     this.renderCharacterSelector();
+    this.renderLiveStats();
     this.renderQuickMatchState();
     this.renderLobbyList();
     this.renderStage();
@@ -250,10 +255,12 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       case "hello":
         this.clientId = message.clientId;
         this.lobbies = message.lobbies;
+        this.onlineUsers = message.onlineUsers;
         this.quickMatchQueuedCount = message.quickMatchQueued;
         this.quickMatchSearching = false;
         this.syncPreferredCharacterFromLobby();
         this.renderCharacterSelector();
+        this.renderLiveStats();
         this.renderLobbyList();
         this.renderQuickMatchState();
         this.renderStage();
@@ -265,6 +272,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         break;
       case "lobby-list":
         this.lobbies = message.lobbies;
+        this.onlineUsers = message.onlineUsers;
+        this.renderLiveStats();
         this.renderLobbyList();
         break;
       case "lobby-joined":
@@ -338,6 +347,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         break;
       case "quick-match-state":
         this.quickMatchQueuedCount = message.queued;
+        this.onlineUsers = message.onlineUsers;
+        this.renderLiveStats();
         this.renderQuickMatchState();
         break;
       case "peer-left":
@@ -372,6 +383,33 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       <h1>BOMBA</h1>
       <span>Public rooms. Claim a slot. Drop in fast.</span>
     `;
+    const statsList = document.createElement("ul");
+    statsList.className = "lobby-brand__stats";
+
+    const onlineUsersValue = document.createElement("span");
+    onlineUsersValue.className = "lobby-brand__stat-value";
+    const openRoomsValue = document.createElement("span");
+    openRoomsValue.className = "lobby-brand__stat-value";
+    const liveRoomsValue = document.createElement("span");
+    liveRoomsValue.className = "lobby-brand__stat-value";
+
+    const onlineItem = document.createElement("li");
+    onlineItem.className = "lobby-brand__stat";
+    onlineItem.innerHTML = `<span class="lobby-brand__stat-label">Online now</span>`;
+    onlineItem.appendChild(onlineUsersValue);
+
+    const openItem = document.createElement("li");
+    openItem.className = "lobby-brand__stat";
+    openItem.innerHTML = `<span class="lobby-brand__stat-label">Open rooms</span>`;
+    openItem.appendChild(openRoomsValue);
+
+    const liveItem = document.createElement("li");
+    liveItem.className = "lobby-brand__stat";
+    liveItem.innerHTML = `<span class="lobby-brand__stat-label">Live rooms</span>`;
+    liveItem.appendChild(liveRoomsValue);
+
+    statsList.append(onlineItem, openItem, liveItem);
+    brand.appendChild(statsList);
 
     const createPanel = document.createElement("div");
     createPanel.className = "lobby-create";
@@ -563,6 +601,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     return {
       shell,
       browserList,
+      onlineUsersValue,
+      openRoomsValue,
+      liveRoomsValue,
       createTitle,
       createButton,
       quickMatchButton,
@@ -680,6 +721,14 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         : "No open public rooms right now. Quick match will create one.";
   }
 
+  private renderLiveStats(): void {
+    const openRooms = this.lobbies.filter((lobby) => lobby.status === "open").length;
+    const liveRooms = this.lobbies.filter((lobby) => lobby.status === "playing").length;
+    this.elements.onlineUsersValue.textContent = String(this.onlineUsers);
+    this.elements.openRoomsValue.textContent = String(openRooms);
+    this.elements.liveRoomsValue.textContent = String(liveRooms);
+  }
+
   private renderSeatPill(label: string, seat: LobbySummary["seats"][PlayerId]): HTMLElement {
     const pill = document.createElement("span");
     pill.className = "lobby-seat-pill";
@@ -696,7 +745,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.elements.stageTitle.textContent = "BOMBA";
       this.elements.stageDescription.textContent =
         "Create a room or use quick match to drop into the live fight.";
-      this.elements.stageMeta.textContent = "Public rooms · 2-4 pilots · WASD move · Q bomb · E ready";
+      this.elements.stageMeta.textContent = "Public rooms | 2-4 pilots | P1 WASD Q/R E | P2 Arrows O/U P";
       this.elements.inviteInput.value = "";
       this.elements.copyButton.disabled = true;
       this.elements.leaveButton.disabled = true;
@@ -717,7 +766,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       ? "The room is live. Chat and slot locks stay on the rail."
       : "Claim a side, lock your pilot, and enter match flow as soon as every occupied slot is ready.";
     this.elements.stageMeta.textContent =
-      `${lobby.roomCode} · ${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} pilots · ${lobby.status === "playing" ? "Live match" : "Ready room"} · WASD / Q / E / F`;
+      `${lobby.roomCode} | ${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} pilots | ${lobby.status === "playing" ? "Live match" : "Ready room"} | P1 WASD Q/R E | P2 Arrows O/U P`;
     this.elements.inviteInput.value = this.buildInviteUrl(lobby.roomCode);
     this.elements.copyButton.disabled = false;
     this.elements.leaveButton.disabled = false;
@@ -976,4 +1025,5 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     return normalized || null;
   }
 }
+
 

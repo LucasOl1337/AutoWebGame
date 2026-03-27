@@ -2,7 +2,7 @@ import type { MenuPlayerId, PlayerId } from "./types";
 
 export const CANVAS_WIDTH = 480;
 export const CANVAS_HEIGHT = 480;
-export const HUD_HEIGHT = 52;
+export const HUD_HEIGHT = 74;
 export const TILE_SIZE = 40;
 export const GRID_WIDTH = 11;
 export const GRID_HEIGHT = 9;

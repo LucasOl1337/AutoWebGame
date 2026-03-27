@@ -12,6 +12,15 @@ export function mirrorTile(tile: TileCoord): TileCoord {
   };
 }
 
+export function isWrapPortalTile(x: number, y: number): boolean {
+  const middleX = Math.floor(GRID_WIDTH / 2);
+  const middleY = Math.floor(GRID_HEIGHT / 2);
+  return (
+    (y === middleY && (x === 0 || x === GRID_WIDTH - 1))
+    || (x === middleX && (y === 0 || y === GRID_HEIGHT - 1))
+  );
+}
+
 export function createArena(): ArenaState {
   const solid = new Set<string>();
   const breakable = new Set<string>();
@@ -22,7 +31,7 @@ export function createArena(): ArenaState {
     for (let x = 0; x < GRID_WIDTH; x += 1) {
       const isBorder = x === 0 || y === 0 || x === GRID_WIDTH - 1 || y === GRID_HEIGHT - 1;
       const isPillar = x % 2 === 1 && y % 2 === 1;
-      if (isBorder || isPillar) {
+      if (isPillar || (isBorder && !isWrapPortalTile(x, y))) {
         solid.add(tileKey(x, y));
       }
     }
@@ -130,7 +139,7 @@ function createOpenTiles(): Set<string> {
   addSpawnZone(1, GRID_HEIGHT - 2, 1, -1);
   addSpawnZone(GRID_WIDTH - 2, GRID_HEIGHT - 2, -1, -1);
 
-  // Main combat lanes: quick spawn exits plus a contested central cross.
+  // Main lanes: fast spawn exits plus a direct center contest route.
   addRow(sideRow);
   addRow(middleY);
   addRow(farSideRow);
@@ -138,9 +147,16 @@ function createOpenTiles(): Set<string> {
   addColumn(farSideColumn);
   addColumn(middleX);
 
-  // Extra center flanks keep pressure rotating instead of stalling into
-  // long farm corridors on the far edges.
+  // Portal approaches: players can rotate through map edges.
+  add(1, middleY);
+  add(GRID_WIDTH - 2, middleY);
+  add(middleX, 1);
+  add(middleX, GRID_HEIGHT - 2);
+
+  // Structured center pockets keep breakables mirrored and contestable.
   [
+    { x: middleX - 3, y: sideRow + 1 },
+    { x: middleX + 3, y: sideRow + 1 },
     { x: middleX - 2, y: sideRow + 1 },
     { x: middleX + 2, y: sideRow + 1 },
     { x: middleX - 2, y: sideRow + 2 },
@@ -161,14 +177,20 @@ function createOpenTiles(): Set<string> {
     { x: middleX + 2, y: farSideRow - 2 },
     { x: middleX - 2, y: farSideRow - 1 },
     { x: middleX + 2, y: farSideRow - 1 },
-    { x: middleX - 3, y: middleY },
-    { x: middleX + 3, y: middleY },
     { x: middleX - 3, y: middleY - 1 },
     { x: middleX + 3, y: middleY - 1 },
+    { x: middleX - 3, y: middleY },
+    { x: middleX + 3, y: middleY },
     { x: middleX - 3, y: middleY + 1 },
     { x: middleX + 3, y: middleY + 1 },
     { x: middleX, y: sideRow + 1 },
     { x: middleX, y: farSideRow - 1 },
+    { x: sideColumn + 1, y: middleY },
+    { x: farSideColumn - 1, y: middleY },
+    { x: sideColumn + 1, y: sideRow + 1 },
+    { x: farSideColumn - 1, y: sideRow + 1 },
+    { x: sideColumn + 1, y: farSideRow - 1 },
+    { x: farSideColumn - 1, y: farSideRow - 1 },
   ].forEach((tile) => add(tile.x, tile.y));
 
   return openTiles;

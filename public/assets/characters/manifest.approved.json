@@ -479,7 +479,7 @@
       },
       "animations": {
         "idle": true,
-        "walk": true,
+        "walk": false,
         "run": true,
         "cast": true,
         "attack": true
