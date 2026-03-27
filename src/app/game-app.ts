@@ -63,6 +63,7 @@ import type {
   OnlineInputState,
   OnlineSessionBridge,
 } from "../online/protocol";
+import { SoundManager, SFX_MANIFEST } from "./sound-manager";
 
 declare global {
   interface Window {
@@ -313,6 +314,7 @@ export class GameApp {
   private characterLocked: Record<PlayerId, boolean> = createBooleanPlayerRecord(true);
   private characterMenuOpen: Record<PlayerId, boolean> = createBooleanPlayerRecord(false);
   private readonly spriteTrimCache = new SpriteTrimCache();
+  private readonly soundManager = new SoundManager();
 
   constructor(root: HTMLElement, assets: GameAssets) {
     this.root = root;
@@ -390,6 +392,7 @@ export class GameApp {
       this.startMatch();
       return;
     }
+    this.soundManager.playOneShot("matchStart");
     this.mode = "match";
     this.botEnabled = false;
     this.matchWinner = null;
@@ -545,6 +548,7 @@ export class GameApp {
     if (this.headless) {
       return;
     }
+    void this.soundManager.loadSounds(SFX_MANIFEST);
     this.root.appendChild(this.canvas);
     this.syncCanvasDisplaySize();
     this.mode = "menu";
@@ -574,6 +578,7 @@ export class GameApp {
 
   private registerWindowHooks(): void {
     window.addEventListener("resize", this.syncCanvasDisplaySize);
+    this.soundManager.bindUnlock(window);
     window.render_game_to_text = () => this.renderGameToText();
     window.advanceTime = (ms: number) => {
       const steps = Math.max(1, Math.round(ms / FIXED_STEP_MS));
@@ -1180,6 +1185,7 @@ export class GameApp {
   private startMatch(): void {
     // Prevent queued key presses from previous screens leaking into active gameplay.
     this.input.clearPresses();
+    this.soundManager.playOneShot("matchStart");
     this.menuReady = createBooleanPlayerRecord(false);
     this.matchResultChoice = createPlayerRecord(() => null);
     this.score = { 1: 0, 2: 0, 3: 0, 4: 0 };
@@ -2545,6 +2551,7 @@ export class GameApp {
     });
     this.nextBombId += 1;
     player.activeBombs += 1;
+    this.soundManager.playOneShot("bombPlace");
     return true;
   }
 
@@ -2589,7 +2596,9 @@ export class GameApp {
 
     const [bomb] = this.bombs.splice(index, 1);
     this.players[bomb.ownerId].activeBombs = Math.max(0, this.players[bomb.ownerId].activeBombs - 1);
+    this.soundManager.playOneShot("bombExplode");
     const flameTiles = new Set<string>();
+    let brokeCrate = false;
     const range = bomb.flameRange;
     flameTiles.add(tileKey(bomb.tile.x, bomb.tile.y));
 
@@ -2616,6 +2625,7 @@ export class GameApp {
         if (this.arena.breakable.has(key)) {
           this.arena.breakable.delete(key);
           this.revealPowerUpAt(key);
+          brokeCrate = true;
           break;
         }
       }
@@ -2625,6 +2635,10 @@ export class GameApp {
       const [xText, yText] = key.split(",");
       this.addFlame({ x: Number(xText), y: Number(yText) });
     });
+    this.soundManager.playOneShot("flameIgnite");
+    if (brokeCrate) {
+      this.soundManager.playOneShot("crateBreak");
+    }
     this.resolvePlayerDeathsFromFlames();
   }
 
@@ -2648,6 +2662,7 @@ export class GameApp {
     if (!this.suddenDeathActive && this.roundTimeMs <= SUDDEN_DEATH_START_MS) {
       this.suddenDeathActive = true;
       this.suddenDeathTickMs = 0;
+      this.soundManager.playOneShot("suddenDeath");
     }
 
     if (!this.suddenDeathActive || this.suddenDeathPath.length === 0 || this.suddenDeathIndex >= this.suddenDeathPath.length) {
@@ -2675,6 +2690,7 @@ export class GameApp {
     if (this.arena.breakable.has(key)) {
       this.arena.breakable.delete(key);
       this.revealPowerUpAt(key);
+      this.soundManager.playOneShot("crateBreak", 0.92);
     }
     const bomb = this.bombs.find((item) => item.tile.x === tile.x && item.tile.y === tile.y);
     if (bomb) {
@@ -2743,10 +2759,12 @@ export class GameApp {
         if (player.shieldCharges > 0) {
           player.shieldCharges -= 1;
           player.flameGuardMs = SHIELD_GUARD_MS;
+          this.soundManager.playOneShot("shieldBlock");
           continue;
         }
         player.alive = false;
         player.velocity = { x: 0, y: 0 };
+        this.soundManager.playOneShot("playerDeath");
       }
     }
   }
@@ -2767,6 +2785,7 @@ export class GameApp {
         if (powerUp.tile.x === tile.x && powerUp.tile.y === tile.y) {
           powerUp.collected = true;
           applyPowerUpToPlayer(player, powerUp.type);
+          this.soundManager.playOneShot("powerupCollect");
         }
       }
     }
@@ -2787,6 +2806,10 @@ export class GameApp {
   private finishRound(winner: PlayerId | null, reason: RoundOutcome["reason"], message: string): void {
     if (this.roundOutcome) {
       return;
+    }
+    const clinchesMatch = winner ? this.score[winner] + 1 >= TARGET_WINS : false;
+    if (reason === "elimination" || winner) {
+      this.soundManager.playOneShot(clinchesMatch ? "matchWin" : "roundWin");
     }
     if (winner) {
       this.score[winner] += 1;
