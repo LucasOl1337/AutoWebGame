@@ -158,14 +158,17 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     });
 
     this.elements.quickMatchButton.addEventListener("click", () => {
-      if (!this.quickMatchSearching) {
-        void this.requestShellFullscreen("gesture");
+      if (this.quickMatchSearching) {
+        return;
       }
-      this.send(
-        this.quickMatchSearching
-          ? { type: "quick-match-cancel" }
-          : { type: "quick-match", characterIndex: this.preferredCharacterIndex },
-      );
+      void this.requestShellFullscreen("gesture");
+      this.quickMatchSearching = true;
+      this.renderQuickMatchState();
+      if (!this.send({ type: "quick-match", characterIndex: this.preferredCharacterIndex })) {
+        this.quickMatchSearching = false;
+        this.renderQuickMatchState();
+        this.setStatus("Quick match unavailable. Reconnecting...");
+      }
     });
 
     this.elements.selectorPrev.addEventListener("click", () => {
@@ -247,7 +250,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.clientId = message.clientId;
         this.lobbies = message.lobbies;
         this.quickMatchQueuedCount = message.quickMatchQueued;
-        this.quickMatchSearching = message.searchingQuickMatch;
+        this.quickMatchSearching = false;
         this.quickMatchCountdownMs = null;
         this.syncPreferredCharacterFromLobby();
         this.renderCharacterSelector();
@@ -268,8 +271,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.role = message.role;
         this.currentLobby = message.lobby;
         this.roomCode = message.lobby.roomCode;
+        this.quickMatchSearching = false;
         this.syncPreferredCharacterFromLobby();
         this.renderCharacterSelector();
+        this.renderQuickMatchState();
         this.app.attachOnlineSession(this);
         this.updateLocation(message.lobby.roomCode);
         this.renderStage();
@@ -288,19 +293,23 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.role = null;
         this.roomCode = null;
         this.currentLobby = null;
+        this.quickMatchSearching = false;
         this.exitShellFullscreen();
         this.renderCharacterSelector();
         this.updateLocation(null);
         this.app.detachOnlineSession();
         this.renderStage();
         this.renderLobbyList();
+        this.renderQuickMatchState();
         this.setStatus("Back in the global lobby.");
         break;
       case "match-started":
         this.role = message.config.role;
         this.roomCode = message.config.roomCode;
+        this.quickMatchSearching = false;
         this.syncPreferredCharacterFromMatchConfig(message.config);
         this.renderCharacterSelector();
+        this.renderQuickMatchState();
         this.app.startOnlineMatch(message.config);
         this.elements.shell.dataset.state = "match";
         this.renderStage();
@@ -324,17 +333,20 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         break;
       case "quick-match-state":
         this.quickMatchQueuedCount = message.queued;
-        this.quickMatchSearching = message.searching;
         this.quickMatchCountdownMs = message.countdownMs;
         this.renderQuickMatchState();
         break;
       case "peer-left":
         this.app.clearOnlinePeer();
         this.elements.shell.dataset.state = "lobby";
+        this.quickMatchSearching = false;
+        this.renderQuickMatchState();
         this.exitShellFullscreen();
         this.setStatus("A pilot left. The room is open again.");
         break;
       case "error":
+        this.quickMatchSearching = false;
+        this.renderQuickMatchState();
         this.setStatus(message.message);
         break;
       default:
@@ -628,10 +640,6 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.persistPreferredCharacterIndex();
     this.renderCharacterSelector();
 
-    if (this.quickMatchSearching) {
-      this.send({ type: "quick-match", characterIndex: this.preferredCharacterIndex });
-    }
-
     if (this.currentLobby?.selfSeat && this.currentLobby.status === "open") {
       this.send({ type: "set-character", characterIndex: this.preferredCharacterIndex });
     }
@@ -657,15 +665,14 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   }
 
   private renderQuickMatchState(): void {
-    this.elements.quickMatchButton.textContent = this.quickMatchSearching ? "Cancel search" : "Find quick match";
+    this.elements.quickMatchButton.textContent = this.quickMatchSearching ? "Finding room..." : "Find quick match";
     this.elements.quickMatchButton.dataset.searching = this.quickMatchSearching ? "true" : "false";
+    this.elements.quickMatchButton.disabled = this.quickMatchSearching;
     this.elements.quickMatchMeta.textContent = this.quickMatchSearching
-      ? this.quickMatchQueuedCount >= 2 && this.quickMatchCountdownMs !== null
-        ? `${this.quickMatchQueuedCount} pilots locked. Match starts in ${Math.max(1, Math.ceil(this.quickMatchCountdownMs / 1000))}s unless more join.`
-        : "Searching for pilots..."
+      ? "Looking for an open public room and claiming the first free slot."
       : this.quickMatchQueuedCount > 0
-        ? `${this.quickMatchQueuedCount} pilot${this.quickMatchQueuedCount === 1 ? "" : "s"} in quick-match queue`
-        : "Jump into a live match as soon as two players queue. Up to four can enter the same match.";
+        ? `${this.quickMatchQueuedCount} public room${this.quickMatchQueuedCount === 1 ? "" : "s"} have open slots.`
+        : "No open public rooms right now. Quick match will create one.";
   }
 
   private renderSeatPill(label: string, seat: LobbySummary["seats"][PlayerId]): HTMLElement {

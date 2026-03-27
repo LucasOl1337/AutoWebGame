@@ -8,6 +8,9 @@ export interface DirectionalSprites {
   right: HTMLImageElement | null;
   idle: Record<Direction, HTMLImageElement[]>;
   walk: Record<Direction, HTMLImageElement[]>;
+  run: Record<Direction, HTMLImageElement[]>;
+  cast: Record<Direction, HTMLImageElement[]>;
+  attack: Record<Direction, HTMLImageElement[]>;
 }
 
 export interface CharacterRosterEntry {
@@ -109,12 +112,15 @@ async function loadDirectionalSprites(prefix: string, baseVariants: string[] = [
     right,
     idle: { up: [], down: [], left: [], right: [] },
     walk,
+    run: { up: [], down: [], left: [], right: [] },
+    cast: { up: [], down: [], left: [], right: [] },
+    attack: { up: [], down: [], left: [], right: [] },
   };
 }
 
 async function loadStaticDirectionalSprites(
   basePath: string,
-  animations?: { idle?: boolean; walk?: boolean; run?: boolean },
+  animations?: { idle?: boolean; walk?: boolean; run?: boolean; cast?: boolean; attack?: boolean },
 ): Promise<DirectionalSprites> {
   const [down, right, up, left] = await Promise.all([
     loadImage(`${basePath}/south.png`),
@@ -125,6 +131,8 @@ async function loadStaticDirectionalSprites(
   const idleFrames = animations?.idle ? await loadCharacterCycle(basePath, "idle") : { up: [], down: [], left: [], right: [] };
   const walkFrames = animations?.walk ? await loadCharacterCycle(basePath, "walk") : { up: [], down: [], left: [], right: [] };
   const runFrames = animations?.run ? await loadCharacterCycle(basePath, "run") : { up: [], down: [], left: [], right: [] };
+  const castFrames = animations?.cast ? await loadCharacterCycle(basePath, "cast") : { up: [], down: [], left: [], right: [] };
+  const attackFrames = animations?.attack ? await loadCharacterCycle(basePath, "attack") : { up: [], down: [], left: [], right: [] };
   return {
     up,
     down,
@@ -137,6 +145,9 @@ async function loadStaticDirectionalSprites(
       left: walkFrames.left.length > 0 ? walkFrames.left : runFrames.left,
       right: walkFrames.right.length > 0 ? walkFrames.right : runFrames.right,
     },
+    run: runFrames,
+    cast: castFrames,
+    attack: attackFrames,
   };
 }
 
@@ -146,7 +157,7 @@ async function loadWalkCycle(prefix: string): Promise<Record<Direction, HTMLImag
 
 async function loadCharacterCycle(
   basePath: string,
-  animationName: "idle" | "walk" | "run",
+  animationName: "idle" | "walk" | "run" | "cast" | "attack",
 ): Promise<Record<Direction, HTMLImageElement[]>> {
   return loadCycleFromTemplate((suffix, index) => `${basePath}/${animationName}-${suffix}-${index}.png`);
 }

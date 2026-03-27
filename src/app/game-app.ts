@@ -40,6 +40,7 @@ import type {
   ArenaState,
   BombState,
   Direction,
+  FlameStyle,
   FlameState,
   MatchScore,
   MenuPlayerId,
@@ -105,6 +106,9 @@ const CANVAS_BACKBUFFER_SCALE = 2;
 const CANVAS_VIEWPORT_PADDING = 32;
 const PLAYER_SPRITE_HEIGHT_SCALE = 1.45;
 const PLAYER_SPRITE_MAX_WIDTH_SCALE = 1.2;
+const SPECIAL_SKILL_INPUT = "Space";
+const SPECIAL_FEEDBACK_MS = 420;
+const SPECIAL_GUARD_MS = 360;
 const ONLINE_SNAPSHOT_INTERVAL_MS = 50;
 const ONLINE_RENDER_SMOOTHING = 0.48;
 const ONLINE_INTERPOLATION_DELAY_MS = 52;
@@ -131,11 +135,21 @@ interface PendingOnlineInput {
   input: OnlineInputState;
 }
 
+type CharacterSkillKind = "arcane-bolt" | "stinger-dash" | "dark-rift" | "combat-step";
+
+interface CharacterSkillDefinition {
+  kind: CharacterSkillKind;
+  name: string;
+  cooldownMs: number;
+  accent: string;
+}
+
 function createNeutralOnlineInput(): OnlineInputState {
   return {
     direction: null,
     bombPressed: false,
     detonatePressed: false,
+    specialPressed: false,
   };
 }
 
@@ -144,6 +158,7 @@ function cloneOnlineInputState(input: OnlineInputState): OnlineInputState {
     direction: input.direction,
     bombPressed: input.bombPressed,
     detonatePressed: input.detonatePressed,
+    specialPressed: input.specialPressed,
   };
 }
 
@@ -155,6 +170,9 @@ function createEmptyDirectionalSprites(): DirectionalSprites {
     right: null,
     idle: { up: [], down: [], left: [], right: [] },
     walk: { up: [], down: [], left: [], right: [] },
+    run: { up: [], down: [], left: [], right: [] },
+    cast: { up: [], down: [], left: [], right: [] },
+    attack: { up: [], down: [], left: [], right: [] },
   };
 }
 
@@ -492,6 +510,7 @@ export class GameApp {
       direction: input.direction,
       bombPressed: playerInput.bombPressed || input.bombPressed,
       detonatePressed: playerInput.detonatePressed || input.detonatePressed,
+      specialPressed: playerInput.specialPressed || input.specialPressed,
     };
   }
 
@@ -580,6 +599,7 @@ export class GameApp {
     input.direction = this.input.getMovementDirection(1);
     input.bombPressed = input.bombPressed || this.input.consumePress(localBindings.bomb);
     input.detonatePressed = input.detonatePressed || this.input.consumePress(localBindings.detonate);
+    input.specialPressed = input.specialPressed || this.input.consumePress(SPECIAL_SKILL_INPUT);
   }
 
   private forwardGuestInput(): void {
@@ -724,6 +744,7 @@ export class GameApp {
       direction: input.direction,
       bombPressed: target.bombPressed || input.bombPressed,
       detonatePressed: target.detonatePressed || input.detonatePressed,
+      specialPressed: target.specialPressed || input.specialPressed,
     };
   }
 
@@ -791,6 +812,9 @@ export class GameApp {
     if (this.consumeOnlineDetonatePress(localId)) {
       this.triggerRemoteDetonation(player);
     }
+    if (this.consumeOnlineSpecialPress(localId)) {
+      this.tryActivateSpecial(player);
+    }
 
     const direction = this.getMovementDirection(localId);
     if (direction) {
@@ -847,6 +871,9 @@ export class GameApp {
     }
     if (input.detonatePressed) {
       this.triggerRemoteDetonation(player);
+    }
+    if (input.specialPressed) {
+      this.tryActivateSpecial(player);
     }
 
     if (input.direction) {
@@ -1194,6 +1221,356 @@ export class GameApp {
     return this.isBotControlled(playerId) ? "BOT" : `P${playerId}`;
   }
 
+  private getCharacterSkillDefinition(playerId: PlayerId): CharacterSkillDefinition {
+    const entry = this.getActiveCharacterEntry(playerId);
+    const characterId = entry.id;
+    const nameKey = `${entry.name} ${entry.id}`.toLowerCase();
+    if (characterId === "03a976fb-7313-4064-a477-5bb9b0760034") {
+      return {
+        kind: "arcane-bolt",
+        name: "Arcane Bolt",
+        cooldownMs: 6500,
+        accent: "#8dd7ff",
+      };
+    }
+    if (characterId === "6ee8baa5-3277-413b-ae0e-2659b9cc52e9") {
+      return {
+        kind: "stinger-dash",
+        name: "Stinger Dash",
+        cooldownMs: 7000,
+        accent: "#ffc86d",
+      };
+    }
+    if (characterId === "5474c45c-2987-43e0-af2c-a6500c836881") {
+      return {
+        kind: "dark-rift",
+        name: "Dark Rift",
+        cooldownMs: 7600,
+        accent: "#b68cff",
+      };
+    }
+    if (/(ranni|witch|mage|wizard|sorcer|arcane|lux|merlin)/i.test(nameKey)) {
+      return {
+        kind: "arcane-bolt",
+        name: "Arcane Bolt",
+        cooldownMs: 6500,
+        accent: "#8dd7ff",
+      };
+    }
+    if (/(bee|assassin|ninja|killer|rogue|samurai|shinobi)/i.test(nameKey)) {
+      return {
+        kind: "stinger-dash",
+        name: "Stinger Dash",
+        cooldownMs: 7000,
+        accent: "#ffc86d",
+      };
+    }
+    if (/(nico|shadow|dark|void|phantom|specter|reaper)/i.test(nameKey)) {
+      return {
+        kind: "dark-rift",
+        name: "Dark Rift",
+        cooldownMs: 7600,
+        accent: "#b68cff",
+      };
+    }
+    return {
+      kind: "combat-step",
+      name: "Combat Step",
+      cooldownMs: 8000,
+      accent: "#8fffd9",
+    };
+  }
+
+  private getSpecialCooldownLabel(player: PlayerState): string {
+    const skill = this.getCharacterSkillDefinition(player.id);
+    if (player.specialCooldownMs <= 0) {
+      return `${skill.name.toUpperCase()} READY`;
+    }
+    return `${skill.name.toUpperCase()} ${(player.specialCooldownMs / 1000).toFixed(1)}s`;
+  }
+
+  private getNearestAliveEnemy(playerId: PlayerId): PlayerState | null {
+    const origin = this.players[playerId];
+    const originTile = this.getTileFromPosition(origin.position);
+    let nearest: PlayerState | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const id of this.activePlayerIds) {
+      if (id === playerId) {
+        continue;
+      }
+      const candidate = this.players[id];
+      if (!candidate.alive) {
+        continue;
+      }
+      const distance = this.getTileDistance(originTile, this.getTileFromPosition(candidate.position));
+      if (distance < nearestDistance) {
+        nearest = candidate;
+        nearestDistance = distance;
+      }
+    }
+    return nearest;
+  }
+
+  private shouldBotUseSpecial(player: PlayerState): boolean {
+    if (player.specialCooldownMs > 0 || !player.alive) {
+      return false;
+    }
+    const skill = this.getCharacterSkillDefinition(player.id);
+    const enemy = this.getNearestAliveEnemy(player.id);
+    const playerTile = this.getTileFromPosition(player.position);
+    const dangerMs = this.getDangerMap().get(tileKey(playerTile.x, playerTile.y)) ?? Number.POSITIVE_INFINITY;
+    if (dangerMs <= this.getMoveDuration(player) * 2) {
+      return skill.kind === "stinger-dash" || skill.kind === "combat-step";
+    }
+    if (!enemy) {
+      return false;
+    }
+    const enemyTile = this.getTileFromPosition(enemy.position);
+    if (skill.kind === "stinger-dash") {
+      return this.getTileDistance(playerTile, enemyTile) <= 2;
+    }
+    if (skill.kind === "arcane-bolt") {
+      return this.canSkillReachTile(playerTile, enemyTile, 2);
+    }
+    if (skill.kind === "dark-rift") {
+      return this.canSkillReachTile(playerTile, enemyTile, 3) || this.hasAdjacentBreakable(playerTile);
+    }
+    return this.getTileDistance(playerTile, enemyTile) <= 1;
+  }
+
+  private tryActivateSpecial(player: PlayerState): boolean {
+    if (!player.alive || player.specialCooldownMs > 0) {
+      return false;
+    }
+    const skill = this.getCharacterSkillDefinition(player.id);
+    let activated = false;
+    if (skill.kind === "arcane-bolt") {
+      activated = this.activateArcaneBolt(player);
+    } else if (skill.kind === "stinger-dash") {
+      activated = this.activateStingerDash(player);
+    } else if (skill.kind === "dark-rift") {
+      activated = this.activateDarkRift(player);
+    } else {
+      activated = this.activateCombatStep(player);
+    }
+    if (!activated) {
+      return false;
+    }
+    player.specialCooldownMs = skill.cooldownMs;
+    player.specialFeedbackMs = SPECIAL_FEEDBACK_MS;
+    this.soundManager.playOneShot("powerupCollect", 0.55);
+    return true;
+  }
+
+  private activateArcaneBolt(player: PlayerState): boolean {
+    const tiles = this.buildSkillLineTiles(player, 2, false);
+    if (tiles.length === 0) {
+      return false;
+    }
+    this.addSpecialEffect(player.id, "arcane-bolt", "#8dd7ff", tiles);
+    this.spawnSkillFlames(tiles, 260, "arcane");
+    this.primeBombsOnTiles(tiles, 120);
+    player.flameGuardMs = Math.max(player.flameGuardMs, 220);
+    return true;
+  }
+
+  private activateDarkRift(player: PlayerState): boolean {
+    const tiles = this.buildSkillLineTiles(player, 3, true);
+    if (tiles.length === 0) {
+      return false;
+    }
+    for (const tile of tiles) {
+      const key = tileKey(tile.x, tile.y);
+      if (this.arena.breakable.has(key)) {
+        this.arena.breakable.delete(key);
+        this.soundManager.playOneShot("crateBreak", 0.45);
+        this.revealPowerUpAt(key);
+        break;
+      }
+    }
+    this.addSpecialEffect(player.id, "dark-rift", "#b68cff", tiles, 320);
+    this.spawnSkillFlames(tiles, 320, "shadow");
+    this.primeBombsOnTiles(tiles, 0);
+    return true;
+  }
+
+  private activateStingerDash(player: PlayerState): boolean {
+    const origin = this.getTileFromPosition(player.position);
+    const destination = this.getDashDestination(player, 2, true);
+    if (!destination) {
+      return false;
+    }
+    player.position = this.getTileCenter(destination);
+    player.tile = { ...destination };
+    player.velocity = { x: 0, y: 0 };
+    player.flameGuardMs = Math.max(player.flameGuardMs, SPECIAL_GUARD_MS);
+    this.addSpecialEffect(player.id, "stinger-dash", "#ffc86d", [origin, destination]);
+    return true;
+  }
+
+  private activateCombatStep(player: PlayerState): boolean {
+    const origin = this.getTileFromPosition(player.position);
+    const destination = this.getDashDestination(player, 1, false);
+    if (!destination) {
+      player.flameGuardMs = Math.max(player.flameGuardMs, SPECIAL_GUARD_MS);
+      this.addSpecialEffect(player.id, "combat-step", "#8fffd9", [origin]);
+      return true;
+    }
+    player.position = this.getTileCenter(destination);
+    player.tile = { ...destination };
+    player.velocity = { x: 0, y: 0 };
+    player.flameGuardMs = Math.max(player.flameGuardMs, SPECIAL_GUARD_MS);
+    this.addSpecialEffect(player.id, "combat-step", "#8fffd9", [origin, destination]);
+    return true;
+  }
+
+  private getDashDestination(player: PlayerState, maxSteps: number, pushBombs: boolean): TileCoord | null {
+    const delta = directionDelta[player.direction];
+    let current = this.getTileFromPosition(player.position);
+    let moved = false;
+    for (let step = 0; step < maxSteps; step += 1) {
+      const next = { x: current.x + delta.x, y: current.y + delta.y };
+      if (next.x < 0 || next.y < 0 || next.x >= GRID_WIDTH || next.y >= GRID_HEIGHT) {
+        break;
+      }
+      const key = tileKey(next.x, next.y);
+      if (this.arena.solid.has(key) || this.arena.breakable.has(key) || this.isAnotherActivePlayerOnTile(player.id, next)) {
+        break;
+      }
+      const bomb = this.getBombAtTile(next);
+      if (bomb) {
+        if (!pushBombs || !this.tryPushBombAtTile(next, player.direction, 1)) {
+          break;
+        }
+      }
+      current = next;
+      moved = true;
+    }
+    return moved ? current : null;
+  }
+
+  private buildSkillLineTiles(player: PlayerState, range: number, includeBreakableImpact: boolean): TileCoord[] {
+    const origin = this.getTileFromPosition(player.position);
+    const delta = directionDelta[player.direction];
+    const tiles: TileCoord[] = [];
+    for (let step = 1; step <= range; step += 1) {
+      const tile = { x: origin.x + delta.x * step, y: origin.y + delta.y * step };
+      if (tile.x < 0 || tile.y < 0 || tile.x >= GRID_WIDTH || tile.y >= GRID_HEIGHT) {
+        break;
+      }
+      const key = tileKey(tile.x, tile.y);
+      if (this.arena.solid.has(key)) {
+        break;
+      }
+      if (this.arena.breakable.has(key)) {
+        if (includeBreakableImpact) {
+          tiles.push(tile);
+        }
+        break;
+      }
+      tiles.push(tile);
+      if (this.getBombAtTile(tile)) {
+        break;
+      }
+    }
+    return tiles;
+  }
+
+  private canSkillReachTile(origin: TileCoord, target: TileCoord, range: number): boolean {
+    if (origin.x !== target.x && origin.y !== target.y) {
+      return false;
+    }
+    if (this.getTileDistance(origin, target) > range) {
+      return false;
+    }
+    const deltaX = Math.sign(target.x - origin.x);
+    const deltaY = Math.sign(target.y - origin.y);
+    for (let step = 1; step <= range; step += 1) {
+      const tile = { x: origin.x + deltaX * step, y: origin.y + deltaY * step };
+      if (tile.x === origin.x && tile.y === origin.y) {
+        continue;
+      }
+      const key = tileKey(tile.x, tile.y);
+      if (this.arena.solid.has(key)) {
+        return false;
+      }
+      if (tile.x === target.x && tile.y === target.y) {
+        return true;
+      }
+      if (this.arena.breakable.has(key)) {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  private spawnSkillFlames(tiles: TileCoord[], remainingMs: number, style: FlameStyle): void {
+    for (const tile of tiles) {
+      const existing = this.flames.find((flame) => flame.tile.x === tile.x && flame.tile.y === tile.y);
+      if (existing) {
+        existing.remainingMs = Math.max(existing.remainingMs, remainingMs);
+        existing.style = style;
+        continue;
+      }
+      this.flames.push({
+        tile: { ...tile },
+        remainingMs,
+        style,
+      });
+    }
+  }
+
+  private addSpecialEffect(
+    ownerId: PlayerId,
+    kind: CharacterSkillKind,
+    accent: string,
+    tiles: TileCoord[],
+    durationMs: number = SPECIAL_EFFECT_MS,
+  ): void {
+    this.specialEffects.push({
+      ownerId,
+      kind,
+      accent,
+      tiles: tiles.map((tile) => ({ ...tile })),
+      remainingMs: durationMs,
+      durationMs,
+    });
+  }
+
+  private updateSpecialEffects(deltaMs: number): void {
+    for (const effect of this.specialEffects) {
+      effect.remainingMs -= deltaMs;
+    }
+    this.specialEffects = this.specialEffects.filter((effect) => effect.remainingMs > 0);
+  }
+
+  private primeBombsOnTiles(tiles: TileCoord[], fuseMs: number): void {
+    for (const tile of tiles) {
+      const bomb = this.getBombAtTile(tile);
+      if (bomb) {
+        bomb.fuseMs = Math.min(bomb.fuseMs, fuseMs);
+      }
+    }
+  }
+
+  private getBombAtTile(tile: TileCoord): BombState | null {
+    return this.bombs.find((bomb) => bomb.tile.x === tile.x && bomb.tile.y === tile.y) ?? null;
+  }
+
+  private isAnotherActivePlayerOnTile(playerId: PlayerId, tile: TileCoord): boolean {
+    return this.activePlayerIds.some((id) => {
+      if (id === playerId) {
+        return false;
+      }
+      const candidate = this.players[id];
+      if (!candidate.alive) {
+        return false;
+      }
+      const candidateTile = this.getTileFromPosition(candidate.position);
+      return candidateTile.x === tile.x && candidateTile.y === tile.y;
+    });
+  }
+
   private shortenCharacterName(name: string, maxLength = 30): string {
     if (name.length <= maxLength) {
       return name;
@@ -1227,6 +1604,8 @@ export class GameApp {
       shieldCharges: 0,
       bombPassLevel: 0,
       kickLevel: 0,
+      specialCooldownMs: 0,
+      specialFeedbackMs: 0,
       flameGuardMs: 0,
       spawnProtectionMs: SPAWN_PROTECTION_MS,
     };
@@ -1240,10 +1619,12 @@ export class GameApp {
       }
       player.spawnProtectionMs = Math.max(0, player.spawnProtectionMs - deltaMs);
       player.flameGuardMs = Math.max(0, player.flameGuardMs - deltaMs);
+      player.specialCooldownMs = Math.max(0, player.specialCooldownMs - deltaMs);
+      player.specialFeedbackMs = Math.max(0, player.specialFeedbackMs - deltaMs);
 
       const botDecision = this.isBotControlled(id) ? this.getBotDecision(player) : null;
       const automationBomb = this.automationMode
-        ? this.automationControlledPlayer === id && this.input.consumePress("Space")
+        ? this.automationControlledPlayer === id && this.input.consumePress("BracketRight")
         : false;
       const onlineBomb = this.consumeOnlineBombPress(id);
       const nativeBindings = MENU_PLAYER_IDS.includes(id as MenuPlayerId)
@@ -1266,6 +1647,15 @@ export class GameApp {
           : false);
       if (wantsDetonate) {
         this.triggerRemoteDetonation(player);
+      }
+
+      const nativeSpecial = this.shouldUseNativeControls() && id === 1
+        ? this.input.consumePress(SPECIAL_SKILL_INPUT)
+        : false;
+      const onlineSpecial = this.consumeOnlineSpecialPress(id);
+      const botSpecial = this.isBotControlled(id) && this.shouldBotUseSpecial(player);
+      if (nativeSpecial || onlineSpecial || botSpecial) {
+        this.tryActivateSpecial(player);
       }
 
       const desiredDirection = botDecision?.direction ?? this.getMovementDirection(id);
@@ -1346,6 +1736,19 @@ export class GameApp {
     }
     const pressed = source.detonatePressed;
     source.detonatePressed = false;
+    return pressed;
+  }
+
+  private consumeOnlineSpecialPress(id: PlayerId): boolean {
+    if (!this.onlineSession) {
+      return false;
+    }
+    const source = this.onlineInputs[id];
+    if (!source) {
+      return false;
+    }
+    const pressed = source.specialPressed;
+    source.specialPressed = false;
     return pressed;
   }
 
@@ -2313,27 +2716,33 @@ export class GameApp {
     const fromTile = this.getTileFromPosition(player.position);
     const delta = directionDelta[direction];
     const bombTile = { x: fromTile.x + delta.x, y: fromTile.y + delta.y };
-    const targetTile = { x: bombTile.x + delta.x, y: bombTile.y + delta.y };
+    return this.tryPushBombAtTile(bombTile, direction, 1);
+  }
 
-    const bomb = this.bombs.find((item) => item.tile.x === bombTile.x && item.tile.y === bombTile.y);
+  private tryPushBombAtTile(tile: TileCoord, direction: Direction, distance: number): boolean {
+    const bomb = this.getBombAtTile(tile);
     if (!bomb) {
       return false;
     }
-    if (targetTile.x < 0 || targetTile.y < 0 || targetTile.x >= GRID_WIDTH || targetTile.y >= GRID_HEIGHT) {
-      return false;
+    const delta = directionDelta[direction];
+    let targetTile = { ...bomb.tile };
+    for (let step = 0; step < distance; step += 1) {
+      const nextTile = { x: targetTile.x + delta.x, y: targetTile.y + delta.y };
+      if (nextTile.x < 0 || nextTile.y < 0 || nextTile.x >= GRID_WIDTH || nextTile.y >= GRID_HEIGHT) {
+        return false;
+      }
+      const targetKey = tileKey(nextTile.x, nextTile.y);
+      if (this.arena.solid.has(targetKey) || this.arena.breakable.has(targetKey)) {
+        return false;
+      }
+      if (this.bombs.some((item) => item.id !== bomb.id && item.tile.x === nextTile.x && item.tile.y === nextTile.y)) {
+        return false;
+      }
+      if (this.isAnyPlayerOnTile(nextTile)) {
+        return false;
+      }
+      targetTile = nextTile;
     }
-
-    const targetKey = tileKey(targetTile.x, targetTile.y);
-    if (this.arena.solid.has(targetKey) || this.arena.breakable.has(targetKey)) {
-      return false;
-    }
-    if (this.bombs.some((item) => item.id !== bomb.id && item.tile.x === targetTile.x && item.tile.y === targetTile.y)) {
-      return false;
-    }
-    if (this.isAnyPlayerOnTile(targetTile)) {
-      return false;
-    }
-
     bomb.tile = targetTile;
     bomb.ownerCanPass = false;
     return true;
@@ -3124,6 +3533,8 @@ export class GameApp {
     const title = `${this.getPlayerSlotLabel(playerId)} ${this.score[playerId]}`;
     const statLine = `B${player.maxBombs} F${player.flameRange} S${player.speedLevel}`;
     const status = player.alive ? (player.flameGuardMs > 0 ? "GUARD" : "LIVE") : "DOWN";
+    const skill = this.getCharacterSkillDefinition(playerId);
+    const skillLabel = this.getSpecialCooldownLabel(player);
 
     this.drawHudPanel(x, y, width, 30, palette.glow);
     this.ctx.textAlign = "left";
@@ -3140,6 +3551,23 @@ export class GameApp {
     this.ctx.textAlign = "right";
     this.drawHudText(status, x + width - 6, y + 11, player.alive ? "#e5fff7" : "rgba(210, 220, 231, 0.55)", "rgba(4, 10, 19, 0.85)");
     this.drawHudText(statLine, x + width - 6, y + 21, "#dbefff", "rgba(4, 10, 19, 0.85)");
+    this.ctx.textAlign = "left";
+    this.ctx.font = "6px monospace";
+    this.drawHudText(
+      `SPACE ${this.shortenCharacterName(skill.name, 14)}`,
+      x + 6,
+      y + 28,
+      skill.accent,
+      "rgba(4, 10, 19, 0.85)",
+    );
+    this.ctx.textAlign = "right";
+    this.drawHudText(
+      this.shortenCharacterName(skillLabel, 18),
+      x + width - 6,
+      y + 28,
+      player.specialCooldownMs > 0 ? "rgba(219, 239, 255, 0.82)" : skill.accent,
+      "rgba(4, 10, 19, 0.85)",
+    );
   }
 
   private renderArena(): void {
@@ -3215,6 +3643,8 @@ export class GameApp {
     for (const flame of this.flames) {
       this.drawFlame(flame);
     }
+
+    this.drawSpecialEffects();
 
     for (const id of this.activePlayerIds) {
       this.drawPlayer(this.players[id]);
