@@ -42,8 +42,6 @@ export interface PlayerState {
   shieldCharges: number;
   bombPassLevel: number;
   kickLevel: number;
-  specialCooldownMs: number;
-  specialFeedbackMs: number;
   flameGuardMs: number;
   spawnProtectionMs: number;
 }
