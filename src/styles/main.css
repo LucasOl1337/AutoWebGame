@@ -66,16 +66,6 @@ button {
   gap: 16px;
 }
 
-.lobby-shell:fullscreen {
-  width: 100vw;
-  height: 100vh;
-  max-width: none;
-  padding: 10px;
-  background:
-    radial-gradient(circle at top left, rgba(90, 172, 255, 0.14), transparent 28%),
-    linear-gradient(180deg, #0b1524 0%, #040811 100%);
-}
-
 .lobby-browser,
 .lobby-stage {
   position: relative;
@@ -679,7 +669,7 @@ canvas {
 }
 
 .lobby-shell[data-state="match"] .lobby-stage {
-  padding: 12px;
+  padding: 8px;
   grid-template-rows: minmax(0, 1fr);
 }
 
@@ -696,15 +686,15 @@ canvas {
 
 .lobby-shell[data-state="match"] .lobby-stage__viewport {
   height: 100%;
-  padding: 16px 18px 18px;
+  padding: 10px;
 }
 
 .lobby-shell[data-state="match"] .lobby-stage__rail {
   position: absolute;
-  top: 18px;
-  right: 18px;
-  width: min(320px, 26vw);
-  max-height: calc(100% - 36px);
+  top: 12px;
+  right: 12px;
+  width: min(280px, 21vw);
+  max-height: calc(100% - 24px);
   pointer-events: none;
   z-index: 3;
 }
@@ -717,12 +707,17 @@ canvas {
 }
 
 .lobby-shell[data-state="match"] .lobby-stage__panel--seats {
-  max-height: 48%;
+  max-height: 44%;
   overflow: auto;
 }
 
 .lobby-shell[data-state="match"] .lobby-chat {
-  min-height: 220px;
+  min-height: 180px;
+}
+
+.lobby-shell[data-state="match"] canvas {
+  max-width: 100%;
+  max-height: 100%;
 }
 
 @media (max-width: 1420px) {
@@ -754,7 +749,7 @@ canvas {
   }
 
   .lobby-shell[data-state="match"] .lobby-stage__rail {
-    width: min(340px, 34vw);
+    width: min(300px, 30vw);
   }
 }
 
