@@ -480,23 +480,7 @@ export class GlobalLobby extends DurableObject {
 
     await this.persistState();
 
-    for (const seatId of activePlayerIds) {
-      const seat = room.seats[seatId];
-      if (!seat.clientId) {
-        continue;
-      }
-      this.sendToClient(seat.clientId, {
-        type: "match-started",
-        config: {
-          roomCode: room.roomCode,
-          role: "guest",
-          localPlayerId: seatId,
-          activePlayerIds,
-          characterSelections,
-        },
-      });
-    }
-
+    this.sendMatchStarted(room, activePlayerIds, characterSelections);
     this.startRoomMatch(room, activePlayerIds, characterSelections);
     this.appendRoomSystemMessage(room, "Match started. Good luck.");
     await this.persistState();
@@ -1149,10 +1133,35 @@ export class GlobalLobby extends DurableObject {
       }
 
       activeMatch.restartTimer = null;
+      this.sendMatchStarted(activeRoom, activeMatch.activePlayerIds, activeMatch.characterSelections);
       this.startRoomMatch(activeRoom, activeMatch.activePlayerIds, activeMatch.characterSelections);
       this.broadcastLobbyToMembers(activeRoom);
       this.broadcastLobbyList();
     }, MATCH_RESTART_DELAY_MS);
+  }
+
+  /**
+   * @param {LobbyRoom} room
+   * @param {Array<1 | 2 | 3 | 4>} activePlayerIds
+   * @param {Record<1 | 2 | 3 | 4, number>} characterSelections
+   */
+  sendMatchStarted(room, activePlayerIds, characterSelections) {
+    for (const seatId of activePlayerIds) {
+      const seat = room.seats[seatId];
+      if (!seat.clientId) {
+        continue;
+      }
+      this.sendToClient(seat.clientId, {
+        type: "match-started",
+        config: {
+          roomCode: room.roomCode,
+          role: "guest",
+          localPlayerId: seatId,
+          activePlayerIds,
+          characterSelections,
+        },
+      });
+    }
   }
 
   /**

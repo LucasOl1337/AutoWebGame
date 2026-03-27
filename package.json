@@ -32,6 +32,7 @@
     "test:bomb-range": "npm run compile:esm && node tests/bomb-range-snapshot-check.mjs",
     "test:bomb-push": "npm run compile:esm && node tests/bomb-push-check.mjs",
     "test:shield": "npm run compile:esm && node tests/shield-powerup-check.mjs",
+    "test:special-skill": "npm run compile:esm && node tests/special-skill-check.mjs",
     "test:player-sprite": "npm run compile:esm && node tests/player-sprite-render-check.mjs",
     "test:sprite-trim": "npm run compile:esm && node tests/sprite-trim-cache-check.mjs",
     "test:round-outcome": "npm run compile:esm && node tests/round-outcome-pause-check.mjs",

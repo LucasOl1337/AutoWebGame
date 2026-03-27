@@ -109,6 +109,8 @@ const PLAYER_SPRITE_MAX_WIDTH_SCALE = 1.2;
 const SPECIAL_SKILL_INPUT = "Space";
 const SPECIAL_FEEDBACK_MS = 420;
 const SPECIAL_GUARD_MS = 360;
+const SPECIAL_EFFECT_MS = 260;
+const SPECIAL_PULSE_RADIUS = TILE_SIZE * 0.4;
 const ONLINE_SNAPSHOT_INTERVAL_MS = 50;
 const ONLINE_RENDER_SMOOTHING = 0.48;
 const ONLINE_INTERPOLATION_DELAY_MS = 52;
@@ -142,6 +144,15 @@ interface CharacterSkillDefinition {
   name: string;
   cooldownMs: number;
   accent: string;
+}
+
+interface CharacterSkillEffect {
+  ownerId: PlayerId;
+  kind: CharacterSkillKind;
+  accent: string;
+  remainingMs: number;
+  durationMs: number;
+  tiles: TileCoord[];
 }
 
 function createNeutralOnlineInput(): OnlineInputState {
@@ -304,6 +315,7 @@ export class GameApp {
   private botPendingReverseDirection: Record<PlayerId, Direction | null> = createDirectionPlayerRecord(null);
   private botPendingReverseFrames: Record<PlayerId, number> = createNumberPlayerRecord(0);
   private animationClockMs = 0;
+  private specialEffects: CharacterSkillEffect[] = [];
   private suddenDeathActive = false;
   private suddenDeathTickMs = SUDDEN_DEATH_TICK_MS;
   private suddenDeathIndex = 0;
@@ -1052,6 +1064,7 @@ export class GameApp {
     this.updatePlayers(deltaMs);
     this.updateBombs(deltaMs);
     this.updateFlames(deltaMs);
+    this.updateSpecialEffects(deltaMs);
     this.collectPowerUps();
     this.evaluateRoundState();
   }
@@ -1153,6 +1166,7 @@ export class GameApp {
     this.players = this.createPlayers();
     this.bombs = [];
     this.flames = [];
+    this.specialEffects = [];
     this.nextBombId = 1;
     this.roundTimeMs = ROUND_DURATION_MS;
     this.roundOutcome = null;
@@ -1537,7 +1551,7 @@ export class GameApp {
     });
   }
 
-  private updateSpecialEffects(deltaMs: number): void {
+  public updateSpecialEffects(deltaMs: number): void {
     for (const effect of this.specialEffects) {
       effect.remainingMs -= deltaMs;
     }
@@ -3904,9 +3918,19 @@ export class GameApp {
       this.ctx.restore();
       return;
     }
-    this.ctx.fillStyle = `rgba(255, 160, 74, ${alpha})`;
+    const outerColor = flame.style === "arcane"
+      ? `rgba(112, 207, 255, ${alpha})`
+      : flame.style === "shadow"
+        ? `rgba(158, 99, 255, ${alpha})`
+        : `rgba(255, 160, 74, ${alpha})`;
+    const innerColor = flame.style === "arcane"
+      ? `rgba(215, 248, 255, ${alpha})`
+      : flame.style === "shadow"
+        ? `rgba(232, 205, 255, ${alpha})`
+        : `rgba(255, 244, 159, ${alpha})`;
+    this.ctx.fillStyle = outerColor;
     this.ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
-    this.ctx.fillStyle = `rgba(255, 244, 159, ${alpha})`;
+    this.ctx.fillStyle = innerColor;
     this.ctx.beginPath();
     this.ctx.moveTo(x + 16, y + 5);
     this.ctx.lineTo(x + 26, y + 16);
@@ -3914,6 +3938,39 @@ export class GameApp {
     this.ctx.lineTo(x + 6, y + 16);
     this.ctx.closePath();
     this.ctx.fill();
+  }
+
+  private drawSpecialEffects(): void {
+    for (const effect of this.specialEffects) {
+      const alpha = Math.max(0.18, effect.remainingMs / effect.durationMs);
+      this.ctx.save();
+      this.ctx.strokeStyle = effect.accent;
+      this.ctx.fillStyle = effect.accent;
+      this.ctx.globalAlpha = alpha;
+      if (effect.tiles.length >= 2) {
+        const start = this.getTileCenter(effect.tiles[0]);
+        const end = this.getTileCenter(effect.tiles[effect.tiles.length - 1]);
+        this.ctx.lineWidth = effect.kind === "combat-step" ? 3 : 4;
+        this.ctx.strokeStyle = effect.accent;
+        this.ctx.beginPath();
+        this.ctx.moveTo(ARENA_OFFSET_X + start.x, ARENA_OFFSET_Y + start.y);
+        this.ctx.lineTo(ARENA_OFFSET_X + end.x, ARENA_OFFSET_Y + end.y);
+        this.ctx.stroke();
+      }
+      for (const tile of effect.tiles) {
+        const center = this.getTileCenter(tile);
+        this.ctx.beginPath();
+        this.ctx.arc(
+          ARENA_OFFSET_X + center.x,
+          ARENA_OFFSET_Y + center.y,
+          SPECIAL_PULSE_RADIUS * alpha,
+          0,
+          Math.PI * 2,
+        );
+        this.ctx.fill();
+      }
+      this.ctx.restore();
+    }
   }
 
   private drawPlayer(player: PlayerState): void {
@@ -3928,13 +3985,29 @@ export class GameApp {
     const baseSprites = this.getPlayerSprites(player.id);
     const idleFrames = baseSprites.idle?.[player.direction] ?? [];
     const walkFrames = baseSprites.walk?.[player.direction] ?? [];
+    const runFrames = baseSprites.run?.[player.direction] ?? [];
+    const castFrames = baseSprites.cast?.[player.direction] ?? [];
+    const attackFrames = baseSprites.attack?.[player.direction] ?? [];
     const moving = Math.abs(player.velocity.x) > 0.02 || Math.abs(player.velocity.y) > 0.02;
     const frameIndex = Math.floor(this.animationClockMs / WALK_FRAME_MS);
-    let sprite = moving && walkFrames.length > 0
-      ? walkFrames[frameIndex % walkFrames.length]
-      : !moving && idleFrames.length > 0
-        ? idleFrames[frameIndex % idleFrames.length]
-        : spriteForDirection(baseSprites, player.direction);
+    const skill = this.getCharacterSkillDefinition(player.id);
+    let specialFrames: HTMLImageElement[] = [];
+    if (player.specialFeedbackMs > 0) {
+      specialFrames = skill.kind === "stinger-dash"
+        ? (attackFrames.length > 0 ? attackFrames : (runFrames.length > 0 ? runFrames : walkFrames))
+        : skill.kind === "combat-step"
+          ? (runFrames.length > 0 ? runFrames : walkFrames)
+          : (castFrames.length > 0 ? castFrames : (attackFrames.length > 0 ? attackFrames : idleFrames));
+    }
+    let sprite = specialFrames.length > 0
+      ? specialFrames[frameIndex % specialFrames.length]
+      : moving && runFrames.length > 0
+        ? runFrames[frameIndex % runFrames.length]
+        : moving && walkFrames.length > 0
+          ? walkFrames[frameIndex % walkFrames.length]
+          : !moving && idleFrames.length > 0
+            ? idleFrames[frameIndex % idleFrames.length]
+            : spriteForDirection(baseSprites, player.direction);
     if (!sprite || !this.getSpriteTrimBounds(sprite)) {
       sprite = this.getRenderableSprite(baseSprites, player.direction);
     }
@@ -3943,6 +4016,17 @@ export class GameApp {
     this.ctx.beginPath();
     this.ctx.ellipse(x + TILE_SIZE * 0.5, y + TILE_SIZE - 2, TILE_SIZE * 0.4, TILE_SIZE * 0.18, 0, 0, Math.PI * 2);
     this.ctx.fill();
+
+    if (player.specialFeedbackMs > 0) {
+      const glowAlpha = Math.max(0.22, player.specialFeedbackMs / SPECIAL_FEEDBACK_MS) * 0.55;
+      this.ctx.save();
+      this.ctx.globalAlpha = glowAlpha;
+      this.ctx.fillStyle = skill.accent;
+      this.ctx.beginPath();
+      this.ctx.ellipse(x + TILE_SIZE * 0.5, y + TILE_SIZE * 0.5, TILE_SIZE * 0.42, TILE_SIZE * 0.5, 0, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.restore();
+    }
 
     if (sprite) {
       const fullWidth = sprite.naturalWidth || sprite.width || 1;
@@ -4139,6 +4223,35 @@ export class GameApp {
           flameRange: this.players[previewPlayerId].flameRange,
           tiles: bombPreviewTiles,
         },
+        special: {
+          input: SPECIAL_SKILL_INPUT,
+          effects: this.specialEffects.map((effect) => ({
+            ownerId: effect.ownerId,
+            kind: effect.kind,
+            category: effect.kind === "arcane-bolt"
+              ? "spell-projectile"
+              : effect.kind === "dark-rift"
+                ? "shadow-spell"
+                : effect.kind === "stinger-dash"
+                  ? "dash-strike"
+                  : "movement-guard",
+            accent: effect.accent,
+            remainingMs: Math.round(effect.remainingMs),
+            tiles: effect.tiles.map((tile) => ({ ...tile })),
+          })),
+        },
+        skillEffects: this.specialEffects.map((effect) => ({
+          ownerId: effect.ownerId,
+          kind: effect.kind,
+          category: effect.kind === "arcane-bolt"
+            ? "spell-projectile"
+            : effect.kind === "dark-rift"
+              ? "shadow-spell"
+              : effect.kind === "stinger-dash"
+                ? "dash-strike"
+                : "movement-guard",
+          remainingMs: Math.round(effect.remainingMs),
+        })),
         automationSelectedPlayer: this.automationMode ? this.automationControlledPlayer : null,
         roundOutcome: this.roundOutcome ? {
           winner: this.roundOutcome.winner,
@@ -4186,6 +4299,20 @@ export class GameApp {
           shieldCharges: player.shieldCharges,
           bombPassLevel: player.bombPassLevel,
           kickLevel: player.kickLevel,
+          special: {
+            name: this.getCharacterSkillDefinition(id).name,
+            kind: this.getCharacterSkillDefinition(id).kind,
+            category: this.getCharacterSkillDefinition(id).kind === "arcane-bolt"
+              ? "spell-projectile"
+              : this.getCharacterSkillDefinition(id).kind === "dark-rift"
+                ? "shadow-spell"
+                : this.getCharacterSkillDefinition(id).kind === "stinger-dash"
+                  ? "dash-strike"
+                  : "movement-guard",
+            cooldownMs: Math.round(player.specialCooldownMs),
+            ready: player.specialCooldownMs <= 0,
+            feedbackMs: Math.round(player.specialFeedbackMs),
+          },
           flameGuardMs: Math.round(player.flameGuardMs),
           spawnProtectionMs: Math.round(player.spawnProtectionMs),
         };

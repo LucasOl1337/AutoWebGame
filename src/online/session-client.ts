@@ -71,7 +71,6 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private reconnectAttempts = 0;
   private quickMatchSearching = false;
   private quickMatchQueuedCount = 0;
-  private quickMatchCountdownMs: number | null = null;
   private preferredCharacterIndex = 0;
   private fullscreenRetryArmed = false;
   private readonly fullscreenRetryListener = (): void => {
@@ -251,7 +250,6 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.lobbies = message.lobbies;
         this.quickMatchQueuedCount = message.quickMatchQueued;
         this.quickMatchSearching = false;
-        this.quickMatchCountdownMs = null;
         this.syncPreferredCharacterFromLobby();
         this.renderCharacterSelector();
         this.renderLobbyList();
@@ -333,7 +331,6 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         break;
       case "quick-match-state":
         this.quickMatchQueuedCount = message.queued;
-        this.quickMatchCountdownMs = message.countdownMs;
         this.renderQuickMatchState();
         break;
       case "peer-left":
@@ -367,7 +364,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     brand.innerHTML = `
       <p>Global lobby</p>
       <h1>Mistbridge Arena</h1>
-      <span>Public rooms. Up to 4 pilots. Quick match fills from 2 to 4.</span>
+      <span>Public rooms. Up to 4 pilots. Quick match claims an open slot.</span>
     `;
 
     const createPanel = document.createElement("div");
@@ -671,7 +668,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.elements.quickMatchMeta.textContent = this.quickMatchSearching
       ? "Looking for an open public room and claiming the first free slot."
       : this.quickMatchQueuedCount > 0
-        ? `${this.quickMatchQueuedCount} public room${this.quickMatchQueuedCount === 1 ? "" : "s"} have open slots.`
+        ? this.quickMatchQueuedCount === 1
+          ? "1 public room has open slots."
+          : `${this.quickMatchQueuedCount} public rooms have open slots.`
         : "No open public rooms right now. Quick match will create one.";
   }
 
@@ -690,7 +689,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.elements.stageEyebrow.textContent = "Global matchmaking";
       this.elements.stageTitle.textContent = "Queue into Mistbridge";
       this.elements.stageDescription.textContent =
-        "Build a squad, pick your pilot, and enter a live arena without losing the playfield to UI chrome.";
+        "Build a squad, pick your pilot, and jump into a public room. Quick match claims an open slot or creates one if needed.";
       this.elements.stageMeta.textContent = "Public rooms · 2-4 pilots · WASD move · Q bomb · E ready · F fullscreen";
       this.elements.inviteInput.value = "";
       this.elements.copyButton.disabled = true;
