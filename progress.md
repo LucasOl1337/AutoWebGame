@@ -1,17 +1,17 @@
-Original prompt: Usaando a habilidade web game do codex, vamos desenvolver um jogo webapp.
+﻿Original prompt: Usaando a habilidade web game do codex, vamos desenvolver um jogo webapp.
 
 2026-03-16
 - Kickoff do projeto registrado.
-- Workspace estava vazio no momento da análise inicial.
+- Workspace estava vazio no momento da anÃ¡lise inicial.
 - Definido plano inicial para um jogo web inspirado em Bomberman, com foco em MVP 2D grid-based.
 
 TODO
 - Escolher entre Vite + JavaScript puro ou Vite + TypeScript no primeiro scaffold.
-- Criar scaffold inicial com canvas único, loop determinístico e hooks `window.render_game_to_text` / `window.advanceTime`.
-- Implementar primeiro slice jogável: mapa fixo, movimentação em grid, bombas, explosão e destruição de blocos.
+- Criar scaffold inicial com canvas Ãºnico, loop determinÃ­stico e hooks `window.render_game_to_text` / `window.advanceTime`.
+- Implementar primeiro slice jogÃ¡vel: mapa fixo, movimentaÃ§Ã£o em grid, bombas, explosÃ£o e destruiÃ§Ã£o de blocos.
 
 Sugestoes
-- Manter placeholder assets no início para validar jogabilidade antes de investir em arte final.
+- Manter placeholder assets no inÃ­cio para validar jogabilidade antes de investir em arte final.
 - Testar cada incremento com o cliente Playwright da skill `develop-web-game`.
 
 2026-03-16 implementation
@@ -72,7 +72,7 @@ TODO movimento
 2026-03-16 visual overhaul pass
 - Substituidos personagens P1/P2 por sprites PixelLab novos e coerentes entre si.
 - Substituidos bomba, chama e os tres pickups por assets PixelLab mais refinados.
-- Segunda rodada de tiles PixelLab integrada com piso-base escuro, lane clara, spawn rúnico, parede de parapeto e barricada mais legivel.
+- Segunda rodada de tiles PixelLab integrada com piso-base escuro, lane clara, spawn rÃºnico, parede de parapeto e barricada mais legivel.
 - Ajustado runtime para desenhar sombras/realces sutis em parede e crate para ganhar profundidade sem poluir.
 - Screenshots-chave: `output/art-pass-final/shot-0.png`, `output/art-pass-final-bomb/shot-0.png`.
 2026-03-16 edge-forgiveness pass
@@ -85,7 +85,7 @@ TODO movimento
 - Menu portraits tambem foram ampliados para refletir a nova escala.
 - Screenshot-chave: `output/player-scale-pass/shot-0.png`.
 2026-03-16 turn clean-up pass
-- Troca de direcao perpendicular ficou mais estrita: o giro agora so entra quando existe avanço real na nova lane.
+- Troca de direcao perpendicular ficou mais estrita: o giro agora so entra quando existe avancÌ§o real na nova lane.
 - Se o jogador virar cedo demais, o sistema continua no eixo anterior em vez de puxar o personagem para tras ou gerar snap lateral estranho.
 - Smoke atualizado em `output/corner-buffer-2/shot-0.png`, com P1 mantendo o movimento para baixo ate a curva caber.
 
@@ -124,7 +124,7 @@ Validacao desta rodada
 2026-03-16 movement + scale alignment pass
 - Corrigida inconsistencia entre visual e colisao do player: hitbox reduzida de quase 1 tile para `0.42 * TILE_SIZE`, mantendo grid/collision robustos e melhorando leitura visual.
 - Sistema anti-travar/fallback de curva foi restringido: ao receber input perpendicular, agora respeita esse input sempre que houver qualquer movimento valido na nova direcao (combined/lane/forward), em vez de forcar continuidade no eixo anterior.
-- Fallback para ultima direcao agora so entra quando ha avanc�o combinado real no eixo anterior (`combinedFree`), removendo o empurrao indevido para frente em corredor.
+- Fallback para ultima direcao agora so entra quando ha avanc¸o combinado real no eixo anterior (`combinedFree`), removendo o empurrao indevido para frente em corredor.
 - Escala visual do personagem melhorada sem trocar assets: render agora usa crop do frame util do sprite (`32x52` a partir de `x=16,y=6`) e upscale maior in-game (`2.25x` de altura por tile).
 - Portrait do menu passou a usar o mesmo crop para evitar miniatura com muito transparente.
 
@@ -134,7 +134,7 @@ Validacao
 - Experimento A/B de input lateral em corredor (`tests/actions/corridor-side-a.json` vs `corridor-side-b.json`):
   - com input lateral (`a2`): P1 final `pixel.y = 130`, `direction = right`
   - sem input lateral (`b2`): P1 final `pixel.y = 131.166...`, `direction = down`
-  => sinaliza que o input lateral nao esta mais for�ando continuidade para frente como antes.
+  => sinaliza que o input lateral nao esta mais forçando continuidade para frente como antes.
 - `tests/bot-intel-check.mjs` executado (ok) apos ajuste de um cenario para evitar falso negativo.
 2026-03-16 automation mini-sprint (auto-correcoes)
 - Playwright + dev-server smoke attempt in this run was blocked by sandbox `spawn EPERM` (Chromium and esbuild/Vite could not spawn), so this pass focused on code-level fixes plus Node validations.
@@ -182,7 +182,7 @@ Validacao
 Validacao
 - Typecheck: `cmd /c node node_modules\\typescript\\bin\\tsc --noEmit` (ok).
 - Build: `cmd /c npm run build` (ok).
-- Screenshot de confer�ncia: `output/player-fit-fix/shot-0.png`.
+- Screenshot de conferência: `output/player-fit-fix/shot-0.png`.
 2026-03-16 auto-correcoes mini sprint (input transitions + test reliability)
 - Tentativa de gameplay real repetida nesta rodada, mas Vite/Chromium seguem bloqueados por sandbox com `spawn EPERM`; sem sessao Playwright visual.
 - Bug corrigido: eventos de tecla em fila podiam vazar entre modos (menu -> match, round -> match-result), gerando acoes inesperadas (ex.: pause no inicio da partida). Solucao: `InputManager.clearPresses()` + limpeza ao entrar em match e match-result.
@@ -199,7 +199,7 @@ TODO proximo run
 - Assim que ambiente permitir spawn de browser, executar smoke visual real (`smoke-match`, `bot-smoke`) para validar UX/render apos as correcoes de transicao de input.
 - Considerar adicionar um teste Node para fluxo completo de rematch (round winner -> match-result -> restart) garantindo ausencia de vazamento de input em todas as transicoes.
 2026-03-16 sudden death mechanics sprint
-- Nova mecanica de fim de round: Sudden Death inicia nos ultimos 25s e injeta chamas em espiral das bordas para o centro, for�ando confronto e encerrando rounds arrastados.
+- Nova mecanica de fim de round: Sudden Death inicia nos ultimos 25s e injeta chamas em espiral das bordas para o centro, forçando confronto e encerrando rounds arrastados.
 - Cada tick do Sudden Death pode quebrar bloco no tile atingido, revelar power-up escondido e acionar bomba posicionada naquele tile (fuse -> 0), integrando com os sistemas existentes em vez de bypass.
 - HUD agora mostra countdown para Sudden Death (`SD Ns`) e troca para estado ativo (`SUDDEN DEATH`) quando o evento entra.
 - `render_game_to_text` passou a expor `match.suddenDeath` com `active`, `startsAtMs`, `tickMs` e `progress` para depuracao automatizada.
@@ -296,7 +296,7 @@ Validacao
   - adicionado `spawnProtectionMs` em `PlayerState`
   - jogadores nascem com `SPAWN_PROTECTION_MS = 2200`
   - dano por chama ignora player enquanto protecao > 0
-  - `render_game_to_text` agora exp�e `spawnProtectionMs` por player para QA.
+  - `render_game_to_text` agora expõe `spawnProtectionMs` por player para QA.
 - Arena spawn zone expandida (open tiles) para reduzir rounds com abertura travada em grid compacto.
 
 Validacao
@@ -317,7 +317,7 @@ Validacao
 - Smoke Playwright bloqueado no ambiente por `spawn EPERM` do Chromium; pendente validacao visual quando sandbox permitir browser spawn.
 
 2026-03-17 auto-correcoes mini sprint (spawn lock + render fallback)
-- Analise desta rodada encontrou 2 regress�es principais:
+- Analise desta rodada encontrou 2 regressões principais:
   1) crash no harness Node em `drawPlayer` quando `assets.players[*].walk` nao existe (fixtures antigas dos testes).
   2) BOT e jogador podiam nascer "presos" no mapa 11x9: spawn em `2,1` / `8,7` tinha unica saida marcada como breakable por power-up forcado, causando IA sem direcao e jogo truncado no inicio.
 - Correcao aplicada no render: `drawPlayer` agora usa fallback seguro para ciclo de caminhada (`baseSprites.walk?.[dir] ?? []`), evitando excecao e preservando sprite estatico quando nao ha frames de walk.
@@ -345,12 +345,12 @@ TODO proximo run
 Validacao
 - Typecheck: `cmd /c node node_modules\\typescript\\bin\\tsc --noEmit` (ok).
 - Smoke de gameplay: `output/guts-clean-v2/shot-0.png`.
-- Recorte close do P1 para inspe��o: `output/guts-clean-v2/crop-p1.png`.
+- Recorte close do P1 para inspeção: `output/guts-clean-v2/crop-p1.png`.
 - Sem erros de console.
 2026-03-16 sharpness/rendering fidelity sprint
 - Corrigido pipeline de render para reduzir blur global (HUD, tiles e sprites):
   - canvas agora usa backbuffer 2x (`CANVAS_BACKBUFFER_SCALE = 2`) e `ctx.setTransform(...)` para desenhar em coordenadas logicas com mais definicao real.
-  - novo `syncCanvasDisplaySize()` aplica escala de exibicao com preferencia por fator inteiro conforme viewport, evitando interpolacao fracionada que emba�a pixel art.
+  - novo `syncCanvasDisplaySize()` aplica escala de exibicao com preferencia por fator inteiro conforme viewport, evitando interpolacao fracionada que embaça pixel art.
   - hook em `resize` e `fullscreenchange` para manter a nitidez apos redimensionamento/toggle fullscreen.
 - CSS do canvas simplificado para nao forcar escala dinamica fracionada via regra fixa; tamanho passa a ser controlado pelo runtime.
 - Test harnesses Node atualizados (`tests/bot-intel-check.mjs` e `tests/input-transition-check.mjs`) com `setTransform`, `style`, `innerWidth/innerHeight` no fake canvas/window.
@@ -413,7 +413,7 @@ TODO proximo run
 - Quando o ambiente liberar spawn de browser, reexecutar smoke visual real (`smoke-match`, `bot-smoke`, `sudden-death-smoke`) para validar UX/render alem da simulacao.
 - Se surgirem novos ajustes de arena, manter o `test:spawn` no gate para evitar retorno de spawn lock.
 2026-03-16 guts walk hi-res integration
-- Anima��es do P1 (Guts) foram promovidas para nativo 160x160 usando frames de `output/pixellab-guts/unzipped/animations/walking-8-frames`.
+- Animações do P1 (Guts) foram promovidas para nativo 160x160 usando frames de `output/pixellab-guts/unzipped/animations/walking-8-frames`.
 - Substituidos `public/assets/sprites/player1-walk-{south,north,west}-0..7.png` pelos frames hi-res originais.
 - Direcao leste (`east`) reconstruida por espelho horizontal dos frames `west` para manter 4 direcoes sem quebra.
 - Como o walk agora e hi-res, `allowWalkAnimation` do P1 foi reativado.
@@ -423,3 +423,437 @@ Validacao
 - `npm run test:bot` (ok)
 - `npm run test:input` (ok)
 - Playwright walk smoke: `output/guts-hiwalk/shot-0.png`, `shot-1.png` (sem erros de console).
+2026-03-16 mechanics sprint (bomb push)
+- Area escolhida: mecanicas de gameplay.
+- Nova mecanica implementada: ao caminhar contra uma bomba alinhada no corredor, o player empurra a bomba 1 tile na direcao do movimento (somente se o tile de destino estiver livre).
+- Regras de seguranca do push:
+  - nao empurra para fora da arena;
+  - nao empurra para parede/bloco quebravel;
+  - nao empurra para tile ocupado por outra bomba;
+  - nao empurra para tile ocupado por player vivo.
+- Integracao feita dentro do fluxo de movimento (`movePlayer`) para manter responsividade sem criar input novo.
+
+Validacao
+- Novo teste deterministico: `tests/bomb-push-check.mjs`.
+  - cenario 1: bomba em frente e tile livre -> bomba avanca de (3,1) para (4,1) (`pushPass=true`).
+  - cenario 2: bloco quebravel atras da bomba -> bomba nao move (`blockedPass=true`).
+- Script npm novo: `npm run test:bomb-push`.
+- Regressao mantida:
+  - `npm run test:bot` (ok)
+  - `npm run test:input` (ok)
+  - `npm run test:spawn` (ok)
+- Skill Playwright tentada nesta rodada, mas Chromium segue bloqueado por sandbox com `browserType.launch: spawn EPERM`.
+
+TODO proximo run
+- Quando o ambiente liberar spawn do Chromium, executar smoke visual real para verificar a leitura/feeling da mecanica de push em gameplay (`smoke-match` + cenario dedicado de corredor com bomba).
+- Considerar extensao natural da mecanica: power-up de chute deslizante (bomba desliza ate obstaculo) para elevar profundidade tatica sem perder previsibilidade.
+2026-03-16 bot round-start suicide fix
+- Root cause found in movement gating: zero-displacement options were treated as valid movement, so BOT could choose a turn direction, never leave the tile, and die on its own first bomb.
+- Fix in src/app/game-app.ts:
+  - added real movement checks (`positionChanged` / `canMovementOptionAdvance`)
+  - `resolveMovementDirection` now only treats a direction as usable when it produces actual displacement
+  - `movePlayer` no longer early-returns on `combinedFree` when the move stays in place
+- Regression added to tests/bot-intel-check.mjs: fresh round sim now requires BOT to leave its first bomb tile and stay alive after that first explosion resolves.
+
+Validation
+- cmd /c node node_modules\\typescript\\bin\\tsc --noEmit (ok)
+- cmd /c npm run test:bot (ok, including `freshRoundEscapePass=true`)
+- cmd /c npm run test:input (ok)
+- cmd /c npm run test:spawn (ok)
+- cmd /c npm run test:bomb-push (ok)
+- develop-web-game smoke: output/web-game/shot-0.png + output/web-game/state-0.json
+  - captured state shows BOT alive on tile {x:7,y:6} after leaving the danger tile, with own bomb at {x:8,y:7}
+  - no errors-0.json produced in that smoke run
+2026-03-17 bot strategic safety-window sprint
+- Area escolhida: inteligencia de bots.
+- Melhoria aplicada na navegacao tatica do BOT: pathing estrategico agora exige janela minima de seguranca no tile de destino (nao apenas seguranca na chegada), evitando passos para tiles que explodem logo em seguida.
+- Implementacao em `getBotDecision(...)` + BFS de busca (`findNearestReachableTarget`/`findDirectionToNearestTile`) com parametro de `minSafetyWindowMs`.
+- Novo cenario de teste adicionado em `tests/bot-intel-check.mjs` (`strategicAvoidPass`): reproduz caso em que o BOT antes aceitava rota para tile com perigo em 570ms apesar de alternativa segura; agora evita esse passo.
+
+Validacao desta rodada
+- `npm run test:bot` (ok, incluindo `strategicAvoidPass=true`).
+- `npm run test:input` (ok).
+- `npm run test:spawn` (ok).
+- `node node_modules/typescript/bin/tsc --noEmit` (ok).
+
+TODO proximo run
+- Rodar smoke Playwright visual do BOT assim que o ambiente liberar spawn do Chromium (ainda ocorre `browserType.launch: spawn EPERM` no sandbox atual).
+- Se o comportamento ficar conservador demais em gameplay real, ajustar `BOT_STRATEGIC_MOVE_WINDOW_STEPS` (atual 2).
+2026-03-16 auto-correcoes mini sprint (round outcome pause freeze)
+- Tentativa de gameplay com cliente Playwright da skill foi bloqueada neste ambiente: `npx` via PowerShell barrado por ExecutionPolicy e `cmd /c npx playwright --version` falhou com `npm EACCES` (sem acesso/perm para baixar pacote), então a rodada usou simulacao deterministica com `window.advanceTime` + eventos de teclado.
+- Bug real identificado e reproduzido: pressionar `Esc` durante `roundOutcome` congelava a transicao de round (pause vazava para o proximo round).
+- Correcao 1 (`src/app/game-app.ts`): toggle de pausa agora e ignorado enquanto `roundOutcome` estiver ativo.
+- Correcao 2 (`src/app/game-app.ts`): `advanceAfterRound()` agora limpa fila de input (`this.input.clearPresses()`) tambem na transicao de round normal, evitando vazamento de tecla para o round seguinte.
+- Nova regressao adicionada: `tests/round-outcome-pause-check.mjs` valida fim de round por eliminacao + `Esc` no resultado + avanc¸o correto para round seguinte sem pause travado.
+- Script adicionado: `npm run test:round-outcome`.
+
+Validacao desta rodada
+- `npm run test:bot` (ok)
+- `npm run test:input` (ok)
+- `npm run test:spawn` (ok)
+- `npm run test:bomb-push` (ok)
+- `npm run test:round-outcome` (ok)
+- `node node_modules/typescript/bin/tsc --noEmit` (ok)
+
+Notas uteis para o futuro
+- Nao execute os scripts `test:*` em paralelo: todos recompilam `output/esm` e pode ocorrer `ERR_MODULE_NOT_FOUND` intermitente por corrida de arquivos.
+- Manter `test:round-outcome` no gate de regressao para evitar retorno de freeze entre rounds por input stale.
+2026-03-16 bot survival + controls legend follow-up
+- Follow-up from user report: BOT was still self-KOing at round start in the real game loop.
+- Root cause refinement:
+  - `getBotDecision()` had a side effect (cooldown mutation), which polluted debug runs and made bot timing harder to reason about.
+  - `canBotPlaceBombAtTile()` was too permissive: it accepted tiles that were reachable before detonation even if they were still inside the blast when the bomb actually exploded.
+- Fixes applied:
+  - moved BOT bomb cooldown write out of `getBotDecision()` and into the actual successful bomb placement path in `updatePlayers()` / `placeBomb()`
+  - `placeBomb()` now returns `boolean` so cooldown is only applied when the bomb was really created
+  - `canBotPlaceBombAtTile()` now requires an escape tile that survives the planned detonation, not just an early-arrival tile
+  - added `getOverlappingBomb()` + committed bomb-escape preference so BOT stops bouncing on its own pass-through bomb footprint
+- UI request completed: added always-visible controls legend at the bottom of gameplay and expanded menu instructions with `B` toggle info.
+
+Validation
+- cmd /c node node_modules\\typescript\\bin\\tsc --noEmit (ok)
+- cmd /c npm run test:bot (ok)
+- cmd /c npm run test:input (ok)
+- cmd /c npm run test:spawn (ok)
+- cmd /c npm run test:bomb-push (ok)
+- deterministic round trace after compile:
+  - round 1 first bomb at frame 24 on tile {x:7,y:6}
+  - BOT left bomb tile and did not die; round 1 winner became BOT (`winner: 2`)
+- develop-web-game smoke: output/web-game/shot-0.png + output/web-game/state-0.json
+  - BOT alive in round 1 (`tile {x:6,y:7}`) with own bomb safely offset at `{x:5,y:6}`
+  - controls legend visible on screen
+  - no errors-0.json produced
+2026-03-17 bot spawn-protection intelligence sprint
+- Area escolhida: inteligencia de bots (mini sprint focado em decisao ofensiva com invulnerabilidade de spawn).
+- TDD aplicado com teste dedicado novo `tests/bot-spawn-protection-check.mjs`:
+  1) RED confirmado: bot plantava bomba contra inimigo adjacente ainda invulneravel (`spawnProtectionMs > 0`).
+  2) GREEN: `getBotDecision` agora considera vulnerabilidade real do inimigo antes de acionar gatilhos ofensivos (adjacencia/linha de bomba) e antes de planejar `attackPositionTarget`.
+- Agressividade util preservada: mesmo com inimigo invulneravel, bot continua autorizado a plantar bomba se houver bloco quebravel adjacente.
+
+Validacao desta rodada
+- `npm run compile:esm && node tests/bot-spawn-protection-check.mjs` (ok)
+  - caso 1: `placeBomb=false` contra alvo invulneravel.
+  - caso 2: `placeBomb=true` quando ha breakable adjacente.
+- `npm run test:input` (ok) para sanity check fora da IA.
+- Limite do ambiente: `npm run dev`/Vite e smoke Playwright seguem bloqueados por `spawn EPERM` (esbuild child process), sem screenshot de gameplay nesta rodada.
+
+TODO proximo run
+- Quando spawn de browser/child process estiver liberado, rodar smoke visual real com a skill (`tests/actions/bot-smoke.json`) e confirmar em screenshot que o BOT evita drop inutil no inicio da rodada.
+2026-03-17 mini sprint (polimento: danger overlay tatico)
+- Area escolhida: polimento/UX de combate.
+- Entregue:
+  - Novo overlay de perigo em tempo real no tabuleiro, baseado no `getDangerMap`, destacando tiles com risco iminente (cores por ETA).
+  - Toggle global `V` para ligar/desligar o overlay; status visivel no HUD (`DANGER ON/OFF`) e hints atualizados em menu/legenda.
+  - `render_game_to_text` agora expõe `match.dangerOverlay` com `enabled`, `maxEtaMs` e lista de `tiles` (quando ligado).
+  - Novo teste TDD: `tests/danger-overlay-check.mjs` + script `npm run test:danger-overlay`.
+  - `InputManager` atualizado para reservar `KeyV`.
+
+Validacao desta rodada
+- `npm run test:danger-overlay` (ok)
+- `npm run test:input` (ok)
+- `npm run test:round-outcome` (ok)
+- `npm run test:spawn` (ok)
+- `node node_modules/typescript/bin/tsc --noEmit` (ok)
+
+Limitacao de ambiente
+- Iteracao visual com skill `develop-web-game` tentou executar em `http://127.0.0.1:5173`, mas Chromium segue bloqueado por sandbox com `browserType.launch: spawn EPERM`.
+2026-03-17 mini sprint (polimento + engenharia: blast preview tatico)
+- Area escolhida: polimento de gameplay com suporte de engenharia/testes.
+- Entregue:
+  - Novo overlay de pre-visualizacao de explosao da bomba para o jogador ativo (P1 em partida local; jogador selecionado no modo automation).
+  - Toggle global `C` para ligar/desligar blast preview, com indicador no HUD (`BLAST ON/OFF`) e instrucoes atualizadas no menu/legenda.
+  - `render_game_to_text` expandido com `match.bombPreview` (`enabled`, `playerId`, `flameRange`, `tiles`) para depuracao deterministica.
+  - Novo teste TDD `tests/bomb-preview-toggle-check.mjs` + script `npm run test:bomb-preview`.
+  - `InputManager` atualizado para reservar `KeyC` e evitar interferencia do navegador.
+- Validacao desta rodada (executada em sequencia):
+  - `npm run test:bomb-preview` (ok)
+  - `npm run test:danger-overlay` (ok)
+  - `npm run test:input` (ok)
+  - `npm run test:spawn` (ok)
+  - `npm run test:round-outcome` (ok)
+  - `npm run test:bomb-range` (ok)
+  - `node node_modules/typescript/bin/tsc --noEmit` (ok)
+- Nota de confiabilidade: scripts `test:*` nao devem rodar em paralelo porque todos recompilam `output/esm` e podem gerar `ERR_MODULE_NOT_FOUND` intermitente.
+- Limite do ambiente: tentativa de 
+pm run dev nesta rodada confirmou bloqueio spawn EPERM (esbuild), mantendo a validacao em harnesses Node.
+
+- Correcao de registro: tentativa de 
+pm run dev nesta rodada confirmou bloqueio spawn EPERM (esbuild), mantendo validacao em harnesses Node.
+2026-03-17 mini sprint (bot intelligence: context-aware power-up priority)
+- Area escolhida: inteligencia de bots, com foco em decisao de loot sob risco/beneficio.
+- TDD:
+  - RED confirmado em novo teste `tests/bot-powerup-priority-check.mjs`: BOT priorizava `speed-up` por proximidade e perseguia `speed-up` inutil com `speedLevel` max.
+  - GREEN aplicado em `src/app/game-app.ts` com nova selecao `findValuablePowerUpDirection(...)` e score por valor efetivo do pickup.
+- Entregue:
+  - BOT agora agrupa pickups visiveis por prioridade e busca primeiro os de maior valor real para o estado atual.
+  - BOT ignora pickup sem ganho pratico (`bomb-up` no cap, `flame-up` no cap, `speed-up` no cap).
+  - Regressao de harness IA estabilizada em `tests/bot-intel-check.mjs` com estado explicito de vulnerabilidade (`spawnProtectionMs=0`) e `flameRange` nos cenarios de cadeia.
+  - Novo script `npm run test:bot-powerup` em `package.json`.
+
+Validacao desta rodada
+- `npm run test:bot-powerup` (ok)
+- `npm run test:bot` (ok)
+- `npm run test:input` (ok)
+- `npm run test:spawn` (ok)
+- `npm run test:danger-overlay` (ok)
+- `npm run test:round-outcome` (ok)
+- `node node_modules/typescript/bin/tsc --noEmit` (ok)
+
+Observacoes
+- Validacao desta sprint foi 100% por harness Node deterministico.
+- Nao houve sessao Playwright visual nesta rodada.
+2026-03-17 mini sprint (bot anti-suicide: preemptive escape)
+- Bug report reproduzido com evidencia: BOT morria sozinho em ~8.7s (`deadAtFrame=520`) com P1 inerte.
+- Root cause identificado:
+  - BOT so tratava perigo como urgente muito tarde (`nowDanger`), e antes disso podia oscilar entre tiles da mesma coluna de explosao.
+  - Quando finalmente entrava no modo de fuga critica, ja nao havia rota segura viavel.
+- TDD aplicado:
+  - RED: novo teste `tests/bot-survival-10s-check.mjs` falhando com morte no frame 520.
+  - GREEN: `src/app/game-app.ts` ganhou escape preemptivo (`BOT_PREEMPTIVE_ESCAPE_STEPS`) em `getBotDecision` para sair mais cedo de tiles com detonação prevista.
+- Entregue:
+  - Nova heuristica de fuga antecipada antes do estado critico, com preferencia por tile seguro com vizinhos seguros.
+  - Script `npm run test:bot-survival` adicionado para gate de regressao.
+
+Validacao desta rodada
+- `npm run test:bot-survival` (RED falhou -> GREEN passou)
+- `npm run test:bot` (ok)
+- `npm run test:bot-powerup` (ok)
+- `npm run test:input` (ok)
+- `npm run test:spawn` (ok)
+- `npm run test:danger-overlay` (ok)
+- `npm run test:round-outcome` (ok)
+- `node node_modules/typescript/bin/tsc --noEmit` (ok)
+2026-03-17 mini sprint (mecanica: detonacao remota)
+- Area escolhida: mecanica de combate com ganho tatico imediato.
+- Entregue:
+  - Novo power-up 
+emote-up integrado em tipos, arena e assets (src/core/types.ts, src/game/arena.ts, src/app/assets.ts).
+  - Novo atributo 
+emoteLevel por jogador + suporte no HUD/menu/legend e 
+ender_game_to_text.
+  - Novo input dedicado de detonação remota: P1 R, P2 U (src/core/config.ts, src/engine/input.ts).
+  - Ao acionar detonação remota, a bomba mais antiga do jogador explode instantaneamente (sem esperar o fuse).
+  - Priorizacao de BOT para pickup 
+emote-up quando ainda nao possui o recurso.
+- TDD:
+  - RED confirmado em 	ests/remote-detonation-check.mjs (coleta sem ganho + detonação nao ocorria).
+  - GREEN com implementacao minima e teste passando.
+- Validacao desta rodada:
+  - 
+pm run test:remote (ok)
+  - 
+pm run test:bomb-push (ok)
+  - 
+pm run test:bomb-preview (ok)
+  - 
+pm run test:danger-overlay (ok)
+  - 
+pm run test:input (ok)
+  - 
+pm run test:bot (ok)
+  - 
+pm run test:round-outcome (ok)
+  - 
+ode node_modules/typescript/bin/tsc --noEmit (ok)
+- Limite de ambiente:
+  - Skill Playwright executada (web_game_playwright_client.js), mas browsers continuam bloqueados por rowserType.launch: spawn EPERM.
+
+Atualizado em: 2026-03-17 15:07:22 -03:00
+2026-03-17 mini sprint (bot opening discipline)
+- Follow-up do relato do usuario: o BOT ainda parecia se matar no opening porque plantava a primeira bomba cedo demais, ainda dentro da propria janela de spawnProtection.
+- Root cause confirmado em modo manual (navigator.webdriver = false, BOT ligado): primeira bomba saia no frame 24 com cerca de 1783ms de spawnProtection restante, criando um opening arriscado e com leitura de suicidio instantaneo.
+- TDD: novo teste tests/bot-opening-discipline-check.mjs.
+  - RED: falhou com firstBotBombFrame=24 e bombPlacedDuringSpawnProtection=true.
+  - GREEN: getBotDecision() agora bloqueia plantio ofensivo enquanto player.spawnProtectionMs > 0.
+- Efeito apos fix:
+  - primeira bomba do BOT passou para firstBotBombFrame=132, ja com spawnProtectionAtBomb=0;
+  - BOT continua vivo e agressivo depois da janela de spawn.
+
+Validacao desta rodada
+- npm run test:bot-opening (ok)
+- npm run compile:esm && node tests/bot-opening-discipline-check.mjs && node tests/bot-intel-check.mjs && node tests/bot-survival-10s-check.mjs && node tests/bot-powerup-priority-check.mjs && node node_modules/typescript/bin/tsc --noEmit (ok)
+- Smoke visual skill develop-web-game:
+  - output/bot-opening-short/shot-11.png
+  - output/bot-opening-short/state-11.json
+  - sem errors-0.json
+
+TODO proximo run
+- Se o opening ficar conservador demais em gameplay humano real, considerar abrir excecao para plantio ainda no spawn apenas quando houver rota de fuga com 2 saidas seguras e alvo realmente valioso.
+2026-03-17 mini sprint (bot remote detonation intelligence)
+- Root cause confirmado: o BOT ja priorizava pegar `remote-up`, mas nao tinha nenhum caminho de decisao para usar detonação remota; `getBotDecision()` so sabia retornar direcao e `placeBomb`.
+- TDD: novo teste `tests/bot-remote-detonation-check.mjs`.
+  - RED inicial mostrou `detonateDecision = { direction: "right", placeBomb: false }`, sem uso do remote mesmo com kill limpa disponivel.
+  - Ajuste de fixture no teste: os cenario foram isolados da geometria fixa da arena (`solid` limpo) para validar inteligencia de remote, nao colisao de mapa.
+- Implementacao minima:
+  - `BotDecision` ganhou flag opcional `detonate`.
+  - `updatePlayers()` agora executa `triggerRemoteDetonation()` tambem para decisoes do BOT.
+  - extraido helper `getOldestOwnedBomb()` para alinhar a decisao da IA com a mesma bomba que a detonação real dispara.
+  - novo helper `getRemoteDetonationBomb()` faz o BOT detonar so quando:
+    - ele possui `remoteLevel`,
+    - a bomba selecionada realmente atinge o inimigo vulneravel,
+    - o proprio BOT nao esta no blast dessa detonação.
+
+Validacao desta rodada
+- `npm run compile:esm && node tests/bot-opening-discipline-check.mjs && node tests/bot-remote-detonation-check.mjs && node tests/bot-intel-check.mjs && node tests/bot-survival-10s-check.mjs && node tests/bot-powerup-priority-check.mjs && node node_modules/typescript/bin/tsc --noEmit` (ok)
+- Smoke visual skill `develop-web-game`:
+  - `output/bot-remote-smoke/shot-0.png`
+  - `output/bot-remote-smoke/state-0.json`
+  - sem `errors-0.json`
+
+TODO proximo run
+- Criar um cenario deterministico de browser/harness para o BOT realmente coletar `remote-up` em gameplay e confirmar uso visual da detonação remota, nao apenas por teste Node.
+2026-03-17 bot anti-suicide follow-up (own blast-lane escape)
+- Root cause reproduced in deterministic harness: bot could return `direction: null` while standing inside its own bomb blast lane (not overlapping bomb tile), delaying escape and leading to self-trap behavior.
+- Added targeted regression test `tests/bot-own-blast-escape-check.mjs` (RED -> GREEN) to require bot's chosen next tile to exit its own blast coverage.
+- Bot decision hardened in `src/app/game-app.ts`: new `getThreateningOwnedBomb(...)` path that forces immediate escape when bot is inside any owned bomb blast lane, instead of waiting for late danger threshold.
+- Added npm script `test:bot-own-blast` for quick verification.
+
+Validation
+- `npm run test:bot-own-blast` (pass)
+- `npm run test:bot` (pass)
+- `npm run test:bot-survival` (pass)
+- `node node_modules/typescript/bin/tsc --noEmit` (pass)
+
+Notes
+- Attempt to run visual smoke via develop-web-game Playwright client was blocked by host policy when spawning dev server process in this session.
+2026-03-18 pixel lab roster + live character menu (G/K)
+- Added bulk PixelLab importer script `scripts/import_pixellab_characters.mjs` + npm command `npm run sync:pixellab`.
+- Synced completed PixelLab characters into `public/assets/characters/<character-id>/{south,east,north,west}.png` and generated `public/assets/characters/manifest.json`.
+- Import result in this run: 76/76 character folders present in `public/assets/characters`.
+- Updated runtime assets loader to read roster manifest and load all character directional sprites into `GameAssets.characterRoster`.
+- Implemented live character selection workflow in-game:
+  - Open selection menu: `G` (P1), `K` (P2)
+  - Browse options: P1 `W/S`, P2 `ArrowUp/ArrowDown`
+  - Lock selection: P1 `E`, P2 `P`
+  - Selection applies live after lock and persists through rounds.
+- Added overlay rendering for character selection in menu/match/match-result states.
+- Updated portraits/player rendering to use selected roster sprites (instead of fixed player1/player2 art only).
+- Added regression test `tests/character-selection-menu-check.mjs` and npm script `test:character-menu`.
+
+Validation
+- `npm run test:character-menu` (pass)
+- `npm run test:input` (pass)
+- `npm run test:bot` (pass)
+- `npm run test:bot-own-blast` (pass)
+- `node node_modules/typescript/bin/tsc --noEmit` (pass)
+- `npm run build` (pass)
+2026-03-18 sprite scale polish + hitbox cleanup
+- Removed the visible per-player glow/hitbox rectangle from `drawPlayer` so no blue debug box is drawn during gameplay.
+- Implemented sprite alpha-trim caching in `src/app/game-app.ts` (offscreen scan once per sprite via `WeakMap`) to crop transparent padding from imported PixelLab frames.
+- Player sprite rendering now draws trimmed source rects and uses larger presentation scale (`PLAYER_SPRITE_HEIGHT_SCALE=1.45`, width clamped by tile) so characters are visually readable on the arena.
+- Added regression test `tests/player-sprite-render-check.mjs` + npm command `test:player-sprite`.
+
+Validation
+- `npm run test:player-sprite` (pass)
+- `npm run test:character-menu` (pass)
+- `npm run test:input` (pass)
+- `npm run test:bot-survival` (pass)
+- `npm run build` (pass)
+
+2026-03-18 bot opening trap fix
+- Follow-up to the round-start bot report: the opening path from P2 spawn was leading into a dead-end pocket (`8,6`) with breakables on the only useful exits, so the bot would either stall there or look suicidal if it tried to force a bomb.
+- Patched `getBotDecision()` to stop using the old "nearest any safe tile" patrol fallback. The fallback now scores adjacent moves, prefers non-reversing movement, and refuses trap tiles that have adjacent breakables but cannot actually be bombed from safely.
+- Result: the bot now holds the safe spawn tile instead of walking into the trap on round start, and the opening no longer self-KOs.
+- Updated `tests/bot-intel-check.mjs` to assert opening trap safety instead of requiring an impossible first-round bomb from the spawn pocket.
+
+Validation
+- `npm run test:bot` (pass)
+- `npm run test:bot-opening` (pass)
+- `npm run test:bot-own-blast` (pass)
+- `npm run test:bot-survival` (pass)
+- `npm run test:remote` (pass)
+- `npm run build` (pass)
+2026-03-18 mini sprint (mecanica: shield-up)
+- Foco: mecanica/sobrevivencia (novo power-up defensivo com impacto tatico).
+- Entregue:
+  - Novo power-up `shield-up` integrado em tipos, arena e assets (`src/core/types.ts`, `src/game/arena.ts`, `src/app/assets.ts`).
+  - `PlayerState` expandido com `shieldCharges` e `flameGuardMs`.
+  - Dano por chama agora consome escudo antes da morte e aplica janela curta de guard (`SHIELD_GUARD_MS`) para permitir reposicionamento.
+  - HUD atualizado para exibir `H` (escudos) e status `GUARD` quando ativo.
+  - `render_game_to_text` agora expõe `shieldCharges` e `flameGuardMs` por jogador.
+  - Novo teste TDD `tests/shield-powerup-check.mjs` + script `npm run test:shield`.
+- Validacoes:
+  - `npm run test:shield` (RED->GREEN confirmado)
+  - `npm run test:remote` (ok)
+  - `npm run test:bot-powerup` (ok)
+  - `npm run test:input` (ok)
+  - `npm run test:spawn` (ok)
+  - `npm run test:round-outcome` (ok)
+  - `npm run test:danger-overlay` (ok)
+  - `node node_modules/typescript/bin/tsc --noEmit` (ok)
+- Observacao tecnica:
+  - `compile:esm` em paralelo causa corrida em `output/esm`; manter gate de testes sequencial.
+- Playwright:
+  - Rodada tentou validacao visual, mas ambiente bloqueou browser/server local (`spawn EPERM`, acesso negado para subir http server e falha de sessao existente no Chrome do MCP).
+2026-03-20 HUD cleanup pass
+- Analise visual via skill `develop-web-game` finalmente executada com Playwright local e screenshot novo em `output/analysis-smoke/shot-0.png`.
+- Achado principal: a barra de controles persistia durante a partida e roubava foco visual da arena, contrariando a diretriz da skill de manter instrucoes no menu.
+- Ajuste aplicado em `src/app/game-app.ts`: legenda de controles removida do runtime in-game; informacoes de controle continuam centralizadas no menu inicial.
+- Menu tambem foi atualizado para listar o power-up `+Shield`, alinhando onboarding com as mecanicas ja existentes do jogo.
+
+Validacao 2026-03-20
+- `npm run build` (pass)
+- `npm run test:input` (pass, executado isoladamente para evitar corrida de `compile:esm`)
+- Smoke Playwright no build estatico em `http://127.0.0.1:4173` com artefatos em `output/analysis-smoke-clean/`
+
+TODO sugestao
+- Se quisermos aproveitar ainda mais a limpeza visual, a proxima rodada natural e usar o espaco inferior liberado para atmosfera decorativa ou subir levemente a arena sem reintroduzir texto utilitario durante a partida.
+2026-03-20 launcher pass
+- Criado launcher simples para Windows com duplo clique:
+  - `Abrir Bomberman.bat`
+  - `Fechar Bomberman.bat`
+- Implementacao central em PowerShell:
+  - `scripts/launch-bomberman.ps1` garante dependencias, roda `npm run build`, sobe servidor local e abre o navegador automaticamente.
+  - `scripts/serve-dist.ps1` serve a pasta `dist/` sem depender de Python, usando `HttpListener`.
+  - `scripts/stop-bomberman.ps1` encerra o servidor ativo e limpa o estado salvo.
+- O launcher reaproveita uma instancia existente quando o jogo ja estiver aberto, evitando abrir varios servidores locais.
+- Estado do launcher fica em `.bomberman-launcher.json`, com PID e porta da sessao atual.
+
+Validacao 2026-03-20 launcher
+- `powershell -File .\scripts\launch-bomberman.ps1` (pass)
+- Reexecucao do launcher com servidor ativo reutilizando a sessao existente (pass)
+- `powershell -File .\scripts\stop-bomberman.ps1` (pass)
+2026-03-20 menu redesign pass
+- Corrigido bug visual do menu inicial: os cards de ready estavam sobrepondo o bloco de instrucoes, gerando layout quebrado e poluido.
+- `renderMenu()` foi redesenhado em blocos mais claros:
+  - dois cards superiores para P1 e P2/BOT;
+  - um card central para opcoes da partida;
+  - dois cards inferiores dedicados ao estado de ready e skin de cada jogador.
+- `drawReadyPanel()` ganhou layout proprio com retrato embutido no card, textos menores e status mais legivel.
+- Adicionado helper `drawMenuSection()` para padronizar os blocos visuais do menu.
+
+Validacao 2026-03-20 menu
+- `npm run build` (pass)
+- Smoke Playwright em `output/menu-redesign-smoke/shot-0.png` confirmando que o menu deixou de sobrepor elementos
+2026-03-20 arena combat + bot visibility pass
+- Corrigida a visibilidade do P2/BOT:
+  - o roster padrao agora comeca com `default-p1` / `default-p2` em `src/app/assets.ts`, evitando cair direto em personagens do manifest com sprites quebrados;
+  - `drawPlayer()` e `drawMenuPortrait()` passaram a usar fallback de direcao renderizavel quando um frame vier vazio/transparente.
+- Corrigido o problema do BOT "sumido": o asset `0fb0ec2f...` tinha frames `north/south` vazios, entao o personagem desaparecia quando ficava parado virado nesses eixos.
+- Arena refeita para combate:
+  - mais conectividade no spawn e no eixo central;
+  - power-ups forçados sairam das rotas de abertura e foram reposicionados para zonas mais contestadas;
+  - o miolo ganhou mais flancos curtos para gerar troca e rotacao mais cedo.
+
+Validacao 2026-03-20 arena
+- `npm run build` (pass)
+- `npm run test:spawn` (pass, `reachableOpenTiles` subiu para 15 em ambos os spawns)
+- `npm run test:bot-survival` (pass)
+- Smoke Playwright em `output/arena-bot-fix-smoke/shot-0.png` mostrando BOT visivel e atuando no centro da arena
+2026-03-27 bomb collision + extra power-ups
+- Bomba voltou a ser bloqueante por padrao: empurrar bomba agora exige `kick-up`, e atravessar bomba agora exige `bomb-pass-up`, mantendo apenas o escape curto do dono ao plantar.
+- Runtime recebeu `bomb-pass-up` e `kick-up` de ponta a ponta: tipos, limites, spawn no mapa, prioridade de bot, HUD, fallback visual e asset loading.
+- Spec do pack PixelLab atualizada para incluir `public/assets/ui/power-bomb-pass.png` e `public/assets/ui/power-kick.png`.
+- Novos icons gerados e promovidos do PixelLab:
+  - `power-bomb-pass.png` com silhueta espectral azul legivel.
+  - `power-kick.png` com bota/impacto bem legivel no tile.
+
+Validacao 2026-03-27 power-ups
+- `npm run build` (pass)
+- `npm run test:bomb-push` (pass; cobre bloqueio default, kick e bomb-pass)
+- `npm run test:shield` (pass)
+- `npm run test:bot-powerup` (pass)
+
+TODO 2026-03-27
+- Rodar smoke visual em browser para ver os dois novos pickups no tabuleiro real e ajustar contraste se o `kick-up` parecer escuro demais em fundo claro.
+- Se quisermos expandir mais a camada de perks, os proximos candidatos naturais sao `line-bomb`, `flame-pass` ou `throw-bomb`.

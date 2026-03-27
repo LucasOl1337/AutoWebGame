@@ -1,0 +1,455 @@
+{
+  "version": "1.1",
+  "styleDefaults": {
+    "theme": "heroic-fantasy",
+    "inspiration": "lol-inspired pixel art",
+    "view": "low top-down",
+    "readabilityTargetTileSize": 40,
+    "outline": "single color outline",
+    "shading": "medium shading",
+    "detail": "high detail"
+  },
+  "scheduler": {
+    "submitSpacingMs": 20000,
+    "pollIntervalMs": 30000,
+    "retryDelaysMs": [30000, 60000, 120000, 300000],
+    "maxRetries": 3
+  },
+  "pinnedCharacters": [
+    {
+      "id": "03a976fb-7313-4064-a477-5bb9b0760034",
+      "defaultSlot": 1,
+      "order": 0
+    },
+    {
+      "id": "6ee8baa5-3277-413b-ae0e-2659b9cc52e9",
+      "defaultSlot": 2,
+      "order": 1
+    }
+  ],
+  "batches": [
+    { "key": "tiles", "label": "Map Tiles" },
+    { "key": "props", "label": "Props and VFX" },
+    { "key": "pickups", "label": "Pickups" },
+    { "key": "characters", "label": "Future Character Jobs" }
+  ],
+  "assets": [
+    {
+      "key": "arena-tiles",
+      "batch": "tiles",
+      "enabled": true,
+      "kind": "tiles-pro",
+      "tool": "create_tiles_pro",
+      "responseIdKeys": ["id", "tile_id", "result.id", "result.tile_id"],
+      "submit": {
+        "path": "/create-tiles-pro",
+        "method": "POST",
+        "body": {
+          "description": "1). heroic fantasy stone arena floor with rich blue-gray shading and subtle runic wear 2). lighter combat lane floor tile with carved slab direction and cleaner highlights 3). glowing arcane spawn floor tile with restrained gold-blue rune center 4). heavy fortified wall tile with readable top-down depth, carved stone lip and crisp silhouette 5). breakable wooden crate tile with iron braces, cracks and readable shape 6). optional accent floor tile with moss and engraved edge detail",
+          "tile_type": "square_topdown",
+          "tile_size": 32,
+          "tile_view": "low top-down",
+          "outline_mode": "outline"
+        }
+      },
+      "poll": {
+        "pathTemplate": "/tiles-pro/{remoteId}"
+      },
+      "outputs": [
+        {
+          "key": "floor-base",
+          "sourcePaths": ["storage_urls.tile_0", "b2_urls.tile_0", "urls.tile_0", "result.b2_urls.tile_0", "data.storage_urls.tile_0", "data.b2_urls.tile_0", "data.urls.tile_0", "data.result.b2_urls.tile_0"],
+          "targetPath": "public/assets/tiles/floor-base.png"
+        },
+        {
+          "key": "floor-lane",
+          "sourcePaths": ["storage_urls.tile_1", "b2_urls.tile_1", "urls.tile_1", "result.b2_urls.tile_1", "data.storage_urls.tile_1", "data.b2_urls.tile_1", "data.urls.tile_1", "data.result.b2_urls.tile_1"],
+          "targetPath": "public/assets/tiles/floor-alt.png"
+        },
+        {
+          "key": "floor-spawn",
+          "sourcePaths": ["storage_urls.tile_2", "b2_urls.tile_2", "urls.tile_2", "result.b2_urls.tile_2", "data.storage_urls.tile_2", "data.b2_urls.tile_2", "data.urls.tile_2", "data.result.b2_urls.tile_2"],
+          "targetPath": "public/assets/tiles/floor-spawn.png"
+        },
+        {
+          "key": "wall",
+          "sourcePaths": ["storage_urls.tile_3", "b2_urls.tile_3", "urls.tile_3", "result.b2_urls.tile_3", "data.storage_urls.tile_3", "data.b2_urls.tile_3", "data.urls.tile_3", "data.result.b2_urls.tile_3"],
+          "targetPath": "public/assets/tiles/wall.png"
+        },
+        {
+          "key": "crate",
+          "sourcePaths": ["storage_urls.tile_4", "b2_urls.tile_4", "urls.tile_4", "result.b2_urls.tile_4", "data.storage_urls.tile_4", "data.b2_urls.tile_4", "data.urls.tile_4", "data.result.b2_urls.tile_4"],
+          "targetPath": "public/assets/tiles/crate.png"
+        }
+      ]
+    },
+    {
+      "key": "bomb-prop",
+      "batch": "props",
+      "enabled": true,
+      "kind": "map-object",
+      "tool": "create_map_object",
+      "responseIdKeys": ["id", "object_id", "result.id", "result.object_id"],
+      "submit": {
+        "path": "/map-objects",
+        "method": "POST",
+        "body": {
+          "description": "heroic fantasy bomb pickup object, low top-down, dark steel shell, gold rune seam, high readability",
+          "image_size": { "width": 64, "height": 64 },
+          "view": "low top-down",
+          "outline": "single color outline",
+          "shading": "medium shading",
+          "detail": "high detail"
+        }
+      },
+      "poll": {
+        "pathTemplate": "/objects/{remoteId}"
+      },
+      "outputs": [
+        {
+          "key": "bomb",
+          "sourcePaths": ["$mcpMapObjectDownload", "rotation_urls.south", "download_url", "image_url", "result.rotation_urls.south", "result.download_url", "result.image_url", "data.rotation_urls.south", "data.download_url", "data.image_url"],
+          "targetPath": "public/assets/sprites/bomb.png"
+        }
+      ]
+    },
+    {
+      "key": "bomb-ruins-prop",
+      "batch": "props",
+      "enabled": true,
+      "kind": "map-object",
+      "tool": "create_map_object",
+      "responseIdKeys": ["id", "object_id", "result.id", "result.object_id"],
+      "submit": {
+        "path": "/map-objects",
+        "method": "POST",
+        "body": {
+          "description": "heroic fantasy bomb ruins sprite, low top-down, cracked steel shell with dim ember core, readable at small size",
+          "image_size": { "width": 64, "height": 64 },
+          "view": "low top-down",
+          "outline": "single color outline",
+          "shading": "medium shading",
+          "detail": "high detail"
+        }
+      },
+      "poll": {
+        "pathTemplate": "/objects/{remoteId}"
+      },
+      "outputs": [
+        {
+          "key": "bomb-ruins",
+          "sourcePaths": ["$mcpMapObjectDownload", "rotation_urls.south", "download_url", "image_url", "result.rotation_urls.south", "result.download_url", "result.image_url", "data.rotation_urls.south", "data.download_url", "data.image_url"],
+          "targetPath": "public/assets/sprites/bomb-ruins.png"
+        }
+      ]
+    },
+    {
+      "key": "flame-prop",
+      "batch": "props",
+      "enabled": true,
+      "kind": "map-object",
+      "tool": "create_map_object",
+      "responseIdKeys": ["id", "object_id", "result.id", "result.object_id"],
+      "submit": {
+        "path": "/map-objects",
+        "method": "POST",
+        "body": {
+          "description": "heroic fantasy flame burst sprite, low top-down, gold-orange fire with blue rune core, compact readable silhouette",
+          "image_size": { "width": 64, "height": 64 },
+          "view": "low top-down",
+          "outline": "single color outline",
+          "shading": "medium shading",
+          "detail": "high detail"
+        }
+      },
+      "poll": {
+        "pathTemplate": "/objects/{remoteId}"
+      },
+      "outputs": [
+        {
+          "key": "flame",
+          "sourcePaths": ["$mcpMapObjectDownload", "rotation_urls.south", "download_url", "image_url", "result.rotation_urls.south", "result.download_url", "result.image_url", "data.rotation_urls.south", "data.download_url", "data.image_url"],
+          "targetPath": "public/assets/sprites/flame.png"
+        }
+      ]
+    },
+    {
+      "key": "flame-ruins-prop",
+      "batch": "props",
+      "enabled": true,
+      "kind": "map-object",
+      "tool": "create_map_object",
+      "responseIdKeys": ["id", "object_id", "result.id", "result.object_id"],
+      "submit": {
+        "path": "/map-objects",
+        "method": "POST",
+        "body": {
+          "description": "heroic fantasy spent flame rune sprite, low top-down, fading ember residue with smoke glow, readable small shape",
+          "image_size": { "width": 64, "height": 64 },
+          "view": "low top-down",
+          "outline": "single color outline",
+          "shading": "medium shading",
+          "detail": "high detail"
+        }
+      },
+      "poll": {
+        "pathTemplate": "/objects/{remoteId}"
+      },
+      "outputs": [
+        {
+          "key": "flame-ruins",
+          "sourcePaths": ["$mcpMapObjectDownload", "rotation_urls.south", "download_url", "image_url", "result.rotation_urls.south", "result.download_url", "result.image_url", "data.rotation_urls.south", "data.download_url", "data.image_url"],
+          "targetPath": "public/assets/sprites/flame-ruins.png"
+        }
+      ]
+    },
+    {
+      "key": "pickup-bomb",
+      "batch": "pickups",
+      "enabled": true,
+      "kind": "map-object",
+      "tool": "create_map_object",
+      "responseIdKeys": ["id", "object_id", "result.id", "result.object_id"],
+      "submit": {
+        "path": "/map-objects",
+        "method": "POST",
+        "body": {
+          "description": "heroic fantasy bomb-up power icon, low top-down, compact rune bomb emblem with gold trim",
+          "image_size": { "width": 64, "height": 64 },
+          "view": "low top-down",
+          "outline": "single color outline",
+          "shading": "medium shading",
+          "detail": "high detail"
+        }
+      },
+      "poll": {
+        "pathTemplate": "/objects/{remoteId}"
+      },
+      "outputs": [
+        {
+          "key": "power-bomb",
+          "sourcePaths": ["$mcpMapObjectDownload", "rotation_urls.south", "download_url", "image_url", "result.rotation_urls.south", "result.download_url", "result.image_url", "data.rotation_urls.south", "data.download_url", "data.image_url"],
+          "targetPath": "public/assets/ui/power-bomb.png"
+        }
+      ]
+    },
+    {
+      "key": "pickup-flame",
+      "batch": "pickups",
+      "enabled": true,
+      "kind": "map-object",
+      "tool": "create_map_object",
+      "responseIdKeys": ["id", "object_id", "result.id", "result.object_id"],
+      "submit": {
+        "path": "/map-objects",
+        "method": "POST",
+        "body": {
+          "description": "heroic fantasy flame-up power icon, low top-down, rune flame crest with orange-blue glow",
+          "image_size": { "width": 64, "height": 64 },
+          "view": "low top-down",
+          "outline": "single color outline",
+          "shading": "medium shading",
+          "detail": "high detail"
+        }
+      },
+      "poll": {
+        "pathTemplate": "/objects/{remoteId}"
+      },
+      "outputs": [
+        {
+          "key": "power-flame",
+          "sourcePaths": ["$mcpMapObjectDownload", "rotation_urls.south", "download_url", "image_url", "result.rotation_urls.south", "result.download_url", "result.image_url", "data.rotation_urls.south", "data.download_url", "data.image_url"],
+          "targetPath": "public/assets/ui/power-flame.png"
+        }
+      ]
+    },
+    {
+      "key": "pickup-speed",
+      "batch": "pickups",
+      "enabled": true,
+      "kind": "map-object",
+      "tool": "create_map_object",
+      "responseIdKeys": ["id", "object_id", "result.id", "result.object_id"],
+      "submit": {
+        "path": "/map-objects",
+        "method": "POST",
+        "body": {
+          "description": "heroic fantasy speed-up power icon, low top-down, winged rune boot emblem with teal glow",
+          "image_size": { "width": 64, "height": 64 },
+          "view": "low top-down",
+          "outline": "single color outline",
+          "shading": "medium shading",
+          "detail": "high detail"
+        }
+      },
+      "poll": {
+        "pathTemplate": "/objects/{remoteId}"
+      },
+      "outputs": [
+        {
+          "key": "power-speed",
+          "sourcePaths": ["$mcpMapObjectDownload", "rotation_urls.south", "download_url", "image_url", "result.rotation_urls.south", "result.download_url", "result.image_url", "data.rotation_urls.south", "data.download_url", "data.image_url"],
+          "targetPath": "public/assets/ui/power-speed.png"
+        }
+      ]
+    },
+    {
+      "key": "pickup-remote",
+      "batch": "pickups",
+      "enabled": true,
+      "kind": "map-object",
+      "tool": "create_map_object",
+      "responseIdKeys": ["id", "object_id", "result.id", "result.object_id"],
+      "submit": {
+        "path": "/map-objects",
+        "method": "POST",
+        "body": {
+          "description": "heroic fantasy remote-up power icon, low top-down, arcane trigger emblem with blue control rune",
+          "image_size": { "width": 64, "height": 64 },
+          "view": "low top-down",
+          "outline": "single color outline",
+          "shading": "medium shading",
+          "detail": "high detail"
+        }
+      },
+      "poll": {
+        "pathTemplate": "/objects/{remoteId}"
+      },
+      "outputs": [
+        {
+          "key": "power-remote",
+          "sourcePaths": ["$mcpMapObjectDownload", "rotation_urls.south", "download_url", "image_url", "result.rotation_urls.south", "result.download_url", "result.image_url", "data.rotation_urls.south", "data.download_url", "data.image_url"],
+          "targetPath": "public/assets/ui/power-remote.png"
+        }
+      ]
+    },
+    {
+      "key": "pickup-shield",
+      "batch": "pickups",
+      "enabled": true,
+      "kind": "map-object",
+      "tool": "create_map_object",
+      "responseIdKeys": ["id", "object_id", "result.id", "result.object_id"],
+      "submit": {
+        "path": "/map-objects",
+        "method": "POST",
+        "body": {
+          "description": "heroic fantasy shield-up power icon, low top-down, protective crest with blue-gold barrier rune",
+          "image_size": { "width": 64, "height": 64 },
+          "view": "low top-down",
+          "outline": "single color outline",
+          "shading": "medium shading",
+          "detail": "high detail"
+        }
+      },
+      "poll": {
+        "pathTemplate": "/objects/{remoteId}"
+      },
+      "outputs": [
+        {
+          "key": "power-shield",
+          "sourcePaths": ["$mcpMapObjectDownload", "rotation_urls.south", "download_url", "image_url", "result.rotation_urls.south", "result.download_url", "result.image_url", "data.rotation_urls.south", "data.download_url", "data.image_url"],
+          "targetPath": "public/assets/ui/power-shield.png"
+        }
+      ]
+    },
+    {
+      "key": "pickup-bomb-pass",
+      "batch": "pickups",
+      "enabled": true,
+      "kind": "map-object",
+      "tool": "create_map_object",
+      "responseIdKeys": ["id", "object_id", "result.id", "result.object_id"],
+      "submit": {
+        "path": "/map-objects",
+        "method": "POST",
+        "body": {
+          "description": "heroic fantasy bomb-pass power icon, low top-down, spectral bomb emblem with cyan phase ring and ghost rune trail",
+          "image_size": { "width": 64, "height": 64 },
+          "view": "low top-down",
+          "outline": "single color outline",
+          "shading": "medium shading",
+          "detail": "high detail"
+        }
+      },
+      "poll": {
+        "pathTemplate": "/objects/{remoteId}"
+      },
+      "outputs": [
+        {
+          "key": "power-bomb-pass",
+          "sourcePaths": ["$mcpMapObjectDownload", "rotation_urls.south", "download_url", "image_url", "result.rotation_urls.south", "result.download_url", "result.image_url", "data.rotation_urls.south", "data.download_url", "data.image_url"],
+          "targetPath": "public/assets/ui/power-bomb-pass.png"
+        }
+      ]
+    },
+    {
+      "key": "pickup-kick",
+      "batch": "pickups",
+      "enabled": true,
+      "kind": "map-object",
+      "tool": "create_map_object",
+      "responseIdKeys": ["id", "object_id", "result.id", "result.object_id"],
+      "submit": {
+        "path": "/map-objects",
+        "method": "POST",
+        "body": {
+          "description": "heroic fantasy kick-up power icon, low top-down, armored boot crest with orange gold impact rune and motion spark",
+          "image_size": { "width": 64, "height": 64 },
+          "view": "low top-down",
+          "outline": "single color outline",
+          "shading": "medium shading",
+          "detail": "high detail"
+        }
+      },
+      "poll": {
+        "pathTemplate": "/objects/{remoteId}"
+      },
+      "outputs": [
+        {
+          "key": "power-kick",
+          "sourcePaths": ["$mcpMapObjectDownload", "rotation_urls.south", "download_url", "image_url", "result.rotation_urls.south", "result.download_url", "result.image_url", "data.rotation_urls.south", "data.download_url", "data.image_url"],
+          "targetPath": "public/assets/ui/power-kick.png"
+        }
+      ]
+    },
+    {
+      "key": "p1-future-walk",
+      "batch": "characters",
+      "enabled": false,
+      "kind": "character-animation",
+      "tool": "animate_character",
+      "submit": {
+        "path": "/animate-character",
+        "method": "POST",
+        "body": {
+          "character_id": "03a976fb-7313-4064-a477-5bb9b0760034",
+          "template_animation_id": "walk"
+        }
+      },
+      "poll": {
+        "pathTemplate": "/characters/{remoteId}"
+      },
+      "outputs": []
+    },
+    {
+      "key": "p2-future-walk",
+      "batch": "characters",
+      "enabled": false,
+      "kind": "character-animation",
+      "tool": "animate_character",
+      "submit": {
+        "path": "/animate-character",
+        "method": "POST",
+        "body": {
+          "character_id": "6ee8baa5-3277-413b-ae0e-2659b9cc52e9",
+          "template_animation_id": "walk"
+        }
+      },
+      "poll": {
+        "pathTemplate": "/characters/{remoteId}"
+      },
+      "outputs": []
+    }
+  ]
+}

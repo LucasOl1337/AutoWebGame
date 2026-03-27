@@ -63,6 +63,8 @@ game.startMatch();
 
 const bot = game.players[2];
 const enemy = game.players[1];
+bot.spawnProtectionMs = 0;
+enemy.spawnProtectionMs = 0;
 const directionDelta = {
   up: { x: 0, y: -1 },
   down: { x: 0, y: 1 },
@@ -136,8 +138,8 @@ setPlayerTile(bot, { x: 8, y: 5 });
 setPlayerTile(enemy, { x: 1, y: 1 });
 game.flames = [];
 game.bombs = [
-  { id: 9001, ownerId: 1, tile: { x: 4, y: 5 }, fuseMs: 450, ownerCanPass: false },
-  { id: 9002, ownerId: 1, tile: { x: 6, y: 5 }, fuseMs: 2200, ownerCanPass: false },
+  { id: 9001, ownerId: 1, tile: { x: 4, y: 5 }, fuseMs: 450, ownerCanPass: false, flameRange: 2 },
+  { id: 9002, ownerId: 1, tile: { x: 6, y: 5 }, fuseMs: 2200, ownerCanPass: false, flameRange: 2 },
 ];
 game.botBombCooldownMs = 0;
 game.arena.breakable = new Set();
@@ -174,6 +176,36 @@ if (decisionSuddenDeath.direction) {
 }
 game.suddenDeathActive = false;
 
+setPlayerTile(bot, { x: 4, y: 3 });
+setPlayerTile(enemy, { x: 7, y: 6 });
+game.flames = [];
+game.bombs = [
+  { id: 9100, ownerId: 1, tile: { x: 2, y: 3 }, fuseMs: 1932, ownerCanPass: false, flameRange: 2 },
+  { id: 9101, ownerId: 1, tile: { x: 3, y: 4 }, fuseMs: 570, ownerCanPass: false, flameRange: 2 },
+  { id: 9102, ownerId: 1, tile: { x: 9, y: 6 }, fuseMs: 967, ownerCanPass: false, flameRange: 2 },
+];
+game.arena.breakable = new Set();
+game.botBombCooldownMs = 0;
+bot.flameRange = 2;
+const strategicAvoidDecision = game.getBotDecision(bot);
+const strategicAvoidPass = strategicAvoidDecision.placeBomb === false
+  && strategicAvoidDecision.direction !== null
+  && strategicAvoidDecision.direction !== "down";
+
+const freshRoundGame = new GameApp(root, assets);
+freshRoundGame.startMatch();
+const trapTile = { x: 8, y: 6 };
+let enteredTrapFrame = -1;
+for (let frame = 0; frame < 260; frame += 1) {
+  freshRoundGame.updateMatch(1000 / 60);
+  const botTile = freshRoundGame.players[2].tile;
+  if (botTile.x === trapTile.x && botTile.y === trapTile.y) {
+    enteredTrapFrame = frame;
+    break;
+  }
+}
+const freshRoundSafetyPass = enteredTrapFrame === -1 && freshRoundGame.players[2].alive;
+
 const report = {
   botEnabled: game.botEnabled,
   botName: game.players[2].name,
@@ -184,6 +216,9 @@ const report = {
   attackPositionDecision: decisionAttackPosition,
   chainDangerDecision: decisionChainDanger,
   suddenDeathDecision: decisionSuddenDeath,
+  strategicAvoidDecision,
+  trapTile,
+  enteredTrapFrame,
   pressurePass,
   dangerPass,
   bombPass,
@@ -191,9 +226,21 @@ const report = {
   attackPositionPass,
   chainDangerPass,
   suddenDeathPass,
+  strategicAvoidPass,
+  freshRoundSafetyPass,
 };
 
 console.log(JSON.stringify(report, null, 2));
-if (!pressurePass || !dangerPass || !bombPass || !lineBombPass || !attackPositionPass || !chainDangerPass || !suddenDeathPass) {
+if (
+  !pressurePass
+  || !dangerPass
+  || !bombPass
+  || !lineBombPass
+  || !attackPositionPass
+  || !chainDangerPass
+  || !suddenDeathPass
+  || !strategicAvoidPass
+  || !freshRoundSafetyPass
+) {
   process.exit(1);
 }

@@ -11,18 +11,22 @@ export class InputManager {
     KEY_BINDINGS[1].left,
     KEY_BINDINGS[1].right,
     KEY_BINDINGS[1].bomb,
+    KEY_BINDINGS[1].detonate,
     KEY_BINDINGS[1].ready,
     KEY_BINDINGS[2].up,
     KEY_BINDINGS[2].down,
     KEY_BINDINGS[2].left,
     KEY_BINDINGS[2].right,
     KEY_BINDINGS[2].bomb,
+    KEY_BINDINGS[2].detonate,
     KEY_BINDINGS[2].ready,
     "Space",
     "Enter",
     "Escape",
     "KeyF",
     "KeyB",
+    "KeyG",
+    "KeyK",
   ]);
 
   constructor(target: Window) {

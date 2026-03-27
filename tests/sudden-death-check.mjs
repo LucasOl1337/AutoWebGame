@@ -70,7 +70,12 @@ const injectedPowerUp = { type: 'speed-up', tile: { ...firstTile }, revealed: fa
 game.arena.powerUps.push(injectedPowerUp);
 
 const breakableBefore = game.arena.breakable.has(firstKey);
-game.roundTimeMs = 24_000;
+game.roundTimeMs = 71_000;
+game.updateSuddenDeath(900);
+
+const suddenDeathStillWaiting = game.suddenDeathActive === false;
+
+game.roundTimeMs = 70_000;
 game.updateSuddenDeath(900);
 
 const suddenDeathActive = game.suddenDeathActive === true;
@@ -84,6 +89,7 @@ const report = {
   pathLength: path.length,
   firstTile,
   breakableBefore,
+  suddenDeathStillWaiting,
   suddenDeathActive,
   progressed,
   flameAtFirst,
@@ -93,6 +99,6 @@ const report = {
 
 console.log(JSON.stringify(report, null, 2));
 
-if (!pathReady || !breakableBefore || !suddenDeathActive || !progressed || !flameAtFirst || !breakableCleared || !powerUpRevealed) {
+if (!pathReady || !breakableBefore || !suddenDeathStillWaiting || !suddenDeathActive || !progressed || !flameAtFirst || !breakableCleared || !powerUpRevealed) {
   process.exit(1);
 }

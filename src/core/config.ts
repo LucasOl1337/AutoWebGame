@@ -18,6 +18,9 @@ export const MIN_MOVE_MS = 160;
 export const MAX_BOMBS = 5;
 export const MAX_RANGE = 5;
 export const MAX_SPEED_LEVEL = 4;
+export const MAX_SHIELD_CHARGES = 2;
+export const MAX_BOMB_PASS_LEVEL = 1;
+export const MAX_KICK_LEVEL = 1;
 export const TARGET_WINS = 2;
 
 export const PLAYER_COLORS = {
@@ -40,6 +43,7 @@ export const KEY_BINDINGS = {
     left: "KeyA",
     right: "KeyD",
     bomb: "KeyQ",
+    detonate: "KeyR",
     ready: "KeyE",
   },
   2: {
@@ -48,6 +52,7 @@ export const KEY_BINDINGS = {
     left: "ArrowLeft",
     right: "ArrowRight",
     bomb: "KeyO",
+    detonate: "KeyU",
     ready: "KeyP",
   },
 } as const;

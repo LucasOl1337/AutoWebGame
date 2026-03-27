@@ -1,7 +1,14 @@
 export type PlayerId = 1 | 2;
 export type Mode = "boot" | "menu" | "match" | "match-result";
 export type Direction = "up" | "down" | "left" | "right";
-export type PowerUpType = "bomb-up" | "flame-up" | "speed-up";
+export type PowerUpType =
+  | "bomb-up"
+  | "flame-up"
+  | "speed-up"
+  | "remote-up"
+  | "shield-up"
+  | "bomb-pass-up"
+  | "kick-up";
 
 export interface TileCoord {
   x: number;
@@ -26,6 +33,11 @@ export interface PlayerState {
   activeBombs: number;
   flameRange: number;
   speedLevel: number;
+  remoteLevel: number;
+  shieldCharges: number;
+  bombPassLevel: number;
+  kickLevel: number;
+  flameGuardMs: number;
   spawnProtectionMs: number;
 }
 
@@ -35,6 +47,7 @@ export interface BombState {
   tile: TileCoord;
   fuseMs: number;
   ownerCanPass: boolean;
+  flameRange: number;
 }
 
 export interface FlameState {

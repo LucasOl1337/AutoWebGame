@@ -6,14 +6,45 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:cloudflare": "npm run build",
+    "dev:cloudflare": "npm run build && node ./node_modules/wrangler/bin/wrangler.js dev --local",
+    "deploy:cloudflare": "npm run build && node ./node_modules/wrangler/bin/wrangler.js deploy",
+    "serve:online": "node scripts/online_server.mjs",
     "preview": "vite preview",
+    "pixellab:run": "node scripts/pixellab_orchestrator.mjs run --spec configs/pixellab-pack.v1.json",
+    "pixellab:status": "node scripts/pixellab_orchestrator.mjs status --spec configs/pixellab-pack.v1.json",
+    "sync:pixellab": "node scripts/import_pixellab_characters.mjs",
     "compile:esm": "node node_modules/typescript/bin/tsc -p tsconfig.runtime.json && node tests/patch-esm-imports.mjs",
     "test:bot": "npm run compile:esm && node tests/bot-intel-check.mjs",
+    "test:character-menu": "npm run compile:esm && node tests/character-selection-menu-check.mjs",
+    "test:bot-own-blast": "npm run compile:esm && node tests/bot-own-blast-escape-check.mjs",
+    "test:bot-remote": "npm run compile:esm && node tests/bot-remote-detonation-check.mjs",
+    "test:bot-opening": "npm run compile:esm && node tests/bot-opening-discipline-check.mjs",
     "test:input": "npm run compile:esm && node tests/input-transition-check.mjs",
-    "test:spawn": "npm run compile:esm && node tests/spawn-escape-check.mjs"
+    "test:spawn": "npm run compile:esm && node tests/spawn-escape-check.mjs",
+    "test:danger-overlay": "npm run compile:esm && node tests/danger-overlay-check.mjs",
+    "test:bomb-preview": "npm run compile:esm && node tests/bomb-preview-toggle-check.mjs",
+    "test:bot-powerup": "npm run compile:esm && node tests/bot-powerup-priority-check.mjs",
+    "test:bot-survival": "npm run compile:esm && node tests/bot-survival-10s-check.mjs",
+    "test:bot-direction": "npm run compile:esm && node tests/bot-direction-stability-check.mjs",
+    "test:bomb-range": "npm run compile:esm && node tests/bomb-range-snapshot-check.mjs",
+    "test:bomb-push": "npm run compile:esm && node tests/bomb-push-check.mjs",
+    "test:shield": "npm run compile:esm && node tests/shield-powerup-check.mjs",
+    "test:player-sprite": "npm run compile:esm && node tests/player-sprite-render-check.mjs",
+    "test:sprite-trim": "npm run compile:esm && node tests/sprite-trim-cache-check.mjs",
+    "test:round-outcome": "npm run compile:esm && node tests/round-outcome-pause-check.mjs",
+    "test:remote": "npm run compile:esm && node tests/remote-detonation-check.mjs",
+    "test:pixellab-roster": "node tests/pixellab-roster-check.mjs",
+    "test:pixellab-orchestrator": "node tests/pixellab-orchestrator-check.mjs",
+    "test:pixellab-pack": "node tests/pixellab-pack-spec-check.mjs"
   },
   "devDependencies": {
+    "playwright": "^1.58.2",
     "typescript": "^5.9.2",
-    "vite": "^7.1.5"
+    "vite": "^7.1.5",
+    "wrangler": "^4.78.0"
+  },
+  "dependencies": {
+    "ws": "^8.20.0"
   }
 }

@@ -15,6 +15,8 @@ export function mirrorTile(tile: TileCoord): TileCoord {
 export function createArena(): ArenaState {
   const solid = new Set<string>();
   const breakable = new Set<string>();
+  const middleX = Math.floor(GRID_WIDTH / 2);
+  const middleY = Math.floor(GRID_HEIGHT / 2);
 
   for (let y = 0; y < GRID_HEIGHT; y += 1) {
     for (let x = 0; x < GRID_WIDTH; x += 1) {
@@ -27,11 +29,15 @@ export function createArena(): ArenaState {
   }
 
   const powerUpCandidates = [
-    { tile: { x: 2, y: 3 }, type: "bomb-up" },
-    { tile: { x: 3, y: 4 }, type: "bomb-up" },
-    { tile: { x: 4, y: 2 }, type: "flame-up" },
-    { tile: { x: 2, y: GRID_HEIGHT - 3 }, type: "flame-up" },
-    { tile: { x: 4, y: GRID_HEIGHT - 3 }, type: "speed-up" },
+    { tile: { x: middleX - 2, y: middleY }, type: "bomb-up" },
+    { tile: { x: middleX - 1, y: middleY - 1 }, type: "bomb-up" },
+    { tile: { x: middleX - 1, y: middleY + 1 }, type: "flame-up" },
+    { tile: { x: middleX, y: sideRowForPowerUps(GRID_HEIGHT) }, type: "flame-up" },
+    { tile: { x: middleX + 1, y: middleY - 1 }, type: "speed-up" },
+    { tile: { x: middleX, y: middleY - 2 }, type: "remote-up" },
+    { tile: { x: middleX + 1, y: middleY + 1 }, type: "shield-up" },
+    { tile: { x: middleX - 2, y: middleY - 2 }, type: "bomb-pass-up" },
+    { tile: { x: middleX + 2, y: middleY + 2 }, type: "kick-up" },
   ] as const;
   const powerUpPairs: Array<{ tile: TileCoord; type: PowerUpType }> = powerUpCandidates
     .filter((entry) => entry.tile.x > 0 && entry.tile.y > 0 && entry.tile.x < GRID_WIDTH - 1 && entry.tile.y < GRID_HEIGHT - 1)
@@ -64,6 +70,10 @@ export function createArena(): ArenaState {
   }
 
   return { solid, breakable, powerUps };
+}
+
+function sideRowForPowerUps(height: number): number {
+  return Math.min(2, height - 3);
 }
 
 function createPowerUp(tile: TileCoord, type: PowerUpType): PowerUpState {
@@ -109,7 +119,7 @@ function createOpenTiles(): Set<string> {
       for (let ox = 0; ox <= 3; ox += 1) {
         const x = originX + ox * dirX;
         const y = originY + oy * dirY;
-        if (Math.abs(ox) + Math.abs(oy) <= 4) {
+        if (Math.abs(ox) + Math.abs(oy) <= 5) {
           add(x, y);
         }
       }
@@ -118,22 +128,45 @@ function createOpenTiles(): Set<string> {
   addSpawnZone(1, 1, 1, 1);
   addSpawnZone(GRID_WIDTH - 2, GRID_HEIGHT - 2, -1, -1);
 
-  // Main lanes create a more intentional arena with side and center fights.
+  // Main combat lanes: quick spawn exits plus a contested central cross.
   addRow(sideRow);
   addRow(middleY);
   addRow(farSideRow);
   addColumn(sideColumn);
   addColumn(farSideColumn);
-  addColumn(middleX, sideRow, GRID_HEIGHT - 3);
+  addColumn(middleX);
 
-  // Central pockets keep the middle contested instead of clogged.
+  // Extra center flanks keep pressure rotating instead of stalling into
+  // long farm corridors on the far edges.
   [
+    { x: middleX - 2, y: sideRow + 1 },
+    { x: middleX + 2, y: sideRow + 1 },
+    { x: middleX - 2, y: sideRow + 2 },
+    { x: middleX + 2, y: sideRow + 2 },
     { x: middleX - 2, y: middleY - 1 },
+    { x: middleX - 1, y: middleY - 1 },
     { x: middleX, y: middleY - 1 },
+    { x: middleX + 1, y: middleY - 1 },
     { x: middleX + 2, y: middleY - 1 },
+    { x: middleX - 2, y: middleY },
+    { x: middleX + 2, y: middleY },
     { x: middleX - 2, y: middleY + 1 },
+    { x: middleX - 1, y: middleY + 1 },
     { x: middleX, y: middleY + 1 },
+    { x: middleX + 1, y: middleY + 1 },
     { x: middleX + 2, y: middleY + 1 },
+    { x: middleX - 2, y: farSideRow - 2 },
+    { x: middleX + 2, y: farSideRow - 2 },
+    { x: middleX - 2, y: farSideRow - 1 },
+    { x: middleX + 2, y: farSideRow - 1 },
+    { x: middleX - 3, y: middleY },
+    { x: middleX + 3, y: middleY },
+    { x: middleX - 3, y: middleY - 1 },
+    { x: middleX + 3, y: middleY - 1 },
+    { x: middleX - 3, y: middleY + 1 },
+    { x: middleX + 3, y: middleY + 1 },
+    { x: middleX, y: sideRow + 1 },
+    { x: middleX, y: farSideRow - 1 },
   ].forEach((tile) => add(tile.x, tile.y));
 
   return openTiles;
