@@ -24,6 +24,7 @@ export const MAX_SHIELD_CHARGES = 2;
 export const MAX_BOMB_PASS_LEVEL = 1;
 export const MAX_KICK_LEVEL = 1;
 export const TARGET_WINS = 5;
+export const SKILL_KEY = "Space";
 
 export const PLAYER_COLORS: Record<PlayerId, { primary: string; secondary: string; glow: string }> = {
   1: {

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { copyFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rm, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -24,6 +24,7 @@ export const PINNED_CHARACTERS = [
     order: 1,
   },
 ];
+const RANNI_CHARACTER_ID = "03a976fb-7313-4064-a477-5bb9b0760034";
 
 const CHARACTER_NAME_OVERRIDES = {
   "03a976fb-7313-4064-a477-5bb9b0760034": "Ranni",
@@ -64,6 +65,13 @@ const CAST_ANIMATION_CANDIDATES = [
   "drinking",
 ];
 const CAST_ANIMATION_PATTERNS = ["cast", "spell", "magic", "dark-energy", "fireball"];
+const RANNI_ICE_CAST_PATTERNS = ["ice cube", "ice block", "ice splash", "custom-became an ice cube"];
+const DIRECTION_FALLBACKS = {
+  south: ["south-east", "south-west", "east", "west", "north-east", "north-west", "north"],
+  east: ["north-east", "south-east", "north", "south", "north-west", "south-west", "west"],
+  north: ["north-east", "north-west", "east", "west", "south-east", "south-west", "south"],
+  west: ["north-west", "south-west", "north", "south", "north-east", "south-east", "east"],
+};
 
 const ATTACK_ANIMATION_CANDIDATES = [
   "high-kick",
@@ -232,32 +240,99 @@ function cleanName(rawName, characterId) {
   return `${base.slice(0, 61)}...`;
 }
 
-function getAnimationFrames(animations, candidates, direction, patterns = []) {
-  for (const animationName of candidates) {
-    const byDirection = animations?.[animationName];
-    if (!byDirection || !Array.isArray(byDirection[direction])) {
+function findAnimationCandidatesByPatterns(animations, patterns = []) {
+  const names = Object.keys(animations ?? {});
+  const matches = [];
+  for (const rawPattern of patterns) {
+    const pattern = rawPattern.toLowerCase();
+    for (const name of names) {
+      if (!name.toLowerCase().includes(pattern)) {
+        continue;
+      }
+      if (!matches.includes(name)) {
+        matches.push(name);
+      }
+    }
+  }
+  return matches;
+}
+
+function getFramesForDirection(byDirection, direction, options = {}) {
+  const {
+    allowDirectionFallback = false,
+    allowAnyDirectionFallback = false,
+  } = options;
+
+  const directions = [direction];
+  if (allowDirectionFallback) {
+    directions.push(...(DIRECTION_FALLBACKS[direction] ?? []));
+  }
+
+  const seenDirections = new Set();
+  for (const candidateDirection of directions) {
+    if (seenDirections.has(candidateDirection)) {
       continue;
     }
-    const frames = byDirection[direction].filter((frame) => typeof frame === "string" && frame.length > 0);
+    seenDirections.add(candidateDirection);
+    const rawFrames = byDirection?.[candidateDirection];
+    if (!Array.isArray(rawFrames)) {
+      continue;
+    }
+    const frames = rawFrames.filter((frame) => typeof frame === "string" && frame.length > 0);
     if (frames.length > 0) {
       return frames;
     }
   }
 
-  for (const [animationName, byDirection] of Object.entries(animations ?? {})) {
-    const normalizedName = animationName.toLowerCase();
-    if (!patterns.some((pattern) => normalizedName.includes(pattern))) {
+  if (!allowAnyDirectionFallback) {
+    return [];
+  }
+
+  for (const rawFrames of Object.values(byDirection ?? {})) {
+    if (!Array.isArray(rawFrames)) {
       continue;
     }
-    if (!byDirection || !Array.isArray(byDirection[direction])) {
+    const frames = rawFrames.filter((frame) => typeof frame === "string" && frame.length > 0);
+    if (frames.length > 0) {
+      return frames;
+    }
+  }
+
+  return [];
+}
+
+function getAnimationFrames(animations, candidates, direction, patterns = [], options = {}) {
+  for (const animationName of candidates) {
+    const byDirection = animations?.[animationName];
+    if (!byDirection) {
       continue;
     }
-    const frames = byDirection[direction].filter((frame) => typeof frame === "string" && frame.length > 0);
+    const frames = getFramesForDirection(byDirection, direction, options);
+    if (frames.length > 0) {
+      return frames;
+    }
+  }
+
+  const patternCandidates = findAnimationCandidatesByPatterns(animations, patterns);
+  for (const animationName of patternCandidates) {
+    const byDirection = animations?.[animationName];
+    if (!byDirection) {
+      continue;
+    }
+    const frames = getFramesForDirection(byDirection, direction, options);
     if (frames.length > 0) {
       return frames;
     }
   }
   return [];
+}
+
+async function clearAnimationPrefixFrames(destinationDir, prefix) {
+  const files = await readdir(destinationDir, { withFileTypes: true });
+  const targetPrefix = `${prefix}-`;
+  await Promise.all(files
+    .filter((entry) => entry.isFile() && entry.name.startsWith(targetPrefix) && entry.name.endsWith(".png"))
+    .map((entry) => unlink(path.join(destinationDir, entry.name))));
 }
 
 async function copyAnimationFrames(extractDir, destinationDir, prefix, frames) {
@@ -269,7 +344,7 @@ async function copyAnimationFrames(extractDir, destinationDir, prefix, frames) {
   }
 }
 
-async function copyAnimationSet(extractDir, destinationDir, animations, candidates, prefix, patterns = []) {
+async function copyAnimationSet(extractDir, destinationDir, animations, candidates, prefix, patterns = [], options = {}) {
   let hasFrames = false;
   for (const [direction, target] of [
     ["south", `${prefix}-south`],
@@ -277,7 +352,8 @@ async function copyAnimationSet(extractDir, destinationDir, animations, candidat
     ["north", `${prefix}-north`],
     ["west", `${prefix}-west`],
   ]) {
-    const frames = getAnimationFrames(animations, candidates, direction, patterns);
+    await clearAnimationPrefixFrames(destinationDir, target);
+    const frames = getAnimationFrames(animations, candidates, direction, patterns, options);
     if (frames.length > 0) {
       await copyAnimationFrames(extractDir, destinationDir, target, frames);
       hasFrames = true;
@@ -458,9 +534,16 @@ export async function importPixelLabCharacters() {
         extractDir,
         destinationDir,
         animations,
-        CAST_ANIMATION_CANDIDATES,
+        characterId === RANNI_CHARACTER_ID
+          ? [...findAnimationCandidatesByPatterns(animations, RANNI_ICE_CAST_PATTERNS), ...CAST_ANIMATION_CANDIDATES]
+          : CAST_ANIMATION_CANDIDATES,
         "cast",
-        CAST_ANIMATION_PATTERNS,
+        characterId === RANNI_CHARACTER_ID
+          ? [...RANNI_ICE_CAST_PATTERNS, ...CAST_ANIMATION_PATTERNS]
+          : CAST_ANIMATION_PATTERNS,
+        characterId === RANNI_CHARACTER_ID
+          ? { allowDirectionFallback: true, allowAnyDirectionFallback: true }
+          : {},
       );
       const hasAttackFrames = await copyAnimationSet(
         extractDir,

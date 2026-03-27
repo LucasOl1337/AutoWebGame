@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "node ./node_modules/typescript/bin/tsc && node ./node_modules/vite/bin/vite.js build",
     "build:cloudflare": "npm run build",
     "dev:cloudflare": "npm run build && node ./node_modules/wrangler/bin/wrangler.js dev --local",
     "deploy:cloudflare": "npm run build && node ./node_modules/wrangler/bin/wrangler.js deploy",
@@ -25,6 +25,7 @@
     "test:spawn": "npm run compile:esm && node tests/spawn-escape-check.mjs",
     "test:online-4p": "npm run compile:esm && node tests/online-four-player-check.mjs",
     "test:online-audio": "npm run compile:esm && node tests/online-audio-bridge-check.mjs",
+    "test:online-input-latch": "npm run compile:esm && node tests/online-input-latching-check.mjs",
     "test:danger-overlay": "npm run compile:esm && node tests/danger-overlay-check.mjs",
     "test:bomb-preview": "npm run compile:esm && node tests/bomb-preview-toggle-check.mjs",
     "test:bot-powerup": "npm run compile:esm && node tests/bot-powerup-priority-check.mjs",
@@ -36,6 +37,7 @@
     "test:powerup-hud": "npm run compile:esm && node tests/powerup-hud-slots-check.mjs",
     "test:powerup-drop-rate": "npm run compile:esm && node tests/powerup-drop-rate-check.mjs",
     "test:player-sprite": "npm run compile:esm && node tests/player-sprite-render-check.mjs",
+    "test:ranni-ult": "npm run compile:esm && node tests/ranni-ult-ice-blink-check.mjs",
     "test:sprite-trim": "npm run compile:esm && node tests/sprite-trim-cache-check.mjs",
     "test:round-outcome": "npm run compile:esm && node tests/round-outcome-pause-check.mjs",
     "test:remote": "npm run compile:esm && node tests/remote-detonation-check.mjs",
@@ -44,6 +46,7 @@
     "test:pixellab-pack": "node tests/pixellab-pack-spec-check.mjs"
   },
   "devDependencies": {
+    "@cloudflare/workerd-windows-64": "^1.20260317.1",
     "playwright": "^1.58.2",
     "typescript": "^5.9.2",
     "vite": "^7.1.5",

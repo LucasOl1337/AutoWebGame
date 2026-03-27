@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { GameApp } from "../src/app/game-app";
+import { mergeSequencedOnlineInputState } from "../src/online/input-latch";
 
 const STATE_VERSION = 3;
 const MATCH_TICK_MS = 1000 / 60;
@@ -574,19 +575,14 @@ export class GlobalLobby extends DurableObject {
       return;
     }
 
-    const inputSeq = Math.max(0, Number(inputPayload?.inputSeq) || 0);
-    if (inputSeq < (match.inputs[seat].inputSeq ?? 0)) {
-      return;
-    }
-
-    match.inputs[seat] = {
+    match.inputs[seat] = mergeSequencedOnlineInputState(match.inputs[seat], {
       direction: inputPayload?.input?.direction ?? null,
       bombPressed: Boolean(inputPayload?.input?.bombPressed),
       detonatePressed: Boolean(inputPayload?.input?.detonatePressed),
       skillPressed: Boolean(inputPayload?.input?.skillPressed),
-      inputSeq,
+      inputSeq: Math.max(0, Number(inputPayload?.inputSeq) || 0),
       sentAtMs: Math.max(0, Number(inputPayload?.sentAtMs) || 0),
-    };
+    });
   }
 
   /**

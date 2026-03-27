@@ -1,5 +1,5 @@
 import type { Direction, MenuPlayerId } from "../core/types";
-import { KEY_BINDINGS } from "../core/config";
+import { KEY_BINDINGS, SKILL_KEY } from "../core/config";
 
 export interface InputController {
   consumePress(code: string): boolean;
@@ -28,6 +28,7 @@ export class InputManager {
     KEY_BINDINGS[2].bomb,
     KEY_BINDINGS[2].detonate,
     KEY_BINDINGS[2].ready,
+    SKILL_KEY,
     "Space",
     "Enter",
     "Escape",

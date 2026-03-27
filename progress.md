@@ -969,3 +969,69 @@ TODO Ranni
 - Validacao concluida:
   - `npm run compile:esm`
   - `node --check worker/index.js`
+2026-03-27 wrap-map pass
+- Arena layout atualizado para uma versao mais competitiva com blocos quebraveis em padrao mais organizado e rotas centrais mais disputadas.
+- Bordas agora possuem portais de wrap em quatro lados (esquerda/direita no eixo central e cima/baixo no eixo central), permitindo atravessar de um lado ao outro.
+- Colisao/movimento do jogador ajustados para coordenadas circulares da arena (wrap horizontal e vertical), incluindo empurrao de bomba atravessando borda.
+- Propagacao de explosao nas bordas passou a respeitar limite do grid para evitar tiles invalidos quando a borda nao e solida.
+- Render ganhou destaque visual nos tiles de portal para leitura rapida durante partida.
+- Validacao executada: `npm run build`, `npm run test:spawn`, `npm run test:bomb-range`.
+- Deploy executado com sucesso em Cloudflare Workers.
+- URLs ativas: https://autowebgame-online.lucasplays2000.workers.dev e https://bombapvp.com.
+2026-03-27 hud-and-rail-fix
+- Corrigido estado de partida para o rail lateral (pilot locks + bomb feed) ocupar coluna propria, sem sobrepor o canvas.
+- Ajustado HUD superior para reduzir sobreposicao de textos em partidas 1v1 com layout dedicado (painel esquerdo/direito + centro limpo para tempo/SD).
+- HUD recebeu altura maior para acomodar informacoes sem colisao visual.
+- Validacao: `npm run build` e `npm run test:powerup-hud`.
+- Deploy atualizado em Cloudflare (version id 2efd2005-5e23-4ce7-9fe8-c3bb81dc835d).
+2026-03-27 quick-match-lobby-rail-fix
+- Corrigido estouro visual no estado de lobby/quick-match: rail da direita agora tem contencao vertical, seats com scroll proprio e chat com area isolada.
+- Evitado comportamento confuso do botao Find match quando usuario ja esta com vaga pronta em lobby aberto (agora mostra status de espera em vez de tentar novo matching em loop).
+- Mensagem de status no lobby aberto foi ajustada para deixar claro quando quick match ja travou vaga e so falta outro piloto.
+- Validacao: `npm run build` e `npm run test:online-4p`.
+- Deploy atualizado em Cloudflare (version id 86674c2c-b9f2-4331-8139-f4dbc8d618db).
+2026-03-27 arena-hardening-pass
+- Arena generator ajustado para garantir 0 pares ortogonais de blocos indestrutiveis encostados (incluindo bordas) com padrao de borda alternada.
+- Spawns receberam carve estrutural e pockets de abertura para remover armadilha de inicio; validacao agora mostra 3 vizinhos livres em cada spawn.
+- Densidade de blocos quebraveis em tiles abertos foi reduzida para evitar corredores de morte no inicio.
+- Scripts npm de build foram ajustados para usar binarios locais (`node_modules`) e evitar falha de `tsc` ausente no ambiente.
+- Dependencia de deploy `@cloudflare/workerd-windows-64` adicionada para estabilizar wrangler no Windows.
+- Validacoes: `npm run test:spawn`, check interno de `touchingPairs=0`, `npm run test:bomb-range`, `npm run test:bot-opening`.
+- Deploy atualizado em Cloudflare (version id 7322ce59-9fed-4013-a652-1039554c1ca4).
+2026-03-27 dense-breakable-pass
+- Arena generation alterada para cumprir pedido de mapa denso: aproximadamente 80%+ dos tiles jogaveis (fora da zona de spawn) agora viram blocos quebraveis de forma deterministica e simetrica.
+- Spawn safety mantida com bolha manhattan<=2 em cada spawn, garantindo abertura inicial sem morte obrigatoria.
+- Regra de solidos mantida com 0 pares ortogonais de indestrutiveis encostados.
+- Validacao: densidade atual 0.895 (17/19 tiles fillable), touchingSolidPairs=0, `npm run test:spawn` ok.
+- Deploy atualizado em Cloudflare (version id 096a046f-f9b6-437b-8c09-095dd9408cdd).
+2026-03-27 four-player-balance-pass
+- Arena redesenhada para 4 players com simetria horizontal/vertical na distribuicao de caixas quebraveis (todos os spawns equivalentes).
+- Densidade de blocos quebraveis ajustada para 82.1% fora da zona de spawn seguro.
+- Spawn continua seguro (3 vizinhos livres) e foi mantido bloco inicial forcado para abertura de jogo sem auto-morte.
+- Regra de indestrutiveis sem contato ortogonal preservada (`touchingSolidPairs=0`).
+- Validacao: `npm run test:spawn`, check de densidade/solidos, `npm run test:bomb-range`, `npm run test:online-4p`.
+- Deploy atualizado em Cloudflare (version id f626c3c4-2eff-4953-99e0-282b86511d5d).
+2026-03-27 Ranni ult hotfix (ice cast + channel teleport validation)
+- Corrigido importador `scripts/import_pixellab_characters.mjs` para priorizar animacao custom de gelo da Ranni antes de fallbacks genericos.
+- Adicionado fallback direcional para cast (incluindo reaproveitamento de direcoes disponiveis) e limpeza de frames antigos por prefixo para evitar mistura com `fireball`.
+- Sync executado com `PIXELLAB_CHARACTER_IDS=03a976fb-7313-4064-a477-5bb9b0760034`; cast da Ranni agora foi regenerado em 4 frames por direcao (`cast-south/east/north/west-0..3`) a partir do set de gelo.
+- Reforcado teste `tests/ranni-ult-ice-blink-check.mjs` para rodar em mapa aberto e validar cadeia completa da mecanica: freeze em channel, projected movement durante 2s, teleport no fim, entrada em cooldown.
+
+Validacao 2026-03-27
+- `npm run test:ranni-ult` (pass)
+- `npm run test:input` (pass)
+- `npm run test:player-sprite` (pass)
+- `npm run build` (pass)
+2026-03-27 online bomb flicker fix (guest one-shot input latch)
+- Causa raiz identificada no Durable Object (`worker/index.js`): `capturePlayerInput` sobrescrevia `bombPressed/detonatePressed/skillPressed` com `false` quando chegava um pacote mais novo antes do tick do servidor.
+- Efeito em jogo: cliente guest previa bomba localmente, mas o servidor podia nao consumir o one-shot; no frame autoritativo seguinte a bomba sumia ("aparece e some").
+- Correcao aplicada:
+  - criado `src/online/input-latch.ts` com `mergeSequencedOnlineInputState(...)` para latchear flags one-shot por seq (OR) e ignorar pacotes fora de ordem.
+  - `worker/index.js` agora usa esse merge em `capturePlayerInput`.
+- Teste novo: `tests/online-input-latching-check.mjs` + script `npm run test:online-input-latch`.
+
+Validacao 2026-03-27
+- `npm run test:online-input-latch` (pass)
+- `npm run test:online-4p` (pass)
+- `node --check worker/index.js` (pass)
+- `npm run build` (pass)

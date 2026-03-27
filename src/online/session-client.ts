@@ -165,6 +165,16 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     });
 
     this.elements.quickMatchButton.addEventListener("click", () => {
+      const currentLobby = this.currentLobby;
+      if (
+        currentLobby
+        && currentLobby.status === "open"
+        && currentLobby.selfSeat
+        && currentLobby.seats[currentLobby.selfSeat]?.ready
+      ) {
+        this.setStatus("Quick match ja armou sua vaga. Aguardando outro piloto entrar.");
+        return;
+      }
       if (this.quickMatchSearching) {
         return;
       }
@@ -774,6 +784,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.elements.seats[playerId].replaceChildren(this.buildSeatContent(playerId, lobby));
     }
     this.renderChat();
+    if (lobby.status === "open" && lobby.selfSeat && lobby.seats[lobby.selfSeat]?.ready && lobby.occupantCount < 2) {
+      this.setStatus("Quick match pronto: vaga travada. Falta mais 1 piloto para iniciar.");
+    }
     window.requestAnimationFrame(() => {
       window.dispatchEvent(new Event("resize"));
     });

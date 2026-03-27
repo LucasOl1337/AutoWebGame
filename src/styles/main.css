@@ -513,11 +513,13 @@ button {
 .lobby-stage__rail {
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(290px, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(220px, 0.9fr);
   gap: 14px;
+  overflow: hidden;
 }
 
 .lobby-stage__panel {
+  min-height: 0;
   display: grid;
   gap: 12px;
   padding: 18px;
@@ -526,6 +528,7 @@ button {
 
 .lobby-stage__panel--seats {
   align-content: start;
+  overflow: auto;
 }
 
 .lobby-seats {
@@ -623,6 +626,7 @@ button {
 
 .lobby-chat {
   min-height: 0;
+  overflow: hidden;
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 

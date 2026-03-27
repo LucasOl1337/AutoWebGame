@@ -5,6 +5,8 @@ export const MENU_PLAYER_IDS = [1, 2] as const;
 export type Mode = "boot" | "menu" | "match" | "match-result";
 export type Direction = "up" | "down" | "left" | "right";
 export type FlameStyle = "normal" | "arcane" | "shadow";
+export type CharacterSkillId = "ranni-ice-blink";
+export type SkillPhase = "idle" | "channeling" | "cooldown";
 export type PowerUpType =
   | "bomb-up"
   | "flame-up"
@@ -44,6 +46,17 @@ export interface PlayerState {
   kickLevel: number;
   flameGuardMs: number;
   spawnProtectionMs: number;
+  skill: PlayerSkillState;
+}
+
+export interface PlayerSkillState {
+  id: CharacterSkillId | null;
+  phase: SkillPhase;
+  channelRemainingMs: number;
+  cooldownRemainingMs: number;
+  castElapsedMs: number;
+  projectedPosition: PixelCoord | null;
+  projectedLastMoveDirection: Direction | null;
 }
 
 export interface BombState {

@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-03-27T20:56:19.327Z",
-  "totalRequested": 3,
+  "generatedAt": "2026-03-27T23:15:40.478Z",
+  "totalRequested": 2,
   "imported": 2,
-  "skipped": 1,
+  "skipped": 0,
   "invalid": false,
   "characters": [
     {
@@ -14,7 +14,10 @@
       },
       "animations": {
         "idle": true,
-        "walk": true
+        "walk": true,
+        "run": true,
+        "cast": true,
+        "attack": true
       },
       "pinned": true,
       "defaultSlot": 1,
