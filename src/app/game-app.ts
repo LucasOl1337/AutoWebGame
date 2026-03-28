@@ -797,7 +797,7 @@ export class GameApp {
       ?? (typeof window.innerWidth === "number" ? window.innerWidth : CANVAS_WIDTH + CANVAS_VIEWPORT_PADDING);
     const viewportHeight = viewport?.clientHeight
       ?? (typeof window.innerHeight === "number" ? window.innerHeight : CANVAS_HEIGHT + CANVAS_VIEWPORT_PADDING);
-    const viewportPadding = viewport ? 12 : CANVAS_VIEWPORT_PADDING;
+    const viewportPadding = viewport ? 6 : CANVAS_VIEWPORT_PADDING;
     const availableWidth = Math.max(160, viewportWidth - viewportPadding);
     const availableHeight = Math.max(160, viewportHeight - viewportPadding);
     const fitScale = Math.min(availableWidth / CANVAS_WIDTH, availableHeight / CANVAS_HEIGHT);
@@ -2832,21 +2832,11 @@ export class GameApp {
       });
     }
 
-    this.ctx.textAlign = "left";
-    this.ctx.font = "bold 8px monospace";
-    this.drawHudText(`R${this.roundNumber}`, 12, 14, "#d8eaf8", "rgba(4, 10, 19, 0.9)");
-    this.drawHudText(`GOAL ${TARGET_WINS}`, 12, 27, "#d8eaf8", "rgba(4, 10, 19, 0.9)");
-    this.drawHudText(
-      this.showDangerOverlay ? "DANGER ON" : "DANGER OFF",
-      12,
-      HUD_HEIGHT - 9,
-      this.showDangerOverlay ? "rgba(255, 213, 163, 0.96)" : "rgba(176, 197, 218, 0.82)",
-      "rgba(4, 10, 19, 0.9)",
-    );
-
     this.ctx.textAlign = "center";
+    this.ctx.font = "bold 7px monospace";
+    this.drawHudText(`R${this.roundNumber} | GOAL ${TARGET_WINS}`, CANVAS_WIDTH / 2, 8, "#d8eaf8", "rgba(4, 10, 19, 0.9)");
     this.ctx.font = "bold 8px monospace";
-    this.drawHudText("TIME", CANVAS_WIDTH / 2, 14, "#b8cde2", "rgba(4, 10, 19, 0.9)");
+    this.drawHudText("TIME", CANVAS_WIDTH / 2, 17, "#b8cde2", "rgba(4, 10, 19, 0.9)");
     this.ctx.font = "bold 16px monospace";
     this.drawHudText(
       Math.ceil(this.roundTimeMs / 1000).toString().padStart(2, "0"),
@@ -2855,15 +2845,6 @@ export class GameApp {
       "#f7fbff",
       "rgba(4, 10, 19, 0.9)",
     );
-    this.ctx.font = "7px monospace";
-    this.drawHudText(
-      this.showBombPreview ? "BLAST ON" : "BLAST OFF",
-      CANVAS_WIDTH / 2,
-      HUD_HEIGHT - 9,
-      this.showBombPreview ? "rgba(183, 247, 232, 0.96)" : "rgba(176, 197, 218, 0.82)",
-      "rgba(4, 10, 19, 0.9)",
-    );
-
     if (!this.roundOutcome) {
       this.ctx.textAlign = "center";
       this.ctx.font = "bold 8px monospace";
@@ -3949,4 +3930,3 @@ export class GameApp {
     return JSON.stringify(payload);
   }
 }
-

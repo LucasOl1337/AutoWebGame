@@ -38,8 +38,7 @@ interface SessionElements {
   selectorPortrait: HTMLImageElement;
   selectorName: HTMLParagraphElement;
   selectorNote: HTMLParagraphElement;
-  selectorPrev: HTMLButtonElement;
-  selectorNext: HTMLButtonElement;
+  selectorGrid: HTMLDivElement;
   stageEyebrow: HTMLParagraphElement;
   stageTitle: HTMLHeadingElement;
   stageDescription: HTMLParagraphElement;
@@ -47,8 +46,13 @@ interface SessionElements {
   inviteInput: HTMLInputElement;
   copyButton: HTMLButtonElement;
   leaveButton: HTMLButtonElement;
+  matchMeta: HTMLParagraphElement;
+  matchCopyButton: HTMLButtonElement;
+  matchLeaveButton: HTMLButtonElement;
   arenaViewport: HTMLDivElement;
+  seatsHeading: HTMLDivElement;
   seats: Record<PlayerId, HTMLDivElement>;
+  chatHeading: HTMLDivElement;
   chatLog: HTMLDivElement;
   chatInput: HTMLInputElement;
   chatSend: HTMLButtonElement;
@@ -187,28 +191,18 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       }
     });
 
-    this.elements.selectorPrev.addEventListener("click", () => {
-      this.updatePreferredCharacter(this.preferredCharacterIndex - 1);
+    this.elements.copyButton.addEventListener("click", () => {
+      void this.copyInvite();
     });
-
-    this.elements.selectorNext.addEventListener("click", () => {
-      this.updatePreferredCharacter(this.preferredCharacterIndex + 1);
-    });
-
-    this.elements.copyButton.addEventListener("click", async () => {
-      if (!this.currentLobby) {
-        return;
-      }
-      try {
-        await navigator.clipboard.writeText(this.buildInviteUrl(this.currentLobby.roomCode));
-        this.setStatus("Invite copied. Anyone can also join from the global lobby board.");
-      } catch {
-        this.setStatus("Copy failed. Share the room code manually.");
-      }
+    this.elements.matchCopyButton.addEventListener("click", () => {
+      void this.copyInvite();
     });
 
     this.elements.leaveButton.addEventListener("click", () => {
-      this.send({ type: "leave-lobby" });
+      this.leaveCurrentLobby();
+    });
+    this.elements.matchLeaveButton.addEventListener("click", () => {
+      this.leaveCurrentLobby();
     });
 
     this.elements.chatSend.addEventListener("click", () => {
@@ -247,6 +241,22 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     }
     this.elements.chatInput.value = "";
     this.elements.chatInput.focus();
+  }
+
+  private async copyInvite(): Promise<void> {
+    if (!this.currentLobby) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(this.buildInviteUrl(this.currentLobby.roomCode));
+      this.setStatus("Invite copied. Anyone can also join from the global lobby board.");
+    } catch {
+      this.setStatus("Copy failed. Share the room code manually.");
+    }
+  }
+
+  private leaveCurrentLobby(): void {
+    this.send({ type: "leave-lobby" });
   }
 
   private handleMessage(rawMessage: unknown): void {
@@ -298,7 +308,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.updateLocation(message.lobby.roomCode);
         this.renderStage();
         this.renderLobbyList();
-        this.setStatus("Lobby joined. Claim a slot, pick a character, then lock ready.");
+        this.setStatus("Lobby joined. Claim a slot, pick a character, then ready up.");
         break;
       case "lobby-updated":
         {
@@ -338,7 +348,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.app.startOnlineMatch(message.config);
         this.elements.shell.dataset.state = "match";
         this.renderStage();
-        this.setStatus("Match live. Arena expanded and slot locks stay active until the room resets.");
+        this.setStatus("Match live. Arena expanded and the player rail stays active until the room resets.");
         break;
       case "guest-input":
         this.app.receiveOnlineGuestInput(message.input);
@@ -453,13 +463,19 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     const selectorHeading = document.createElement("div");
     selectorHeading.className = "lobby-selector__heading";
-    selectorHeading.textContent = "Selected bomber";
+    selectorHeading.textContent = "Champion select";
+
+    const selectorSummary = document.createElement("div");
+    selectorSummary.className = "lobby-selector__summary";
 
     const selectorPortrait = document.createElement("img");
     selectorPortrait.className = "lobby-selector__portrait";
     selectorPortrait.alt = "Selected character";
-    selectorPortrait.width = 112;
-    selectorPortrait.height = 112;
+    selectorPortrait.width = 72;
+    selectorPortrait.height = 72;
+
+    const selectorCopy = document.createElement("div");
+    selectorCopy.className = "lobby-selector__copy";
 
     const selectorName = document.createElement("p");
     selectorName.className = "lobby-selector__name";
@@ -467,21 +483,13 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const selectorNote = document.createElement("p");
     selectorNote.className = "lobby-selector__note";
 
-    const selectorActions = document.createElement("div");
-    selectorActions.className = "lobby-selector__actions";
+    selectorCopy.append(selectorName, selectorNote);
+    selectorSummary.append(selectorPortrait, selectorCopy);
 
-    const selectorPrev = document.createElement("button");
-    selectorPrev.className = "lobby-button";
-    selectorPrev.type = "button";
-    selectorPrev.textContent = "Prev";
+    const selectorGrid = document.createElement("div");
+    selectorGrid.className = "lobby-selector__grid";
 
-    const selectorNext = document.createElement("button");
-    selectorNext.className = "lobby-button";
-    selectorNext.type = "button";
-    selectorNext.textContent = "Next";
-
-    selectorActions.append(selectorPrev, selectorNext);
-    selectorPanel.append(selectorHeading, selectorPortrait, selectorName, selectorNote, selectorActions);
+    selectorPanel.append(selectorHeading, selectorSummary, selectorGrid);
 
     const browserList = document.createElement("div");
     browserList.className = "lobby-browser__list";
@@ -545,12 +553,38 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const sideRail = document.createElement("aside");
     sideRail.className = "lobby-stage__rail";
 
+    const matchPanel = document.createElement("section");
+    matchPanel.className = "lobby-stage__panel lobby-stage__panel--match-menu";
+
+    const matchHeading = document.createElement("div");
+    matchHeading.className = "lobby-stage__panel-heading";
+    matchHeading.textContent = "Match menu";
+
+    const matchMeta = document.createElement("p");
+    matchMeta.className = "lobby-stage__match-meta";
+
+    const matchActions = document.createElement("div");
+    matchActions.className = "lobby-stage__match-actions";
+
+    const matchCopyButton = document.createElement("button");
+    matchCopyButton.className = "lobby-button";
+    matchCopyButton.type = "button";
+    matchCopyButton.textContent = "Copy invite";
+
+    const matchLeaveButton = document.createElement("button");
+    matchLeaveButton.className = "lobby-button lobby-button--danger";
+    matchLeaveButton.type = "button";
+    matchLeaveButton.textContent = "Exit match";
+
+    matchActions.append(matchCopyButton, matchLeaveButton);
+    matchPanel.append(matchHeading, matchMeta, matchActions);
+
     const seatsPanel = document.createElement("section");
     seatsPanel.className = "lobby-stage__panel lobby-stage__panel--seats";
 
     const seatsHeading = document.createElement("div");
     seatsHeading.className = "lobby-stage__panel-heading";
-    seatsHeading.textContent = "Pilot locks";
+    seatsHeading.textContent = "Pilots";
 
     const seatsWrap = document.createElement("div");
     seatsWrap.className = "lobby-seats";
@@ -572,7 +606,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     const chatHeading = document.createElement("div");
     chatHeading.className = "lobby-stage__panel-heading";
-    chatHeading.textContent = "Bomb feed";
+    chatHeading.textContent = "Feed";
 
     const chatLog = document.createElement("div");
     chatLog.className = "lobby-chat__log";
@@ -602,7 +636,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const status = document.createElement("p");
     status.className = "lobby-status";
 
-    sideRail.append(seatsPanel, chatPanel);
+    sideRail.append(matchPanel, seatsPanel, chatPanel);
     workspace.append(arenaViewport, sideRail);
     stage.append(stageTop, workspace, status);
     shell.append(browser, stage);
@@ -621,8 +655,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       selectorPortrait,
       selectorName,
       selectorNote,
-      selectorPrev,
-      selectorNext,
+      selectorGrid,
       stageEyebrow,
       stageTitle,
       stageDescription,
@@ -630,8 +663,13 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       inviteInput,
       copyButton,
       leaveButton,
+      matchMeta,
+      matchCopyButton,
+      matchLeaveButton,
       arenaViewport,
+      seatsHeading,
       seats,
+      chatHeading,
       chatLog,
       chatInput,
       chatSend,
@@ -687,6 +725,39 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.elements.selectorNote.textContent = this.currentLobby?.selfSeat
       ? "Applied to your claimed slot and reused for quick match."
       : "This pilot is used for quick match and your next claimed slot.";
+    this.elements.selectorGrid.replaceChildren(
+      ...this.roster.map((entry, index) => {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.className = "lobby-selector__option";
+        if (index === this.preferredCharacterIndex) {
+          option.dataset.selected = "true";
+        }
+
+        const portrait = document.createElement("img");
+        portrait.className = "lobby-selector__option-portrait";
+        portrait.alt = entry.name;
+        portrait.src = assetUrl(`/assets/characters/${entry.id}/south.png`);
+        portrait.width = 48;
+        portrait.height = 48;
+
+        const meta = document.createElement("div");
+        meta.className = "lobby-selector__option-meta";
+
+        const name = document.createElement("strong");
+        name.textContent = entry.name;
+
+        const hint = document.createElement("span");
+        hint.textContent = entry.defaultSlot ? `Default P${entry.defaultSlot}` : "Selectable";
+
+        meta.append(name, hint);
+        option.append(portrait, meta);
+        option.addEventListener("click", () => {
+          this.updatePreferredCharacter(index);
+        });
+        return option;
+      }),
+    );
   }
 
   private updatePreferredCharacter(nextIndex: number): void {
@@ -759,6 +830,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.elements.inviteInput.value = "";
       this.elements.copyButton.disabled = true;
       this.elements.leaveButton.disabled = true;
+      this.elements.matchMeta.textContent = "";
+      this.elements.matchCopyButton.disabled = true;
+      this.elements.matchLeaveButton.disabled = true;
+      this.elements.seatsHeading.textContent = "Pilots";
+      this.elements.chatHeading.textContent = "Feed";
       for (const playerId of ALL_PLAYER_IDS) {
         this.elements.seats[playerId].replaceChildren(this.buildEmptySeat(playerId));
       }
@@ -773,13 +849,18 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.elements.stageEyebrow.textContent = lobby.status === "playing" ? "Live room" : "Open board";
     this.elements.stageTitle.textContent = lobby.title;
     this.elements.stageDescription.textContent = lobby.status === "playing"
-      ? "The room is live. Chat and slot locks stay on the rail."
-      : "Claim a side, lock your pilot, and enter match flow as soon as every occupied slot is ready.";
+      ? "The room is live. The player rail and feed stay available on the side."
+      : "Claim a side, choose your bomber, and start as soon as every occupied slot is ready.";
     this.elements.stageMeta.textContent =
       `${lobby.roomCode} | ${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} pilots | ${lobby.status === "playing" ? "Live match" : "Ready room"} | P1 WASD Q/R E | P2 Arrows O/U P`;
     this.elements.inviteInput.value = this.buildInviteUrl(lobby.roomCode);
     this.elements.copyButton.disabled = false;
     this.elements.leaveButton.disabled = false;
+    this.elements.matchMeta.textContent = `${lobby.roomCode} | ${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} pilots | ${lobby.status === "playing" ? "Live" : "Lobby"}`;
+    this.elements.matchCopyButton.disabled = false;
+    this.elements.matchLeaveButton.disabled = false;
+    this.elements.seatsHeading.textContent = "Pilots";
+    this.elements.chatHeading.textContent = lobby.status === "playing" ? "Match feed" : "Feed";
     for (const playerId of ALL_PLAYER_IDS) {
       this.elements.seats[playerId].replaceChildren(this.buildSeatContent(playerId, lobby));
     }
@@ -849,14 +930,14 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     slot.textContent = `P${playerId}`;
 
     const title = document.createElement("strong");
-    title.textContent = "Open slot";
+    title.textContent = "Open";
 
     const state = document.createElement("em");
-    state.textContent = "Waiting for a pilot";
+    state.textContent = "Available";
 
     const placeholder = document.createElement("div");
     placeholder.className = "lobby-seat__placeholder";
-    placeholder.textContent = "Claim this slot, choose a pilot on the left, then lock ready.";
+    placeholder.textContent = "Claim slot.";
 
     header.append(slot, title, state);
     wrap.append(header, placeholder);
@@ -878,11 +959,13 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     slotLabel.textContent = `P${playerId}`;
 
     const name = document.createElement("strong");
-    name.textContent = seat.clientId ? seat.displayName || `Pilot ${playerId}` : "Open slot";
+    name.textContent = seat.clientId ? seat.displayName || `Pilot ${playerId}` : "Open";
 
     const status = document.createElement("em");
     status.textContent = seat.clientId
-      ? (seat.ready ? "Locked" : isSelf ? "Choosing" : "Waiting")
+      ? lobby.status === "playing"
+        ? (seat.ready ? "Live" : "Joining")
+        : (seat.ready ? "Ready" : isSelf ? "Selecting" : "Joined")
       : "Available";
 
     header.append(slotLabel, name, status);
@@ -905,7 +988,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     characterName.textContent = character.name;
 
     const characterState = document.createElement("span");
-    characterState.textContent = seat.ready ? "Ready" : "Not ready";
+    characterState.textContent = lobby.status === "playing"
+      ? (seat.ready ? "In arena" : "Joining")
+      : (seat.ready ? "Seat ready" : "Selected");
 
     characterMeta.append(characterName, characterState);
 
@@ -918,7 +1003,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       const claimButton = document.createElement("button");
       claimButton.className = "lobby-button lobby-button--primary";
       claimButton.type = "button";
-      claimButton.textContent = `Claim P${playerId}`;
+      claimButton.textContent = "Claim";
       claimButton.addEventListener("click", () => {
         this.send({ type: "claim-seat", seat: playerId, characterIndex: this.preferredCharacterIndex });
       });
@@ -927,20 +1012,22 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       const readyButton = document.createElement("button");
       readyButton.className = `lobby-button ${seat.ready ? "lobby-button--danger" : "lobby-button--primary"}`;
       readyButton.type = "button";
-      readyButton.textContent = seat.ready ? "Unlock" : "Lock ready";
+      readyButton.textContent = seat.ready ? "Undo" : "Ready up";
       readyButton.addEventListener("click", () => {
         this.send({ type: "set-ready", ready: !seat.ready });
       });
 
       const info = document.createElement("span");
       info.className = "lobby-seat__hint";
-      info.textContent = "Pilot selection is controlled from the left panel.";
+      info.textContent = "Uses your selected bomber.";
 
       actions.append(readyButton, info);
     } else {
       const info = document.createElement("span");
       info.className = "lobby-seat__hint";
-      info.textContent = seat.ready ? "Slot locked in." : "Waiting for this pilot.";
+      info.textContent = lobby.status === "playing"
+        ? (seat.ready ? "Pilot deployed." : "Connecting to arena.")
+        : (seat.ready ? "Ready." : "Waiting.");
       actions.appendChild(info);
     }
 
@@ -1042,5 +1129,3 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     return normalized || null;
   }
 }
-
-
