@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { GameApp } from "../src/app/game-app";
+import { CHARACTER_ROSTER_MANIFEST } from "../src/core/character-roster-manifest";
 import { mergeSequencedOnlineInputState } from "../src/online/input-latch";
 import { createFixedRatePumpState, consumeFixedRatePumpSteps } from "../src/online/server-tick";
 
@@ -1366,6 +1367,29 @@ function createNeutralInput() {
   };
 }
 
+function createEmptyDirectionalSprites() {
+  return {
+    up: null,
+    down: null,
+    left: null,
+    right: null,
+    idle: { up: [], down: [], left: [], right: [] },
+    walk: { up: [], down: [], left: [], right: [] },
+    run: { up: [], down: [], left: [], right: [] },
+    cast: { up: [], down: [], left: [], right: [] },
+    attack: { up: [], down: [], left: [], right: [] },
+    death: { up: [], down: [], left: [], right: [] },
+  };
+}
+
+function createServerCharacterRoster() {
+  return CHARACTER_ROSTER_MANIFEST.map((entry) => ({
+    ...entry,
+    size: null,
+    sprites: createEmptyDirectionalSprites(),
+  }));
+}
+
 function createServerGame() {
   return new GameApp(
     /** @type {HTMLElement} */ ({ appendChild() {} }),
@@ -1393,7 +1417,7 @@ function createServerGame() {
         "bomb-pass-up": null,
         "kick-up": null,
       },
-      characterRoster: [],
+      characterRoster: createServerCharacterRoster(),
     },
   );
 }
