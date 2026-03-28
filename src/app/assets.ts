@@ -11,6 +11,7 @@ export interface DirectionalSprites {
   run: Record<Direction, HTMLImageElement[]>;
   cast: Record<Direction, HTMLImageElement[]>;
   attack: Record<Direction, HTMLImageElement[]>;
+  death: Record<Direction, HTMLImageElement[]>;
 }
 
 export interface CharacterRosterEntry {
@@ -24,6 +25,7 @@ export interface CharacterRosterEntry {
     run?: boolean;
     cast?: boolean;
     attack?: boolean;
+    death?: boolean;
   };
   pinned?: boolean;
   defaultSlot?: PlayerId;
@@ -41,6 +43,7 @@ export interface GameAssets {
   props: {
     wall: HTMLImageElement | null;
     crate: HTMLImageElement | null;
+    crateBreakFrames?: HTMLImageElement[];
     bomb: HTMLImageElement | null;
     flame: HTMLImageElement | null;
   };
@@ -57,6 +60,7 @@ interface CharacterManifestEntry {
     run?: boolean;
     cast?: boolean;
     attack?: boolean;
+    death?: boolean;
   };
   pinned?: boolean;
   defaultSlot?: PlayerId;
@@ -115,12 +119,20 @@ async function loadDirectionalSprites(prefix: string, baseVariants: string[] = [
     run: { up: [], down: [], left: [], right: [] },
     cast: { up: [], down: [], left: [], right: [] },
     attack: { up: [], down: [], left: [], right: [] },
+    death: { up: [], down: [], left: [], right: [] },
   };
 }
 
 async function loadStaticDirectionalSprites(
   basePath: string,
-  animations?: { idle?: boolean; walk?: boolean; run?: boolean; cast?: boolean; attack?: boolean },
+  animations?: {
+    idle?: boolean;
+    walk?: boolean;
+    run?: boolean;
+    cast?: boolean;
+    attack?: boolean;
+    death?: boolean;
+  },
 ): Promise<DirectionalSprites> {
   const [down, right, up, left] = await Promise.all([
     loadImage(`${basePath}/south.png`),
@@ -133,6 +145,7 @@ async function loadStaticDirectionalSprites(
   const runFrames = animations?.run ? await loadCharacterCycle(basePath, "run") : { up: [], down: [], left: [], right: [] };
   const castFrames = animations?.cast ? await loadCharacterCycle(basePath, "cast") : { up: [], down: [], left: [], right: [] };
   const attackFrames = animations?.attack ? await loadCharacterCycle(basePath, "attack") : { up: [], down: [], left: [], right: [] };
+  const deathFrames = animations?.death ? await loadCharacterCycle(basePath, "death") : { up: [], down: [], left: [], right: [] };
   return {
     up,
     down,
@@ -148,6 +161,7 @@ async function loadStaticDirectionalSprites(
     run: runFrames,
     cast: castFrames,
     attack: attackFrames,
+    death: deathFrames,
   };
 }
 
@@ -157,7 +171,7 @@ async function loadWalkCycle(prefix: string): Promise<Record<Direction, HTMLImag
 
 async function loadCharacterCycle(
   basePath: string,
-  animationName: "idle" | "walk" | "run" | "cast" | "attack",
+  animationName: "idle" | "walk" | "run" | "cast" | "attack" | "death",
 ): Promise<Record<Direction, HTMLImageElement[]>> {
   return loadCycleFromTemplate((suffix, index) => `${basePath}/${animationName}-${suffix}-${index}.png`);
 }
@@ -247,6 +261,10 @@ export async function loadGameAssets(): Promise<GameAssets> {
     floorSpawn,
     wall,
     crate,
+    crateBreak0,
+    crateBreak1,
+    crateBreak2,
+    crateBreak3,
     bomb,
     flame,
     bombUp,
@@ -262,6 +280,10 @@ export async function loadGameAssets(): Promise<GameAssets> {
     loadImage(assetUrl("/assets/tiles/floor-spawn.png")),
     loadImage(assetUrl("/assets/tiles/wall.png")),
     loadImage(assetUrl("/assets/tiles/crate.png")),
+    loadImage(assetUrl("/assets/tiles/crate-break-0.png")),
+    loadImage(assetUrl("/assets/tiles/crate-break-1.png")),
+    loadImage(assetUrl("/assets/tiles/crate-break-2.png")),
+    loadImage(assetUrl("/assets/tiles/crate-break-3.png")),
     loadImage(assetUrl("/assets/sprites/bomb.png")),
     loadImage(assetUrl("/assets/sprites/flame.png")),
     loadImage(assetUrl("/assets/ui/power-bomb.png")),
@@ -309,6 +331,8 @@ export async function loadGameAssets(): Promise<GameAssets> {
     props: {
       wall,
       crate,
+      crateBreakFrames: [crateBreak0, crateBreak1, crateBreak2, crateBreak3]
+        .filter((frame): frame is HTMLImageElement => frame !== null),
       bomb,
       flame,
     },

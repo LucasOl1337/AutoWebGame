@@ -973,6 +973,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         right: null,
         idle: { up: [], down: [], left: [], right: [] },
         walk: { up: [], down: [], left: [], right: [] },
+        run: { up: [], down: [], left: [], right: [] },
+        cast: { up: [], down: [], left: [], right: [] },
+        attack: { up: [], down: [], left: [], right: [] },
+        death: { up: [], down: [], left: [], right: [] },
       },
     };
   }

@@ -5,6 +5,8 @@ const noop = () => {};
 const { GameApp } = await import("../output/esm/app/game-app.js");
 const { TILE_SIZE } = await import("../output/esm/core/config.js");
 
+const RANNI_CHANNEL_MS = 1_500;
+
 const emptyDirectionalSprites = {
   up: null,
   down: null,
@@ -77,7 +79,7 @@ for (; channelElapsedMs < 2500 && p1.skill.phase === "channeling"; channelElapse
     ...neutralInput,
   });
   game.advanceServerSimulation(17);
-  if (channelElapsedMs >= Math.floor(2000 / 2) && !midSnapshot) {
+  if (channelElapsedMs >= Math.floor(RANNI_CHANNEL_MS / 2) && !midSnapshot) {
     midSnapshot = {
       midX: p1.position.x,
       midSkill: {
@@ -142,6 +144,56 @@ for (let elapsed = 0; elapsed < 500; elapsed += 17) {
 }
 const immuneDuringChannel = immuneRanni.alive && immuneRanni.skill.phase === "channeling";
 
+const cancelGame = createServerMatch({ 1: 0, 2: 1, 3: 0, 4: 1 });
+const cancelRanni = cancelGame.players[1];
+cancelRanni.position = { x: 4 * TILE_SIZE + TILE_SIZE * 0.5, y: 4 * TILE_SIZE + TILE_SIZE * 0.5 };
+cancelRanni.tile = { x: 4, y: 4 };
+cancelRanni.spawnProtectionMs = 0;
+cancelGame.setServerPlayerInput(1, {
+  direction: "right",
+  ...neutralInput,
+  skillPressed: true,
+});
+cancelGame.advanceServerSimulation(17);
+
+let cancelElapsedMs = 17;
+for (; cancelElapsedMs < 600; cancelElapsedMs += 17) {
+  cancelGame.setServerPlayerInput(1, {
+    direction: "right",
+    ...neutralInput,
+  });
+  cancelGame.advanceServerSimulation(17);
+}
+
+cancelGame.setServerPlayerInput(1, {
+  direction: "right",
+  ...neutralInput,
+  skillPressed: true,
+});
+cancelGame.advanceServerSimulation(17);
+
+const cancelFinishX = cancelRanni.position.x;
+const cancelSkill = {
+  ...cancelRanni.skill,
+  projectedPosition: cancelRanni.skill.projectedPosition ? { ...cancelRanni.skill.projectedPosition } : null,
+};
+
+const cancelRunnerGame = createServerMatch({ 1: 1, 2: 1, 3: 1, 4: 1 });
+const cancelRunner = cancelRunnerGame.players[1];
+cancelRunner.position = { x: beforeX, y: p1.position.y };
+cancelRunner.tile = { x: 4, y: 4 };
+cancelRunner.spawnProtectionMs = 0;
+for (let elapsed = 0; elapsed < cancelElapsedMs; elapsed += 17) {
+  cancelRunnerGame.setServerPlayerInput(1, {
+    direction: "right",
+    ...neutralInput,
+  });
+  cancelRunnerGame.advanceServerSimulation(17);
+}
+const expectedCancelFinishX = cancelRunner.position.x;
+const canceledEarly = cancelSkill.phase === "cooldown" && cancelElapsedMs < channelElapsedMs;
+const canceledToProjectedTrack = Math.abs(cancelFinishX - expectedCancelFinishX) < 1.5;
+
 const report = {
   beforeX,
   midX,
@@ -158,6 +210,11 @@ const report = {
   channelingPhaseObserved,
   cooldownPhaseObserved,
   immuneDuringChannel,
+  cancelElapsedMs,
+  cancelFinishX,
+  expectedCancelFinishX,
+  canceledEarly,
+  canceledToProjectedTrack,
   pass: frozenInPlace
     && projectedMovedDuringChannel
     && teleportedAfterChannel
@@ -165,6 +222,8 @@ const report = {
     && channelingPhaseObserved
     && cooldownPhaseObserved
     && immuneDuringChannel
+    && canceledEarly
+    && canceledToProjectedTrack
 };
 
 console.log(JSON.stringify(report, null, 2));

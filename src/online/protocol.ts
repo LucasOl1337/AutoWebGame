@@ -8,6 +8,7 @@ import type {
   PlayerState,
   PowerUpState,
   RoundOutcome,
+  SuddenDeathClosingTileState,
 } from "../core/types";
 
 export type OnlineRole = "host" | "guest";
@@ -82,6 +83,8 @@ export interface OnlineGameSnapshot {
   suddenDeathActive: boolean;
   suddenDeathTickMs: number;
   suddenDeathIndex: number;
+  suddenDeathClosedTiles: string[];
+  suddenDeathClosingTiles: SuddenDeathClosingTileState[];
   showDangerOverlay: boolean;
   showBombPreview: boolean;
   selectedCharacterIndex: Record<PlayerId, number>;
@@ -108,6 +111,8 @@ export interface OnlineGameFrame {
   suddenDeathActive: boolean;
   suddenDeathTickMs: number;
   suddenDeathIndex: number;
+  suddenDeathClosedTiles: string[];
+  suddenDeathClosingTiles: SuddenDeathClosingTileState[];
   selectedCharacterIndex: Record<PlayerId, number>;
   activePlayerIds: PlayerId[];
 }
