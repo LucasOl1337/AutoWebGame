@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-03-28T02:02:03.745Z",
-  "totalRequested": 2,
-  "imported": 2,
+  "generatedAt": "2026-03-28T02:57:59.274Z",
+  "totalRequested": 3,
+  "imported": 3,
   "skipped": 0,
   "invalid": false,
   "characters": [
@@ -484,10 +484,11 @@
       },
       "animations": {
         "idle": true,
-        "walk": false,
+        "walk": true,
         "run": true,
         "cast": true,
-        "attack": true
+        "attack": true,
+        "death": false
       },
       "pinned": false
     },

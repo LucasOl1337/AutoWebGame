@@ -2,6 +2,7 @@ import type {
   BombState,
   Direction,
   FlameState,
+  MagicBeamState,
   MatchScore,
   Mode,
   PlayerId,
@@ -19,6 +20,7 @@ export interface OnlineInputState {
   bombPressed: boolean;
   detonatePressed: boolean;
   skillPressed: boolean;
+  skillHeld?: boolean;
 }
 
 export interface LobbySeatState {
@@ -72,6 +74,7 @@ export interface OnlineGameSnapshot {
   players: Record<PlayerId, PlayerState>;
   bombs: BombState[];
   flames: FlameState[];
+  magicBeams: MagicBeamState[];
   nextBombId: number;
   score: MatchScore;
   roundNumber: number;
@@ -100,6 +103,7 @@ export interface OnlineGameFrame {
   players: Record<PlayerId, PlayerState>;
   bombs: BombState[];
   flames: FlameState[];
+  magicBeams: MagicBeamState[];
   nextBombId: number;
   score: MatchScore;
   roundNumber: number;

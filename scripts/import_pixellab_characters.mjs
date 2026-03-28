@@ -26,6 +26,7 @@ export const PINNED_CHARACTERS = [
 ];
 const RANNI_CHARACTER_ID = "03a976fb-7313-4064-a477-5bb9b0760034";
 const KILLER_BEE_CHARACTER_ID = "6ee8baa5-3277-413b-ae0e-2659b9cc52e9";
+const NICO_CHARACTER_ID = "5474c45c-2987-43e0-af2c-a6500c836881";
 
 const CHARACTER_NAME_OVERRIDES = {
   "03a976fb-7313-4064-a477-5bb9b0760034": "Ranni",
@@ -70,6 +71,11 @@ const RANNI_ICE_CAST_PATTERNS = ["ice cube", "ice block", "ice splash", "custom-
 const KILLER_BEE_DASH_CAST_PATTERNS = [
   "super fast bee dash",
   "bee dash with particle",
+];
+const NICO_ARCANE_BEAM_CAST_PATTERNS = [
+  "nico ultimate arcane beam",
+  "fireball",
+  "dark-energy spell",
 ];
 const DIRECTION_FALLBACKS = {
   south: ["south-east", "south-west", "east", "west", "north-east", "north-west", "north"],
@@ -548,12 +554,16 @@ export async function importPixelLabCharacters() {
           ? [...findAnimationCandidatesByPatterns(animations, RANNI_ICE_CAST_PATTERNS), ...CAST_ANIMATION_CANDIDATES]
           : characterId === KILLER_BEE_CHARACTER_ID
             ? [...findAnimationCandidatesByPatterns(animations, KILLER_BEE_DASH_CAST_PATTERNS), ...CAST_ANIMATION_CANDIDATES]
+            : characterId === NICO_CHARACTER_ID
+              ? [...findAnimationCandidatesByPatterns(animations, NICO_ARCANE_BEAM_CAST_PATTERNS), ...CAST_ANIMATION_CANDIDATES]
             : CAST_ANIMATION_CANDIDATES,
         "cast",
         characterId === RANNI_CHARACTER_ID
           ? [...RANNI_ICE_CAST_PATTERNS, ...CAST_ANIMATION_PATTERNS]
           : characterId === KILLER_BEE_CHARACTER_ID
             ? [...KILLER_BEE_DASH_CAST_PATTERNS, ...CAST_ANIMATION_PATTERNS]
+            : characterId === NICO_CHARACTER_ID
+              ? [...NICO_ARCANE_BEAM_CAST_PATTERNS, ...CAST_ANIMATION_PATTERNS]
             : CAST_ANIMATION_PATTERNS,
         characterId === RANNI_CHARACTER_ID
           ? { allowDirectionFallback: true, allowAnyDirectionFallback: true }

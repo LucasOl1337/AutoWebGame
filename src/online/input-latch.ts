@@ -20,6 +20,7 @@ export function mergeSequencedOnlineInputState(
     bombPressed: current.bombPressed || Boolean(incoming.bombPressed),
     detonatePressed: current.detonatePressed || Boolean(incoming.detonatePressed),
     skillPressed: current.skillPressed || Boolean(incoming.skillPressed),
+    skillHeld: Boolean(incoming.skillHeld),
     inputSeq: incomingSeq,
     sentAtMs: Math.max(0, Number(incoming.sentAtMs) || 0),
   };

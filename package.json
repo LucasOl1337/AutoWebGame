@@ -42,6 +42,7 @@
     "test:powerup-drop-rate": "npm run compile:esm && node tests/powerup-drop-rate-check.mjs",
     "test:player-sprite": "npm run compile:esm && node tests/player-sprite-render-check.mjs",
     "test:killer-bee-ult": "npm run compile:esm && node tests/killer-bee-ult-dash-check.mjs",
+    "test:nico-ult": "npm run compile:esm && node tests/nico-ult-arcane-beam-check.mjs",
     "test:ranni-ult": "npm run compile:esm && node tests/ranni-ult-ice-blink-check.mjs",
     "test:sprite-trim": "npm run compile:esm && node tests/sprite-trim-cache-check.mjs",
     "test:round-outcome": "npm run compile:esm && node tests/round-outcome-pause-check.mjs",

@@ -5,7 +5,7 @@ export const MENU_PLAYER_IDS = [1, 2] as const;
 export type Mode = "boot" | "menu" | "match" | "match-result";
 export type Direction = "up" | "down" | "left" | "right";
 export type FlameStyle = "normal" | "arcane" | "shadow";
-export type CharacterSkillId = "ranni-ice-blink" | "killer-bee-wing-dash";
+export type CharacterSkillId = "ranni-ice-blink" | "killer-bee-wing-dash" | "nico-arcane-beam";
 export type SkillPhase = "idle" | "channeling" | "cooldown";
 export type PowerUpType =
   | "bomb-up"
@@ -69,6 +69,14 @@ export interface FlameState {
   tile: TileCoord;
   remainingMs: number;
   style?: FlameStyle;
+}
+
+export interface MagicBeamState {
+  ownerId: PlayerId;
+  origin: TileCoord;
+  direction: Direction;
+  tiles: TileCoord[];
+  remainingMs: number;
 }
 
 export interface SuddenDeathClosingTileState {

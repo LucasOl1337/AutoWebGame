@@ -38,6 +38,7 @@ import type {
   CharacterSkillId,
   Direction,
   FlameState,
+  MagicBeamState,
   MatchScore,
   MenuPlayerId,
   Mode,
@@ -110,6 +111,7 @@ const CRATE_BREAK_DURATION_MS = 220;
 const SPAWN_PROTECTION_MS = 2200;
 const RANNI_CHARACTER_ID = "03a976fb-7313-4064-a477-5bb9b0760034";
 const KILLER_BEE_CHARACTER_ID = "6ee8baa5-3277-413b-ae0e-2659b9cc52e9";
+const NICO_CHARACTER_ID = "5474c45c-2987-43e0-af2c-a6500c836881";
 const RANNI_SKILL_CHANNEL_MS = 1_500;
 const RANNI_SKILL_COOLDOWN_MS = 10_000;
 const KILLER_BEE_DASH_DISTANCE_PX = TILE_SIZE * 3;
@@ -117,6 +119,11 @@ const KILLER_BEE_DASH_DURATION_MS = 240;
 const KILLER_BEE_DASH_MIN_DURATION_MS = 90;
 const KILLER_BEE_DASH_FRAME_MS = 60;
 const KILLER_BEE_SKILL_COOLDOWN_MS = 10_000;
+const NICO_SKILL_CHANNEL_MS = 2_000;
+const NICO_SKILL_COOLDOWN_MS = 10_000;
+const NICO_BEAM_DURATION_MS = 260;
+const NICO_BEAM_CORE_WIDTH_PX = TILE_SIZE * 0.26;
+const NICO_BEAM_GLOW_WIDTH_PX = TILE_SIZE * 0.56;
 const SUDDEN_DEATH_ELAPSED_MS = 40_000;
 const SUDDEN_DEATH_START_MS = ROUND_DURATION_MS - SUDDEN_DEATH_ELAPSED_MS;
 const SUDDEN_DEATH_TICK_MS = 800;
@@ -164,6 +171,7 @@ function createNeutralOnlineInput(): OnlineInputState {
     bombPressed: false,
     detonatePressed: false,
     skillPressed: false,
+    skillHeld: false,
   };
 }
 
@@ -173,6 +181,7 @@ function cloneOnlineInputState(input: OnlineInputState): OnlineInputState {
     bombPressed: input.bombPressed,
     detonatePressed: input.detonatePressed,
     skillPressed: input.skillPressed,
+    skillHeld: Boolean(input.skillHeld),
   };
 }
 
@@ -257,6 +266,7 @@ function createHeadlessCanvas(): {
     strokeText: noop,
     save: noop,
     restore: noop,
+    createLinearGradient: () => ({ addColorStop: noop }),
   } as unknown as CanvasRenderingContext2D;
   fakeContext.imageSmoothingEnabled = false;
   return {
@@ -338,6 +348,7 @@ export class GameApp {
   private players: Record<PlayerId, PlayerState> = this.createPlayers();
   private bombs: BombState[] = [];
   private flames: FlameState[] = [];
+  private magicBeams: MagicBeamState[] = [];
   private nextBombId = 1;
 
   private menuReady: Record<PlayerId, boolean> = createBooleanPlayerRecord(false);
@@ -509,6 +520,11 @@ export class GameApp {
       ...flame,
       tile: { ...flame.tile },
     }));
+    this.magicBeams = (snapshot.magicBeams ?? []).map((beam) => ({
+      ...beam,
+      origin: { ...beam.origin },
+      tiles: beam.tiles.map((tile) => ({ ...tile })),
+    }));
     this.nextBombId = snapshot.nextBombId;
     this.score = { ...snapshot.score };
     this.roundNumber = snapshot.roundNumber;
@@ -563,6 +579,11 @@ export class GameApp {
     this.flames = frame.flames.map((flame) => ({
       ...flame,
       tile: { ...flame.tile },
+    }));
+    this.magicBeams = (frame.magicBeams ?? []).map((beam) => ({
+      ...beam,
+      origin: { ...beam.origin },
+      tiles: beam.tiles.map((tile) => ({ ...tile })),
     }));
     this.score = { ...frame.score };
     this.roundNumber = frame.roundNumber;
@@ -742,6 +763,7 @@ export class GameApp {
       bombPressed: playerInput.bombPressed || input.bombPressed,
       detonatePressed: playerInput.detonatePressed || input.detonatePressed,
       skillPressed: playerInput.skillPressed || input.skillPressed,
+      skillHeld: Boolean(input.skillHeld),
     };
   }
 
@@ -831,6 +853,7 @@ export class GameApp {
     input.bombPressed = input.bombPressed || this.input.consumePress(localBindings.bomb);
     input.detonatePressed = input.detonatePressed || this.input.consumePress(localBindings.detonate);
     input.skillPressed = input.skillPressed || this.input.consumePress(SKILL_KEY);
+    input.skillHeld = this.input.isDown(SKILL_KEY);
   }
 
   private forwardGuestInput(): void {
@@ -885,6 +908,11 @@ export class GameApp {
       flames: this.flames.map((flame) => ({
         ...flame,
         tile: { ...flame.tile },
+      })),
+      magicBeams: this.magicBeams.map((beam) => ({
+        ...beam,
+        origin: { ...beam.origin },
+        tiles: beam.tiles.map((tile) => ({ ...tile })),
       })),
       nextBombId: this.nextBombId,
       score: { ...this.score },
@@ -994,6 +1022,7 @@ export class GameApp {
       bombPressed: target.bombPressed || input.bombPressed,
       detonatePressed: target.detonatePressed || input.detonatePressed,
       skillPressed: target.skillPressed || input.skillPressed,
+      skillHeld: Boolean(input.skillHeld),
     };
   }
 
@@ -1058,6 +1087,7 @@ export class GameApp {
         bombPressed: this.consumeOnlineBombPress(localId),
         detonatePressed: this.consumeOnlineDetonatePress(localId),
         skillPressed: this.consumeOnlineSkillPress(localId),
+        skillHeld: this.isSkillHeld(localId),
       },
       deltaMs,
     );
@@ -1121,7 +1151,7 @@ export class GameApp {
       this.activatePlayerSkill(player, input.direction);
     }
 
-    if (this.updatePlayerSkillChannel(player, input.direction, input.skillPressed, deltaMs)) {
+    if (this.updatePlayerSkillChannel(player, input.direction, input.skillPressed, Boolean(input.skillHeld), deltaMs)) {
       player.tile = this.getTileFromPosition(player.position);
       return false;
     }
@@ -1176,6 +1206,9 @@ export class GameApp {
       case "killer-bee-wing-dash":
         this.startKillerBeeDash(player, desiredDirection);
         return;
+      case "nico-arcane-beam":
+        this.startNicoArcaneBeam(player, desiredDirection);
+        return;
       default:
         return;
     }
@@ -1216,10 +1249,28 @@ export class GameApp {
     player.velocity.y = 0;
   }
 
+  private startNicoArcaneBeam(player: PlayerState, desiredDirection: Direction | null): void {
+    if (player.skill.id !== "nico-arcane-beam") {
+      return;
+    }
+    const aimDirection = desiredDirection ?? player.lastMoveDirection ?? player.direction;
+    player.direction = aimDirection;
+    player.lastMoveDirection = aimDirection;
+    player.skill.phase = "channeling";
+    player.skill.channelRemainingMs = NICO_SKILL_CHANNEL_MS;
+    player.skill.cooldownRemainingMs = 0;
+    player.skill.castElapsedMs = 0;
+    player.skill.projectedPosition = null;
+    player.skill.projectedLastMoveDirection = aimDirection;
+    player.velocity.x = 0;
+    player.velocity.y = 0;
+  }
+
   private updatePlayerSkillChannel(
     player: PlayerState,
     desiredDirection: Direction | null,
     skillPressed: boolean,
+    skillHeld: boolean,
     deltaMs: number,
   ): boolean {
     if (player.skill.phase !== "channeling") {
@@ -1230,6 +1281,8 @@ export class GameApp {
         return this.updateRanniIceBlinkChannel(player, desiredDirection, skillPressed, deltaMs);
       case "killer-bee-wing-dash":
         return this.updateKillerBeeDash(player, deltaMs);
+      case "nico-arcane-beam":
+        return this.updateNicoArcaneBeamChannel(player, desiredDirection, skillHeld, deltaMs);
       default:
         return false;
     }
@@ -1301,6 +1354,33 @@ export class GameApp {
     return true;
   }
 
+  private updateNicoArcaneBeamChannel(
+    player: PlayerState,
+    desiredDirection: Direction | null,
+    skillHeld: boolean,
+    deltaMs: number,
+  ): boolean {
+    if (player.skill.id !== "nico-arcane-beam") {
+      return false;
+    }
+    player.velocity.x = 0;
+    player.velocity.y = 0;
+    if (desiredDirection) {
+      player.direction = desiredDirection;
+      player.skill.projectedLastMoveDirection = desiredDirection;
+    }
+    if (!skillHeld && player.skill.castElapsedMs > 0) {
+      this.cancelNicoArcaneBeam(player);
+      return true;
+    }
+    player.skill.channelRemainingMs = Math.max(0, player.skill.channelRemainingMs - deltaMs);
+    player.skill.castElapsedMs += deltaMs;
+    if (player.skill.channelRemainingMs <= 0) {
+      this.fireNicoArcaneBeam(player);
+    }
+    return true;
+  }
+
   private finishRanniBlink(player: PlayerState): void {
     if (player.skill.id !== "ranni-ice-blink") {
       return;
@@ -1345,8 +1425,116 @@ export class GameApp {
     player.skill.projectedLastMoveDirection = null;
   }
 
+  private cancelNicoArcaneBeam(player: PlayerState): void {
+    if (player.skill.id !== "nico-arcane-beam") {
+      return;
+    }
+    player.velocity.x = 0;
+    player.velocity.y = 0;
+    player.skill.phase = "idle";
+    player.skill.channelRemainingMs = 0;
+    player.skill.cooldownRemainingMs = 0;
+    player.skill.castElapsedMs = 0;
+    player.skill.projectedPosition = null;
+    player.skill.projectedLastMoveDirection = null;
+  }
+
+  private fireNicoArcaneBeam(player: PlayerState): void {
+    if (player.skill.id !== "nico-arcane-beam") {
+      return;
+    }
+    const direction = player.skill.projectedLastMoveDirection ?? player.lastMoveDirection ?? player.direction;
+    const origin = this.getTileFromPosition(player.position);
+    const beam = this.computeNicoBeam(player.id, origin, direction);
+    this.addMagicBeam(beam);
+    this.resolveNicoBeamImpact(player.id, beam.tiles);
+    player.direction = direction;
+    player.lastMoveDirection = direction;
+    player.velocity.x = 0;
+    player.velocity.y = 0;
+    player.skill.phase = "cooldown";
+    player.skill.channelRemainingMs = 0;
+    player.skill.cooldownRemainingMs = NICO_SKILL_COOLDOWN_MS;
+    player.skill.castElapsedMs = 0;
+    player.skill.projectedPosition = null;
+    player.skill.projectedLastMoveDirection = null;
+  }
+
   private isPlayerImmuneDuringSkillChannel(player: PlayerState): boolean {
     return player.skill.id === "ranni-ice-blink" && player.skill.phase === "channeling";
+  }
+
+  private computeNicoBeam(ownerId: PlayerId, origin: TileCoord, direction: Direction): MagicBeamState {
+    const delta = directionDelta[direction];
+    const maxSteps = direction === "left" || direction === "right"
+      ? Math.ceil(GRID_WIDTH / 2)
+      : Math.ceil(GRID_HEIGHT / 2);
+    const tiles: TileCoord[] = [];
+    for (let step = 1; step <= maxSteps; step += 1) {
+      const tile = {
+        x: origin.x + delta.x * step,
+        y: origin.y + delta.y * step,
+      };
+      if (tile.x < 0 || tile.y < 0 || tile.x >= GRID_WIDTH || tile.y >= GRID_HEIGHT) {
+        break;
+      }
+      const key = tileKey(tile.x, tile.y);
+      if (this.arena.solid.has(key)) {
+        break;
+      }
+      tiles.push(tile);
+    }
+    return {
+      ownerId,
+      origin: { ...origin },
+      direction,
+      tiles,
+      remainingMs: NICO_BEAM_DURATION_MS,
+    };
+  }
+
+  private addMagicBeam(beam: MagicBeamState): void {
+    this.magicBeams.push({
+      ...beam,
+      origin: { ...beam.origin },
+      tiles: beam.tiles.map((tile) => ({ ...tile })),
+    });
+  }
+
+  private resolveNicoBeamImpact(ownerId: PlayerId, beamTiles: TileCoord[]): void {
+    if (beamTiles.length === 0) {
+      return;
+    }
+    let brokeCrate = false;
+    const hitKeys = new Set<string>();
+    for (const tile of beamTiles) {
+      const key = tileKey(tile.x, tile.y);
+      hitKeys.add(key);
+      if (this.breakCrateAtKey(key)) {
+        brokeCrate = true;
+      }
+      const bomb = this.bombs.find((item) => item.tile.x === tile.x && item.tile.y === tile.y);
+      if (bomb) {
+        bomb.fuseMs = 0;
+      }
+    }
+    for (const id of this.activePlayerIds) {
+      if (id === ownerId) {
+        continue;
+      }
+      const player = this.players[id];
+      if (!player.alive) {
+        continue;
+      }
+      player.tile = this.getTileFromPosition(player.position);
+      if (!hitKeys.has(tileKey(player.tile.x, player.tile.y))) {
+        continue;
+      }
+      this.tryAbsorbInstantHit(player);
+    }
+    if (brokeCrate) {
+      this.soundManager.playOneShot("crateBreak");
+    }
   }
 
   private computeKillerBeeDashTarget(player: PlayerState, direction: Direction): PixelCoord {
@@ -1771,6 +1959,7 @@ export class GameApp {
     this.players = this.createPlayers();
     this.bombs = [];
     this.flames = [];
+    this.magicBeams = [];
     this.crateBreakAnimations = [];
     this.playerDeathAnimations = createPlayerRecord(() => null);
     this.nextBombId = 1;
@@ -1842,6 +2031,9 @@ export class GameApp {
     }
     if (characterId === KILLER_BEE_CHARACTER_ID) {
       return "killer-bee-wing-dash";
+    }
+    if (characterId === NICO_CHARACTER_ID) {
+      return "nico-arcane-beam";
     }
     return null;
   }
@@ -1927,6 +2119,7 @@ export class GameApp {
         || (this.shouldUseNativeControls()
           ? id === 1 && this.input.consumePress(SKILL_KEY)
           : false);
+      const skillHeld = this.isSkillHeld(id);
 
       const desiredDirection = botDecision?.direction ?? this.getMovementDirection(id);
       const direction = this.isBotControlled(id)
@@ -1939,6 +2132,7 @@ export class GameApp {
           bombPressed: wantsBomb,
           detonatePressed: wantsDetonate,
           skillPressed: wantsSkill,
+          skillHeld,
         },
         deltaMs,
       );
@@ -1973,6 +2167,19 @@ export class GameApp {
       return this.input.getMovementDirection(id as MenuPlayerId);
     }
     return null;
+  }
+
+  private isSkillHeld(id: PlayerId): boolean {
+    if (this.isBotControlled(id)) {
+      return false;
+    }
+    if (this.onlineSession) {
+      return Boolean(this.onlineInputs[id]?.skillHeld);
+    }
+    if (this.automationMode) {
+      return this.automationControlledPlayer === id && this.input.isDown(SKILL_KEY);
+    }
+    return id === 1 && this.shouldUseNativeControls() && this.input.isDown(SKILL_KEY);
   }
 
   private isBotControlled(id: PlayerId): boolean {
@@ -3303,6 +3510,13 @@ export class GameApp {
       ));
     }
 
+    if (this.magicBeams.length > 0) {
+      for (const beam of this.magicBeams) {
+        beam.remainingMs -= deltaMs;
+      }
+      this.magicBeams = this.magicBeams.filter((beam) => beam.remainingMs > 0);
+    }
+
     if (this.suddenDeathClosureEffects.length === 0) {
       return;
     }
@@ -3406,14 +3620,7 @@ export class GameApp {
       if (this.isPlayerImmuneDuringSkillChannel(player)) {
         continue;
       }
-      player.alive = false;
-      player.velocity = { x: 0, y: 0 };
-      player.skill = createDefaultPlayerSkillState(player.skill.id);
-      this.playerDeathAnimations[player.id] = {
-        startedAtMs: this.animationClockMs,
-        direction: player.lastMoveDirection ?? player.direction,
-      };
-      this.soundManager.playOneShot("playerDeath");
+      this.killPlayer(player);
     }
   }
 
@@ -3467,31 +3674,43 @@ export class GameApp {
       }
       player.tile = this.getTileFromPosition(player.position);
       if (flameKeys.has(tileKey(player.tile.x, player.tile.y))) {
-        if (player.spawnProtectionMs > 0) {
-          continue;
-        }
-        if (this.isPlayerImmuneDuringSkillChannel(player)) {
-          continue;
-        }
-        if (player.flameGuardMs > 0) {
-          continue;
-        }
-        if (player.shieldCharges > 0) {
-          player.shieldCharges -= 1;
-          player.flameGuardMs = SHIELD_GUARD_MS;
-          this.soundManager.playOneShot("shieldBlock");
-          continue;
-        }
-        player.alive = false;
-        player.velocity = { x: 0, y: 0 };
-        player.skill = createDefaultPlayerSkillState(player.skill.id);
-        this.playerDeathAnimations[player.id] = {
-          startedAtMs: this.animationClockMs,
-          direction: player.lastMoveDirection ?? player.direction,
-        };
-        this.soundManager.playOneShot("playerDeath");
+        this.tryAbsorbInstantHit(player);
       }
     }
+  }
+
+  private tryAbsorbInstantHit(player: PlayerState): boolean {
+    if (player.spawnProtectionMs > 0) {
+      return false;
+    }
+    if (this.isPlayerImmuneDuringSkillChannel(player)) {
+      return false;
+    }
+    if (player.flameGuardMs > 0) {
+      return false;
+    }
+    if (player.shieldCharges > 0) {
+      player.shieldCharges -= 1;
+      player.flameGuardMs = SHIELD_GUARD_MS;
+      this.soundManager.playOneShot("shieldBlock");
+      return false;
+    }
+    this.killPlayer(player);
+    return true;
+  }
+
+  private killPlayer(player: PlayerState): void {
+    if (!player.alive) {
+      return;
+    }
+    player.alive = false;
+    player.velocity = { x: 0, y: 0 };
+    player.skill = createDefaultPlayerSkillState(player.skill.id);
+    this.playerDeathAnimations[player.id] = {
+      startedAtMs: this.animationClockMs,
+      direction: player.lastMoveDirection ?? player.direction,
+    };
+    this.soundManager.playOneShot("playerDeath");
   }
 
   private collectPowerUps(): void {
@@ -4075,6 +4294,10 @@ export class GameApp {
       this.drawFlame(flame);
     }
 
+    for (const beam of this.magicBeams) {
+      this.drawMagicBeam(beam);
+    }
+
     for (const id of this.activePlayerIds) {
       this.drawPlayer(this.players[id]);
     }
@@ -4400,6 +4623,68 @@ export class GameApp {
     this.ctx.fill();
   }
 
+  private drawMagicBeam(beam: MagicBeamState): void {
+    const originCenter = {
+      x: ARENA_OFFSET_X + beam.origin.x * TILE_SIZE + TILE_SIZE * 0.5,
+      y: ARENA_OFFSET_Y + beam.origin.y * TILE_SIZE + TILE_SIZE * 0.5,
+    };
+    const lastTile = beam.tiles[beam.tiles.length - 1] ?? beam.origin;
+    const endCenter = {
+      x: ARENA_OFFSET_X + lastTile.x * TILE_SIZE + TILE_SIZE * 0.5,
+      y: ARENA_OFFSET_Y + lastTile.y * TILE_SIZE + TILE_SIZE * 0.5,
+    };
+    const progress = Math.max(0, Math.min(1, beam.remainingMs / NICO_BEAM_DURATION_MS));
+    const glowAlpha = 0.24 + progress * 0.32;
+    const coreAlpha = 0.48 + progress * 0.44;
+    const gradient = this.ctx.createLinearGradient(originCenter.x, originCenter.y, endCenter.x, endCenter.y);
+    gradient.addColorStop(0, `rgba(214, 169, 255, ${glowAlpha})`);
+    gradient.addColorStop(0.2, `rgba(171, 82, 255, ${glowAlpha + 0.08})`);
+    gradient.addColorStop(0.7, `rgba(118, 44, 255, ${glowAlpha + 0.1})`);
+    gradient.addColorStop(1, `rgba(234, 185, 255, ${glowAlpha})`);
+
+    this.ctx.save();
+    this.ctx.globalCompositeOperation = "lighter";
+    this.ctx.lineCap = "round";
+    this.ctx.lineJoin = "round";
+    this.ctx.shadowBlur = TILE_SIZE * 0.85;
+    this.ctx.shadowColor = `rgba(153, 70, 255, ${glowAlpha})`;
+    this.ctx.strokeStyle = gradient;
+    this.ctx.lineWidth = NICO_BEAM_GLOW_WIDTH_PX;
+    this.ctx.beginPath();
+    this.ctx.moveTo(originCenter.x, originCenter.y);
+    this.ctx.lineTo(endCenter.x, endCenter.y);
+    this.ctx.stroke();
+
+    this.ctx.shadowBlur = TILE_SIZE * 0.36;
+    this.ctx.shadowColor = `rgba(255, 234, 255, ${coreAlpha})`;
+    this.ctx.strokeStyle = `rgba(255, 241, 255, ${coreAlpha})`;
+    this.ctx.lineWidth = NICO_BEAM_CORE_WIDTH_PX;
+    this.ctx.beginPath();
+    this.ctx.moveTo(originCenter.x, originCenter.y);
+    this.ctx.lineTo(endCenter.x, endCenter.y);
+    this.ctx.stroke();
+
+    for (const tile of beam.tiles) {
+      const x = ARENA_OFFSET_X + tile.x * TILE_SIZE;
+      const y = ARENA_OFFSET_Y + tile.y * TILE_SIZE;
+      this.ctx.fillStyle = `rgba(153, 58, 255, ${0.12 + progress * 0.14})`;
+      this.ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+      this.ctx.strokeStyle = `rgba(245, 219, 255, ${0.18 + progress * 0.2})`;
+      this.ctx.strokeRect(x + 4.5, y + 4.5, TILE_SIZE - 9, TILE_SIZE - 9);
+    }
+
+    const orbRadius = TILE_SIZE * (0.18 + (1 - progress) * 0.08);
+    this.ctx.fillStyle = `rgba(245, 230, 255, ${0.5 + progress * 0.25})`;
+    this.ctx.beginPath();
+    this.ctx.arc(originCenter.x, originCenter.y, orbRadius, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.fillStyle = `rgba(128, 36, 255, ${0.26 + progress * 0.2})`;
+    this.ctx.beginPath();
+    this.ctx.arc(originCenter.x, originCenter.y, TILE_SIZE * 0.42, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.restore();
+  }
+
   private drawPlayer(player: PlayerState): void {
     if (!player.active) {
       return;
@@ -4543,6 +4828,20 @@ export class GameApp {
         frames,
         frameMs: KILLER_BEE_DASH_FRAME_MS,
         playback: "loop",
+      };
+    }
+    if (player.skill.id === "nico-arcane-beam") {
+      const exactCastFrames = this.getPlayerSprites(player.id).cast?.[renderDirection] ?? [];
+      const frames = exactCastFrames.length > 0
+        ? exactCastFrames
+        : (attackFrames.length > 0 ? attackFrames : runFrames);
+      if (frames.length === 0) {
+        return null;
+      }
+      return {
+        frames,
+        frameMs: Math.max(SKILL_FRAME_MS, Math.floor(NICO_SKILL_CHANNEL_MS / Math.max(1, frames.length))),
+        playback: "hold",
       };
     }
     return null;
@@ -4836,6 +5135,13 @@ export class GameApp {
       flames: this.flames.map((flame) => ({
         tile: flame.tile,
         remainingMs: Math.round(flame.remainingMs),
+      })),
+      magicBeams: this.magicBeams.map((beam) => ({
+        ownerId: beam.ownerId,
+        origin: beam.origin,
+        direction: beam.direction,
+        remainingMs: Math.round(beam.remainingMs),
+        tiles: beam.tiles,
       })),
       blocks: {
         remaining: this.arena.breakable.size,

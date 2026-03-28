@@ -583,6 +583,7 @@ export class GlobalLobby extends DurableObject {
       bombPressed: Boolean(inputPayload?.input?.bombPressed),
       detonatePressed: Boolean(inputPayload?.input?.detonatePressed),
       skillPressed: Boolean(inputPayload?.input?.skillPressed),
+      skillHeld: Boolean(inputPayload?.input?.skillHeld),
       inputSeq: Math.max(0, Number(inputPayload?.inputSeq) || 0),
       sentAtMs: Math.max(0, Number(inputPayload?.sentAtMs) || 0),
     });
@@ -1064,6 +1065,7 @@ export class GlobalLobby extends DurableObject {
         players: snapshot.players,
         bombs: snapshot.bombs,
         flames: snapshot.flames,
+        magicBeams: snapshot.magicBeams,
         nextBombId: snapshot.nextBombId,
         score: snapshot.score,
         roundNumber: snapshot.roundNumber,
@@ -1358,6 +1360,7 @@ function createNeutralInput() {
     bombPressed: false,
     detonatePressed: false,
     skillPressed: false,
+    skillHeld: false,
     inputSeq: 0,
     sentAtMs: 0,
   };
