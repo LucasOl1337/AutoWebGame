@@ -25,6 +25,7 @@ export const PINNED_CHARACTERS = [
   },
 ];
 const RANNI_CHARACTER_ID = "03a976fb-7313-4064-a477-5bb9b0760034";
+const KILLER_BEE_CHARACTER_ID = "6ee8baa5-3277-413b-ae0e-2659b9cc52e9";
 
 const CHARACTER_NAME_OVERRIDES = {
   "03a976fb-7313-4064-a477-5bb9b0760034": "Ranni",
@@ -66,6 +67,10 @@ const CAST_ANIMATION_CANDIDATES = [
 ];
 const CAST_ANIMATION_PATTERNS = ["cast", "spell", "magic", "dark-energy", "fireball"];
 const RANNI_ICE_CAST_PATTERNS = ["ice cube", "ice block", "ice splash", "custom-became an ice cube"];
+const KILLER_BEE_DASH_CAST_PATTERNS = [
+  "super fast bee dash",
+  "bee dash with particle",
+];
 const DIRECTION_FALLBACKS = {
   south: ["south-east", "south-west", "east", "west", "north-east", "north-west", "north"],
   east: ["north-east", "south-east", "north", "south", "north-west", "south-west", "west"],
@@ -80,6 +85,10 @@ const ATTACK_ANIMATION_CANDIDATES = [
   "lead-jab",
 ];
 const ATTACK_ANIMATION_PATTERNS = ["attack", "kick", "punch", "jab", "slash", "shot", "sting"];
+const DEATH_ANIMATION_CANDIDATES = [
+  "falling-back-death",
+];
+const DEATH_ANIMATION_PATTERNS = ["death", "downed", "defeat", "knockout"];
 
 const CHARACTER_IDS = [
   "03a976fb-7313-4064-a477-5bb9b0760034",
@@ -374,6 +383,7 @@ export function buildManifestEntry(characterId, metadata) {
       run: false,
       cast: false,
       attack: false,
+      death: false,
     },
     pinned: Boolean(pinned),
     defaultSlot: pinned?.defaultSlot,
@@ -536,11 +546,15 @@ export async function importPixelLabCharacters() {
         animations,
         characterId === RANNI_CHARACTER_ID
           ? [...findAnimationCandidatesByPatterns(animations, RANNI_ICE_CAST_PATTERNS), ...CAST_ANIMATION_CANDIDATES]
-          : CAST_ANIMATION_CANDIDATES,
+          : characterId === KILLER_BEE_CHARACTER_ID
+            ? [...findAnimationCandidatesByPatterns(animations, KILLER_BEE_DASH_CAST_PATTERNS), ...CAST_ANIMATION_CANDIDATES]
+            : CAST_ANIMATION_CANDIDATES,
         "cast",
         characterId === RANNI_CHARACTER_ID
           ? [...RANNI_ICE_CAST_PATTERNS, ...CAST_ANIMATION_PATTERNS]
-          : CAST_ANIMATION_PATTERNS,
+          : characterId === KILLER_BEE_CHARACTER_ID
+            ? [...KILLER_BEE_DASH_CAST_PATTERNS, ...CAST_ANIMATION_PATTERNS]
+            : CAST_ANIMATION_PATTERNS,
         characterId === RANNI_CHARACTER_ID
           ? { allowDirectionFallback: true, allowAnyDirectionFallback: true }
           : {},
@@ -553,6 +567,14 @@ export async function importPixelLabCharacters() {
         "attack",
         ATTACK_ANIMATION_PATTERNS,
       );
+      const hasDeathFrames = await copyAnimationSet(
+        extractDir,
+        destinationDir,
+        animations,
+        DEATH_ANIMATION_CANDIDATES,
+        "death",
+        DEATH_ANIMATION_PATTERNS,
+      );
 
       const manifestEntry = buildManifestEntry(characterId, metadata);
       manifestEntry.animations = {
@@ -561,6 +583,7 @@ export async function importPixelLabCharacters() {
         run: hasRunFrames,
         cast: hasCastFrames,
         attack: hasAttackFrames,
+        death: hasDeathFrames,
       };
       manifest.push(manifestEntry);
       imported += 1;

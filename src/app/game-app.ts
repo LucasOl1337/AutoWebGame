@@ -46,6 +46,7 @@ import type {
   PlayerState,
   PowerUpState,
   RoundOutcome,
+  SuddenDeathClosingTileState,
   TileCoord,
 } from "../core/types";
 import { InputManager, NoopInputManager, type InputController } from "../engine/input";
@@ -104,14 +105,23 @@ const BOT_PREEMPTIVE_ESCAPE_STEPS = 4;
 const BOT_DIRECTION_CONFIRM_FRAMES = 2;
 const WALK_FRAME_MS = 100;
 const SKILL_FRAME_MS = 100;
+const DEATH_FRAME_MS = 90;
+const CRATE_BREAK_DURATION_MS = 220;
 const SPAWN_PROTECTION_MS = 2200;
 const RANNI_CHARACTER_ID = "03a976fb-7313-4064-a477-5bb9b0760034";
+const KILLER_BEE_CHARACTER_ID = "6ee8baa5-3277-413b-ae0e-2659b9cc52e9";
 const RANNI_SKILL_CHANNEL_MS = 1_500;
 const RANNI_SKILL_COOLDOWN_MS = 10_000;
+const KILLER_BEE_DASH_DISTANCE_PX = TILE_SIZE * 3;
+const KILLER_BEE_DASH_DURATION_MS = 240;
+const KILLER_BEE_DASH_MIN_DURATION_MS = 90;
+const KILLER_BEE_DASH_FRAME_MS = 60;
+const KILLER_BEE_SKILL_COOLDOWN_MS = 10_000;
 const SUDDEN_DEATH_ELAPSED_MS = 40_000;
 const SUDDEN_DEATH_START_MS = ROUND_DURATION_MS - SUDDEN_DEATH_ELAPSED_MS;
 const SUDDEN_DEATH_TICK_MS = 800;
-const SUDDEN_DEATH_FLAME_MS = 900;
+const SUDDEN_DEATH_FALL_MS = 340;
+const SUDDEN_DEATH_IMPACT_LINGER_MS = 180;
 const SHIELD_GUARD_MS = 600;
 const DANGER_OVERLAY_MAX_ETA_MS = BOMB_FUSE_MS + 600;
 const CANVAS_BACKBUFFER_SCALE = 2;
@@ -189,6 +199,7 @@ function createEmptyDirectionalSprites(): DirectionalSprites {
     run: { up: [], down: [], left: [], right: [] },
     cast: { up: [], down: [], left: [], right: [] },
     attack: { up: [], down: [], left: [], right: [] },
+    death: { up: [], down: [], left: [], right: [] },
   };
 }
 
@@ -284,6 +295,18 @@ interface HudSkillSlot {
   valueLabel: string;
 }
 
+interface CrateBreakAnimation {
+  tile: TileCoord;
+  elapsedMs: number;
+}
+
+interface PlayerDeathAnimationState {
+  startedAtMs: number;
+  direction: Direction;
+}
+
+interface SuddenDeathClosureEffect extends SuddenDeathClosingTileState {}
+
 export class GameApp {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -335,10 +358,14 @@ export class GameApp {
   private botPendingReverseDirection: Record<PlayerId, Direction | null> = createDirectionPlayerRecord(null);
   private botPendingReverseFrames: Record<PlayerId, number> = createNumberPlayerRecord(0);
   private animationClockMs = 0;
+  private crateBreakAnimations: CrateBreakAnimation[] = [];
+  private playerDeathAnimations: Record<PlayerId, PlayerDeathAnimationState | null> = createPlayerRecord(() => null);
   private suddenDeathActive = false;
   private suddenDeathTickMs = SUDDEN_DEATH_TICK_MS;
   private suddenDeathIndex = 0;
   private suddenDeathPath: TileCoord[] = [];
+  private suddenDeathClosedTiles = new Set<string>();
+  private suddenDeathClosureEffects: SuddenDeathClosureEffect[] = [];
   private showDangerOverlay = false;
   private showBombPreview = false;
   private readonly characterRoster: CharacterRosterEntry[];
@@ -452,10 +479,19 @@ export class GameApp {
       breakableTiles: snapshot.breakableTiles,
       powerUps: snapshot.powerUps,
     });
+    if (this.onlineSession?.role === "guest" && this.onlineAudioPrimed) {
+      this.spawnCrateBreakAnimationsFromDiff(snapshot.breakableTiles);
+    }
     const baseArena = createArena();
     this.mode = snapshot.mode;
+    this.suddenDeathClosedTiles = new Set(snapshot.suddenDeathClosedTiles ?? []);
+    this.suddenDeathClosureEffects = (snapshot.suddenDeathClosingTiles ?? []).map((effect) => ({
+      tile: { ...effect.tile },
+      elapsedMs: effect.elapsedMs,
+      impacted: effect.impacted,
+    }));
     this.arena = {
-      solid: baseArena.solid,
+      solid: new Set([...baseArena.solid, ...this.suddenDeathClosedTiles]),
       breakable: new Set(snapshot.breakableTiles),
       powerUps: snapshot.powerUps.map((powerUp) => ({
         type: powerUp.type,
@@ -538,6 +574,13 @@ export class GameApp {
     this.suddenDeathActive = frame.suddenDeathActive;
     this.suddenDeathTickMs = frame.suddenDeathTickMs;
     this.suddenDeathIndex = frame.suddenDeathIndex;
+    this.suddenDeathClosedTiles = new Set(frame.suddenDeathClosedTiles ?? []);
+    this.suddenDeathClosureEffects = (frame.suddenDeathClosingTiles ?? []).map((effect) => ({
+      tile: { ...effect.tile },
+      elapsedMs: effect.elapsedMs,
+      impacted: effect.impacted,
+    }));
+    this.arena.solid = new Set([...createArena().solid, ...this.suddenDeathClosedTiles]);
     this.selectedCharacterIndex = { ...frame.selectedCharacterIndex };
     this.pendingCharacterIndex = { ...frame.selectedCharacterIndex };
     this.activePlayerIds = normalizeActivePlayerIds(frame.activePlayerIds);
@@ -585,6 +628,8 @@ export class GameApp {
     this.suddenDeathActive = false;
     this.suddenDeathTickMs = SUDDEN_DEATH_TICK_MS;
     this.suddenDeathIndex = 0;
+    this.suddenDeathClosedTiles = new Set();
+    this.suddenDeathClosureEffects = [];
     this.suddenDeathPath = this.buildSuddenDeathPath();
     this.onlineAudioPrimed = false;
     if (!this.onlineSession) {
@@ -679,6 +724,15 @@ export class GameApp {
 
   private didLoseRemotePlayer(nextPlayers: Record<PlayerId, PlayerState>): boolean {
     return this.activePlayerIds.some((playerId) => this.players[playerId].alive && !nextPlayers[playerId].alive);
+  }
+
+  private spawnCrateBreakAnimationsFromDiff(nextBreakableTiles: string[]): void {
+    const nextBreakables = new Set(nextBreakableTiles);
+    for (const key of this.arena.breakable) {
+      if (!nextBreakables.has(key)) {
+        this.addCrateBreakAnimation(this.parseTileKey(key));
+      }
+    }
   }
 
   public receiveOnlineGuestInput(input: OnlineInputState): void {
@@ -843,6 +897,12 @@ export class GameApp {
       suddenDeathActive: this.suddenDeathActive,
       suddenDeathTickMs: this.suddenDeathTickMs,
       suddenDeathIndex: this.suddenDeathIndex,
+      suddenDeathClosedTiles: Array.from(this.suddenDeathClosedTiles),
+      suddenDeathClosingTiles: this.suddenDeathClosureEffects.map((effect) => ({
+        tile: { ...effect.tile },
+        elapsedMs: effect.elapsedMs,
+        impacted: effect.impacted,
+      })),
       showDangerOverlay: this.showDangerOverlay,
       showBombPreview: this.showBombPreview,
       selectedCharacterIndex: { ...this.selectedCharacterIndex },
@@ -866,6 +926,7 @@ export class GameApp {
 
   private update(deltaMs: number): void {
     if (this.onlineSession?.role === "guest") {
+      this.updateVisualEffects(deltaMs);
       if (this.mode === "match") {
         if (!this.headless) {
           this.captureOnlineLocalInput();
@@ -1047,7 +1108,7 @@ export class GameApp {
     this.advancePlayerSkillTimers(player, deltaMs);
 
     if (input.skillPressed) {
-      this.activatePlayerSkill(player);
+      this.activatePlayerSkill(player, input.direction);
     }
 
     if (this.updatePlayerSkillChannel(player, input.direction, input.skillPressed, deltaMs)) {
@@ -1094,15 +1155,53 @@ export class GameApp {
     }
   }
 
-  private activatePlayerSkill(player: PlayerState): void {
-    if (!player.alive || player.skill.id !== "ranni-ice-blink" || player.skill.phase !== "idle") {
+  private activatePlayerSkill(player: PlayerState, desiredDirection: Direction | null): void {
+    if (!player.alive || player.skill.phase !== "idle") {
       return;
     }
+    switch (player.skill.id) {
+      case "ranni-ice-blink":
+        this.startRanniIceBlink(player);
+        return;
+      case "killer-bee-wing-dash":
+        this.startKillerBeeDash(player, desiredDirection);
+        return;
+      default:
+        return;
+    }
+  }
+
+  private startRanniIceBlink(player: PlayerState): void {
     player.skill.phase = "channeling";
     player.skill.channelRemainingMs = RANNI_SKILL_CHANNEL_MS;
     player.skill.castElapsedMs = 0;
     player.skill.projectedPosition = { ...player.position };
     player.skill.projectedLastMoveDirection = player.lastMoveDirection;
+    player.velocity.x = 0;
+    player.velocity.y = 0;
+  }
+
+  private startKillerBeeDash(player: PlayerState, desiredDirection: Direction | null): void {
+    if (player.skill.id !== "killer-bee-wing-dash") {
+      return;
+    }
+    const dashDirection = desiredDirection ?? player.lastMoveDirection ?? player.direction;
+    const target = this.computeKillerBeeDashTarget(player, dashDirection);
+    const dashDistance = this.getDashDistancePx(player.position, target, dashDirection);
+    if (dashDistance < 1) {
+      return;
+    }
+    const durationMs = Math.max(
+      KILLER_BEE_DASH_MIN_DURATION_MS,
+      Math.round(KILLER_BEE_DASH_DURATION_MS * (dashDistance / KILLER_BEE_DASH_DISTANCE_PX)),
+    );
+    player.direction = dashDirection;
+    player.lastMoveDirection = dashDirection;
+    player.skill.phase = "channeling";
+    player.skill.channelRemainingMs = durationMs;
+    player.skill.castElapsedMs = 0;
+    player.skill.projectedPosition = target;
+    player.skill.projectedLastMoveDirection = dashDirection;
     player.velocity.x = 0;
     player.velocity.y = 0;
   }
@@ -1113,10 +1212,25 @@ export class GameApp {
     skillPressed: boolean,
     deltaMs: number,
   ): boolean {
-    if (player.skill.id !== "ranni-ice-blink" || player.skill.phase !== "channeling") {
+    if (player.skill.phase !== "channeling") {
       return false;
     }
+    switch (player.skill.id) {
+      case "ranni-ice-blink":
+        return this.updateRanniIceBlinkChannel(player, desiredDirection, skillPressed, deltaMs);
+      case "killer-bee-wing-dash":
+        return this.updateKillerBeeDash(player, deltaMs);
+      default:
+        return false;
+    }
+  }
 
+  private updateRanniIceBlinkChannel(
+    player: PlayerState,
+    desiredDirection: Direction | null,
+    skillPressed: boolean,
+    deltaMs: number,
+  ): boolean {
     player.velocity.x = 0;
     player.velocity.y = 0;
     if (skillPressed && player.skill.castElapsedMs > 0) {
@@ -1147,6 +1261,36 @@ export class GameApp {
     return true;
   }
 
+  private updateKillerBeeDash(player: PlayerState, deltaMs: number): boolean {
+    if (player.skill.id !== "killer-bee-wing-dash") {
+      return false;
+    }
+    const dashDirection = player.skill.projectedLastMoveDirection ?? player.lastMoveDirection ?? player.direction;
+    const target = player.skill.projectedPosition ?? player.position;
+    const start = { ...player.position };
+    const remainingMs = Math.max(0, player.skill.channelRemainingMs);
+    const stepFraction = remainingMs <= 0 ? 1 : Math.min(1, deltaMs / remainingMs);
+    const deltaX = this.getWrappedDelta(target.x, player.position.x, ARENA_PIXEL_WIDTH);
+    const deltaY = this.getWrappedDelta(target.y, player.position.y, ARENA_PIXEL_HEIGHT);
+    player.position = this.normalizeArenaPosition({
+      x: player.position.x + deltaX * stepFraction,
+      y: player.position.y + deltaY * stepFraction,
+    });
+    player.velocity = {
+      x: this.getWrappedDelta(player.position.x, start.x, ARENA_PIXEL_WIDTH) / (deltaMs / 1000),
+      y: this.getWrappedDelta(player.position.y, start.y, ARENA_PIXEL_HEIGHT) / (deltaMs / 1000),
+    };
+    player.direction = dashDirection;
+    player.lastMoveDirection = dashDirection;
+    player.tile = this.getTileFromPosition(player.position);
+    player.skill.channelRemainingMs = Math.max(0, remainingMs - deltaMs);
+    player.skill.castElapsedMs += deltaMs;
+    if (player.skill.channelRemainingMs <= 0 || this.hasReachedSkillTarget(player.position, target)) {
+      this.finishKillerBeeDash(player);
+    }
+    return true;
+  }
+
   private finishRanniBlink(player: PlayerState): void {
     if (player.skill.id !== "ranni-ice-blink") {
       return;
@@ -1170,8 +1314,62 @@ export class GameApp {
     player.skill.projectedLastMoveDirection = null;
   }
 
+  private finishKillerBeeDash(player: PlayerState): void {
+    if (player.skill.id !== "killer-bee-wing-dash") {
+      return;
+    }
+    const target = player.skill.projectedPosition ?? player.position;
+    player.position = { ...target };
+    player.tile = this.getTileFromPosition(player.position);
+    if (player.skill.projectedLastMoveDirection) {
+      player.direction = player.skill.projectedLastMoveDirection;
+      player.lastMoveDirection = player.skill.projectedLastMoveDirection;
+    }
+    player.velocity.x = 0;
+    player.velocity.y = 0;
+    player.skill.phase = "cooldown";
+    player.skill.channelRemainingMs = 0;
+    player.skill.cooldownRemainingMs = KILLER_BEE_SKILL_COOLDOWN_MS;
+    player.skill.castElapsedMs = 0;
+    player.skill.projectedPosition = null;
+    player.skill.projectedLastMoveDirection = null;
+  }
+
   private isPlayerImmuneDuringSkillChannel(player: PlayerState): boolean {
     return player.skill.id === "ranni-ice-blink" && player.skill.phase === "channeling";
+  }
+
+  private computeKillerBeeDashTarget(player: PlayerState, direction: Direction): PixelCoord {
+    const delta = directionDelta[direction];
+    const stepPx = 4;
+    let position = { ...player.position };
+    let travelledPx = 0;
+    while (travelledPx < KILLER_BEE_DASH_DISTANCE_PX) {
+      const nextStep = Math.min(stepPx, KILLER_BEE_DASH_DISTANCE_PX - travelledPx);
+      const candidate = this.normalizeArenaPosition({
+        x: position.x + delta.x * nextStep,
+        y: position.y + delta.y * nextStep,
+      });
+      if (!this.canOccupyPosition(player, candidate)) {
+        break;
+      }
+      position = candidate;
+      travelledPx += nextStep;
+    }
+    return position;
+  }
+
+  private getDashDistancePx(from: PixelCoord, to: PixelCoord, direction: Direction): number {
+    if (direction === "left" || direction === "right") {
+      return Math.abs(this.getWrappedDelta(to.x, from.x, ARENA_PIXEL_WIDTH));
+    }
+    return Math.abs(this.getWrappedDelta(to.y, from.y, ARENA_PIXEL_HEIGHT));
+  }
+
+  private hasReachedSkillTarget(position: PixelCoord, target: PixelCoord): boolean {
+    const deltaX = this.getWrappedDelta(target.x, position.x, ARENA_PIXEL_WIDTH);
+    const deltaY = this.getWrappedDelta(target.y, position.y, ARENA_PIXEL_HEIGHT);
+    return Math.hypot(deltaX, deltaY) <= 0.5;
   }
 
   private simulateProjectedMovement(
@@ -1386,6 +1584,7 @@ export class GameApp {
 
     this.roundTimeMs = Math.max(0, this.roundTimeMs - deltaMs);
     this.animationClockMs += deltaMs;
+    this.updateVisualEffects(deltaMs);
     if (this.roundTimeMs <= 0) {
       this.finishRound(null, "timer", "Clock hit zero. Draw round.");
       return;
@@ -1562,6 +1761,8 @@ export class GameApp {
     this.players = this.createPlayers();
     this.bombs = [];
     this.flames = [];
+    this.crateBreakAnimations = [];
+    this.playerDeathAnimations = createPlayerRecord(() => null);
     this.nextBombId = 1;
     this.roundTimeMs = ROUND_DURATION_MS;
     this.roundOutcome = null;
@@ -1574,6 +1775,8 @@ export class GameApp {
     this.suddenDeathActive = false;
     this.suddenDeathTickMs = SUDDEN_DEATH_TICK_MS;
     this.suddenDeathIndex = 0;
+    this.suddenDeathClosedTiles = new Set();
+    this.suddenDeathClosureEffects = [];
     this.suddenDeathPath = this.buildSuddenDeathPath();
   }
 
@@ -1626,6 +1829,9 @@ export class GameApp {
     const characterId = this.getActiveCharacterEntry(playerId).id;
     if (characterId === RANNI_CHARACTER_ID) {
       return "ranni-ice-blink";
+    }
+    if (characterId === KILLER_BEE_CHARACTER_ID) {
+      return "killer-bee-wing-dash";
     }
     return null;
   }
@@ -2424,17 +2630,21 @@ export class GameApp {
       }
     }
 
+    for (const effect of this.suddenDeathClosureEffects) {
+      if (effect.impacted) {
+        continue;
+      }
+      const impactMs = Math.max(0, SUDDEN_DEATH_FALL_MS - effect.elapsedMs);
+      registerDanger(tileKey(effect.tile.x, effect.tile.y), impactMs);
+    }
+
     if (this.suddenDeathActive && this.suddenDeathPath.length > 0 && this.suddenDeathIndex < this.suddenDeathPath.length) {
       const nextTickMs = Math.max(0, this.suddenDeathTickMs);
       for (let index = this.suddenDeathIndex; index < this.suddenDeathPath.length; index += 1) {
         const stepFromNow = index - this.suddenDeathIndex;
-        const triggerMs = nextTickMs + stepFromNow * SUDDEN_DEATH_TICK_MS;
-        const headTile = this.suddenDeathPath[index];
-        const tailTile = this.suddenDeathPath[this.suddenDeathPath.length - 1 - index];
-        registerDanger(tileKey(headTile.x, headTile.y), triggerMs);
-        if (headTile.x !== tailTile.x || headTile.y !== tailTile.y) {
-          registerDanger(tileKey(tailTile.x, tailTile.y), triggerMs);
-        }
+        const impactMs = nextTickMs + stepFromNow * SUDDEN_DEATH_TICK_MS;
+        const tile = this.suddenDeathPath[index];
+        registerDanger(tileKey(tile.x, tile.y), impactMs);
       }
     }
 
@@ -3016,9 +3226,7 @@ export class GameApp {
           queue.push(chainedBomb.id);
         }
 
-        if (this.arena.breakable.has(key)) {
-          this.arena.breakable.delete(key);
-          this.revealPowerUpAt(key);
+        if (this.breakCrateAtKey(key)) {
           brokeCrate = true;
           break;
         }
@@ -3043,6 +3251,69 @@ export class GameApp {
     }
   }
 
+  private breakCrateAtKey(key: string): boolean {
+    if (!this.arena.breakable.has(key)) {
+      return false;
+    }
+    this.arena.breakable.delete(key);
+    this.revealPowerUpAt(key);
+    this.addCrateBreakAnimation(this.parseTileKey(key));
+    return true;
+  }
+
+  private addCrateBreakAnimation(tile: TileCoord): void {
+    const existing = this.crateBreakAnimations.find((effect) => (
+      effect.tile.x === tile.x && effect.tile.y === tile.y
+    ));
+    if (existing) {
+      existing.elapsedMs = 0;
+      return;
+    }
+    this.crateBreakAnimations.push({
+      tile: { ...tile },
+      elapsedMs: 0,
+    });
+  }
+
+  private parseTileKey(key: string): TileCoord {
+    const [xText, yText] = key.split(",");
+    return {
+      x: Number(xText),
+      y: Number(yText),
+    };
+  }
+
+  private updateVisualEffects(deltaMs: number): void {
+    if (this.crateBreakAnimations.length > 0) {
+      for (const effect of this.crateBreakAnimations) {
+        effect.elapsedMs += deltaMs;
+      }
+      this.crateBreakAnimations = this.crateBreakAnimations.filter((effect) => (
+        effect.elapsedMs < CRATE_BREAK_DURATION_MS
+      ));
+    }
+
+    if (this.suddenDeathClosureEffects.length === 0) {
+      return;
+    }
+    for (const effect of this.suddenDeathClosureEffects) {
+      effect.elapsedMs += deltaMs;
+      if (!effect.impacted && effect.elapsedMs >= SUDDEN_DEATH_FALL_MS) {
+        effect.impacted = true;
+        if (this.onlineSession?.role === "guest") {
+          const key = tileKey(effect.tile.x, effect.tile.y);
+          this.suddenDeathClosedTiles.add(key);
+          this.arena.solid.add(key);
+        } else {
+          this.applySuddenDeathClosure(effect.tile);
+        }
+      }
+    }
+    this.suddenDeathClosureEffects = this.suddenDeathClosureEffects.filter((effect) => (
+      effect.elapsedMs < SUDDEN_DEATH_FALL_MS + SUDDEN_DEATH_IMPACT_LINGER_MS
+    ));
+  }
+
   private addFlame(tile: TileCoord, durationMs: number = FLAME_DURATION_MS): void {
     const existing = this.flames.find((flame) => flame.tile.x === tile.x && flame.tile.y === tile.y);
     if (existing) {
@@ -3065,33 +3336,75 @@ export class GameApp {
 
     this.suddenDeathTickMs -= deltaMs;
     while (this.suddenDeathTickMs <= 0 && this.suddenDeathIndex < this.suddenDeathPath.length) {
-      const headTile = this.suddenDeathPath[this.suddenDeathIndex];
-      const tailTile = this.suddenDeathPath[this.suddenDeathPath.length - 1 - this.suddenDeathIndex];
-      this.triggerSuddenDeathFlame(headTile);
-      if (headTile.x !== tailTile.x || headTile.y !== tailTile.y) {
-        this.triggerSuddenDeathFlame(tailTile);
-      }
+      const tile = this.suddenDeathPath[this.suddenDeathIndex];
+      this.startSuddenDeathClosure(tile);
       this.suddenDeathIndex += 1;
       this.suddenDeathTickMs += SUDDEN_DEATH_TICK_MS;
     }
   }
 
-  private triggerSuddenDeathFlame(tile: TileCoord): void {
+  private startSuddenDeathClosure(tile: TileCoord): void {
     const key = tileKey(tile.x, tile.y);
-    if (this.arena.solid.has(key)) {
+    if (this.suddenDeathClosedTiles.has(key) || this.arena.solid.has(key)) {
       return;
     }
-    if (this.arena.breakable.has(key)) {
-      this.arena.breakable.delete(key);
-      this.revealPowerUpAt(key);
+    const existing = this.suddenDeathClosureEffects.find((effect) => (
+      effect.tile.x === tile.x && effect.tile.y === tile.y
+    ));
+    if (existing) {
+      existing.elapsedMs = 0;
+      existing.impacted = false;
+      return;
+    }
+    this.suddenDeathClosureEffects.push({
+      tile: { ...tile },
+      elapsedMs: 0,
+      impacted: false,
+    });
+  }
+
+  private applySuddenDeathClosure(tile: TileCoord): void {
+    const key = tileKey(tile.x, tile.y);
+    if (this.suddenDeathClosedTiles.has(key)) {
+      return;
+    }
+    if (this.breakCrateAtKey(key)) {
       this.soundManager.playOneShot("crateBreak", 0.92);
     }
+    this.arena.powerUps = this.arena.powerUps.filter((powerUp) => (
+      powerUp.tile.x !== tile.x || powerUp.tile.y !== tile.y
+    ));
     const bomb = this.bombs.find((item) => item.tile.x === tile.x && item.tile.y === tile.y);
     if (bomb) {
       bomb.fuseMs = 0;
     }
-    this.addFlame(tile, SUDDEN_DEATH_FLAME_MS);
-    this.resolvePlayerDeathsFromFlames();
+    this.suddenDeathClosedTiles.add(key);
+    this.arena.solid.add(key);
+    this.resolveSuddenDeathClosureImpact(tile);
+  }
+
+  private resolveSuddenDeathClosureImpact(tile: TileCoord): void {
+    for (const id of this.activePlayerIds) {
+      const player = this.players[id];
+      if (!player.alive) {
+        continue;
+      }
+      player.tile = this.getTileFromPosition(player.position);
+      if (player.tile.x !== tile.x || player.tile.y !== tile.y) {
+        continue;
+      }
+      if (this.isPlayerImmuneDuringSkillChannel(player)) {
+        continue;
+      }
+      player.alive = false;
+      player.velocity = { x: 0, y: 0 };
+      player.skill = createDefaultPlayerSkillState(player.skill.id);
+      this.playerDeathAnimations[player.id] = {
+        startedAtMs: this.animationClockMs,
+        direction: player.lastMoveDirection ?? player.direction,
+      };
+      this.soundManager.playOneShot("playerDeath");
+    }
   }
 
   private buildSuddenDeathPath(): TileCoord[] {
@@ -3162,6 +3475,10 @@ export class GameApp {
         player.alive = false;
         player.velocity = { x: 0, y: 0 };
         player.skill = createDefaultPlayerSkillState(player.skill.id);
+        this.playerDeathAnimations[player.id] = {
+          startedAtMs: this.animationClockMs,
+          direction: player.lastMoveDirection ?? player.direction,
+        };
         this.soundManager.playOneShot("playerDeath");
       }
     }
@@ -3597,9 +3914,9 @@ export class GameApp {
 
     return SKILL_POWER_UP_TYPES.map((type) => {
       const rawLevel = getPowerUpLevel(player, type);
-      const level = type === "remote-up"
-        ? rawLevel
-        : Math.max(0, rawLevel - 1);
+      const level = type === "bomb-up" || type === "flame-up"
+        ? Math.max(0, rawLevel - 1)
+        : rawLevel;
       const valueLabel = type === "remote-up"
         ? (level > 0 ? "ON" : "--")
         : `x${level}`;
@@ -3711,7 +4028,11 @@ export class GameApp {
         }
 
         if (this.arena.solid.has(key)) {
-          this.drawWall(screenX, screenY);
+          if (this.suddenDeathClosedTiles.has(key)) {
+            this.drawSuddenDeathClosedSlot(screenX, screenY);
+          } else {
+            this.drawWall(screenX, screenY);
+          }
         } else if (this.arena.breakable.has(key)) {
           this.drawCrate(screenX, screenY);
         } else if (isWrapPortal) {
@@ -3721,6 +4042,10 @@ export class GameApp {
           this.ctx.fillRect(screenX + 11, screenY + 11, TILE_SIZE - 22, TILE_SIZE - 22);
         }
       }
+    }
+
+    for (const effect of this.crateBreakAnimations) {
+      this.drawCrateBreakAnimation(effect);
     }
 
     this.drawDangerOverlay();
@@ -3742,6 +4067,10 @@ export class GameApp {
 
     for (const id of this.activePlayerIds) {
       this.drawPlayer(this.players[id]);
+    }
+
+    for (const effect of this.suddenDeathClosureEffects) {
+      this.drawSuddenDeathClosureEffect(effect);
     }
 
     this.ctx.strokeStyle = "rgba(188, 223, 255, 0.16)";
@@ -3901,6 +4230,53 @@ export class GameApp {
     this.ctx.strokeRect(x + 2.5, y + 4.5, TILE_SIZE - 5, TILE_SIZE - 7);
   }
 
+  private drawSuddenDeathClosedSlot(x: number, y: number): void {
+    this.drawWall(x, y);
+    this.ctx.fillStyle = "rgba(40, 11, 8, 0.28)";
+    this.ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+    this.ctx.strokeStyle = "rgba(255, 156, 102, 0.32)";
+    this.ctx.strokeRect(x + 4.5, y + 4.5, TILE_SIZE - 9, TILE_SIZE - 9);
+  }
+
+  private drawSuddenDeathClosureEffect(effect: SuddenDeathClosureEffect): void {
+    const x = ARENA_OFFSET_X + effect.tile.x * TILE_SIZE;
+    const y = ARENA_OFFSET_Y + effect.tile.y * TILE_SIZE;
+    const fallProgress = Math.min(1, effect.elapsedMs / SUDDEN_DEATH_FALL_MS);
+    const dropOffset = effect.impacted
+      ? 0
+      : Math.round((1 - fallProgress) * (1 - fallProgress) * TILE_SIZE * 1.8);
+
+    this.ctx.save();
+    this.ctx.fillStyle = `rgba(12, 10, 14, ${effect.impacted ? 0.34 : 0.18 + fallProgress * 0.22})`;
+    this.ctx.beginPath();
+    this.ctx.ellipse(
+      x + TILE_SIZE * 0.5,
+      y + TILE_SIZE * 0.82,
+      TILE_SIZE * 0.38,
+      TILE_SIZE * 0.12,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    this.ctx.fill();
+
+    this.ctx.globalAlpha = effect.impacted ? 1 : Math.max(0.66, 0.78 + fallProgress * 0.22);
+    this.drawSuddenDeathClosedSlot(x, y - dropOffset);
+    this.ctx.restore();
+
+    if (!effect.impacted) {
+      return;
+    }
+
+    const impactProgress = Math.min(1, Math.max(0, effect.elapsedMs - SUDDEN_DEATH_FALL_MS) / SUDDEN_DEATH_IMPACT_LINGER_MS);
+    const glowAlpha = Math.max(0, 0.28 * (1 - impactProgress));
+    if (glowAlpha <= 0) {
+      return;
+    }
+    this.ctx.fillStyle = `rgba(255, 196, 134, ${glowAlpha})`;
+    this.ctx.fillRect(x + 3, y + 3, TILE_SIZE - 6, TILE_SIZE - 6);
+  }
+
   private drawCrate(x: number, y: number): void {
     if (this.assets.props.crate) {
       this.ctx.fillStyle = "rgba(10, 6, 2, 0.28)";
@@ -3921,6 +4297,31 @@ export class GameApp {
     this.ctx.moveTo(x + TILE_SIZE - 6, y + 6);
     this.ctx.lineTo(x + 6, y + TILE_SIZE - 6);
     this.ctx.stroke();
+  }
+
+  private drawCrateBreakAnimation(effect: CrateBreakAnimation): void {
+    const x = ARENA_OFFSET_X + effect.tile.x * TILE_SIZE;
+    const y = ARENA_OFFSET_Y + effect.tile.y * TILE_SIZE;
+    const frames = this.assets.props.crateBreakFrames ?? [];
+    if (frames.length > 0) {
+      const frameMs = Math.max(1, Math.floor(CRATE_BREAK_DURATION_MS / frames.length));
+      const frame = pickAnimationFrame(frames, effect.elapsedMs, frameMs, "hold");
+      if (frame) {
+        this.ctx.save();
+        this.ctx.globalAlpha = Math.max(0.58, 1 - (effect.elapsedMs / CRATE_BREAK_DURATION_MS) * 0.3);
+        this.ctx.drawImage(frame, x, y, TILE_SIZE, TILE_SIZE);
+        this.ctx.restore();
+        return;
+      }
+    }
+
+    // Fallback dust pulse when no sprite sheet is available.
+    const progress = Math.min(1, effect.elapsedMs / CRATE_BREAK_DURATION_MS);
+    const radius = 4 + progress * 10;
+    this.ctx.fillStyle = `rgba(214, 168, 119, ${Math.max(0, 0.34 - progress * 0.24)})`;
+    this.ctx.beginPath();
+    this.ctx.arc(x + TILE_SIZE * 0.5, y + TILE_SIZE * 0.55, radius, 0, Math.PI * 2);
+    this.ctx.fill();
   }
 
   private drawPowerUp(powerUp: PowerUpState): void {
@@ -3997,28 +4398,49 @@ export class GameApp {
     const palette = PLAYER_COLORS[player.id];
     const x = position.x;
     const y = position.y;
-    const alpha = player.alive ? 1 : 0.35;
+    const deathState = this.ensurePlayerDeathAnimationState(player);
+    const renderDirection = deathState?.direction ?? player.direction;
+    const alpha = player.alive ? 1 : (deathState ? 1 : 0.35);
     const activeCharacter = this.getActiveCharacterEntry(player.id);
     const baseSprites = this.getPlayerSprites(player.id);
-    const idleFrames = baseSprites.idle?.[player.direction] ?? [];
-    const walkFrames = baseSprites.walk?.[player.direction] ?? [];
-    const runFrames = baseSprites.run?.[player.direction] ?? [];
-    const castFrames = this.getAnimationFramesForDirection(baseSprites.cast, player.direction);
+    const idleFrames = baseSprites.idle?.[renderDirection] ?? [];
+    const walkFrames = baseSprites.walk?.[renderDirection] ?? [];
+    const runFrames = baseSprites.run?.[renderDirection] ?? [];
+    const attackFrames = baseSprites.attack?.[renderDirection] ?? [];
+    const castFrames = this.getAnimationFramesForDirection(baseSprites.cast, renderDirection);
+    const deathFrames = this.getAnimationFramesForDirection(baseSprites.death, renderDirection);
     const prefersRunMovement = activeCharacter.animations?.walk === false && activeCharacter.animations?.run !== false;
-    const channelingSkill = player.skill.id === "ranni-ice-blink" && player.skill.phase === "channeling";
     const movementFrames = prefersRunMovement
       ? (runFrames.length > 0 ? runFrames : walkFrames)
       : (walkFrames.length > 0 ? walkFrames : runFrames);
     const moving = Math.abs(player.velocity.x) > 0.02 || Math.abs(player.velocity.y) > 0.02;
-    const castSprite = channelingSkill
-      ? pickAnimationFrame(castFrames, player.skill.castElapsedMs, SKILL_FRAME_MS, "hold")
+    const deathElapsedMs = deathState
+      ? Math.max(0, this.animationClockMs - deathState.startedAtMs)
+      : 0;
+    const deathSprite = !player.alive
+      ? pickAnimationFrame(deathFrames, deathElapsedMs, DEATH_FRAME_MS, "hold")
+      : null;
+    const skillAnimation = this.getActiveSkillAnimationFrames(
+      player,
+      renderDirection,
+      castFrames,
+      runFrames,
+      attackFrames,
+    );
+    const castSprite = skillAnimation
+      ? pickAnimationFrame(
+          skillAnimation.frames,
+          player.skill.castElapsedMs,
+          skillAnimation.frameMs,
+          skillAnimation.playback,
+        )
       : null;
     const movementSprite = moving
       ? pickAnimationFrame(movementFrames, this.animationClockMs, WALK_FRAME_MS, "loop")
       : pickAnimationFrame(idleFrames, this.animationClockMs, WALK_FRAME_MS, "loop");
-    let sprite = castSprite ?? movementSprite ?? spriteForDirection(baseSprites, player.direction);
+    let sprite = deathSprite ?? castSprite ?? movementSprite ?? spriteForDirection(baseSprites, renderDirection);
     if (!sprite || !this.getSpriteTrimBounds(sprite)) {
-      sprite = this.getRenderableSprite(baseSprites, player.direction);
+      sprite = this.getRenderableSprite(baseSprites, renderDirection);
     }
 
     this.ctx.fillStyle = "rgba(4, 10, 19, 0.34)";
@@ -4065,13 +4487,13 @@ export class GameApp {
     this.ctx.fillRect(x + 8, y + 8, TILE_SIZE - 16, TILE_SIZE - 13);
     this.ctx.fillStyle = "#f5fbff";
 
-    if (player.direction === "up") {
+    if (renderDirection === "up") {
       this.ctx.fillRect(x + 12, y + 10, 4, 4);
       this.ctx.fillRect(x + 16, y + 10, 4, 4);
-    } else if (player.direction === "down") {
+    } else if (renderDirection === "down") {
       this.ctx.fillRect(x + 12, y + 16, 4, 4);
       this.ctx.fillRect(x + 16, y + 16, 4, 4);
-    } else if (player.direction === "left") {
+    } else if (renderDirection === "left") {
       this.ctx.fillRect(x + 10, y + 14, 4, 4);
       this.ctx.fillRect(x + 10, y + 18, 4, 4);
     } else {
@@ -4080,6 +4502,57 @@ export class GameApp {
     }
 
     this.ctx.globalAlpha = 1;
+  }
+
+  private getActiveSkillAnimationFrames(
+    player: PlayerState,
+    renderDirection: Direction,
+    castFrames: HTMLImageElement[],
+    runFrames: HTMLImageElement[],
+    attackFrames: HTMLImageElement[],
+  ): { frames: HTMLImageElement[]; frameMs: number; playback: "loop" | "hold" } | null {
+    if (player.skill.phase !== "channeling") {
+      return null;
+    }
+    if (player.skill.id === "ranni-ice-blink" && castFrames.length > 0) {
+      return {
+        frames: castFrames,
+        frameMs: SKILL_FRAME_MS,
+        playback: "hold",
+      };
+    }
+    if (player.skill.id === "killer-bee-wing-dash") {
+      const exactCastFrames = this.getPlayerSprites(player.id).cast?.[renderDirection] ?? [];
+      const frames = exactCastFrames.length > 0
+        ? exactCastFrames
+        : (runFrames.length > 0 ? runFrames : attackFrames);
+      if (frames.length === 0) {
+        return null;
+      }
+      return {
+        frames,
+        frameMs: KILLER_BEE_DASH_FRAME_MS,
+        playback: "loop",
+      };
+    }
+    return null;
+  }
+
+  private ensurePlayerDeathAnimationState(player: PlayerState): PlayerDeathAnimationState | null {
+    if (player.alive) {
+      this.playerDeathAnimations[player.id] = null;
+      return null;
+    }
+    const existing = this.playerDeathAnimations[player.id];
+    if (existing) {
+      return existing;
+    }
+    const created: PlayerDeathAnimationState = {
+      startedAtMs: this.animationClockMs,
+      direction: player.lastMoveDirection ?? player.direction,
+    };
+    this.playerDeathAnimations[player.id] = created;
+    return created;
   }
 
   private getSpriteTrimBounds(
@@ -4233,6 +4706,12 @@ export class GameApp {
     const bombPreviewTiles = this.showBombPreview
       ? this.getBombPreviewTiles(previewPlayerId).slice(0, 48)
       : [];
+    const crateBreakEffects = this.crateBreakAnimations
+      .slice(0, 24)
+      .map((effect) => ({
+        tile: { ...effect.tile },
+        elapsedMs: Math.round(effect.elapsedMs),
+      }));
 
     const payload = {
       mode: this.mode,
@@ -4254,6 +4733,14 @@ export class GameApp {
           progress: this.suddenDeathPath.length > 0
             ? Math.round((this.suddenDeathIndex / this.suddenDeathPath.length) * 1000) / 10
             : 0,
+          closedTiles: Array.from(this.suddenDeathClosedTiles)
+            .slice(0, 48)
+            .map((key) => this.parseTileKey(key)),
+          closingTiles: this.suddenDeathClosureEffects.map((effect) => ({
+            tile: { ...effect.tile },
+            elapsedMs: Math.round(effect.elapsedMs),
+            impacted: effect.impacted,
+          })),
         },
         dangerOverlay: {
           enabled: this.showDangerOverlay,
@@ -4343,6 +4830,7 @@ export class GameApp {
       blocks: {
         remaining: this.arena.breakable.size,
         visibleBreakables,
+        breakEffects: crateBreakEffects,
       },
       powerups: this.arena.powerUps
         .filter((powerUp) => powerUp.revealed && !powerUp.collected)
