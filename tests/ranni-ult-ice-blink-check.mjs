@@ -121,6 +121,27 @@ const teleportedToProjectedTrack = Math.abs(finishX - expectedFinishX) < 1.5;
 const channelingPhaseObserved = midSkill.phase === "channeling";
 const cooldownPhaseObserved = finishSkill.phase === "cooldown";
 
+const immunityGame = createServerMatch({ 1: 0, 2: 1, 3: 0, 4: 1 });
+const immuneRanni = immunityGame.players[1];
+immuneRanni.position = { x: 4 * TILE_SIZE + TILE_SIZE * 0.5, y: 4 * TILE_SIZE + TILE_SIZE * 0.5 };
+immuneRanni.tile = { x: 4, y: 4 };
+immuneRanni.spawnProtectionMs = 0;
+immunityGame.setServerPlayerInput(1, {
+  direction: "right",
+  ...neutralInput,
+  skillPressed: true,
+});
+immunityGame.advanceServerSimulation(17);
+immunityGame.flames = [{ tile: { x: 4, y: 4 }, remainingMs: 2_000 }];
+for (let elapsed = 0; elapsed < 500; elapsed += 17) {
+  immunityGame.setServerPlayerInput(1, {
+    direction: "right",
+    ...neutralInput,
+  });
+  immunityGame.advanceServerSimulation(17);
+}
+const immuneDuringChannel = immuneRanni.alive && immuneRanni.skill.phase === "channeling";
+
 const report = {
   beforeX,
   midX,
@@ -136,12 +157,14 @@ const report = {
   teleportedToProjectedTrack,
   channelingPhaseObserved,
   cooldownPhaseObserved,
+  immuneDuringChannel,
   pass: frozenInPlace
     && projectedMovedDuringChannel
     && teleportedAfterChannel
     && teleportedToProjectedTrack
     && channelingPhaseObserved
-    && cooldownPhaseObserved,
+    && cooldownPhaseObserved
+    && immuneDuringChannel
 };
 
 console.log(JSON.stringify(report, null, 2));

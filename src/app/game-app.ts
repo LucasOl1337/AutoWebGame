@@ -1159,6 +1159,10 @@ export class GameApp {
     player.skill.projectedLastMoveDirection = null;
   }
 
+  private isPlayerImmuneDuringSkillChannel(player: PlayerState): boolean {
+    return player.skill.id === "ranni-ice-blink" && player.skill.phase === "channeling";
+  }
+
   private simulateProjectedMovement(
     player: PlayerState,
     startPosition: PixelCoord,
@@ -3102,6 +3106,9 @@ export class GameApp {
         if (player.spawnProtectionMs > 0) {
           continue;
         }
+        if (this.isPlayerImmuneDuringSkillChannel(player)) {
+          continue;
+        }
         if (player.flameGuardMs > 0) {
           continue;
         }
@@ -4011,9 +4018,6 @@ export class GameApp {
         spriteHeight,
       );
       this.ctx.restore();
-      if (channelingSkill) {
-        this.drawIcePrisonOverlay(spriteX, spriteY, spriteWidth, spriteHeight, player.skill.channelRemainingMs);
-      }
       return;
     }
 
@@ -4040,22 +4044,7 @@ export class GameApp {
       this.ctx.fillRect(x + 18, y + 18, 4, 4);
     }
 
-    if (channelingSkill) {
-      this.drawIcePrisonOverlay(x + 4, y + 2, TILE_SIZE - 8, TILE_SIZE + 8, player.skill.channelRemainingMs);
-    }
-
     this.ctx.globalAlpha = 1;
-  }
-
-  private drawIcePrisonOverlay(x: number, y: number, width: number, height: number, remainingMs: number): void {
-    const pulse = 0.7 + 0.3 * Math.sin((remainingMs / 120) * Math.PI);
-    this.ctx.save();
-    this.ctx.fillStyle = `rgba(171, 232, 255, ${0.22 + pulse * 0.18})`;
-    this.ctx.fillRect(x - 2, y - 3, width + 4, height + 5);
-    this.ctx.strokeStyle = `rgba(216, 247, 255, ${0.48 + pulse * 0.24})`;
-    this.ctx.lineWidth = 1;
-    this.ctx.strokeRect(x - 1.5, y - 2.5, width + 3, height + 4);
-    this.ctx.restore();
   }
 
   private getSpriteTrimBounds(
