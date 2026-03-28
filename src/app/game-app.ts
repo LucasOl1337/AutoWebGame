@@ -120,9 +120,11 @@ const PLAYER_SPRITE_HEIGHT_SCALE = 1.45;
 const PLAYER_SPRITE_MAX_WIDTH_SCALE = 1.2;
 const ONLINE_SNAPSHOT_INTERVAL_MS = 50;
 const ONLINE_RENDER_SMOOTHING = 0.48;
-const ONLINE_INTERPOLATION_DELAY_MS = 52;
-const ONLINE_EXTRAPOLATION_MS = 42;
-const ONLINE_VELOCITY_LEAD_MS = 18;
+const ONLINE_MIN_INTERPOLATION_DELAY_MS = 18;
+const ONLINE_MAX_INTERPOLATION_DELAY_MS = 34;
+const ONLINE_INTERPOLATION_JITTER_BUFFER_MS = 6;
+const ONLINE_EXTRAPOLATION_MS = 28;
+const ONLINE_VELOCITY_LEAD_MS = 10;
 const ONLINE_MAX_VISUAL_LEAD_PX = TILE_SIZE * 0.34;
 const ONLINE_SAMPLE_BUFFER_SIZE = 12;
 const ARENA_PIXEL_WIDTH = GRID_WIDTH * TILE_SIZE;
@@ -1247,9 +1249,11 @@ export class GameApp {
       };
     }
 
-    const renderAtMs = nowMs - ONLINE_INTERPOLATION_DELAY_MS;
+    const elapsedSinceLatestMs = Math.max(0, nowMs - latestSample.receivedAtMs);
+    const estimatedServerNowMs = latestSample.serverTimeMs + elapsedSinceLatestMs;
+    const renderAtServerMs = estimatedServerNowMs - this.getOnlineInterpolationDelayMs();
     const oldestSample = samples[0] ?? latestSample;
-    if (renderAtMs <= oldestSample.receivedAtMs) {
+    if (renderAtServerMs <= oldestSample.serverTimeMs) {
       const oldestPlayer = oldestSample.players[playerId];
       return {
         x: oldestPlayer.position.x,
@@ -1260,13 +1264,13 @@ export class GameApp {
     for (let index = 1; index < samples.length; index += 1) {
       const previous = samples[index - 1];
       const next = samples[index];
-      if (renderAtMs < previous.receivedAtMs || renderAtMs > next.receivedAtMs) {
+      if (renderAtServerMs < previous.serverTimeMs || renderAtServerMs > next.serverTimeMs) {
         continue;
       }
       const previousSample = previous.players[playerId];
       const nextSample = next.players[playerId];
-      const spanMs = Math.max(1, next.receivedAtMs - previous.receivedAtMs);
-      const alpha = Math.max(0, Math.min(1, (renderAtMs - previous.receivedAtMs) / spanMs));
+      const spanMs = Math.max(1, next.serverTimeMs - previous.serverTimeMs);
+      const alpha = Math.max(0, Math.min(1, (renderAtServerMs - previous.serverTimeMs) / spanMs));
       return {
         x: previousSample.position.x + (nextSample.position.x - previousSample.position.x) * alpha,
         y: previousSample.position.y + (nextSample.position.y - previousSample.position.y) * alpha,
@@ -1275,12 +1279,40 @@ export class GameApp {
 
     const extrapolationMs = Math.max(
       0,
-      Math.min(ONLINE_EXTRAPOLATION_MS, renderAtMs - latestSample.receivedAtMs),
+      Math.min(ONLINE_EXTRAPOLATION_MS, renderAtServerMs - latestSample.serverTimeMs),
     );
     return {
       x: currentSample.position.x + currentSample.velocity.x * (extrapolationMs / 1000),
       y: currentSample.position.y + currentSample.velocity.y * (extrapolationMs / 1000),
     };
+  }
+
+  private getOnlineInterpolationDelayMs(): number {
+    if (this.onlineRenderSamples.length < 2) {
+      return ONLINE_MIN_INTERPOLATION_DELAY_MS;
+    }
+
+    const intervals = [];
+    for (let index = 1; index < this.onlineRenderSamples.length; index += 1) {
+      const intervalMs = this.onlineRenderSamples[index].serverTimeMs - this.onlineRenderSamples[index - 1].serverTimeMs;
+      if (intervalMs > 0) {
+        intervals.push(intervalMs);
+      }
+    }
+
+    if (intervals.length === 0) {
+      return ONLINE_MIN_INTERPOLATION_DELAY_MS;
+    }
+
+    intervals.sort((left, right) => left - right);
+    const medianIntervalMs = intervals[Math.floor(intervals.length / 2)];
+    return Math.max(
+      ONLINE_MIN_INTERPOLATION_DELAY_MS,
+      Math.min(
+        ONLINE_MAX_INTERPOLATION_DELAY_MS,
+        medianIntervalMs + ONLINE_INTERPOLATION_JITTER_BUFFER_MS,
+      ),
+    );
   }
 
   private updateMenu(): void {

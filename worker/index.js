@@ -1,10 +1,13 @@
 import { DurableObject } from "cloudflare:workers";
 import { GameApp } from "../src/app/game-app";
 import { mergeSequencedOnlineInputState } from "../src/online/input-latch";
+import { createFixedRatePumpState, consumeFixedRatePumpSteps } from "../src/online/server-tick";
 
 const STATE_VERSION = 3;
 const MATCH_TICK_MS = 1000 / 60;
 const FULL_SNAPSHOT_EVERY_TICKS = 6;
+const MATCH_PUMP_INTERVAL_MS = 8;
+const MAX_MATCH_STEPS_PER_PUMP = 5;
 const PLAYER_IDS = [1, 2, 3, 4];
 const LEGACY_AUDIO_PATHS = new Set([
   "/assets/audio/sfx/bomb_explode.mp3",
@@ -82,7 +85,7 @@ export class GlobalLobby extends DurableObject {
   quickMatchPendingClients = new Set();
   /** @type {Map<string, number>} */
   preferredCharacterSelections = new Map();
-  /** @type {Map<string, { game: GameApp, inputs: Record<1 | 2 | 3 | 4, import("../src/online/protocol").OnlineInputState & { inputSeq?: number, sentAtMs?: number }>, timer: ReturnType<typeof setInterval> | null, tick: number, activePlayerIds: Array<1 | 2 | 3 | 4>, characterSelections: Record<1 | 2 | 3 | 4, number>, matchResultChoices: Record<1 | 2 | 3 | 4, "rematch" | "lobby" | null> }>} */
+  /** @type {Map<string, { game: GameApp, inputs: Record<1 | 2 | 3 | 4, import("../src/online/protocol").OnlineInputState & { inputSeq?: number, sentAtMs?: number }>, timer: ReturnType<typeof setInterval> | null, tick: number, activePlayerIds: Array<1 | 2 | 3 | 4>, characterSelections: Record<1 | 2 | 3 | 4, number>, matchResultChoices: Record<1 | 2 | 3 | 4, "rematch" | "lobby" | null>, clock: import("../src/online/server-tick").FixedRatePumpState }>} */
   matches = new Map();
   /** @type {Promise<void>} */
   ready;
@@ -970,10 +973,11 @@ export class GlobalLobby extends DurableObject {
       activePlayerIds,
       characterSelections,
       matchResultChoices: createSeatMap(() => null),
+      clock: createFixedRatePumpState(Date.now()),
     };
     match.timer = setInterval(() => {
-      this.tickRoomMatch(room.roomCode);
-    }, MATCH_TICK_MS);
+      this.pumpRoomMatch(room.roomCode);
+    }, MATCH_PUMP_INTERVAL_MS);
     this.matches.set(room.roomCode, match);
     this.broadcastSnapshot(room.roomCode);
   }
@@ -995,7 +999,7 @@ export class GlobalLobby extends DurableObject {
   /**
    * @param {string} roomCode
    */
-  tickRoomMatch(roomCode) {
+  pumpRoomMatch(roomCode) {
     const room = this.rooms.get(roomCode);
     const match = this.matches.get(roomCode);
     if (!room || !match || room.status !== "playing") {
@@ -1003,18 +1007,36 @@ export class GlobalLobby extends DurableObject {
       return;
     }
 
-    for (const playerId of match.activePlayerIds) {
-      match.game.setServerPlayerInput(playerId, match.inputs[playerId]);
+    const pump = consumeFixedRatePumpSteps(
+      match.clock,
+      Date.now(),
+      MATCH_TICK_MS,
+      MAX_MATCH_STEPS_PER_PUMP,
+    );
+    match.clock = pump.state;
+    if (pump.steps <= 0) {
+      return;
     }
-    match.game.advanceServerSimulation(MATCH_TICK_MS);
-    for (const playerId of match.activePlayerIds) {
-      match.inputs[playerId].bombPressed = false;
-      match.inputs[playerId].detonatePressed = false;
-      match.inputs[playerId].skillPressed = false;
+
+    let shouldBroadcastSnapshot = false;
+    for (let step = 0; step < pump.steps; step += 1) {
+      for (const playerId of match.activePlayerIds) {
+        match.game.setServerPlayerInput(playerId, match.inputs[playerId]);
+      }
+      match.game.advanceServerSimulation(MATCH_TICK_MS);
+      for (const playerId of match.activePlayerIds) {
+        match.inputs[playerId].bombPressed = false;
+        match.inputs[playerId].detonatePressed = false;
+        match.inputs[playerId].skillPressed = false;
+      }
+      match.tick += 1;
+      if (match.tick % FULL_SNAPSHOT_EVERY_TICKS === 0) {
+        shouldBroadcastSnapshot = true;
+      }
     }
-    match.tick += 1;
+
     this.broadcastFrame(roomCode);
-    if (match.tick % FULL_SNAPSHOT_EVERY_TICKS === 0) {
+    if (shouldBroadcastSnapshot) {
       this.broadcastSnapshot(roomCode);
     }
   }
@@ -1051,6 +1073,8 @@ export class GlobalLobby extends DurableObject {
         suddenDeathActive: snapshot.suddenDeathActive,
         suddenDeathTickMs: snapshot.suddenDeathTickMs,
         suddenDeathIndex: snapshot.suddenDeathIndex,
+        suddenDeathClosedTiles: snapshot.suddenDeathClosedTiles,
+        suddenDeathClosingTiles: snapshot.suddenDeathClosingTiles,
         selectedCharacterIndex: snapshot.selectedCharacterIndex,
         activePlayerIds: snapshot.activePlayerIds,
       },

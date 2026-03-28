@@ -28,6 +28,7 @@
     "test:online-4p": "npm run compile:esm && node tests/online-four-player-check.mjs",
     "test:online-audio": "npm run compile:esm && node tests/online-audio-bridge-check.mjs",
     "test:online-input-latch": "npm run compile:esm && node tests/online-input-latching-check.mjs",
+    "test:server-tick": "npm run compile:esm && node tests/server-tick-catchup-check.mjs",
     "test:danger-overlay": "npm run compile:esm && node tests/danger-overlay-check.mjs",
     "test:bomb-preview": "npm run compile:esm && node tests/bomb-preview-toggle-check.mjs",
     "test:bot-powerup": "npm run compile:esm && node tests/bot-powerup-priority-check.mjs",

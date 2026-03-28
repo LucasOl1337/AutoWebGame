@@ -1035,6 +1035,24 @@ Validacao 2026-03-27
 - `npm run test:online-4p` (pass)
 - `node --check worker/index.js` (pass)
 - `npm run build` (pass)
+2026-03-27 PvP latency pass
+- Diagnostico consolidado do lag PvP:
+  - o jogo contra bot local continuava liso, entao o gargalo ficou restrito ao pipeline online
+  - o cliente online ja estava com interpolacao baseada em `serverTimeMs` e buffer dinamico curto (`18-34 ms`) em `src/app/game-app.ts`
+  - o servidor autoritativo ainda dependia de `setInterval(16.6ms)` perfeito; se o timer atrasasse no workerd local, a partida inteira desacelerava e o input parecia atrasado mesmo com ping baixo
+- Correcao aplicada no servidor:
+  - criado `src/online/server-tick.ts` com acumulador/catch-up para steps fixos
+  - `worker/index.js` passou a usar `pumpRoomMatch(...)` com acumulador real de tempo e limite de catch-up por pump
+  - broadcast continua saindo com o ultimo estado processado, evitando enfileirar frames intermediarios quando houver atraso do timer
+- Teste novo: `tests/server-tick-catchup-check.mjs` + script `npm run test:server-tick`
+
+Validacao 2026-03-27 PvP latency
+- `npm run test:server-tick` (pass)
+- `npm run test:online-input-latch` (pass)
+- `npm run test:online-4p` (pass)
+- `node --check worker/index.js` (pass)
+- `npm run build` (pass)
+- `GET http://2804-14c-62-2471--5bc.nip.io:8788/health` (200)
 2026-03-27 local-online parity + menu bot fill
 - Fluxo local para testar o mesmo worker autoritativo do online sem deploy:
   - `serve:online` agora sobe `wrangler dev --local` (usa `worker/index.js` + Durable Object + `/online` websocket + assets de `dist`).
