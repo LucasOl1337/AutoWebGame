@@ -1,0 +1,22 @@
+This toolkit contains a curated extraction of image-matching code adapted from:
+
+  AirtestProject / Airtest
+  https://github.com/AirtestProject/Airtest
+  Apache License 2.0
+  Extracted from commit d729c631d2032521be1e2168a249a2a89d79af2a
+
+Included and adapted areas:
+- airtest/aircv/aircv.py
+- airtest/aircv/cal_confidence.py
+- airtest/aircv/error.py
+- airtest/aircv/template.py
+- airtest/aircv/multiscale_template_matching.py
+- airtest/aircv/utils.py
+- airtest/utils/logger.py
+
+Changes made in this repo:
+- Repackaged into a smaller module surface for asset workflows only
+- Removed device automation dependencies
+- Added JSON CLI commands for `match`, `scan-dir`, `compare`, and `doctor`
+- Added repo-aware path handling and annotated preview export
+- Reduced dependency scope to the subset needed for asset matching

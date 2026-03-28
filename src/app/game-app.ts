@@ -57,7 +57,6 @@ import {
   formatControlKey,
   getPowerUpDefinition,
   getPowerUpLevel,
-  getPowerUpPriorityScore,
   type SkillPowerUpType,
   SKILL_POWER_UP_TYPES,
 } from "../core/powerups";
@@ -69,6 +68,40 @@ import type {
   OnlineSessionBridge,
 } from "../online/protocol";
 import { SoundManager, SFX_MANIFEST } from "./sound-manager";
+import type { BotContext } from "./bot-ai";
+import {
+  getBotDecision as botAI_getBotDecision,
+  getStableBotDirection as botAI_getStableBotDirection,
+} from "./bot-ai";
+import type { SkillContext } from "./skill-system";
+import {
+  createDefaultPlayerSkillState,
+  syncPlayerSkill as skill_syncPlayerSkill,
+  advancePlayerSkillTimers as skill_advancePlayerSkillTimers,
+  activatePlayerSkill as skill_activatePlayerSkill,
+  updatePlayerSkillChannel as skill_updatePlayerSkillChannel,
+  isPlayerImmuneDuringSkillChannel as skill_isPlayerImmuneDuringSkillChannel,
+  RANNI_CHARACTER_ID,
+  KILLER_BEE_CHARACTER_ID,
+  NICO_CHARACTER_ID,
+  KILLER_BEE_DASH_FRAME_MS,
+  NICO_BEAM_DURATION_MS,
+  NICO_BEAM_CORE_WIDTH_PX,
+  NICO_BEAM_GLOW_WIDTH_PX,
+} from "./skill-system";
+import type { OnlineRenderSample, PendingOnlineInput } from "./online-sync";
+import {
+  ONLINE_SNAPSHOT_INTERVAL_MS,
+  appendPendingOnlineInput,
+  captureOnlineLocalInput as online_captureLocalInput,
+  cloneOnlineInputState,
+  consumeLatchedOnlinePress,
+  createNeutralOnlineInput,
+  mergeLatchedOnlineInput,
+  playOnlineAudioTransition as online_playAudioTransition,
+  pushOnlineRenderSample as online_pushRenderSample,
+  updateVisualPlayerPositions as online_updateVisualPlayerPositions,
+} from "./online-sync";
 
 declare global {
   interface Window {
@@ -98,32 +131,12 @@ const LOCAL_BOT_CYCLE_KEY = "KeyN";
 const MAX_LOCAL_BOT_FILL = 3;
 const BOT_BOMB_COOLDOWN_MS = 900;
 const BOT_DANGER_FUSE_MS = 1000;
-const BOT_DANGER_ARRIVAL_BUFFER_MS = 140;
-const BOT_SCAN_RADIUS = 7;
-const BOT_SUDDEN_DEATH_LOOKAHEAD_MS = 2100;
-const BOT_STRATEGIC_MOVE_WINDOW_STEPS = 2;
-const BOT_PREEMPTIVE_ESCAPE_STEPS = 4;
-const BOT_DIRECTION_CONFIRM_FRAMES = 2;
 const WALK_FRAME_MS = 100;
 const SKILL_FRAME_MS = 100;
 const DEATH_FRAME_MS = 90;
 const CRATE_BREAK_DURATION_MS = 220;
 const SPAWN_PROTECTION_MS = 2200;
-const RANNI_CHARACTER_ID = "03a976fb-7313-4064-a477-5bb9b0760034";
-const KILLER_BEE_CHARACTER_ID = "6ee8baa5-3277-413b-ae0e-2659b9cc52e9";
-const NICO_CHARACTER_ID = "5474c45c-2987-43e0-af2c-a6500c836881";
-const RANNI_SKILL_CHANNEL_MS = 1_500;
-const RANNI_SKILL_COOLDOWN_MS = 10_000;
-const KILLER_BEE_DASH_DISTANCE_PX = TILE_SIZE * 3;
-const KILLER_BEE_DASH_DURATION_MS = 240;
-const KILLER_BEE_DASH_MIN_DURATION_MS = 90;
-const KILLER_BEE_DASH_FRAME_MS = 60;
-const KILLER_BEE_SKILL_COOLDOWN_MS = 10_000;
 const NICO_SKILL_CHANNEL_MS = 2_000;
-const NICO_SKILL_COOLDOWN_MS = 10_000;
-const NICO_BEAM_DURATION_MS = 260;
-const NICO_BEAM_CORE_WIDTH_PX = TILE_SIZE * 0.26;
-const NICO_BEAM_GLOW_WIDTH_PX = TILE_SIZE * 0.56;
 const SUDDEN_DEATH_ELAPSED_MS = 40_000;
 const SUDDEN_DEATH_START_MS = ROUND_DURATION_MS - SUDDEN_DEATH_ELAPSED_MS;
 const SUDDEN_DEATH_TICK_MS = 800;
@@ -135,15 +148,6 @@ const CANVAS_BACKBUFFER_SCALE = 2;
 const CANVAS_VIEWPORT_PADDING = 32;
 const PLAYER_SPRITE_HEIGHT_SCALE = 1.45;
 const PLAYER_SPRITE_MAX_WIDTH_SCALE = 1.2;
-const ONLINE_SNAPSHOT_INTERVAL_MS = 50;
-const ONLINE_RENDER_SMOOTHING = 0.48;
-const ONLINE_MIN_INTERPOLATION_DELAY_MS = 18;
-const ONLINE_MAX_INTERPOLATION_DELAY_MS = 34;
-const ONLINE_INTERPOLATION_JITTER_BUFFER_MS = 6;
-const ONLINE_EXTRAPOLATION_MS = 28;
-const ONLINE_VELOCITY_LEAD_MS = 10;
-const ONLINE_MAX_VISUAL_LEAD_PX = TILE_SIZE * 0.34;
-const ONLINE_SAMPLE_BUFFER_SIZE = 12;
 const ARENA_PIXEL_WIDTH = GRID_WIDTH * TILE_SIZE;
 const ARENA_PIXEL_HEIGHT = GRID_HEIGHT * TILE_SIZE;
 const PLAYER_SPAWNS: Record<PlayerId, { tile: TileCoord; direction: Direction }> = {
@@ -152,50 +156,6 @@ const PLAYER_SPAWNS: Record<PlayerId, { tile: TileCoord; direction: Direction }>
   3: { tile: { x: 2, y: GRID_HEIGHT - 2 }, direction: "up" },
   4: { tile: { x: GRID_WIDTH - 3, y: GRID_HEIGHT - 2 }, direction: "up" },
 };
-
-interface OnlineRenderSample {
-  receivedAtMs: number;
-  serverTimeMs: number;
-  serverTick: number;
-  players: Record<PlayerId, { position: PixelCoord; velocity: PixelCoord }>;
-}
-
-interface PendingOnlineInput {
-  seq: number;
-  input: OnlineInputState;
-}
-
-function createNeutralOnlineInput(): OnlineInputState {
-  return {
-    direction: null,
-    bombPressed: false,
-    detonatePressed: false,
-    skillPressed: false,
-    skillHeld: false,
-  };
-}
-
-function cloneOnlineInputState(input: OnlineInputState): OnlineInputState {
-  return {
-    direction: input.direction,
-    bombPressed: input.bombPressed,
-    detonatePressed: input.detonatePressed,
-    skillPressed: input.skillPressed,
-    skillHeld: Boolean(input.skillHeld),
-  };
-}
-
-function createDefaultPlayerSkillState(skillId: CharacterSkillId | null) {
-  return {
-    id: skillId,
-    phase: "idle" as const,
-    channelRemainingMs: 0,
-    cooldownRemainingMs: 0,
-    castElapsedMs: 0,
-    projectedPosition: null,
-    projectedLastMoveDirection: null,
-  };
-}
 
 function createEmptyDirectionalSprites(): DirectionalSprites {
   return {
@@ -426,6 +386,52 @@ export class GameApp {
     };
     this.pendingCharacterIndex = { ...this.selectedCharacterIndex };
     this.applyOfflineBotFill(this.automationMode ? 1 : 0, false);
+  }
+
+  private createBotContext(): BotContext {
+    return {
+      players: this.players,
+      activePlayerIds: this.activePlayerIds,
+      bombs: this.bombs,
+      flames: this.flames,
+      arena: this.arena,
+      suddenDeathActive: this.suddenDeathActive,
+      suddenDeathTickMs: this.suddenDeathTickMs,
+      suddenDeathIndex: this.suddenDeathIndex,
+      suddenDeathPath: this.suddenDeathPath,
+      suddenDeathClosureEffects: this.suddenDeathClosureEffects,
+      botBombCooldownMs: this.botBombCooldownMs,
+      botCommittedDirection: this.botCommittedDirection,
+      botPendingReverseDirection: this.botPendingReverseDirection,
+      botPendingReverseFrames: this.botPendingReverseFrames,
+      canOccupyPosition: (_pos, _tile) => true,
+      evaluateMovementOption: (player, dir, dt) => this.evaluateMovementOption(player, dir, dt),
+      canMovementOptionAdvance: (pos, opt) => this.canMovementOptionAdvance(pos, opt),
+      areOppositeDirections: (a, b) => this.areOppositeDirections(a, b),
+      isPlayerOverlappingTile: (player, tile) => this.isPlayerOverlappingTile(player, tile),
+    };
+  }
+
+  private createSkillContext(): SkillContext {
+    return {
+      arena: this.arena,
+      bombs: this.bombs,
+      players: this.players,
+      activePlayerIds: this.activePlayerIds,
+      magicBeams: this.magicBeams,
+      selectedCharacterIndex: this.selectedCharacterIndex,
+      characterRoster: this.characterRoster,
+      canOccupyPosition: (player, pos) => this.canOccupyPosition(player, pos),
+      getTileFromPosition: (pos) => this.getTileFromPosition(pos),
+      normalizeArenaPosition: (pos) => this.normalizeArenaPosition(pos),
+      getWrappedDelta: (target, current, size) => this.getWrappedDelta(target, current, size),
+      resolveMovementDirection: (player, dir, dt) => this.resolveMovementDirection(player, dir, dt),
+      movePlayerSimulated: (player, dir, dt) => this.movePlayerSimulated(player, dir, dt),
+      clonePlayerState: (player) => this.clonePlayerState(player),
+      tryAbsorbInstantHit: (player) => this.tryAbsorbInstantHit(player),
+      breakCrateAtKey: (key) => this.breakCrateAtKey(key),
+      soundManager: { playOneShot: (name: string) => this.soundManager.playOneShot(name as any) },
+    };
   }
 
   public attachOnlineSession(session: OnlineSessionBridge): void {
@@ -673,55 +679,21 @@ export class GameApp {
     breakableTiles?: string[];
     powerUps?: PowerUpState[];
   }): void {
-    if (
-      this.headless
-      || this.onlineSession?.role !== "guest"
-      || !this.onlineAudioPrimed
-    ) {
-      return;
-    }
-
-    const previousBombIds = new Set(this.bombs.map((bomb) => bomb.id));
-    const nextBombIds = new Set(next.bombs.map((bomb) => bomb.id));
-    const addedBombs = next.bombs.filter((bomb) => !previousBombIds.has(bomb.id)).length;
-    const removedBombs = this.bombs.filter((bomb) => !nextBombIds.has(bomb.id)).length;
-
-    const previousFlames = new Set(this.flames.map((flame) => tileKey(flame.tile.x, flame.tile.y)));
-    const newFlames = next.flames.filter((flame) => !previousFlames.has(tileKey(flame.tile.x, flame.tile.y))).length;
-    const startedSuddenDeath = !this.suddenDeathActive && next.suddenDeathActive;
-
-    if (addedBombs > 0) {
-      this.soundManager.playOneShot("bombPlace");
-    }
-    if (startedSuddenDeath) {
-      this.soundManager.playOneShot("suddenDeath");
-    }
-    if (removedBombs > 0) {
-      this.soundManager.playOneShot("bombExplode");
-    }
-    if (newFlames > 0) {
-      this.soundManager.playOneShot("flameIgnite");
-    }
-
-    if (next.breakableTiles && this.arena.breakable.size > new Set(next.breakableTiles).size) {
-      this.soundManager.playOneShot("crateBreak");
-    }
-
-    if (next.powerUps && this.didCollectRemotePowerUp(next.powerUps)) {
-      this.soundManager.playOneShot("powerupCollect");
-    }
-
-    if (this.didConsumeRemoteShield(next.players)) {
-      this.soundManager.playOneShot("shieldBlock");
-    }
-
-    if (this.didLoseRemotePlayer(next.players)) {
-      this.soundManager.playOneShot("playerDeath");
-    }
-
-    if (!this.roundOutcome && next.roundOutcome) {
-      this.soundManager.playOneShot(next.matchWinner ? "matchWin" : "roundWin");
-    }
+    online_playAudioTransition({
+      headless: this.headless,
+      role: this.onlineSession?.role ?? null,
+      audioPrimed: this.onlineAudioPrimed,
+      hadRoundOutcome: Boolean(this.roundOutcome),
+      previousBombs: this.bombs,
+      previousFlames: this.flames,
+      previousSuddenDeathActive: this.suddenDeathActive,
+      previousBreakableTileCount: this.arena.breakable.size,
+      next,
+      didCollectRemotePowerUp: (powerUps) => this.didCollectRemotePowerUp(powerUps),
+      didConsumeRemoteShield: (players) => this.didConsumeRemoteShield(players),
+      didLoseRemotePlayer: (players) => this.didLoseRemotePlayer(players),
+      playSound: (name) => this.soundManager.playOneShot(name as any),
+    });
   }
 
   private didCollectRemotePowerUp(nextPowerUps: PowerUpState[]): boolean {
@@ -757,14 +729,7 @@ export class GameApp {
   }
 
   public receiveOnlineGuestInput(input: OnlineInputState): void {
-    const playerInput = this.onlineInputs[2];
-    this.onlineInputs[2] = {
-      direction: input.direction,
-      bombPressed: playerInput.bombPressed || input.bombPressed,
-      detonatePressed: playerInput.detonatePressed || input.detonatePressed,
-      skillPressed: playerInput.skillPressed || input.skillPressed,
-      skillHeld: Boolean(input.skillHeld),
-    };
+    this.onlineInputs[2] = mergeLatchedOnlineInput(this.onlineInputs[2], input);
   }
 
   public detachOnlineSession(): void {
@@ -849,11 +814,14 @@ export class GameApp {
     }
     const localBindings = KEY_BINDINGS[1];
     const input = this.onlineInputs[this.onlineLocalPlayerId];
-    input.direction = this.input.getMovementDirection(1);
-    input.bombPressed = input.bombPressed || this.input.consumePress(localBindings.bomb);
-    input.detonatePressed = input.detonatePressed || this.input.consumePress(localBindings.detonate);
-    input.skillPressed = input.skillPressed || this.input.consumePress(SKILL_KEY);
-    input.skillHeld = this.input.isDown(SKILL_KEY);
+    online_captureLocalInput(
+      input,
+      this.input.getMovementDirection(1),
+      this.input.consumePress(localBindings.bomb),
+      this.input.consumePress(localBindings.detonate),
+      this.input.consumePress(SKILL_KEY),
+      this.input.isDown(SKILL_KEY),
+    );
   }
 
   private forwardGuestInput(): void {
@@ -864,10 +832,7 @@ export class GameApp {
     const inputSeq = this.onlineNextInputSeq + 1;
     this.onlineNextInputSeq = inputSeq;
     this.onlineSession.sendGuestInput(nextInput, inputSeq);
-    this.onlinePendingInputs.push({ seq: inputSeq, input: nextInput });
-    if (this.onlinePendingInputs.length > 180) {
-      this.onlinePendingInputs.splice(0, this.onlinePendingInputs.length - 180);
-    }
+    appendPendingOnlineInput(this.onlinePendingInputs, { seq: inputSeq, input: nextInput });
   }
 
   private flushOnlineSnapshot(deltaMs: number): void {
@@ -1016,14 +981,7 @@ export class GameApp {
   }
 
   public setServerPlayerInput(playerId: PlayerId, input: OnlineInputState): void {
-    const target = this.onlineInputs[playerId];
-    this.onlineInputs[playerId] = {
-      direction: input.direction,
-      bombPressed: target.bombPressed || input.bombPressed,
-      detonatePressed: target.detonatePressed || input.detonatePressed,
-      skillPressed: target.skillPressed || input.skillPressed,
-      skillHeld: Boolean(input.skillHeld),
-    };
+    this.onlineInputs[playerId] = mergeLatchedOnlineInput(this.onlineInputs[playerId], input);
   }
 
   public advanceServerSimulation(deltaMs: number): void {
@@ -1047,27 +1005,14 @@ export class GameApp {
     serverTick: number,
     players: Record<PlayerId, PlayerState>,
   ): void {
-    if (this.headless || typeof performance === "undefined") {
-      return;
-    }
-    const sample = {
-      receivedAtMs: performance.now(),
+    online_pushRenderSample(
+      this.onlineRenderSamples,
+      this.headless,
       serverTimeMs,
       serverTick,
-      players: createPlayerRecord((playerId) => ({
-        position: this.getPlayerPixelPositionFromState(players[playerId]),
-        velocity: { x: players[playerId].velocity.x, y: players[playerId].velocity.y },
-      })),
-    };
-    const previousSample = this.onlineRenderSamples[this.onlineRenderSamples.length - 1] ?? null;
-    if (previousSample && previousSample.serverTick === sample.serverTick) {
-      this.onlineRenderSamples[this.onlineRenderSamples.length - 1] = sample;
-    } else {
-      this.onlineRenderSamples.push(sample);
-      if (this.onlineRenderSamples.length > ONLINE_SAMPLE_BUFFER_SIZE) {
-        this.onlineRenderSamples.splice(0, this.onlineRenderSamples.length - ONLINE_SAMPLE_BUFFER_SIZE);
-      }
-    }
+      players,
+      (player) => this.getPlayerPixelPositionFromState(player),
+    );
   }
 
   private updateGuestLocalPrediction(deltaMs: number): void {
@@ -1177,93 +1122,15 @@ export class GameApp {
   }
 
   private syncPlayerSkill(player: PlayerState): void {
-    const expectedSkillId = this.getPlayerSkillId(player.id);
-    if (player.skill.id === expectedSkillId) {
-      return;
-    }
-    player.skill = createDefaultPlayerSkillState(expectedSkillId);
+    skill_syncPlayerSkill(player, this.createSkillContext(), (playerId) => this.getPlayerSkillId(playerId));
   }
 
   private advancePlayerSkillTimers(player: PlayerState, deltaMs: number): void {
-    if (player.skill.phase !== "cooldown") {
-      return;
-    }
-    player.skill.cooldownRemainingMs = Math.max(0, player.skill.cooldownRemainingMs - deltaMs);
-    if (player.skill.cooldownRemainingMs <= 0) {
-      player.skill.phase = "idle";
-      player.skill.castElapsedMs = 0;
-    }
+    skill_advancePlayerSkillTimers(player, deltaMs);
   }
 
   private activatePlayerSkill(player: PlayerState, desiredDirection: Direction | null): void {
-    if (!player.alive || player.skill.phase !== "idle") {
-      return;
-    }
-    switch (player.skill.id) {
-      case "ranni-ice-blink":
-        this.startRanniIceBlink(player);
-        return;
-      case "killer-bee-wing-dash":
-        this.startKillerBeeDash(player, desiredDirection);
-        return;
-      case "nico-arcane-beam":
-        this.startNicoArcaneBeam(player, desiredDirection);
-        return;
-      default:
-        return;
-    }
-  }
-
-  private startRanniIceBlink(player: PlayerState): void {
-    player.skill.phase = "channeling";
-    player.skill.channelRemainingMs = RANNI_SKILL_CHANNEL_MS;
-    player.skill.castElapsedMs = 0;
-    player.skill.projectedPosition = { ...player.position };
-    player.skill.projectedLastMoveDirection = player.lastMoveDirection;
-    player.velocity.x = 0;
-    player.velocity.y = 0;
-  }
-
-  private startKillerBeeDash(player: PlayerState, desiredDirection: Direction | null): void {
-    if (player.skill.id !== "killer-bee-wing-dash") {
-      return;
-    }
-    const dashDirection = desiredDirection ?? player.lastMoveDirection ?? player.direction;
-    const target = this.computeKillerBeeDashTarget(player, dashDirection);
-    const dashDistance = this.getDashDistancePx(player.position, target, dashDirection);
-    if (dashDistance < 1) {
-      return;
-    }
-    const durationMs = Math.max(
-      KILLER_BEE_DASH_MIN_DURATION_MS,
-      Math.round(KILLER_BEE_DASH_DURATION_MS * (dashDistance / KILLER_BEE_DASH_DISTANCE_PX)),
-    );
-    player.direction = dashDirection;
-    player.lastMoveDirection = dashDirection;
-    player.skill.phase = "channeling";
-    player.skill.channelRemainingMs = durationMs;
-    player.skill.castElapsedMs = 0;
-    player.skill.projectedPosition = target;
-    player.skill.projectedLastMoveDirection = dashDirection;
-    player.velocity.x = 0;
-    player.velocity.y = 0;
-  }
-
-  private startNicoArcaneBeam(player: PlayerState, desiredDirection: Direction | null): void {
-    if (player.skill.id !== "nico-arcane-beam") {
-      return;
-    }
-    const aimDirection = desiredDirection ?? player.lastMoveDirection ?? player.direction;
-    player.direction = aimDirection;
-    player.lastMoveDirection = aimDirection;
-    player.skill.phase = "channeling";
-    player.skill.channelRemainingMs = NICO_SKILL_CHANNEL_MS;
-    player.skill.cooldownRemainingMs = 0;
-    player.skill.castElapsedMs = 0;
-    player.skill.projectedPosition = null;
-    player.skill.projectedLastMoveDirection = aimDirection;
-    player.velocity.x = 0;
-    player.velocity.y = 0;
+    skill_activatePlayerSkill(player, desiredDirection, this.createSkillContext());
   }
 
   private updatePlayerSkillChannel(
@@ -1273,442 +1140,25 @@ export class GameApp {
     skillHeld: boolean,
     deltaMs: number,
   ): boolean {
-    if (player.skill.phase !== "channeling") {
-      return false;
-    }
-    switch (player.skill.id) {
-      case "ranni-ice-blink":
-        return this.updateRanniIceBlinkChannel(player, desiredDirection, skillPressed, deltaMs);
-      case "killer-bee-wing-dash":
-        return this.updateKillerBeeDash(player, deltaMs);
-      case "nico-arcane-beam":
-        return this.updateNicoArcaneBeamChannel(player, desiredDirection, skillHeld, deltaMs);
-      default:
-        return false;
-    }
-  }
-
-  private updateRanniIceBlinkChannel(
-    player: PlayerState,
-    desiredDirection: Direction | null,
-    skillPressed: boolean,
-    deltaMs: number,
-  ): boolean {
-    player.velocity.x = 0;
-    player.velocity.y = 0;
-    if (skillPressed && player.skill.castElapsedMs > 0) {
-      this.finishRanniBlink(player);
-      return true;
-    }
-    if (!player.skill.projectedPosition) {
-      player.skill.projectedPosition = { ...player.position };
-    }
-    if (desiredDirection) {
-      const simulated = this.simulateProjectedMovement(
-        player,
-        player.skill.projectedPosition,
-        desiredDirection,
-        player.skill.projectedLastMoveDirection,
-        deltaMs,
-      );
-      player.skill.projectedPosition = simulated.position;
-      player.skill.projectedLastMoveDirection = simulated.lastMoveDirection;
-      player.direction = simulated.direction;
-    }
-
-    player.skill.channelRemainingMs = Math.max(0, player.skill.channelRemainingMs - deltaMs);
-    player.skill.castElapsedMs += deltaMs;
-    if (player.skill.channelRemainingMs <= 0) {
-      this.finishRanniBlink(player);
-    }
-    return true;
-  }
-
-  private updateKillerBeeDash(player: PlayerState, deltaMs: number): boolean {
-    if (player.skill.id !== "killer-bee-wing-dash") {
-      return false;
-    }
-    const dashDirection = player.skill.projectedLastMoveDirection ?? player.lastMoveDirection ?? player.direction;
-    const target = player.skill.projectedPosition ?? player.position;
-    const start = { ...player.position };
-    const remainingMs = Math.max(0, player.skill.channelRemainingMs);
-    const stepFraction = remainingMs <= 0 ? 1 : Math.min(1, deltaMs / remainingMs);
-    const deltaX = this.getWrappedDelta(target.x, player.position.x, ARENA_PIXEL_WIDTH);
-    const deltaY = this.getWrappedDelta(target.y, player.position.y, ARENA_PIXEL_HEIGHT);
-    player.position = this.normalizeArenaPosition({
-      x: player.position.x + deltaX * stepFraction,
-      y: player.position.y + deltaY * stepFraction,
-    });
-    player.velocity = {
-      x: this.getWrappedDelta(player.position.x, start.x, ARENA_PIXEL_WIDTH) / (deltaMs / 1000),
-      y: this.getWrappedDelta(player.position.y, start.y, ARENA_PIXEL_HEIGHT) / (deltaMs / 1000),
-    };
-    player.direction = dashDirection;
-    player.lastMoveDirection = dashDirection;
-    player.tile = this.getTileFromPosition(player.position);
-    player.skill.channelRemainingMs = Math.max(0, remainingMs - deltaMs);
-    player.skill.castElapsedMs += deltaMs;
-    if (player.skill.channelRemainingMs <= 0 || this.hasReachedSkillTarget(player.position, target)) {
-      this.finishKillerBeeDash(player);
-    }
-    return true;
-  }
-
-  private updateNicoArcaneBeamChannel(
-    player: PlayerState,
-    desiredDirection: Direction | null,
-    skillHeld: boolean,
-    deltaMs: number,
-  ): boolean {
-    if (player.skill.id !== "nico-arcane-beam") {
-      return false;
-    }
-    player.velocity.x = 0;
-    player.velocity.y = 0;
-    if (desiredDirection) {
-      player.direction = desiredDirection;
-      player.skill.projectedLastMoveDirection = desiredDirection;
-    }
-    if (!skillHeld && player.skill.castElapsedMs > 0) {
-      this.cancelNicoArcaneBeam(player);
-      return true;
-    }
-    player.skill.channelRemainingMs = Math.max(0, player.skill.channelRemainingMs - deltaMs);
-    player.skill.castElapsedMs += deltaMs;
-    if (player.skill.channelRemainingMs <= 0) {
-      this.fireNicoArcaneBeam(player);
-    }
-    return true;
-  }
-
-  private finishRanniBlink(player: PlayerState): void {
-    if (player.skill.id !== "ranni-ice-blink") {
-      return;
-    }
-    const target = player.skill.projectedPosition ?? player.position;
-    if (this.canOccupyPosition(player, target)) {
-      player.position = { ...target };
-      player.tile = this.getTileFromPosition(player.position);
-    }
-    if (player.skill.projectedLastMoveDirection) {
-      player.lastMoveDirection = player.skill.projectedLastMoveDirection;
-      player.direction = player.skill.projectedLastMoveDirection;
-    }
-    player.velocity.x = 0;
-    player.velocity.y = 0;
-    player.skill.phase = "cooldown";
-    player.skill.channelRemainingMs = 0;
-    player.skill.cooldownRemainingMs = RANNI_SKILL_COOLDOWN_MS;
-    player.skill.castElapsedMs = 0;
-    player.skill.projectedPosition = null;
-    player.skill.projectedLastMoveDirection = null;
-  }
-
-  private finishKillerBeeDash(player: PlayerState): void {
-    if (player.skill.id !== "killer-bee-wing-dash") {
-      return;
-    }
-    const target = player.skill.projectedPosition ?? player.position;
-    player.position = { ...target };
-    player.tile = this.getTileFromPosition(player.position);
-    if (player.skill.projectedLastMoveDirection) {
-      player.direction = player.skill.projectedLastMoveDirection;
-      player.lastMoveDirection = player.skill.projectedLastMoveDirection;
-    }
-    player.velocity.x = 0;
-    player.velocity.y = 0;
-    player.skill.phase = "cooldown";
-    player.skill.channelRemainingMs = 0;
-    player.skill.cooldownRemainingMs = KILLER_BEE_SKILL_COOLDOWN_MS;
-    player.skill.castElapsedMs = 0;
-    player.skill.projectedPosition = null;
-    player.skill.projectedLastMoveDirection = null;
-  }
-
-  private cancelNicoArcaneBeam(player: PlayerState): void {
-    if (player.skill.id !== "nico-arcane-beam") {
-      return;
-    }
-    player.velocity.x = 0;
-    player.velocity.y = 0;
-    player.skill.phase = "idle";
-    player.skill.channelRemainingMs = 0;
-    player.skill.cooldownRemainingMs = 0;
-    player.skill.castElapsedMs = 0;
-    player.skill.projectedPosition = null;
-    player.skill.projectedLastMoveDirection = null;
-  }
-
-  private fireNicoArcaneBeam(player: PlayerState): void {
-    if (player.skill.id !== "nico-arcane-beam") {
-      return;
-    }
-    const direction = player.skill.projectedLastMoveDirection ?? player.lastMoveDirection ?? player.direction;
-    const origin = this.getTileFromPosition(player.position);
-    const beam = this.computeNicoBeam(player.id, origin, direction);
-    this.addMagicBeam(beam);
-    this.resolveNicoBeamImpact(player.id, beam.tiles);
-    player.direction = direction;
-    player.lastMoveDirection = direction;
-    player.velocity.x = 0;
-    player.velocity.y = 0;
-    player.skill.phase = "cooldown";
-    player.skill.channelRemainingMs = 0;
-    player.skill.cooldownRemainingMs = NICO_SKILL_COOLDOWN_MS;
-    player.skill.castElapsedMs = 0;
-    player.skill.projectedPosition = null;
-    player.skill.projectedLastMoveDirection = null;
+    return skill_updatePlayerSkillChannel(player, desiredDirection, skillPressed, skillHeld, deltaMs, this.createSkillContext());
   }
 
   private isPlayerImmuneDuringSkillChannel(player: PlayerState): boolean {
-    return player.skill.id === "ranni-ice-blink" && player.skill.phase === "channeling";
-  }
-
-  private computeNicoBeam(ownerId: PlayerId, origin: TileCoord, direction: Direction): MagicBeamState {
-    const delta = directionDelta[direction];
-    const maxSteps = direction === "left" || direction === "right"
-      ? Math.ceil(GRID_WIDTH / 2)
-      : Math.ceil(GRID_HEIGHT / 2);
-    const tiles: TileCoord[] = [];
-    for (let step = 1; step <= maxSteps; step += 1) {
-      const tile = {
-        x: origin.x + delta.x * step,
-        y: origin.y + delta.y * step,
-      };
-      if (tile.x < 0 || tile.y < 0 || tile.x >= GRID_WIDTH || tile.y >= GRID_HEIGHT) {
-        break;
-      }
-      const key = tileKey(tile.x, tile.y);
-      if (this.arena.solid.has(key)) {
-        break;
-      }
-      tiles.push(tile);
-    }
-    return {
-      ownerId,
-      origin: { ...origin },
-      direction,
-      tiles,
-      remainingMs: NICO_BEAM_DURATION_MS,
-    };
-  }
-
-  private addMagicBeam(beam: MagicBeamState): void {
-    this.magicBeams.push({
-      ...beam,
-      origin: { ...beam.origin },
-      tiles: beam.tiles.map((tile) => ({ ...tile })),
-    });
-  }
-
-  private resolveNicoBeamImpact(ownerId: PlayerId, beamTiles: TileCoord[]): void {
-    if (beamTiles.length === 0) {
-      return;
-    }
-    let brokeCrate = false;
-    const hitKeys = new Set<string>();
-    for (const tile of beamTiles) {
-      const key = tileKey(tile.x, tile.y);
-      hitKeys.add(key);
-      if (this.breakCrateAtKey(key)) {
-        brokeCrate = true;
-      }
-      const bomb = this.bombs.find((item) => item.tile.x === tile.x && item.tile.y === tile.y);
-      if (bomb) {
-        bomb.fuseMs = 0;
-      }
-    }
-    for (const id of this.activePlayerIds) {
-      if (id === ownerId) {
-        continue;
-      }
-      const player = this.players[id];
-      if (!player.alive) {
-        continue;
-      }
-      player.tile = this.getTileFromPosition(player.position);
-      if (!hitKeys.has(tileKey(player.tile.x, player.tile.y))) {
-        continue;
-      }
-      this.tryAbsorbInstantHit(player);
-    }
-    if (brokeCrate) {
-      this.soundManager.playOneShot("crateBreak");
-    }
-  }
-
-  private computeKillerBeeDashTarget(player: PlayerState, direction: Direction): PixelCoord {
-    const delta = directionDelta[direction];
-    const stepPx = 4;
-    let position = { ...player.position };
-    let travelledPx = 0;
-    while (travelledPx < KILLER_BEE_DASH_DISTANCE_PX) {
-      const nextStep = Math.min(stepPx, KILLER_BEE_DASH_DISTANCE_PX - travelledPx);
-      const candidate = this.normalizeArenaPosition({
-        x: position.x + delta.x * nextStep,
-        y: position.y + delta.y * nextStep,
-      });
-      if (!this.canOccupyPosition(player, candidate)) {
-        break;
-      }
-      position = candidate;
-      travelledPx += nextStep;
-    }
-    return position;
-  }
-
-  private getDashDistancePx(from: PixelCoord, to: PixelCoord, direction: Direction): number {
-    if (direction === "left" || direction === "right") {
-      return Math.abs(this.getWrappedDelta(to.x, from.x, ARENA_PIXEL_WIDTH));
-    }
-    return Math.abs(this.getWrappedDelta(to.y, from.y, ARENA_PIXEL_HEIGHT));
-  }
-
-  private hasReachedSkillTarget(position: PixelCoord, target: PixelCoord): boolean {
-    const deltaX = this.getWrappedDelta(target.x, position.x, ARENA_PIXEL_WIDTH);
-    const deltaY = this.getWrappedDelta(target.y, position.y, ARENA_PIXEL_HEIGHT);
-    return Math.hypot(deltaX, deltaY) <= 0.5;
-  }
-
-  private simulateProjectedMovement(
-    player: PlayerState,
-    startPosition: PixelCoord,
-    desiredDirection: Direction,
-    projectedLastMoveDirection: Direction | null,
-    deltaMs: number,
-  ): { position: PixelCoord; lastMoveDirection: Direction | null; direction: Direction } {
-    const ghost = this.clonePlayerState(player);
-    ghost.position = { ...startPosition };
-    ghost.tile = this.getTileFromPosition(startPosition);
-    ghost.velocity = { x: 0, y: 0 };
-    ghost.lastMoveDirection = projectedLastMoveDirection;
-    const actualDirection = this.resolveMovementDirection(ghost, desiredDirection, deltaMs);
-    ghost.direction = actualDirection;
-    this.movePlayerSimulated(ghost, actualDirection, deltaMs);
-    return {
-      position: { ...ghost.position },
-      lastMoveDirection: ghost.lastMoveDirection,
-      direction: ghost.direction,
-    };
+    return skill_isPlayerImmuneDuringSkillChannel(player);
   }
 
   private updateVisualPlayerPositions(deltaMs: number): void {
-    if (this.headless || !this.onlineSession) {
-      this.syncVisualPlayerPositions();
-      return;
-    }
-
-    const frameBlend = 1 - Math.pow(1 - ONLINE_RENDER_SMOOTHING, Math.max(1, deltaMs) / FIXED_STEP_MS);
-    const nowMs = typeof performance === "undefined" ? 0 : performance.now();
-    for (const id of this.activePlayerIds) {
-      const player = this.players[id];
-      const target = this.getPlayerPixelPositionFromState(player);
-      if (id === this.onlineLocalPlayerId) {
-        this.visualPlayerPositions[id] = target;
-        continue;
-      }
-
-      let projected = this.projectNetworkPlayerPosition(id, nowMs, target, player.velocity);
-      const current = this.visualPlayerPositions[id];
-
-      const offsetX = projected.x - target.x;
-      const offsetY = projected.y - target.y;
-      const offsetDistance = Math.hypot(offsetX, offsetY);
-      if (offsetDistance > ONLINE_MAX_VISUAL_LEAD_PX && offsetDistance > 0.001) {
-        const scale = ONLINE_MAX_VISUAL_LEAD_PX / offsetDistance;
-        projected = {
-          x: target.x + offsetX * scale,
-          y: target.y + offsetY * scale,
-        };
-      }
-
-      this.visualPlayerPositions[id] = {
-        x: current.x + (projected.x - current.x) * frameBlend,
-        y: current.y + (projected.y - current.y) * frameBlend,
-      };
-    }
-  }
-
-  private projectNetworkPlayerPosition(
-    playerId: PlayerId,
-    nowMs: number,
-    fallbackPosition: PixelCoord,
-    fallbackVelocity: PixelCoord,
-  ): PixelCoord {
-    const samples = this.onlineRenderSamples;
-    const latestSample = samples[samples.length - 1] ?? null;
-    const currentSample = latestSample?.players[playerId] ?? null;
-    if (!currentSample || !latestSample) {
-      return {
-        x: fallbackPosition.x + fallbackVelocity.x * (ONLINE_VELOCITY_LEAD_MS / 1000),
-        y: fallbackPosition.y + fallbackVelocity.y * (ONLINE_VELOCITY_LEAD_MS / 1000),
-      };
-    }
-
-    const elapsedSinceLatestMs = Math.max(0, nowMs - latestSample.receivedAtMs);
-    const estimatedServerNowMs = latestSample.serverTimeMs + elapsedSinceLatestMs;
-    const renderAtServerMs = estimatedServerNowMs - this.getOnlineInterpolationDelayMs();
-    const oldestSample = samples[0] ?? latestSample;
-    if (renderAtServerMs <= oldestSample.serverTimeMs) {
-      const oldestPlayer = oldestSample.players[playerId];
-      return {
-        x: oldestPlayer.position.x,
-        y: oldestPlayer.position.y,
-      };
-    }
-
-    for (let index = 1; index < samples.length; index += 1) {
-      const previous = samples[index - 1];
-      const next = samples[index];
-      if (renderAtServerMs < previous.serverTimeMs || renderAtServerMs > next.serverTimeMs) {
-        continue;
-      }
-      const previousSample = previous.players[playerId];
-      const nextSample = next.players[playerId];
-      const spanMs = Math.max(1, next.serverTimeMs - previous.serverTimeMs);
-      const alpha = Math.max(0, Math.min(1, (renderAtServerMs - previous.serverTimeMs) / spanMs));
-      return {
-        x: previousSample.position.x + (nextSample.position.x - previousSample.position.x) * alpha,
-        y: previousSample.position.y + (nextSample.position.y - previousSample.position.y) * alpha,
-      };
-    }
-
-    const extrapolationMs = Math.max(
-      0,
-      Math.min(ONLINE_EXTRAPOLATION_MS, renderAtServerMs - latestSample.serverTimeMs),
-    );
-    return {
-      x: currentSample.position.x + currentSample.velocity.x * (extrapolationMs / 1000),
-      y: currentSample.position.y + currentSample.velocity.y * (extrapolationMs / 1000),
-    };
-  }
-
-  private getOnlineInterpolationDelayMs(): number {
-    if (this.onlineRenderSamples.length < 2) {
-      return ONLINE_MIN_INTERPOLATION_DELAY_MS;
-    }
-
-    const intervals = [];
-    for (let index = 1; index < this.onlineRenderSamples.length; index += 1) {
-      const intervalMs = this.onlineRenderSamples[index].serverTimeMs - this.onlineRenderSamples[index - 1].serverTimeMs;
-      if (intervalMs > 0) {
-        intervals.push(intervalMs);
-      }
-    }
-
-    if (intervals.length === 0) {
-      return ONLINE_MIN_INTERPOLATION_DELAY_MS;
-    }
-
-    intervals.sort((left, right) => left - right);
-    const medianIntervalMs = intervals[Math.floor(intervals.length / 2)];
-    return Math.max(
-      ONLINE_MIN_INTERPOLATION_DELAY_MS,
-      Math.min(
-        ONLINE_MAX_INTERPOLATION_DELAY_MS,
-        medianIntervalMs + ONLINE_INTERPOLATION_JITTER_BUFFER_MS,
-      ),
-    );
+    online_updateVisualPlayerPositions({
+      headless: this.headless,
+      hasSession: Boolean(this.onlineSession),
+      activePlayerIds: this.activePlayerIds,
+      onlineLocalPlayerId: this.onlineLocalPlayerId,
+      players: this.players,
+      visualPlayerPositions: this.visualPlayerPositions,
+      onlineRenderSamples: this.onlineRenderSamples,
+      deltaMs,
+      getPlayerPixelPositionFromState: (player) => this.getPlayerPixelPositionFromState(player),
+    });
   }
 
   private updateMenu(): void {
@@ -2194,241 +1644,19 @@ export class GameApp {
   }
 
   private consumeOnlineBombPress(id: PlayerId): boolean {
-    if (!this.onlineSession) {
-      return false;
-    }
-    const source = this.onlineInputs[id];
-    if (!source) {
-      return false;
-    }
-    const pressed = source.bombPressed;
-    source.bombPressed = false;
-    return pressed;
+    return consumeLatchedOnlinePress(Boolean(this.onlineSession), this.onlineInputs[id], "bombPressed");
   }
 
   private consumeOnlineDetonatePress(id: PlayerId): boolean {
-    if (!this.onlineSession) {
-      return false;
-    }
-    const source = this.onlineInputs[id];
-    if (!source) {
-      return false;
-    }
-    const pressed = source.detonatePressed;
-    source.detonatePressed = false;
-    return pressed;
+    return consumeLatchedOnlinePress(Boolean(this.onlineSession), this.onlineInputs[id], "detonatePressed");
   }
 
   private consumeOnlineSkillPress(id: PlayerId): boolean {
-    if (!this.onlineSession) {
-      return false;
-    }
-    const source = this.onlineInputs[id];
-    if (!source) {
-      return false;
-    }
-    const pressed = source.skillPressed;
-    source.skillPressed = false;
-    return pressed;
-  }
-
-  private getOverlappingBomb(player: PlayerState): BombState | null {
-    let bestMatch: BombState | null = null;
-    for (const bomb of this.bombs) {
-      if (!this.isPlayerOverlappingTile(player, bomb.tile)) {
-        continue;
-      }
-      if (!bestMatch || bomb.fuseMs < bestMatch.fuseMs || (bomb.ownerId === player.id && bestMatch.ownerId !== player.id)) {
-        bestMatch = bomb;
-      }
-    }
-    return bestMatch;
-  }
-
-  private getThreateningOwnedBomb(player: PlayerState, playerTile: TileCoord): BombState | null {
-    const playerTileKey = tileKey(playerTile.x, playerTile.y);
-    let bestMatch: BombState | null = null;
-    for (const bomb of this.bombs) {
-      if (bomb.ownerId !== player.id) {
-        continue;
-      }
-      const blastKeys = this.getBombBlastKeys(bomb.tile, bomb.flameRange);
-      if (!blastKeys.has(playerTileKey)) {
-        continue;
-      }
-      if (!bestMatch || bomb.fuseMs < bestMatch.fuseMs) {
-        bestMatch = bomb;
-      }
-    }
-    return bestMatch;
+    return consumeLatchedOnlinePress(Boolean(this.onlineSession), this.onlineInputs[id], "skillPressed");
   }
 
   private getBotDecision(player: PlayerState): BotDecision {
-    const enemy = this.players[1];
-    const playerTile = this.getTileFromPosition(player.position);
-    const dangerMap = this.getDangerMap();
-    const moveDuration = this.getMoveDuration(player);
-    const strategicSafetyWindowMs = moveDuration * BOT_STRATEGIC_MOVE_WINDOW_STEPS + BOT_DANGER_ARRIVAL_BUFFER_MS;
-    const overlappingBomb = this.getOverlappingBomb(player);
-
-    if (overlappingBomb) {
-      const overlappingBlast = this.getBombBlastKeys(
-        overlappingBomb.tile,
-        this.players[overlappingBomb.ownerId].flameRange,
-      );
-      const committedEscape = this.findDirectionToNearestTile(
-        player,
-        (tile) => (
-          !overlappingBlast.has(tileKey(tile.x, tile.y))
-          && this.countSafeNeighbors(player, tile, dangerMap) >= 1
-        ),
-        dangerMap,
-      );
-      const fallbackEscape = this.findDirectionToNearestTile(
-        player,
-        (tile) => !overlappingBlast.has(tileKey(tile.x, tile.y)),
-        dangerMap,
-      );
-      if (committedEscape || fallbackEscape) {
-        return {
-          direction: committedEscape ?? fallbackEscape,
-          placeBomb: false,
-        };
-      }
-    }
-
-    const threateningOwnedBomb = this.getThreateningOwnedBomb(player, playerTile);
-    if (threateningOwnedBomb) {
-      const ownBlastKeys = this.getBombBlastKeys(threateningOwnedBomb.tile, threateningOwnedBomb.flameRange);
-      const committedEscape = this.findDirectionToNearestTile(
-        player,
-        (tile) => (
-          !ownBlastKeys.has(tileKey(tile.x, tile.y))
-          && this.countSafeNeighbors(player, tile, dangerMap) >= 1
-        ),
-        dangerMap,
-        moveDuration + BOT_DANGER_ARRIVAL_BUFFER_MS,
-      );
-      const fallbackEscape = this.findDirectionToNearestTile(
-        player,
-        (tile) => !ownBlastKeys.has(tileKey(tile.x, tile.y)),
-        dangerMap,
-      );
-      if (committedEscape || fallbackEscape) {
-        return {
-          direction: committedEscape ?? fallbackEscape,
-          placeBomb: false,
-        };
-      }
-    }
-
-    const playerTileKey = tileKey(playerTile.x, playerTile.y);
-    const currentDangerMs = dangerMap.get(playerTileKey);
-    const preemptiveDangerMs = moveDuration * BOT_PREEMPTIVE_ESCAPE_STEPS + BOT_DANGER_ARRIVAL_BUFFER_MS;
-    const shouldPreemptivelyEscape = currentDangerMs !== undefined && currentDangerMs <= preemptiveDangerMs;
-    if (shouldPreemptivelyEscape) {
-      const plannedEscape = this.findDirectionToNearestTile(
-        player,
-        (tile) => this.countSafeNeighbors(player, tile, dangerMap) >= 1,
-        dangerMap,
-        strategicSafetyWindowMs,
-      );
-      const immediateEscape = this.findDirectionToNearestTile(
-        player,
-        (tile) => this.isTileSafeForArrival(dangerMap, tile, this.getMoveDuration(player)),
-        dangerMap,
-      );
-      if (plannedEscape || immediateEscape) {
-        return {
-          direction: plannedEscape ?? immediateEscape,
-          placeBomb: false,
-        };
-      }
-    }
-    const nowDanger = currentDangerMs !== undefined && currentDangerMs <= moveDuration + BOT_DANGER_ARRIVAL_BUFFER_MS;
-
-    if (nowDanger) {
-      const prioritizedEscape = this.findDirectionToNearestTile(
-        player,
-        (tile) => this.countSafeNeighbors(player, tile, dangerMap) >= 1,
-        dangerMap,
-      );
-      const fallbackEscape = this.findDirectionToNearestTile(
-        player,
-        (tile) => this.isTileSafeForArrival(dangerMap, tile, this.getMoveDuration(player)),
-        dangerMap,
-      );
-      return {
-        direction: prioritizedEscape ?? fallbackEscape,
-        placeBomb: false,
-      };
-    }
-
-    const suddenDeathDirection = this.getSuddenDeathPressureDirection(player, dangerMap);
-    if (suddenDeathDirection) {
-      return { direction: suddenDeathDirection, placeBomb: false };
-    }
-
-    const enemyVulnerable = enemy.alive && enemy.spawnProtectionMs <= 0;
-    const openingProtected = player.spawnProtectionMs > 0;
-    const remoteDetonationBomb = this.getRemoteDetonationBomb(player, enemy, enemyVulnerable);
-    if (remoteDetonationBomb) {
-      return { direction: null, placeBomb: false, detonate: true };
-    }
-    const adjacentEnemy = enemyVulnerable && this.getTileDistance(playerTile, enemy.tile) <= 1;
-    const enemyInBombLine = enemyVulnerable && this.canBombReachTile(playerTile, enemy.tile, player.flameRange);
-    const adjacentBreakable = this.hasAdjacentBreakable(playerTile);
-    const shouldDropBomb = !openingProtected
-      && (adjacentEnemy || adjacentBreakable || enemyInBombLine)
-      && this.canBotPlaceBomb(player);
-    if (shouldDropBomb) {
-      return { direction: null, placeBomb: true };
-    }
-
-    const powerUpTarget = this.findValuablePowerUpDirection(player, strategicSafetyWindowMs);
-    if (powerUpTarget) {
-      return { direction: powerUpTarget, placeBomb: false };
-    }
-
-    const breakableTarget = this.findNearestReachableTarget(
-      player,
-      (tile) => this.hasAdjacentBreakable(tile) && this.canBotPlaceBombAtTile(player, tile, false),
-      strategicSafetyWindowMs,
-    );
-    if (breakableTarget) {
-      return { direction: breakableTarget, placeBomb: false };
-    }
-
-    const attackPositionTarget = this.findNearestReachableTarget(
-      player,
-      (tile) => (
-        enemyVulnerable
-        && this.canBombReachTile(tile, enemy.tile, player.flameRange)
-        && this.canBotPlaceBombAtTile(player, tile, false)
-      ),
-      strategicSafetyWindowMs,
-    );
-    if (attackPositionTarget) {
-      return { direction: attackPositionTarget, placeBomb: false };
-    }
-
-    const chaseEnemy = this.findDirectionToNearestTile(
-      player,
-      (tile) => this.getTileDistance(tile, enemy.tile) <= 1,
-      undefined,
-      strategicSafetyWindowMs,
-    );
-    const patrolDirection = this.getPatrolDirection(player, dangerMap, moveDuration);
-    if (chaseEnemy || patrolDirection) {
-      return { direction: chaseEnemy ?? patrolDirection, placeBomb: false };
-    }
-
-    return { direction: null, placeBomb: false };
-  }
-
-  private canBotPlaceBomb(player: PlayerState): boolean {
-    const playerTile = this.getTileFromPosition(player.position);
-    return this.canBotPlaceBombAtTile(player, playerTile, true);
+    return botAI_getBotDecision(player, this.createBotContext());
   }
 
   private getOldestOwnedBomb(playerId: PlayerId): BombState | null {
@@ -2442,356 +1670,6 @@ export class GameApp {
       }
     }
     return selectedBomb;
-  }
-
-  private getRemoteDetonationBomb(player: PlayerState, enemy: PlayerState, enemyVulnerable: boolean): BombState | null {
-    if (!player.alive || player.remoteLevel <= 0) {
-      return null;
-    }
-    const remoteBomb = this.getOldestOwnedBomb(player.id);
-    if (!remoteBomb) {
-      return null;
-    }
-
-    const blastKeys = this.getBombBlastKeys(remoteBomb.tile, remoteBomb.flameRange);
-    const playerTile = this.getTileFromPosition(player.position);
-    if (blastKeys.has(tileKey(playerTile.x, playerTile.y))) {
-      return null;
-    }
-    if (enemyVulnerable && blastKeys.has(tileKey(enemy.tile.x, enemy.tile.y))) {
-      return remoteBomb;
-    }
-    return null;
-  }
-
-  private canBotPlaceBombAtTile(player: PlayerState, bombTile: TileCoord, respectCooldown: boolean): boolean {
-    if (player.activeBombs >= player.maxBombs) {
-      return false;
-    }
-    if (respectCooldown && this.botBombCooldownMs > 0) {
-      return false;
-    }
-    if (this.bombs.some((bomb) => bomb.tile.x === bombTile.x && bomb.tile.y === bombTile.y)) {
-      return false;
-    }
-    const dangerAfterBomb = this.getDangerMap({
-      tile: bombTile,
-      range: player.flameRange,
-      fuseMs: BOMB_FUSE_MS,
-    });
-
-    const maxEscapeSteps = Math.max(1, Math.floor((BOMB_FUSE_MS - 250) / this.getMoveDuration(player)));
-    const queue: Array<{ tile: TileCoord; distance: number }> = [{ tile: bombTile, distance: 0 }];
-    const visited = new Set<string>([tileKey(bombTile.x, bombTile.y)]);
-
-    while (queue.length > 0) {
-      const current = queue.shift();
-      if (!current) {
-        break;
-      }
-      const survivesDetonation = this.isTileSafeForArrival(dangerAfterBomb, current.tile, BOMB_FUSE_MS);
-      if (current.distance > 0 && survivesDetonation) {
-        return true;
-      }
-      if (current.distance >= maxEscapeSteps) {
-        continue;
-      }
-
-      const neighbors: TileCoord[] = [
-        { x: current.tile.x + 1, y: current.tile.y },
-        { x: current.tile.x - 1, y: current.tile.y },
-        { x: current.tile.x, y: current.tile.y + 1 },
-        { x: current.tile.x, y: current.tile.y - 1 },
-      ];
-
-      for (const next of neighbors) {
-        const nextKey = tileKey(next.x, next.y);
-        if (visited.has(nextKey) || !this.isTilePathableForBot(player, next)) {
-          continue;
-        }
-        visited.add(nextKey);
-        queue.push({ tile: next, distance: current.distance + 1 });
-      }
-    }
-
-    return false;
-  }
-
-  private findNearestReachableTarget(
-    player: PlayerState,
-    predicate: (tile: TileCoord) => boolean,
-    minSafetyWindowMs = BOT_DANGER_ARRIVAL_BUFFER_MS,
-  ): Direction | null {
-    const dangerMap = this.getDangerMap();
-    return this.findDirectionToNearestTile(player, predicate, dangerMap, minSafetyWindowMs);
-  }
-
-  private findDirectionToNearestTile(
-    player: PlayerState,
-    predicate: (tile: TileCoord) => boolean,
-    blockedDanger?: Map<string, number>,
-    minSafetyWindowMs = BOT_DANGER_ARRIVAL_BUFFER_MS,
-  ): Direction | null {
-    const start = this.getTileFromPosition(player.position);
-    const startKey = tileKey(start.x, start.y);
-    const queue: Array<{ tile: TileCoord; first: Direction | null; distance: number }> = [
-      { tile: start, first: null, distance: 0 },
-    ];
-    const visited = new Set<string>([startKey]);
-    const danger = blockedDanger ?? this.getDangerMap();
-    const moveDuration = this.getMoveDuration(player);
-
-    while (queue.length > 0) {
-      const current = queue.shift();
-      if (!current) {
-        break;
-      }
-
-      const arrivalMs = current.distance * moveDuration;
-      const currentSafe = this.isTileSafeForArrivalWithWindow(danger, current.tile, arrivalMs, minSafetyWindowMs);
-      if ((current.tile.x !== start.x || current.tile.y !== start.y) && currentSafe && predicate(current.tile)) {
-        return current.first;
-      }
-
-      if (current.distance >= BOT_SCAN_RADIUS) {
-        continue;
-      }
-
-      const neighbors: Array<{ direction: Direction; tile: TileCoord }> = [
-        { direction: "up", tile: { x: current.tile.x, y: current.tile.y - 1 } },
-        { direction: "down", tile: { x: current.tile.x, y: current.tile.y + 1 } },
-        { direction: "left", tile: { x: current.tile.x - 1, y: current.tile.y } },
-        { direction: "right", tile: { x: current.tile.x + 1, y: current.tile.y } },
-      ];
-
-      for (const neighbor of neighbors) {
-        const key = tileKey(neighbor.tile.x, neighbor.tile.y);
-        const neighborArrivalMs = (current.distance + 1) * moveDuration;
-        if (
-          visited.has(key)
-          || !this.isTileSafeForArrivalWithWindow(danger, neighbor.tile, neighborArrivalMs, minSafetyWindowMs)
-          || !this.isTilePathableForBot(player, neighbor.tile)
-        ) {
-          continue;
-        }
-        visited.add(key);
-        queue.push({
-          tile: neighbor.tile,
-          first: current.first ?? neighbor.direction,
-          distance: current.distance + 1,
-        });
-      }
-    }
-
-    return null;
-  }
-
-  private isTilePathableForBot(player: PlayerState, tile: TileCoord): boolean {
-    if (tile.x < 0 || tile.y < 0 || tile.x >= GRID_WIDTH || tile.y >= GRID_HEIGHT) {
-      return false;
-    }
-    const key = tileKey(tile.x, tile.y);
-    if (this.arena.solid.has(key) || this.arena.breakable.has(key)) {
-      return false;
-    }
-    const bombOnTile = this.bombs.find((bomb) => bomb.tile.x === tile.x && bomb.tile.y === tile.y);
-    if (!bombOnTile) {
-      return true;
-    }
-    if (player.bombPassLevel > 0) {
-      return true;
-    }
-    return bombOnTile.ownerId === player.id && bombOnTile.ownerCanPass;
-  }
-
-  private getTileDistance(a: TileCoord, b: TileCoord): number {
-    return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
-  }
-
-  private canBombReachTile(origin: TileCoord, target: TileCoord, range: number): boolean {
-    if (origin.x !== target.x && origin.y !== target.y) {
-      return false;
-    }
-
-    if (origin.x === target.x) {
-      const step = target.y > origin.y ? 1 : -1;
-      const distance = Math.abs(target.y - origin.y);
-      if (distance > range) {
-        return false;
-      }
-      for (let offset = 1; offset <= distance; offset += 1) {
-        const y = origin.y + offset * step;
-        const key = tileKey(origin.x, y);
-        if (this.arena.solid.has(key)) {
-          return false;
-        }
-        if (this.arena.breakable.has(key)) {
-          return y === target.y;
-        }
-      }
-      return true;
-    }
-
-    const step = target.x > origin.x ? 1 : -1;
-    const distance = Math.abs(target.x - origin.x);
-    if (distance > range) {
-      return false;
-    }
-    for (let offset = 1; offset <= distance; offset += 1) {
-      const x = origin.x + offset * step;
-      const key = tileKey(x, origin.y);
-      if (this.arena.solid.has(key)) {
-        return false;
-      }
-      if (this.arena.breakable.has(key)) {
-        return x === target.x;
-      }
-    }
-    return true;
-  }
-
-  private hasAdjacentBreakable(tile: TileCoord): boolean {
-    const neighbors = [
-      { x: tile.x + 1, y: tile.y },
-      { x: tile.x - 1, y: tile.y },
-      { x: tile.x, y: tile.y + 1 },
-      { x: tile.x, y: tile.y - 1 },
-    ];
-    return neighbors.some((neighbor) => this.arena.breakable.has(tileKey(neighbor.x, neighbor.y)));
-  }
-
-  private findValuablePowerUpDirection(player: PlayerState, minSafetyWindowMs: number): Direction | null {
-    const priorityGroups = new Map<number, Set<string>>();
-    for (const powerUp of this.arena.powerUps) {
-      if (!powerUp.revealed || powerUp.collected) {
-        continue;
-      }
-      const value = this.getPowerUpPriority(player, powerUp.type);
-      if (value <= 0) {
-        continue;
-      }
-      const key = tileKey(powerUp.tile.x, powerUp.tile.y);
-      if (!priorityGroups.has(value)) {
-        priorityGroups.set(value, new Set<string>());
-      }
-      priorityGroups.get(value)?.add(key);
-    }
-
-    const sortedValues = [...priorityGroups.keys()].sort((a, b) => b - a);
-    for (const value of sortedValues) {
-      const targetTiles = priorityGroups.get(value);
-      if (!targetTiles) {
-        continue;
-      }
-      const direction = this.findNearestReachableTarget(
-        player,
-        (tile) => targetTiles.has(tileKey(tile.x, tile.y)),
-        minSafetyWindowMs,
-      );
-      if (direction) {
-        return direction;
-      }
-    }
-
-    return null;
-  }
-
-  private getPowerUpPriority(player: PlayerState, type: PowerUpState["type"]): number {
-    return getPowerUpPriorityScore(player, type);
-  }
-
-  private getSuddenDeathPressureDirection(player: PlayerState, danger: Map<string, number>): Direction | null {
-    if (!this.suddenDeathActive) {
-      return null;
-    }
-    const start = this.getTileFromPosition(player.position);
-    const moveDuration = this.getMoveDuration(player);
-    const centerTile = {
-      x: Math.floor(GRID_WIDTH / 2),
-      y: Math.floor(GRID_HEIGHT / 2),
-    };
-    const currentDistanceToCenter = this.getTileDistance(start, centerTile);
-    const desiredSafetyWindowMs = Math.max(BOT_SUDDEN_DEATH_LOOKAHEAD_MS, moveDuration * 4);
-
-    return this.findDirectionToNearestTile(
-      player,
-      (tile) => {
-        const key = tileKey(tile.x, tile.y);
-        const dangerMs = danger.get(key);
-        const safeWindow = dangerMs === undefined || dangerMs > desiredSafetyWindowMs;
-        if (!safeWindow) {
-          return false;
-        }
-
-        const distanceToCenter = this.getTileDistance(tile, centerTile);
-        const improvesCentering = distanceToCenter < currentDistanceToCenter;
-        if (improvesCentering) {
-          return true;
-        }
-
-        return this.countSafeNeighbors(player, tile, danger) >= 2;
-      },
-      danger,
-    );
-  }
-
-  private getPatrolDirection(
-    player: PlayerState,
-    danger: Map<string, number>,
-    moveDuration: number,
-  ): Direction | null {
-    const playerTile = this.getTileFromPosition(player.position);
-    const centerTile = {
-      x: Math.floor(GRID_WIDTH / 2),
-      y: Math.floor(GRID_HEIGHT / 2),
-    };
-    const currentCenterDistance = this.getTileDistance(playerTile, centerTile);
-    const lastDirection = player.lastMoveDirection ?? player.direction;
-    const reverseDirection = lastDirection
-      ? lastDirection === "up"
-        ? "down"
-        : lastDirection === "down"
-          ? "up"
-          : lastDirection === "left"
-            ? "right"
-            : "left"
-      : null;
-
-    let bestDirection: Direction | null = null;
-    let bestScore = Number.POSITIVE_INFINITY;
-
-    for (const direction of ["up", "right", "left", "down"] as const) {
-      const delta = directionDelta[direction];
-      const nextTile = { x: playerTile.x + delta.x, y: playerTile.y + delta.y };
-      if (
-        !this.isTilePathableForBot(player, nextTile)
-        || !this.isTileSafeForArrival(danger, nextTile, moveDuration)
-      ) {
-        continue;
-      }
-      const canBombFromTile = this.canBotPlaceBombAtTile(player, nextTile, false);
-      if (this.hasAdjacentBreakable(nextTile) && !canBombFromTile) {
-        continue;
-      }
-
-      let score = this.getTileDistance(nextTile, centerTile);
-      if (direction === lastDirection) {
-        score -= 0.5;
-      }
-      if (reverseDirection && direction === reverseDirection) {
-        score += 3;
-      }
-      if (this.getTileDistance(nextTile, centerTile) < currentCenterDistance) {
-        score -= 0.25;
-      }
-
-      if (score < bestScore) {
-        bestScore = score;
-        bestDirection = direction;
-      }
-    }
-
-    return bestDirection;
   }
 
   private getDangerMap(extraBomb?: { tile: TileCoord; range: number; fuseMs: number }): Map<string, number> {
@@ -2890,41 +1768,6 @@ export class GameApp {
     return keys;
   }
 
-  private isTileSafeForArrival(danger: Map<string, number>, tile: TileCoord, arrivalMs: number): boolean {
-    return this.isTileSafeForArrivalWithWindow(danger, tile, arrivalMs, BOT_DANGER_ARRIVAL_BUFFER_MS);
-  }
-
-  private isTileSafeForArrivalWithWindow(
-    danger: Map<string, number>,
-    tile: TileCoord,
-    arrivalMs: number,
-    minSafetyWindowMs: number,
-  ): boolean {
-    const key = tileKey(tile.x, tile.y);
-    const dangerMs = danger.get(key);
-    return dangerMs === undefined || dangerMs > arrivalMs + minSafetyWindowMs;
-  }
-
-  private countSafeNeighbors(player: PlayerState, tile: TileCoord, danger: Map<string, number>): number {
-    const moveDuration = this.getMoveDuration(player);
-    const neighbors = [
-      { x: tile.x + 1, y: tile.y },
-      { x: tile.x - 1, y: tile.y },
-      { x: tile.x, y: tile.y + 1 },
-      { x: tile.x, y: tile.y - 1 },
-    ];
-    let count = 0;
-    for (const neighbor of neighbors) {
-      if (
-        this.isTilePathableForBot(player, neighbor)
-        && this.isTileSafeForArrival(danger, neighbor, moveDuration)
-      ) {
-        count += 1;
-      }
-    }
-    return count;
-  }
-
   private getMoveDuration(player: PlayerState): number {
     return Math.max(MIN_MOVE_MS, BASE_MOVE_MS - player.speedLevel * SPEED_STEP_MS);
   }
@@ -2938,62 +1781,7 @@ export class GameApp {
     desiredDirection: Direction | null,
     deltaMs: number,
   ): Direction | null {
-    if (!this.botCommittedDirection[player.id] && player.lastMoveDirection) {
-      this.botCommittedDirection[player.id] = player.lastMoveDirection;
-    }
-
-    if (!desiredDirection) {
-      this.clearBotReversePending(player.id);
-      return null;
-    }
-
-    const committedDirection = this.botCommittedDirection[player.id] ?? player.lastMoveDirection ?? player.direction;
-    if (
-      !committedDirection
-      || committedDirection === desiredDirection
-    ) {
-      this.clearBotReversePending(player.id);
-      this.rememberBotDirection(player.id, desiredDirection);
-      return desiredDirection;
-    }
-
-    const currentTile = this.getTileFromPosition(player.position);
-    const currentDangerMs = this.getDangerMap().get(tileKey(currentTile.x, currentTile.y));
-    const immediateDanger = currentDangerMs !== undefined
-      && currentDangerMs <= this.getMoveDuration(player) + BOT_DANGER_ARRIVAL_BUFFER_MS;
-    if (immediateDanger) {
-      this.clearBotReversePending(player.id);
-      this.rememberBotDirection(player.id, desiredDirection);
-      return desiredDirection;
-    }
-
-    const continueOption = this.evaluateMovementOption(player, committedDirection, deltaMs);
-    const canContinueForward = this.canMovementOptionAdvance(player.position, continueOption);
-    if (!this.areOppositeDirections(committedDirection, desiredDirection) || !canContinueForward) {
-      this.clearBotReversePending(player.id);
-      this.rememberBotDirection(player.id, desiredDirection);
-      return desiredDirection;
-    }
-
-    if (this.botPendingReverseDirection[player.id] !== desiredDirection) {
-      this.botPendingReverseDirection[player.id] = desiredDirection;
-      this.botPendingReverseFrames[player.id] = 1;
-      return committedDirection;
-    }
-
-    this.botPendingReverseFrames[player.id] += 1;
-    if (this.botPendingReverseFrames[player.id] < BOT_DIRECTION_CONFIRM_FRAMES) {
-      return committedDirection;
-    }
-
-    this.clearBotReversePending(player.id);
-    this.rememberBotDirection(player.id, desiredDirection);
-    return desiredDirection;
-  }
-
-  private clearBotReversePending(playerId: PlayerId): void {
-    this.botPendingReverseDirection[playerId] = null;
-    this.botPendingReverseFrames[playerId] = 0;
+    return botAI_getStableBotDirection(player, desiredDirection, deltaMs, this.createBotContext());
   }
 
   private rememberBotDirection(playerId: PlayerId, direction: Direction): void {
@@ -5161,7 +3949,4 @@ export class GameApp {
     return JSON.stringify(payload);
   }
 }
-
-
-
 

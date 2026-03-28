@@ -1,14 +1,35 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+
+# Dev / test output
 output/
+.deploy-clean/
 
-.vite.log
-.vite.err
-.vite-live.log
-.vite-live.err
+# Python virtual environments
+.venv-airtest-assets/
+.tmp-airtest/
 
+# Wrangler (Cloudflare Workers local)
+.wrangler/
+
+# Logs & temp files
 *.log
+*.err
 *.tmp
 *.bak
-.arena-smoke.pid
-.wrangler/
+*.pid
+*.zip
+*.pyc
+__pycache__/
+claude.md
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
