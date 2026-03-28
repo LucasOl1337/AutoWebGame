@@ -26,6 +26,7 @@ import {
   type DirectionalSprites,
   type GameAssets,
 } from "./assets";
+import { pickAnimationFrame } from "./animation-frame";
 import { SpriteTrimCache, type SpriteTrimBounds } from "./sprite-trim-cache";
 import {
   ALL_PLAYER_IDS,
@@ -90,6 +91,9 @@ const CHARACTER_MENU_KEYS: Record<MenuPlayerId, string> = {
   1: "KeyG",
   2: "KeyK",
 };
+const LOCAL_BOT_TOGGLE_KEY = "KeyB";
+const LOCAL_BOT_CYCLE_KEY = "KeyN";
+const MAX_LOCAL_BOT_FILL = 3;
 const BOT_BOMB_COOLDOWN_MS = 900;
 const BOT_DANGER_FUSE_MS = 1000;
 const BOT_DANGER_ARRIVAL_BUFFER_MS = 140;
@@ -321,7 +325,9 @@ export class GameApp {
   private matchWinner: PlayerId | null = null;
   private readonly automationMode = typeof navigator !== "undefined" ? navigator.webdriver : false;
   private automationControlledPlayer: PlayerId = 2;
-  private botEnabled = this.automationMode;
+  private localBotFill = 0;
+  private botControlledPlayers: Record<PlayerId, boolean> = createBooleanPlayerRecord(false);
+  private botEnabled = false;
   private botBombCooldownMs = 0;
   private botCommittedDirection: Record<PlayerId, Direction | null> = createDirectionPlayerRecord(null);
   private botPendingReverseDirection: Record<PlayerId, Direction | null> = createDirectionPlayerRecord(null);
@@ -379,11 +385,14 @@ export class GameApp {
       4: this.findDefaultCharacterIndex(4, playerTwoIndex),
     };
     this.pendingCharacterIndex = { ...this.selectedCharacterIndex };
+    this.applyOfflineBotFill(this.automationMode ? 1 : 0, false);
   }
 
   public attachOnlineSession(session: OnlineSessionBridge): void {
     this.onlineSession = session;
     this.activePlayerIds = [1, 2];
+    this.localBotFill = 0;
+    this.botControlledPlayers = createBooleanPlayerRecord(false);
     this.botEnabled = false;
     this.menuReady = createBooleanPlayerRecord(false);
     this.matchResultChoice = createPlayerRecord(() => null);
@@ -410,6 +419,8 @@ export class GameApp {
     this.characterLocked = createBooleanPlayerRecord(true);
     this.characterMenuOpen = createBooleanPlayerRecord(false);
     this.matchResultChoice = createPlayerRecord(() => null);
+    this.localBotFill = 0;
+    this.botControlledPlayers = createBooleanPlayerRecord(false);
 
     if (config.role === "host") {
       this.startMatch();
@@ -480,6 +491,8 @@ export class GameApp {
     this.characterLocked = createBooleanPlayerRecord(true);
     this.characterMenuOpen = createBooleanPlayerRecord(false);
     this.activePlayerIds = normalizeActivePlayerIds(snapshot.activePlayerIds);
+    this.localBotFill = 0;
+    this.botControlledPlayers = createBooleanPlayerRecord(false);
     this.botEnabled = false;
     this.matchResultChoice = createPlayerRecord(() => null);
     this.resetOnlineRoundBuffers(snapshot.roundNumber);
@@ -526,6 +539,8 @@ export class GameApp {
     this.selectedCharacterIndex = { ...frame.selectedCharacterIndex };
     this.pendingCharacterIndex = { ...frame.selectedCharacterIndex };
     this.activePlayerIds = normalizeActivePlayerIds(frame.activePlayerIds);
+    this.localBotFill = 0;
+    this.botControlledPlayers = createBooleanPlayerRecord(false);
     this.nextBombId = frame.nextBombId;
     this.resetOnlineRoundBuffers(frame.roundNumber);
     this.pushOnlineRenderSample(frame.serverTimeMs, frame.serverTick, frame.players);
@@ -570,6 +585,13 @@ export class GameApp {
     this.suddenDeathIndex = 0;
     this.suddenDeathPath = this.buildSuddenDeathPath();
     this.onlineAudioPrimed = false;
+    if (!this.onlineSession) {
+      this.applyOfflineBotFill(this.localBotFill, false);
+    } else {
+      this.localBotFill = 0;
+      this.botControlledPlayers = createBooleanPlayerRecord(false);
+      this.botEnabled = false;
+    }
     this.resetRound();
   }
 
@@ -896,6 +918,8 @@ export class GameApp {
     this.pendingCharacterIndex = { ...characterSelections };
     this.characterLocked = createBooleanPlayerRecord(true);
     this.characterMenuOpen = createBooleanPlayerRecord(false);
+    this.localBotFill = 0;
+    this.botControlledPlayers = createBooleanPlayerRecord(false);
     this.botEnabled = false;
     this.startMatch();
   }
@@ -1251,10 +1275,12 @@ export class GameApp {
       return;
     }
 
-    if (this.input.consumePress("KeyB")) {
-      this.botEnabled = !this.botEnabled;
-      this.menuReady[2] = this.botEnabled;
-      this.syncPlayerLabels();
+    if (this.input.consumePress(LOCAL_BOT_CYCLE_KEY)) {
+      this.applyOfflineBotFill((this.localBotFill + 1) % (MAX_LOCAL_BOT_FILL + 1));
+    }
+
+    if (this.input.consumePress(LOCAL_BOT_TOGGLE_KEY)) {
+      this.applyOfflineBotFill(this.localBotFill > 0 ? 0 : 1);
     }
 
     this.handleCharacterSelectionInput();
@@ -1262,17 +1288,20 @@ export class GameApp {
       return;
     }
 
-    if (this.botEnabled) {
-      this.menuReady[2] = true;
+    for (const playerId of this.activePlayerIds) {
+      if (this.isBotControlled(playerId)) {
+        this.menuReady[playerId] = true;
+      }
     }
 
     if (this.automationMode && this.input.consumePress("Enter")) {
       this.menuReady = createBooleanPlayerRecord(false);
-      this.menuReady[1] = true;
-      this.menuReady[2] = this.botEnabled;
+      for (const playerId of this.activePlayerIds) {
+        this.menuReady[playerId] = true;
+      }
     }
     this.handleReadyInput(this.menuReady);
-    if (this.menuReady[1] && this.menuReady[2]) {
+    if (this.activePlayerIds.every((playerId) => this.menuReady[playerId])) {
       this.startMatch();
     }
   }
@@ -1339,14 +1368,17 @@ export class GameApp {
       return;
     }
 
-    if (this.botEnabled) {
-      this.matchResultChoice[2] = "rematch";
+    for (const playerId of this.activePlayerIds) {
+      if (this.isBotControlled(playerId)) {
+        this.matchResultChoice[playerId] = "rematch";
+      }
     }
 
     if (this.automationMode && this.input.consumePress("Enter")) {
       this.matchResultChoice = createPlayerRecord(() => null);
-      this.matchResultChoice[1] = "rematch";
-      this.matchResultChoice[2] = this.botEnabled ? "rematch" : null;
+      for (const playerId of this.activePlayerIds) {
+        this.matchResultChoice[playerId] = "rematch";
+      }
     }
     for (const playerId of MENU_PLAYER_IDS) {
       const choice = this.consumeMatchResultChoiceInputForPlayer(playerId);
@@ -1366,6 +1398,9 @@ export class GameApp {
   private handleReadyInput(readyState: Record<PlayerId, boolean>): void {
     for (const playerId of MENU_PLAYER_IDS) {
       if (!this.activePlayerIds.includes(playerId)) {
+        continue;
+      }
+      if (this.isBotControlled(playerId)) {
         continue;
       }
       if (this.input.consumePress(KEY_BINDINGS[playerId].ready)) {
@@ -1433,6 +1468,37 @@ export class GameApp {
     return MENU_PLAYER_IDS.some((playerId) => this.characterMenuOpen[playerId]);
   }
 
+  private applyOfflineBotFill(botFill: number, preserveP1Ready = true): void {
+    if (this.onlineSession) {
+      return;
+    }
+    const nextFill = Math.max(0, Math.min(MAX_LOCAL_BOT_FILL, Math.floor(botFill)));
+    this.localBotFill = nextFill;
+    const nextActivePlayerIds: PlayerId[] = nextFill === 0
+      ? [1, 2]
+      : ([1, ...ALL_PLAYER_IDS.slice(1, 1 + nextFill)] as PlayerId[]);
+    this.activePlayerIds = normalizeActivePlayerIds(nextActivePlayerIds);
+    this.botControlledPlayers = createBooleanPlayerRecord(false);
+    if (nextFill > 0) {
+      for (const playerId of this.activePlayerIds) {
+        if (playerId !== 1) {
+          this.botControlledPlayers[playerId] = true;
+        }
+      }
+    }
+    this.botEnabled = this.botControlledPlayers[2];
+    const nextReady = createBooleanPlayerRecord(false);
+    nextReady[1] = preserveP1Ready ? this.menuReady[1] : false;
+    for (const playerId of this.activePlayerIds) {
+      if (playerId !== 1 && this.isBotControlled(playerId)) {
+        nextReady[playerId] = true;
+      }
+    }
+    this.menuReady = nextReady;
+    this.matchResultChoice = createPlayerRecord(() => null);
+    this.syncPlayerLabels();
+  }
+
   private startMatch(): void {
     // Prevent queued key presses from previous screens leaking into active gameplay.
     this.input.clearPresses();
@@ -1469,7 +1535,7 @@ export class GameApp {
   private createPlayers(): Record<PlayerId, PlayerState> {
     const players = createPlayerRecord((playerId) => {
       const spawn = PLAYER_SPAWNS[playerId];
-      const name = playerId === 2 && this.isBotControlled(2) ? "BOT" : `P${playerId}`;
+      const name = this.isBotControlled(playerId) ? "BOT" : `P${playerId}`;
       return this.createPlayer(playerId, name, spawn.tile, spawn.direction, this.activePlayerIds.includes(playerId));
     });
     this.visualPlayerPositions = createPlayerRecord((playerId) => this.getPlayerPixelPositionFromState(players[playerId]));
@@ -1478,7 +1544,7 @@ export class GameApp {
 
   private syncPlayerLabels(): void {
     for (const playerId of ALL_PLAYER_IDS) {
-      this.players[playerId].name = playerId === 2 && this.isBotControlled(2) ? "BOT" : `P${playerId}`;
+      this.players[playerId].name = this.isBotControlled(playerId) ? "BOT" : `P${playerId}`;
     }
   }
 
@@ -1649,7 +1715,7 @@ export class GameApp {
   }
 
   private isBotControlled(id: PlayerId): boolean {
-    return id === 2 && this.botEnabled && this.activePlayerIds.includes(2);
+    return Boolean(this.botControlledPlayers?.[id]) && this.activePlayerIds.includes(id);
   }
 
   private shouldUseNativeControls(): boolean {
@@ -3265,6 +3331,23 @@ export class GameApp {
 
   private renderMenu(): void {
     this.renderArena();
+    this.renderHud();
+
+    this.ctx.fillStyle = "rgba(4, 10, 18, 0.7)";
+    this.ctx.fillRect(12, HUD_HEIGHT + 10, 456, 48);
+    this.ctx.strokeStyle = "rgba(143, 205, 247, 0.32)";
+    this.ctx.strokeRect(12.5, HUD_HEIGHT + 10.5, 455, 47);
+    this.ctx.textAlign = "left";
+    this.ctx.font = "bold 9px monospace";
+    this.ctx.fillStyle = "#e2f2ff";
+    this.ctx.fillText("MENU LOCAL  |  E/P READY  |  G/K CHARACTER", 22, HUD_HEIGHT + 27);
+    this.ctx.font = "8px monospace";
+    this.ctx.fillStyle = "#bbd7ee";
+    this.ctx.fillText(
+      `B toggle bot rapido  |  N cicla bots: ${this.localBotFill}  |  ativos: ${this.activePlayerIds.length}`,
+      22,
+      HUD_HEIGHT + 43,
+    );
 
     if (this.isAnyCharacterMenuOpen()) {
       this.renderCharacterSelectionOverlay();
@@ -3885,15 +3968,13 @@ export class GameApp {
       ? (runFrames.length > 0 ? runFrames : walkFrames)
       : (walkFrames.length > 0 ? walkFrames : runFrames);
     const moving = Math.abs(player.velocity.x) > 0.02 || Math.abs(player.velocity.y) > 0.02;
-    const frameIndex = Math.floor(this.animationClockMs / WALK_FRAME_MS);
-    const castFrameIndex = Math.floor(player.skill.castElapsedMs / SKILL_FRAME_MS);
-    let sprite = channelingSkill && castFrames.length > 0
-      ? castFrames[castFrameIndex % castFrames.length]
-      : moving && movementFrames.length > 0
-      ? movementFrames[frameIndex % movementFrames.length]
-      : !moving && idleFrames.length > 0
-        ? idleFrames[frameIndex % idleFrames.length]
-        : spriteForDirection(baseSprites, player.direction);
+    const castSprite = channelingSkill
+      ? pickAnimationFrame(castFrames, player.skill.castElapsedMs, SKILL_FRAME_MS, "hold")
+      : null;
+    const movementSprite = moving
+      ? pickAnimationFrame(movementFrames, this.animationClockMs, WALK_FRAME_MS, "loop")
+      : pickAnimationFrame(idleFrames, this.animationClockMs, WALK_FRAME_MS, "loop");
+    let sprite = castSprite ?? movementSprite ?? spriteForDirection(baseSprites, player.direction);
     if (!sprite || !this.getSpriteTrimBounds(sprite)) {
       sprite = this.getRenderableSprite(baseSprites, player.direction);
     }
@@ -4139,6 +4220,8 @@ export class GameApp {
         menuReady: this.menuReady,
         matchResultChoice: this.matchResultChoice,
         botEnabled: this.botEnabled,
+        localBotFill: this.localBotFill,
+        activePlayerIds: this.activePlayerIds,
         characterMenuOpen: this.characterMenuOpen,
         suddenDeath: {
           active: this.suddenDeathActive,

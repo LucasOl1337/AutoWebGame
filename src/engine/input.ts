@@ -33,6 +33,7 @@ export class InputManager {
     "Enter",
     "Escape",
     "KeyB",
+    "KeyN",
     "KeyG",
     "KeyK",
   ]);

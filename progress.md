@@ -1035,3 +1035,23 @@ Validacao 2026-03-27
 - `npm run test:online-4p` (pass)
 - `node --check worker/index.js` (pass)
 - `npm run build` (pass)
+2026-03-27 local-online parity + menu bot fill
+- Fluxo local para testar o mesmo worker autoritativo do online sem deploy:
+  - `serve:online` agora sobe `wrangler dev --local` (usa `worker/index.js` + Durable Object + `/online` websocket + assets de `dist`).
+  - comando legado de relay simplificado mantido como `serve:online:legacy-relay`.
+- Validacao de health local do worker: `GET /health` retornando 200 (`{"ok":true}`) em `127.0.0.1:8787`.
+- Menu local ganhou suporte para completar partida com bots:
+  - `B` = toggle rapido (0 <-> 1 bot)
+  - `N` = ciclo de bots (`0..3`) preenchendo slots ate P4
+  - inicio da partida agora usa todos os `activePlayerIds` (bots entram auto-ready)
+  - bot control generalizado para P2/P3/P4 quando preenchidos.
+- Overlay do menu local atualizado com hint de controles e contador de bots/ativos.
+- `render_game_to_text` agora expõe `localBotFill` e `activePlayerIds` no bloco `match`.
+- Novo teste: `tests/menu-bot-fill-check.mjs` + script `test:menu-bot-fill`.
+
+Validacao 2026-03-27
+- `npm run test:menu-bot-fill` (pass)
+- `npm run test:online-input-latch` (pass)
+- `npm run test:input` (pass)
+- `npm run test:online-4p` (pass)
+- `npm run build` (pass)

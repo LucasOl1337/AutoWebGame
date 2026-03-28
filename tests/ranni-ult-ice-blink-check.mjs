@@ -37,11 +37,16 @@ const assets = {
   },
 };
 
-const game = new GameApp(root, assets);
-game.startServerAuthoritativeMatch([1, 2], { 1: 0, 2: 1, 3: 0, 4: 1 });
-game.arena.solid.clear();
-game.arena.breakable.clear();
-game.bombs = [];
+function createServerMatch(characterSelections) {
+  const game = new GameApp(root, assets);
+  game.startServerAuthoritativeMatch([1, 2], characterSelections);
+  game.arena.solid.clear();
+  game.arena.breakable.clear();
+  game.bombs = [];
+  return game;
+}
+
+const game = createServerMatch({ 1: 0, 2: 1, 3: 0, 4: 1 });
 
 const p1 = game.players[1];
 p1.position = { x: 4 * TILE_SIZE + TILE_SIZE * 0.5, y: 4 * TILE_SIZE + TILE_SIZE * 0.5 };
@@ -64,50 +69,77 @@ game.setServerPlayerInput(1, {
 });
 game.advanceServerSimulation(17);
 
-for (let elapsed = 0; elapsed < 1900; elapsed += 17) {
+let channelElapsedMs = 17;
+let midSnapshot = null;
+for (; channelElapsedMs < 2500 && p1.skill.phase === "channeling"; channelElapsedMs += 17) {
   game.setServerPlayerInput(1, {
     direction: "right",
     ...neutralInput,
   });
   game.advanceServerSimulation(17);
+  if (channelElapsedMs >= Math.floor(2000 / 2) && !midSnapshot) {
+    midSnapshot = {
+      midX: p1.position.x,
+      midSkill: {
+        ...p1.skill,
+        projectedPosition: p1.skill.projectedPosition ? { ...p1.skill.projectedPosition } : null,
+      },
+    };
+  }
 }
 
-const midX = p1.position.x;
-const midSkill = { ...p1.skill };
+const midX = midSnapshot?.midX ?? p1.position.x;
+const midSkill = midSnapshot?.midSkill ?? {
+  ...p1.skill,
+  projectedPosition: p1.skill.projectedPosition ? { ...p1.skill.projectedPosition } : null,
+};
+const finishX = p1.position.x;
+const finishSkill = {
+  ...p1.skill,
+  projectedPosition: p1.skill.projectedPosition ? { ...p1.skill.projectedPosition } : null,
+};
 
-for (let elapsed = 0; elapsed < 250; elapsed += 17) {
-  game.setServerPlayerInput(1, {
+const runnerGame = createServerMatch({ 1: 1, 2: 1, 3: 1, 4: 1 });
+const runner = runnerGame.players[1];
+runner.position = { x: beforeX, y: p1.position.y };
+runner.tile = { x: 4, y: 4 };
+runner.spawnProtectionMs = 0;
+for (let elapsed = 0; elapsed < channelElapsedMs; elapsed += 17) {
+  runnerGame.setServerPlayerInput(1, {
     direction: "right",
     ...neutralInput,
   });
-  game.advanceServerSimulation(17);
+  runnerGame.advanceServerSimulation(17);
 }
-
-const afterX = p1.position.x;
-const afterSkill = { ...p1.skill };
+const expectedFinishX = runner.position.x;
 
 const frozenInPlace = Math.abs(midX - beforeX) < 1.5;
 const projectedMovedDuringChannel = Boolean(midSkill.projectedPosition)
   && Math.abs(midSkill.projectedPosition.x - beforeX) > 30;
-const teleportedAfterChannel = Math.abs(afterX - beforeX) > 30;
+const teleportedAfterChannel = Math.abs(finishX - beforeX) > 30;
+const teleportedToProjectedTrack = Math.abs(finishX - expectedFinishX) < 1.5;
 const channelingPhaseObserved = midSkill.phase === "channeling";
-const cooldownPhaseObserved = afterSkill.phase === "cooldown";
+const cooldownPhaseObserved = finishSkill.phase === "cooldown";
 
 const report = {
   beforeX,
   midX,
-  afterX,
+  finishX,
+  expectedFinishX,
+  channelElapsedMs,
   beforeSkill,
   midSkill,
-  afterSkill,
+  finishSkill,
   frozenInPlace,
   projectedMovedDuringChannel,
   teleportedAfterChannel,
+  teleportedToProjectedTrack,
   channelingPhaseObserved,
   cooldownPhaseObserved,
   pass: frozenInPlace
     && projectedMovedDuringChannel
     && teleportedAfterChannel
+    && teleportedToProjectedTrack
     && channelingPhaseObserved
     && cooldownPhaseObserved,
 };
