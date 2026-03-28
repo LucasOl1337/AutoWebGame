@@ -1078,8 +1078,18 @@ export class GameApp {
       return;
     }
 
+    let suppressFirstPendingSkillReplay = localPlayer.skill.phase !== "idle";
     for (const pending of this.onlinePendingInputs) {
-      this.applyPredictedInputStep(localPlayer, pending.input, FIXED_STEP_MS);
+      const predictedInput = suppressFirstPendingSkillReplay && pending.input.skillPressed
+        ? {
+            ...pending.input,
+            skillPressed: false,
+          }
+        : pending.input;
+      if (suppressFirstPendingSkillReplay && pending.input.skillPressed) {
+        suppressFirstPendingSkillReplay = false;
+      }
+      this.applyPredictedInputStep(localPlayer, predictedInput, FIXED_STEP_MS);
     }
   }
 

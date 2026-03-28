@@ -85,7 +85,7 @@ export class GlobalLobby extends DurableObject {
   quickMatchPendingClients = new Set();
   /** @type {Map<string, number>} */
   preferredCharacterSelections = new Map();
-  /** @type {Map<string, { game: GameApp, inputs: Record<1 | 2 | 3 | 4, import("../src/online/protocol").OnlineInputState & { inputSeq?: number, sentAtMs?: number }>, timer: ReturnType<typeof setInterval> | null, tick: number, activePlayerIds: Array<1 | 2 | 3 | 4>, characterSelections: Record<1 | 2 | 3 | 4, number>, matchResultChoices: Record<1 | 2 | 3 | 4, "rematch" | "lobby" | null>, clock: import("../src/online/server-tick").FixedRatePumpState }>} */
+  /** @type {Map<string, { game: GameApp, inputs: Record<1 | 2 | 3 | 4, import("../src/online/protocol").OnlineInputState & { inputSeq?: number, sentAtMs?: number }>, ackedInputSeq: Record<1 | 2 | 3 | 4, number>, timer: ReturnType<typeof setInterval> | null, tick: number, activePlayerIds: Array<1 | 2 | 3 | 4>, characterSelections: Record<1 | 2 | 3 | 4, number>, matchResultChoices: Record<1 | 2 | 3 | 4, "rematch" | "lobby" | null>, clock: import("../src/online/server-tick").FixedRatePumpState }>} */
   matches = new Map();
   /** @type {Promise<void>} */
   ready;
@@ -968,6 +968,7 @@ export class GlobalLobby extends DurableObject {
     const match = {
       game,
       inputs: createSeatMap(() => createNeutralInput()),
+      ackedInputSeq: createSeatMap(() => 0),
       timer: null,
       tick: 0,
       activePlayerIds,
@@ -1025,6 +1026,7 @@ export class GlobalLobby extends DurableObject {
       }
       match.game.advanceServerSimulation(MATCH_TICK_MS);
       for (const playerId of match.activePlayerIds) {
+        match.ackedInputSeq[playerId] = match.inputs[playerId].inputSeq ?? match.ackedInputSeq[playerId] ?? 0;
         match.inputs[playerId].bombPressed = false;
         match.inputs[playerId].detonatePressed = false;
         match.inputs[playerId].skillPressed = false;
@@ -1057,7 +1059,7 @@ export class GlobalLobby extends DurableObject {
         serverTimeMs: Date.now(),
         serverTick: match.tick,
         frameId: match.tick,
-        ackedInputSeq: createSeatMap((playerId) => match.inputs[playerId].inputSeq ?? 0),
+        ackedInputSeq: createSeatMap((playerId) => match.ackedInputSeq[playerId] ?? 0),
         mode: snapshot.mode,
         players: snapshot.players,
         bombs: snapshot.bombs,
@@ -1099,7 +1101,7 @@ export class GlobalLobby extends DurableObject {
         serverTimeMs: Date.now(),
         serverTick: match.tick,
         frameId: match.tick,
-        ackedInputSeq: createSeatMap((playerId) => match.inputs[playerId].inputSeq ?? 0),
+        ackedInputSeq: createSeatMap((playerId) => match.ackedInputSeq[playerId] ?? 0),
       },
     });
   }
