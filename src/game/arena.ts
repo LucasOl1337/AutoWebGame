@@ -162,7 +162,7 @@ function createForcedBreakableTiles(
 }
 
 function createPowerUpsFromBreakables(breakable: Set<string>): PowerUpState[] {
-  // Weighted to make speed boots appear more often than rare utilities.
+  // Weighted so boots drop often while still distributing the other core upgrades.
   const dropPool: readonly PowerUpType[] = [
     "speed-up",
     "speed-up",
@@ -172,9 +172,6 @@ function createPowerUpsFromBreakables(breakable: Set<string>): PowerUpState[] {
     "flame-up",
     "flame-up",
     "remote-up",
-    "shield-up",
-    "bomb-pass-up",
-    "kick-up",
   ];
   const powerUps: PowerUpState[] = [];
   const breakableKeys = [...breakable].sort();

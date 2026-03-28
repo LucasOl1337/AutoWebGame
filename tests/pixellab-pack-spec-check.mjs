@@ -19,9 +19,6 @@ const requiredTargets = [
   "public/assets/ui/power-flame.png",
   "public/assets/ui/power-speed.png",
   "public/assets/ui/power-remote.png",
-  "public/assets/ui/power-shield.png",
-  "public/assets/ui/power-bomb-pass.png",
-  "public/assets/ui/power-kick.png",
 ];
 
 const targetPaths = spec.assets.flatMap((asset) => (asset.outputs ?? []).map((output) => output.targetPath));

@@ -253,9 +253,6 @@ export async function loadGameAssets(): Promise<GameAssets> {
     flameUp,
     speedUp,
     remoteUp,
-    shieldUp,
-    bombPassUp,
-    kickUp,
   ] = await Promise.all([
     loadDirectionalSprites(assetUrl("/assets/sprites/player1"), ["hires", ""]),
     loadDirectionalSprites(assetUrl("/assets/sprites/player2")),
@@ -271,9 +268,6 @@ export async function loadGameAssets(): Promise<GameAssets> {
     loadImage(assetUrl("/assets/ui/power-flame.png")),
     loadImage(assetUrl("/assets/ui/power-speed.png")),
     loadImage(assetUrl("/assets/ui/power-remote.png")),
-    loadImage(assetUrl("/assets/ui/power-shield.png")),
-    loadImage(assetUrl("/assets/ui/power-bomb-pass.png")),
-    loadImage(assetUrl("/assets/ui/power-kick.png")),
   ]);
 
   const fallbackRoster: CharacterRosterEntry[] = [
@@ -323,9 +317,6 @@ export async function loadGameAssets(): Promise<GameAssets> {
       "flame-up": flameUp,
       "speed-up": speedUp,
       "remote-up": remoteUp,
-      "shield-up": shieldUp,
-      "bomb-pass-up": bombPassUp,
-      "kick-up": kickUp,
     },
   };
 }

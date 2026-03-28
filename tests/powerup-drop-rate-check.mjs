@@ -77,9 +77,6 @@ const assets = {
     "flame-up": null,
     "speed-up": null,
     "remote-up": null,
-    "shield-up": null,
-    "bomb-pass-up": null,
-    "kick-up": null,
   },
 };
 
@@ -95,21 +92,19 @@ const breakableCount = game.arena.breakable.size;
 const dropCount = game.arena.powerUps.length;
 const dropRatio = breakableCount > 0 ? dropCount / breakableCount : 0;
 const speedDropCount = game.arena.powerUps.filter((powerUp) => powerUp.type === "speed-up").length;
-const extraTiles = ["4,2", "6,2", "4,4", "6,4"];
-const extraBreakablesPresent = extraTiles.every((key) => game.arena.breakable.has(key));
+const hasDenseBreakables = breakableCount >= 24;
 
 const report = {
   breakableCount,
   dropCount,
   dropRatio: Math.round(dropRatio * 1000) / 1000,
   speedDropCount,
-  extraBreakablesPresent,
+  hasDenseBreakables,
   pass: (
-    breakableCount > 0
+    hasDenseBreakables
     && dropRatio >= 0.4
     && dropRatio <= 0.6
     && speedDropCount > 0
-    && extraBreakablesPresent
   ),
 };
 

@@ -106,7 +106,7 @@ const WALK_FRAME_MS = 100;
 const SKILL_FRAME_MS = 100;
 const SPAWN_PROTECTION_MS = 2200;
 const RANNI_CHARACTER_ID = "03a976fb-7313-4064-a477-5bb9b0760034";
-const RANNI_SKILL_CHANNEL_MS = 2_000;
+const RANNI_SKILL_CHANNEL_MS = 1_500;
 const RANNI_SKILL_COOLDOWN_MS = 10_000;
 const SUDDEN_DEATH_ELAPSED_MS = 40_000;
 const SUDDEN_DEATH_START_MS = ROUND_DURATION_MS - SUDDEN_DEATH_ELAPSED_MS;
@@ -1048,7 +1048,7 @@ export class GameApp {
       this.activatePlayerSkill(player);
     }
 
-    if (this.updatePlayerSkillChannel(player, input.direction, deltaMs)) {
+    if (this.updatePlayerSkillChannel(player, input.direction, input.skillPressed, deltaMs)) {
       player.tile = this.getTileFromPosition(player.position);
       return false;
     }
@@ -1105,13 +1105,22 @@ export class GameApp {
     player.velocity.y = 0;
   }
 
-  private updatePlayerSkillChannel(player: PlayerState, desiredDirection: Direction | null, deltaMs: number): boolean {
+  private updatePlayerSkillChannel(
+    player: PlayerState,
+    desiredDirection: Direction | null,
+    skillPressed: boolean,
+    deltaMs: number,
+  ): boolean {
     if (player.skill.id !== "ranni-ice-blink" || player.skill.phase !== "channeling") {
       return false;
     }
 
     player.velocity.x = 0;
     player.velocity.y = 0;
+    if (skillPressed && player.skill.castElapsedMs > 0) {
+      this.finishRanniBlink(player);
+      return true;
+    }
     if (!player.skill.projectedPosition) {
       player.skill.projectedPosition = { ...player.position };
     }
@@ -3555,19 +3564,13 @@ export class GameApp {
     const detonateKeyLabel = this.getDetonateHudKeyLabel(playerId);
 
     return SKILL_POWER_UP_TYPES.map((type) => {
-      const level = getPowerUpLevel(player, type);
-      let valueLabel = "--";
-      if (type === "shield-up") {
-        valueLabel = `x${level}`;
-      } else if (type === "remote-up") {
-        if (level > 0) {
-          valueLabel = "ON";
-        } else {
-          valueLabel = "--";
-        }
-      } else {
-        valueLabel = level > 0 ? "ON" : "--";
-      }
+      const rawLevel = getPowerUpLevel(player, type);
+      const level = type === "remote-up"
+        ? rawLevel
+        : Math.max(0, rawLevel - 1);
+      const valueLabel = type === "remote-up"
+        ? (level > 0 ? "ON" : "--")
+        : `x${level}`;
 
       return {
         type,

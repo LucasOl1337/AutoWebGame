@@ -11,10 +11,7 @@ export type PowerUpType =
   | "bomb-up"
   | "flame-up"
   | "speed-up"
-  | "remote-up"
-  | "shield-up"
-  | "bomb-pass-up"
-  | "kick-up";
+  | "remote-up";
 
 export interface TileCoord {
   x: number;

@@ -73,7 +73,7 @@ const assets = {
   players: { 1: { up: null, down: null, left: null, right: null }, 2: { up: null, down: null, left: null, right: null } },
   floor: { base: null, lane: null, spawn: null },
   props: { wall: null, crate: null, bomb: null, flame: null },
-  powerUps: { "bomb-up": null, "flame-up": null, "speed-up": null, "remote-up": null, "shield-up": null },
+  powerUps: { "bomb-up": null, "flame-up": null, "speed-up": null, "remote-up": null },
 };
 
 const game = new GameApp(root, assets);
@@ -91,29 +91,36 @@ p1.spawnProtectionMs = 0;
 
 game.arena.powerUps = [
   { type: "remote-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
-  { type: "shield-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
+  { type: "flame-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
 ];
 window.advanceTime(17);
 
 const state = JSON.parse(window.render_game_to_text());
 const player = state.players.find((entry) => entry.id === 1);
 const skillSlots = player?.skillSlots ?? [];
+const bombSlot = skillSlots.find((slot) => slot.type === "bomb-up") ?? null;
+const flameSlot = skillSlots.find((slot) => slot.type === "flame-up") ?? null;
 const remoteSlot = skillSlots.find((slot) => slot.type === "remote-up") ?? null;
-const shieldSlot = skillSlots.find((slot) => slot.type === "shield-up") ?? null;
 
 const report = {
+  bombSlot,
+  flameSlot,
   remoteSlot,
-  shieldSlot,
   pass: Boolean(
-    remoteSlot
+    bombSlot
+      && bombSlot.acquired === false
+      && bombSlot.level === 0
+      && bombSlot.value === "x0"
+      && flameSlot
+      && flameSlot.acquired === true
+      && flameSlot.level === 1
+      && flameSlot.value === "x1"
+      && flameSlot.key === null
+      && remoteSlot
       && remoteSlot.acquired === true
       && remoteSlot.level === 1
       && remoteSlot.value === "ON"
       && remoteSlot.key === "R"
-      && shieldSlot
-      && shieldSlot.acquired === true
-      && shieldSlot.level === 1
-      && shieldSlot.value === "x1"
   ),
 };
 
