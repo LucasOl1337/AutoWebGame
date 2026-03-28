@@ -1073,3 +1073,18 @@ Validacao 2026-03-27
 - `npm run test:input` (pass)
 - `npm run test:online-4p` (pass)
 - `npm run build` (pass)
+2026-03-27 sudden death spiral collapse pass
+- Sudden death deixou de gerar chamas aleatorias/pontas duplas; agora fecha 1 tile por tick seguindo uma espiral de fora para dentro.
+- Cada tile entra em animacao de queda, impacta no chao e vira bloqueio permanente (`arena.solid`), cumprindo o efeito de "slot fechando na cabeca".
+- Impacto do fechamento quebra crate, revela/remove pickup preso no tile, aciona bomba presa ali e elimina jogador que permanecer no slot no momento da pancada.
+- Estado online sincronizado com `suddenDeathClosedTiles` + `suddenDeathClosingTiles`, mantendo host/guest alinhados no colapso da arena.
+- `render_game_to_text` agora expõe tiles fechados e tiles em queda dentro de `match.suddenDeath`.
+
+Validacao 2026-03-27 sudden death spiral
+- `npm run build` (pass)
+- `npm run compile:esm` (pass)
+- `node tests/sudden-death-check.mjs` (pass)
+- `npm run test:online-audio` (pass)
+
+Observacao
+- `npm run test:bot` continua falhando no caso `strategicAvoidPass` com `direction: "down"`; nao mexi na heuristica desse cenario porque a mudanca desta rodada ficou restrita ao sudden death.
