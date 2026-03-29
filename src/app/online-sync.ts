@@ -149,10 +149,10 @@ export function playOnlineAudioTransition({
     return;
   }
 
-  const previousBombIds = new Set(previousBombs.map((bomb) => bomb.id));
-  const nextBombIds = new Set(next.bombs.map((bomb) => bomb.id));
-  const addedBombs = next.bombs.filter((bomb) => !previousBombIds.has(bomb.id)).length;
-  const removedBombs = previousBombs.filter((bomb) => !nextBombIds.has(bomb.id)).length;
+  const previousBombKeys = new Set(previousBombs.map((bomb) => getBombAudioKey(bomb)));
+  const nextBombKeys = new Set(next.bombs.map((bomb) => getBombAudioKey(bomb)));
+  const addedBombs = next.bombs.filter((bomb) => !previousBombKeys.has(getBombAudioKey(bomb))).length;
+  const removedBombs = previousBombs.filter((bomb) => !nextBombKeys.has(getBombAudioKey(bomb))).length;
 
   const previousFlameKeys = new Set(previousFlames.map((flame) => tileKey(flame.tile.x, flame.tile.y)));
   const newFlames = next.flames.filter((flame) => !previousFlameKeys.has(tileKey(flame.tile.x, flame.tile.y))).length;
@@ -172,6 +172,10 @@ export function playOnlineAudioTransition({
   if (!previousMatchWinner && next.matchWinner) {
     playSound("matchWin");
   }
+}
+
+function getBombAudioKey(bomb: BombState): string {
+  return `${bomb.ownerId}:${tileKey(bomb.tile.x, bomb.tile.y)}`;
 }
 
 export function pushOnlineRenderSample(

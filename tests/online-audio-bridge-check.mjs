@@ -262,6 +262,39 @@ game.applyOnlineFrame({
 
 const placementCalls = [...calls];
 
+game.applyOnlineFrame({
+  serverTimeMs: 75,
+  serverTick: 1,
+  frameId: 1,
+  ackedInputSeq: { 1: 0, 2: 0, 3: 0, 4: 0 },
+  mode: "match",
+  players: basePlayers,
+  bombs: [{
+    id: 99,
+    ownerId: 1,
+    tile: { x: 2, y: 2 },
+    fuseMs: 860,
+    ownerCanPass: false,
+    flameRange: 1,
+  }],
+  flames: [],
+  nextBombId: 2,
+  score: { 1: 0, 2: 0, 3: 0, 4: 0 },
+  roundNumber: 1,
+  roundTimeMs: 59925,
+  paused: false,
+  roundOutcome: null,
+  matchWinner: null,
+  animationClockMs: 75,
+  suddenDeathActive: false,
+  suddenDeathTickMs: 740,
+  suddenDeathIndex: 0,
+  selectedCharacterIndex: { 1: 0, 2: 1, 3: 0, 4: 0 },
+  activePlayerIds: [1, 2],
+});
+
+const idSwapCalls = calls.slice(placementCalls.length);
+
 game.applyOnlineSnapshot({
   serverTimeMs: 100,
   serverTick: 2,
@@ -348,10 +381,11 @@ game.applyOnlineFrame({
 
 const pass = placementCalls.length === 1
   && placementCalls[0] === "bombPlace"
+  && idSwapCalls.length === 0
   && expected.every((key) => calls.includes(key))
   && calls.includes("matchWin");
 
-console.log(JSON.stringify({ placementCalls, calls, expected, pass }, null, 2));
+console.log(JSON.stringify({ placementCalls, idSwapCalls, calls, expected, pass }, null, 2));
 
 if (!pass) {
   process.exit(1);

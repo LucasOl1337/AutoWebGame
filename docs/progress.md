@@ -1107,3 +1107,11 @@ Validacao 2026-03-29 sfx variation
 - `npm run build` (pass)
 - `npm run test:online-audio` (pass)
 - `npm run compile:esm && node tests/sound-manager-variation-check.mjs` (pass)
+2026-03-29 online bomb audio false-positive fix
+- Corrigido bridge de audio online para rastrear bomba por `ownerId + tile`, nao apenas por `id`.
+- Isso evita falso positivo de explosao quando o guest preve a bomba localmente e o snapshot autoritativo chega com outro `id` para a mesma bomba.
+- Teste `online-audio-bridge-check` ampliado para cobrir troca de `id` sem tocar nenhum SFX extra.
+
+Validacao 2026-03-29 online bomb audio fix
+- `npm run build` (pass)
+- `npm run test:online-audio` (pass)
