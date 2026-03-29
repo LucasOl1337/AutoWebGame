@@ -9,6 +9,7 @@ const MATCH_TICK_MS = 1000 / 60;
 const FULL_SNAPSHOT_EVERY_TICKS = 6;
 const MATCH_PUMP_INTERVAL_MS = 8;
 const MAX_MATCH_STEPS_PER_PUMP = 5;
+const MATCH_RESULT_RESTART_DELAY_MS = 900;
 const PLAYER_IDS = [1, 2, 3, 4];
 const ANALYTICS_TIME_ZONE = "America/Sao_Paulo";
 const ANALYTICS_LOOKBACK_DAYS = 7;
@@ -151,7 +152,7 @@ export class GlobalLobby extends DurableObject {
   quickMatchPendingClients = new Set();
   /** @type {Map<string, number>} */
   preferredCharacterSelections = new Map();
-  /** @type {Map<string, { game: GameApp, inputs: Record<1 | 2 | 3 | 4, import("../src/online/protocol").OnlineInputState & { inputSeq?: number, sentAtMs?: number }>, ackedInputSeq: Record<1 | 2 | 3 | 4, number>, timer: ReturnType<typeof setInterval> | null, tick: number, activePlayerIds: Array<1 | 2 | 3 | 4>, characterSelections: Record<1 | 2 | 3 | 4, number>, matchResultChoices: Record<1 | 2 | 3 | 4, "rematch" | "lobby" | null>, clock: import("../src/online/server-tick").FixedRatePumpState }>} */
+  /** @type {Map<string, { game: GameApp, inputs: Record<1 | 2 | 3 | 4, import("../src/online/protocol").OnlineInputState & { inputSeq?: number, sentAtMs?: number }>, ackedInputSeq: Record<1 | 2 | 3 | 4, number>, timer: ReturnType<typeof setInterval> | null, tick: number, activePlayerIds: Array<1 | 2 | 3 | 4>, characterSelections: Record<1 | 2 | 3 | 4, number>, matchResultChoices: Record<1 | 2 | 3 | 4, "rematch" | "lobby" | null>, clock: import("../src/online/server-tick").FixedRatePumpState, resultRestartAtMs: number | null }>} */
   matches = new Map();
   /** @type {Promise<void>} */
   ready;
@@ -1360,6 +1361,7 @@ export class GlobalLobby extends DurableObject {
       characterSelections,
       matchResultChoices: createSeatMap(() => null),
       clock: createFixedRatePumpState(Date.now()),
+      resultRestartAtMs: null,
     };
     match.timer = setInterval(() => {
       this.pumpRoomMatch(room.roomCode);
@@ -1385,7 +1387,7 @@ export class GlobalLobby extends DurableObject {
   /**
    * @param {string} roomCode
    */
-  pumpRoomMatch(roomCode) {
+  async pumpRoomMatch(roomCode) {
     const room = this.rooms.get(roomCode);
     const match = this.matches.get(roomCode);
     if (!room || !match || room.status !== "playing") {
@@ -1422,7 +1424,21 @@ export class GlobalLobby extends DurableObject {
       }
     }
 
-    this.broadcastFrame(roomCode);
+    const snapshot = this.broadcastFrame(roomCode);
+    if (snapshot?.matchWinner) {
+      if (!match.resultRestartAtMs) {
+        match.resultRestartAtMs = Date.now() + MATCH_RESULT_RESTART_DELAY_MS;
+      } else if (Date.now() >= match.resultRestartAtMs) {
+        if (match.activePlayerIds.length >= 2) {
+          await this.restartPlayingMatch(room, match);
+        } else {
+          await this.resetRoomToLobby(room, "Not enough players to keep auto-starting. Waiting in lobby.");
+        }
+        return;
+      }
+    } else {
+      match.resultRestartAtMs = null;
+    }
     if (shouldBroadcastSnapshot) {
       this.broadcastSnapshot(roomCode);
     }
@@ -1646,6 +1662,32 @@ export class GlobalLobby extends DurableObject {
     this.broadcastLobbyToMembers(room);
     this.broadcastLobbyList();
     await this.maybeStartMatch(room);
+  }
+
+  /**
+   * @param {LobbyRoom} room
+   * @param {{ activePlayerIds: Array<1 | 2 | 3 | 4>, characterSelections: Record<1 | 2 | 3 | 4, number> }} match
+   */
+  async restartPlayingMatch(room, match) {
+    const activePlayerIds = match.activePlayerIds.filter((seatId) => Boolean(room.seats[seatId]?.clientId));
+    if (activePlayerIds.length < 2) {
+      await this.resetRoomToLobby(room, "Not enough players to keep auto-starting. Waiting in lobby.");
+      return;
+    }
+
+    const characterSelections = createSeatMap((seatId) => room.seats[seatId].characterIndex ?? 0);
+    room.clients = new Set(activePlayerIds.map((seatId) => room.seats[seatId].clientId).filter(Boolean));
+    room.hostClientId = room.seats[activePlayerIds[0]].clientId;
+    room.status = "playing";
+    this.refreshSeatLabels(room);
+    await this.persistState();
+
+    this.sendMatchStarted(room, activePlayerIds, characterSelections);
+    this.startRoomMatch(room, activePlayerIds, characterSelections);
+    this.appendRoomSystemMessage(room, "Champion declared. Next match started automatically.");
+    await this.persistState();
+    this.broadcastLobbyToMembers(room);
+    this.broadcastLobbyList();
   }
 
   /**

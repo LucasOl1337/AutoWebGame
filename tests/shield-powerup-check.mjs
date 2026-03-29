@@ -98,6 +98,7 @@ const collectedShield = game.arena.powerUps[0]?.collected === true;
 const shieldLevelAfterPickup = game.players[1].shieldCharges ?? 0;
 
 game.flames = [{ tile: { x: 2, y: 1 }, remainingMs: 400 }];
+game.resolvePlayerDeathsFromFlames();
 window.advanceTime(17);
 
 const survivedFirstFlame = game.players[1].alive === true;
@@ -109,6 +110,7 @@ const stillAliveDuringGuard = game.players[1].alive === true;
 
 game.players[1].flameGuardMs = 0;
 game.flames = [{ tile: { x: 2, y: 1 }, remainingMs: 400 }];
+game.resolvePlayerDeathsFromFlames();
 window.advanceTime(17);
 const diesWithoutShieldOrGuard = game.players[1].alive === false;
 

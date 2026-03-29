@@ -24,6 +24,7 @@ const assets = {
   characterRoster: [
     { id: "03a976fb-7313-4064-a477-5bb9b0760034", name: "Ranni", size: null, sprites: emptyDirectionalSprites, defaultSlot: 1 },
     { id: "6ee8baa5-3277-413b-ae0e-2659b9cc52e9", name: "Killer Bee", size: null, sprites: emptyDirectionalSprites, defaultSlot: 2 },
+    { id: "d083c3dc-7162-4391-8628-6adde0b8d8d6", name: "Crocodilo Arcano", size: null, sprites: emptyDirectionalSprites },
   ],
   floor: { base: null, lane: null, spawn: null },
   props: { wall: null, crate: null, bomb: null, flame: null },
@@ -171,6 +172,41 @@ beeGuest.onlinePendingInputs = [
 beeGuest.applyOnlineSnapshot(beeSnapshot);
 const beeStillChanneling = beeGuest.players[1].skill.phase === "channeling";
 
+const crocodiloServer = createServerMatch({ 1: 2, 2: 0, 3: 2, 4: 0 });
+const crocodilo = crocodiloServer.players[1];
+crocodilo.position = { x: 4 * TILE_SIZE + TILE_SIZE * 0.5, y: 4 * TILE_SIZE + TILE_SIZE * 0.5 };
+crocodilo.tile = { x: 4, y: 4 };
+crocodilo.spawnProtectionMs = 0;
+crocodiloServer.setServerPlayerInput(1, {
+  direction: "right",
+  ...neutralInput,
+  skillPressed: true,
+  skillHeld: true,
+});
+crocodiloServer.advanceServerSimulation(17);
+crocodiloServer.setServerPlayerInput(1, {
+  direction: "right",
+  ...neutralInput,
+  skillHeld: true,
+});
+crocodiloServer.advanceServerSimulation(17);
+const crocodiloSnapshot = cloneSnapshotWithAck(crocodiloServer.exportOnlineSnapshot(), 0);
+
+const crocodiloGuest = createGuestMatch({ 1: 2, 2: 0, 3: 2, 4: 0 });
+crocodiloGuest.onlinePendingInputs = [
+  {
+    seq: 1,
+    input: {
+      direction: "right",
+      ...neutralInput,
+      skillPressed: true,
+      skillHeld: true,
+    },
+  },
+];
+crocodiloGuest.applyOnlineSnapshot(crocodiloSnapshot);
+const crocodiloStillChanneling = crocodiloGuest.players[1].skill.phase === "channeling";
+
 const report = {
   ranniSnapshotSkill: ranniSnapshot.players[1].skill,
   ranniGuestSkill: ranniGuest.players[1].skill,
@@ -178,7 +214,10 @@ const report = {
   beeSnapshotSkill: beeSnapshot.players[1].skill,
   beeGuestSkill: beeGuest.players[1].skill,
   beeStillChanneling,
-  pass: ranniStillChanneling && beeStillChanneling,
+  crocodiloSnapshotSkill: crocodiloSnapshot.players[1].skill,
+  crocodiloGuestSkill: crocodiloGuest.players[1].skill,
+  crocodiloStillChanneling,
+  pass: ranniStillChanneling && beeStillChanneling && crocodiloStillChanneling,
 };
 
 console.log(JSON.stringify(report, null, 2));

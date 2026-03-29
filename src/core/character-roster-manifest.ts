@@ -53,6 +53,10 @@ export const CHARACTER_ROSTER_MANIFEST: CharacterRosterManifestEntry[] = [
     "name": "Charizard, rugged armor straps over scale-like textures with ..."
   },
   {
+    "id": "d083c3dc-7162-4391-8628-6adde0b8d8d6",
+    "name": "Crocodilo Arcano"
+  },
+  {
     "id": "4dfebb11-5982-45ec-bcde-ab3e7cc91ab1",
     "name": "Create a 2D full-body game character inspired by Batman. Visu..."
   },

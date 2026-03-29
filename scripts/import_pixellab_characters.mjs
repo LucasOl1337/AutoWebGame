@@ -27,11 +27,15 @@ export const PINNED_CHARACTERS = [
 const RANNI_CHARACTER_ID = "03a976fb-7313-4064-a477-5bb9b0760034";
 const KILLER_BEE_CHARACTER_ID = "6ee8baa5-3277-413b-ae0e-2659b9cc52e9";
 const NICO_CHARACTER_ID = "5474c45c-2987-43e0-af2c-a6500c836881";
+const NICO_SOURCE_CHARACTER_ID = (process.env.PIXELLAB_NICO_SOURCE_ID ?? NICO_CHARACTER_ID).trim() || NICO_CHARACTER_ID;
+const CROCODILO_CHARACTER_ID = "d083c3dc-7162-4391-8628-6adde0b8d8d6";
 
 const CHARACTER_NAME_OVERRIDES = {
   "03a976fb-7313-4064-a477-5bb9b0760034": "Ranni",
   "6ee8baa5-3277-413b-ae0e-2659b9cc52e9": "Killer Bee",
   "5474c45c-2987-43e0-af2c-a6500c836881": "Nico",
+  [NICO_SOURCE_CHARACTER_ID]: "Nico",
+  "d083c3dc-7162-4391-8628-6adde0b8d8d6": "Crocodilo Arcano",
 };
 
 const WALK_ANIMATION_CANDIDATES = [
@@ -74,6 +78,11 @@ const KILLER_BEE_DASH_CAST_PATTERNS = [
 ];
 const NICO_ARCANE_BEAM_CAST_PATTERNS = [
   "nico ultimate arcane beam",
+  "spellbook",
+  "spell book",
+  "book",
+  "tome",
+  "arcane tome",
   "fireball",
   "dark-energy spell",
 ];
@@ -136,6 +145,7 @@ const CHARACTER_IDS = [
   "f367e6fa-cf26-4bbd-b8bd-ba82bd0c5de6",
   "5f508908-0f62-424f-b894-a0e446f7ec7c",
   "12b4edda-6484-471c-9494-9a843251dc98",
+  "d083c3dc-7162-4391-8628-6adde0b8d8d6",
   "0d83f409-bffa-4742-b1b9-de1a13e86659",
   "b34f2f3f-f7c0-4414-848f-3c373e013400",
   "97c67908-5631-4cbf-9068-a79ce4b92a32",
@@ -147,7 +157,7 @@ const CHARACTER_IDS = [
   "bb9255c1-3f90-4095-ae65-6d5b7a6bd1e6",
   "85c70795-2fa6-4f81-88fe-f1dc37434ad5",
   "465fd522-44c2-4773-b1f8-9530d661ecd5",
-  "5474c45c-2987-43e0-af2c-a6500c836881",
+  NICO_SOURCE_CHARACTER_ID,
   "52d93176-bfde-4e0d-8f36-82731260bd5a",
   "85451d99-10a2-43be-8dfe-64e2ba6bf690",
   "e193bb5e-0eb3-4613-a106-3d401f305852",
@@ -253,6 +263,13 @@ function cleanName(rawName, characterId) {
     return base;
   }
   return `${base.slice(0, 61)}...`;
+}
+
+function resolveTargetCharacterId(sourceCharacterId) {
+  if (sourceCharacterId === NICO_SOURCE_CHARACTER_ID) {
+    return NICO_CHARACTER_ID;
+  }
+  return sourceCharacterId;
 }
 
 function findAnimationCandidatesByPatterns(animations, patterns = []) {
@@ -507,6 +524,7 @@ export async function importPixelLabCharacters() {
       const metadata = JSON.parse(metadataRaw);
       const rotations = metadata?.frames?.rotations ?? {};
       const animations = metadata?.frames?.animations ?? {};
+      const targetCharacterId = resolveTargetCharacterId(characterId);
 
       const south = getRotationPath(rotations, "south");
       const east = getRotationPath(rotations, "east", "south-east");
@@ -517,7 +535,7 @@ export async function importPixelLabCharacters() {
         continue;
       }
 
-      const destinationDir = path.join(PUBLIC_DIR, characterId);
+      const destinationDir = path.join(PUBLIC_DIR, targetCharacterId);
       await ensureDir(destinationDir);
       await copyFile(path.join(extractDir, south), path.join(destinationDir, "south.png"));
       await copyFile(path.join(extractDir, east), path.join(destinationDir, "east.png"));
@@ -550,22 +568,22 @@ export async function importPixelLabCharacters() {
         extractDir,
         destinationDir,
         animations,
-        characterId === RANNI_CHARACTER_ID
+        targetCharacterId === RANNI_CHARACTER_ID
           ? [...findAnimationCandidatesByPatterns(animations, RANNI_ICE_CAST_PATTERNS), ...CAST_ANIMATION_CANDIDATES]
-          : characterId === KILLER_BEE_CHARACTER_ID
+          : targetCharacterId === KILLER_BEE_CHARACTER_ID
             ? [...findAnimationCandidatesByPatterns(animations, KILLER_BEE_DASH_CAST_PATTERNS), ...CAST_ANIMATION_CANDIDATES]
-            : characterId === NICO_CHARACTER_ID
+            : targetCharacterId === NICO_CHARACTER_ID
               ? [...findAnimationCandidatesByPatterns(animations, NICO_ARCANE_BEAM_CAST_PATTERNS), ...CAST_ANIMATION_CANDIDATES]
             : CAST_ANIMATION_CANDIDATES,
         "cast",
-        characterId === RANNI_CHARACTER_ID
+        targetCharacterId === RANNI_CHARACTER_ID
           ? [...RANNI_ICE_CAST_PATTERNS, ...CAST_ANIMATION_PATTERNS]
-          : characterId === KILLER_BEE_CHARACTER_ID
+          : targetCharacterId === KILLER_BEE_CHARACTER_ID
             ? [...KILLER_BEE_DASH_CAST_PATTERNS, ...CAST_ANIMATION_PATTERNS]
-            : characterId === NICO_CHARACTER_ID
+            : targetCharacterId === NICO_CHARACTER_ID
               ? [...NICO_ARCANE_BEAM_CAST_PATTERNS, ...CAST_ANIMATION_PATTERNS]
             : CAST_ANIMATION_PATTERNS,
-        characterId === RANNI_CHARACTER_ID
+        targetCharacterId === RANNI_CHARACTER_ID
           ? { allowDirectionFallback: true, allowAnyDirectionFallback: true }
           : {},
       );
@@ -586,7 +604,7 @@ export async function importPixelLabCharacters() {
         DEATH_ANIMATION_PATTERNS,
       );
 
-      const manifestEntry = buildManifestEntry(characterId, metadata);
+      const manifestEntry = buildManifestEntry(targetCharacterId, metadata);
       manifestEntry.animations = {
         idle: hasIdleFrames,
         walk: hasWalkFrames,
@@ -597,7 +615,7 @@ export async function importPixelLabCharacters() {
       };
       manifest.push(manifestEntry);
       imported += 1;
-      process.stdout.write(`Imported ${characterId}\n`);
+      process.stdout.write(`Imported ${characterId} -> ${targetCharacterId}\n`);
     } catch (error) {
       skipped += 1;
       process.stdout.write(`Skipped ${characterId}: ${error instanceof Error ? error.message : String(error)}\n`);

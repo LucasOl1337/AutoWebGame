@@ -85,10 +85,14 @@ import {
   RANNI_CHARACTER_ID,
   KILLER_BEE_CHARACTER_ID,
   NICO_CHARACTER_ID,
+  CROCODILO_CHARACTER_ID,
   KILLER_BEE_DASH_FRAME_MS,
+  NICO_SKILL_CHANNEL_MS,
   NICO_BEAM_DURATION_MS,
   NICO_BEAM_CORE_WIDTH_PX,
   NICO_BEAM_GLOW_WIDTH_PX,
+  collectNicoBeamTiles,
+  CROCODILO_SKILL_CHANNEL_MS,
 } from "./skill-system";
 import type { OnlineRenderSample, PendingOnlineInput } from "./online-sync";
 import {
@@ -103,6 +107,7 @@ import {
   pushOnlineRenderSample as online_pushRenderSample,
   updateVisualPlayerPositions as online_updateVisualPlayerPositions,
 } from "./online-sync";
+import { SITE_COPY, type SiteLanguage } from "../i18n";
 
 declare global {
   interface Window {
@@ -137,7 +142,6 @@ const SKILL_FRAME_MS = 100;
 const DEATH_FRAME_MS = 90;
 const CRATE_BREAK_DURATION_MS = 220;
 const SPAWN_PROTECTION_MS = 2200;
-const NICO_SKILL_CHANNEL_MS = 2_000;
 const SUDDEN_DEATH_ELAPSED_MS = 40_000;
 const SUDDEN_DEATH_START_MS = ROUND_DURATION_MS - SUDDEN_DEATH_ELAPSED_MS;
 const SUDDEN_DEATH_TICK_MS = 800;
@@ -145,6 +149,7 @@ const SUDDEN_DEATH_FALL_MS = 340;
 const SUDDEN_DEATH_IMPACT_LINGER_MS = 180;
 const SHIELD_GUARD_MS = 600;
 const DANGER_OVERLAY_MAX_ETA_MS = BOMB_FUSE_MS + 600;
+const MATCH_RESULT_RESTART_DELAY_MS = 900;
 const CANVAS_BACKBUFFER_SCALE = 2;
 const CANVAS_VIEWPORT_PADDING = 32;
 const PLAYER_SPRITE_HEIGHT_SCALE = 1.45;
@@ -320,6 +325,7 @@ export class GameApp {
   private paused = false;
   private roundOutcome: RoundOutcome | null = null;
   private matchWinner: PlayerId | null = null;
+  private matchResultCooldownMs = 0;
   private readonly automationMode = typeof navigator !== "undefined" ? navigator.webdriver : false;
   private automationControlledPlayer: PlayerId = 2;
   private localBotFill = 0;
@@ -343,6 +349,7 @@ export class GameApp {
   private readonly characterRoster: CharacterRosterEntry[];
   private readonly spriteTrimCache = new SpriteTrimCache();
   private readonly soundManager = new SoundManager();
+  private language: SiteLanguage = "pt";
 
   // ── Performance: offscreen caches ──
   private backdropCache: HTMLCanvasElement | null = null;
@@ -438,6 +445,7 @@ export class GameApp {
       clonePlayerState: (player) => this.clonePlayerState(player),
       tryAbsorbInstantHit: (player) => this.tryAbsorbInstantHit(player),
       breakCrateAtKey: (key) => this.breakCrateAtKey(key),
+      addFlame: (tile, durationMs, style) => this.addFlame(tile, durationMs, style),
       soundManager: { playOneShot: (name: string) => this.soundManager.playOneShot(name as any) },
     };
   }
@@ -450,6 +458,7 @@ export class GameApp {
     this.botEnabled = false;
     this.menuReady = createBooleanPlayerRecord(false);
     this.matchResultChoice = createPlayerRecord(() => null);
+    this.matchResultCooldownMs = 0;
     this.onlineLocalPlayerId = 1;
     this.onlineInputs = createPlayerRecord(() => createNeutralOnlineInput());
     this.onlineNextInputSeq = 0;
@@ -473,6 +482,7 @@ export class GameApp {
     this.characterLocked = createBooleanPlayerRecord(true);
     this.characterMenuOpen = createBooleanPlayerRecord(false);
     this.matchResultChoice = createPlayerRecord(() => null);
+    this.matchResultCooldownMs = 0;
     this.localBotFill = 0;
     this.botControlledPlayers = createBooleanPlayerRecord(false);
 
@@ -564,6 +574,7 @@ export class GameApp {
     this.botControlledPlayers = createBooleanPlayerRecord(false);
     this.botEnabled = false;
     this.matchResultChoice = createPlayerRecord(() => null);
+    this.matchResultCooldownMs = 0;
     this.resetOnlineRoundBuffers(snapshot.roundNumber);
     this.pushOnlineRenderSample(snapshot.serverTimeMs, snapshot.serverTick, snapshot.players);
     this.nextBombId = snapshot.nextBombId;
@@ -651,6 +662,7 @@ export class GameApp {
     this.onlineLocalPlayerId = 1;
     this.menuReady = createBooleanPlayerRecord(false);
     this.matchResultChoice = createPlayerRecord(() => null);
+    this.matchResultCooldownMs = 0;
     this.score = { 1: 0, 2: 0, 3: 0, 4: 0 };
     this.roundNumber = 1;
     this.matchWinner = null;
@@ -742,6 +754,38 @@ export class GameApp {
     this.paused = false;
   }
 
+  public returnToMenu(): void {
+    if (this.onlineSession) {
+      this.detachOnlineSession();
+      return;
+    }
+    this.resetToLobbyState();
+    this.mode = "menu";
+    this.paused = false;
+    if (!this.headless) {
+      this.render();
+    }
+  }
+
+  public removeServerPlayer(playerId: PlayerId): void {
+    const player = this.players[playerId];
+    if (!player) {
+      return;
+    }
+    if (player.alive) {
+      this.killPlayer(player);
+    }
+    player.active = false;
+    player.alive = false;
+    player.velocity = { x: 0, y: 0 };
+    player.activeBombs = 0;
+    this.botControlledPlayers[playerId] = false;
+    this.activePlayerIds = this.activePlayerIds.filter((id) => id !== playerId);
+    if (this.mode === "match" && !this.roundOutcome) {
+      this.evaluateRoundState();
+    }
+  }
+
   public start(): void {
     if (this.headless) {
       return;
@@ -757,6 +801,13 @@ export class GameApp {
 
   public getCurrentMode(): Mode {
     return this.mode;
+  }
+
+  public setLanguage(language: SiteLanguage): void {
+    this.language = language;
+    if (!this.headless) {
+      this.render();
+    }
   }
 
   public startOfflineBotMatch(botFill = 3): void {
@@ -958,7 +1009,7 @@ export class GameApp {
         this.forwardGuestInput();
         this.updateGuestLocalPrediction(deltaMs);
       } else if (this.mode === "match-result") {
-        this.updateMatchResult();
+        this.updateMatchResult(deltaMs);
       }
       return;
     }
@@ -975,7 +1026,7 @@ export class GameApp {
         this.updateMatch(deltaMs);
         break;
       case "match-result":
-        this.updateMatchResult();
+        this.updateMatchResult(deltaMs);
         break;
       default:
         break;
@@ -1290,44 +1341,21 @@ export class GameApp {
     }
   }
 
-  private updateMatchResult(): void {
-    if (this.onlineSession?.role === "guest") {
-      const choice = this.consumeMatchResultChoiceInputForPlayer(1);
-      if (choice) {
-        this.matchResultChoice[this.onlineLocalPlayerId] = choice;
-        this.onlineSession.sendMatchResultChoice(choice);
-        if (choice === "lobby") {
-          this.resetToLobbyState();
-        }
-      }
+  private updateMatchResult(deltaMs: number): void {
+    if (this.onlineSession) {
       return;
     }
 
-    for (const playerId of this.activePlayerIds) {
-      if (this.isBotControlled(playerId)) {
-        this.matchResultChoice[playerId] = "rematch";
-      }
-    }
-
-    if (this.automationMode && this.input.consumePress("Enter")) {
-      this.matchResultChoice = createPlayerRecord(() => null);
-      for (const playerId of this.activePlayerIds) {
-        this.matchResultChoice[playerId] = "rematch";
-      }
-    }
-    for (const playerId of MENU_PLAYER_IDS) {
-      const choice = this.consumeMatchResultChoiceInputForPlayer(playerId);
-      if (choice) {
-        this.matchResultChoice[playerId] = choice;
-      }
-    }
-    if (this.matchResultChoice[1] === "lobby" || this.matchResultChoice[2] === "lobby") {
-      this.resetToLobbyState();
+    this.matchResultCooldownMs = Math.max(0, this.matchResultCooldownMs - deltaMs);
+    if (this.matchResultCooldownMs > 0) {
       return;
     }
-    if (this.activePlayerIds.every((playerId) => this.matchResultChoice[playerId] === "rematch")) {
+
+    if (this.activePlayerIds.length >= 2) {
       this.startMatch();
+      return;
     }
+    this.returnToMenu();
   }
 
   private handleReadyInput(readyState: Record<PlayerId, boolean>): void {
@@ -1342,17 +1370,6 @@ export class GameApp {
         readyState[playerId] = !readyState[playerId];
       }
     }
-  }
-
-  private consumeMatchResultChoiceInputForPlayer(playerId: MenuPlayerId): "rematch" | "lobby" | null {
-    const bindings = KEY_BINDINGS[playerId];
-    if (this.input.consumePress(bindings.bomb)) {
-      return "rematch";
-    }
-    if (this.input.consumePress(bindings.detonate)) {
-      return "lobby";
-    }
-    return null;
   }
 
   private handleCharacterSelectionInput(): void {
@@ -1431,6 +1448,7 @@ export class GameApp {
     }
     this.menuReady = nextReady;
     this.matchResultChoice = createPlayerRecord(() => null);
+    this.matchResultCooldownMs = 0;
     this.syncPlayerLabels();
   }
 
@@ -1440,6 +1458,7 @@ export class GameApp {
     this.soundManager.playOneShot("matchStart");
     this.menuReady = createBooleanPlayerRecord(false);
     this.matchResultChoice = createPlayerRecord(() => null);
+    this.matchResultCooldownMs = 0;
     this.score = { 1: 0, 2: 0, 3: 0, 4: 0 };
     this.roundNumber = 1;
     this.matchWinner = null;
@@ -1533,6 +1552,9 @@ export class GameApp {
     }
     if (characterId === NICO_CHARACTER_ID) {
       return "nico-arcane-beam";
+    }
+    if (characterId === CROCODILO_CHARACTER_ID) {
+      return "crocodilo-emerald-surge";
     }
     return null;
   }
@@ -2372,13 +2394,20 @@ export class GameApp {
     ));
   }
 
-  private addFlame(tile: TileCoord, durationMs: number = FLAME_DURATION_MS): void {
+  private addFlame(
+    tile: TileCoord,
+    durationMs: number = FLAME_DURATION_MS,
+    style: FlameState["style"] = "normal",
+  ): void {
     const existing = this.flames.find((flame) => flame.tile.x === tile.x && flame.tile.y === tile.y);
     if (existing) {
       existing.remainingMs = Math.max(existing.remainingMs, durationMs);
+      existing.style = existing.style === "toxic" || style === "toxic"
+        ? "toxic"
+        : style;
       return;
     }
-    this.flames.push({ tile: { ...tile }, remainingMs: durationMs });
+    this.flames.push({ tile: { ...tile }, remainingMs: durationMs, style });
   }
 
   private updateSuddenDeath(deltaMs: number): void {
@@ -2607,6 +2636,7 @@ export class GameApp {
       if (this.score[playerId] >= TARGET_WINS) {
         this.matchWinner = playerId;
         this.matchResultChoice = createPlayerRecord(() => null);
+        this.matchResultCooldownMs = MATCH_RESULT_RESTART_DELAY_MS;
         this.input.clearPresses();
         this.mode = "match-result";
         return;
@@ -2900,7 +2930,7 @@ export class GameApp {
 
     this.ctx.textAlign = "center";
     this.ctx.font = "bold 7px monospace";
-    this.drawHudText(`R${this.roundNumber} | GOAL ${TARGET_WINS}`, CANVAS_WIDTH / 2, 8, "#d8eaf8", "rgba(4, 10, 19, 0.9)");
+    this.drawHudText(`R${this.roundNumber} | FIRST TO ${TARGET_WINS}`, CANVAS_WIDTH / 2, 8, "#d8eaf8", "rgba(4, 10, 19, 0.9)");
     this.ctx.font = "bold 8px monospace";
     this.drawHudText("TIME", CANVAS_WIDTH / 2, 17, "#b8cde2", "rgba(4, 10, 19, 0.9)");
     this.ctx.font = "bold 16px monospace";
@@ -2932,7 +2962,7 @@ export class GameApp {
   private renderPlayerHud(playerId: PlayerId, x: number, y: number, width: number): void {
     const player = this.players[playerId];
     const palette = PLAYER_COLORS[playerId];
-    const title = `${this.getPlayerSlotLabel(playerId)} ${this.score[playerId]}`;
+    const title = this.getPlayerSlotLabel(playerId);
     const statLine = `B${player.maxBombs} F${player.flameRange} S${player.speedLevel}`;
     const status = !player.alive
       ? "DOWN"
@@ -2943,7 +2973,7 @@ export class GameApp {
           : "LIVE";
     const skillSlots = this.getHudSkillSlots(playerId);
 
-    this.drawHudPanel(x, y, width, 36, palette.glow);
+    this.drawHudPanel(x, y, width, 42, palette.glow);
     this.ctx.textAlign = "left";
     this.ctx.font = "bold 8px monospace";
     this.drawHudText(title, x + 6, y + 10, palette.primary, "rgba(4, 10, 19, 0.9)");
@@ -2958,9 +2988,10 @@ export class GameApp {
     this.ctx.textAlign = "right";
     this.drawHudText(status, x + width - 6, y + 10, player.alive ? "#e5fff7" : "rgba(210, 220, 231, 0.55)", "rgba(4, 10, 19, 0.85)");
     this.drawHudText(statLine, x + width - 6, y + 18, "#dbefff", "rgba(4, 10, 19, 0.85)");
+    this.drawRoundPips(x + 6, y + 25, this.score[playerId], palette);
 
     const insetX = x + 4;
-    const insetY = y + 22;
+    const insetY = y + 30;
     const insetWidth = Math.max(12, width - 8);
     const gap = 2;
     const slotCount = skillSlots.length;
@@ -2969,6 +3000,32 @@ export class GameApp {
       const slot = skillSlots[index];
       const slotX = insetX + index * (slotWidth + gap);
       this.drawHudSkillSlot(slotX, insetY, slotWidth, 10, slot);
+    }
+  }
+
+  private drawRoundPips(
+    x: number,
+    y: number,
+    wins: number,
+    palette: { primary: string; secondary: string; glow: string },
+  ): void {
+    for (let index = 0; index < TARGET_WINS; index += 1) {
+      const centerX = x + 5 + index * 12;
+      const filled = index < wins;
+      this.ctx.beginPath();
+      this.ctx.arc(centerX, y + 4, 4.5, 0, Math.PI * 2);
+      this.ctx.fillStyle = filled ? "#ffd768" : "rgba(255, 255, 255, 0.08)";
+      this.ctx.fill();
+      this.ctx.lineWidth = 1;
+      this.ctx.strokeStyle = filled ? palette.primary : "rgba(207, 223, 238, 0.34)";
+      this.ctx.stroke();
+      if (!filled) {
+        continue;
+      }
+      this.ctx.beginPath();
+      this.ctx.arc(centerX, y + 4, 1.75, 0, Math.PI * 2);
+      this.ctx.fillStyle = "#fff6cf";
+      this.ctx.fill();
     }
   }
 
@@ -3173,11 +3230,15 @@ export class GameApp {
       this.drawFlame(flame);
     }
 
+    for (const id of ALL_PLAYER_IDS) {
+      this.drawPlayerSkillPreview(this.players[id]);
+    }
+
     for (const beam of this.magicBeams) {
       this.drawMagicBeam(beam);
     }
 
-    for (const id of this.activePlayerIds) {
+    for (const id of ALL_PLAYER_IDS) {
       this.drawPlayer(this.players[id]);
     }
 
@@ -3475,16 +3536,27 @@ export class GameApp {
     const x = ARENA_OFFSET_X + flame.tile.x * TILE_SIZE;
     const y = ARENA_OFFSET_Y + flame.tile.y * TILE_SIZE;
     const alpha = Math.max(0.35, flame.remainingMs / FLAME_DURATION_MS);
-    if (this.assets.props.flame) {
+    if (this.assets.props.flame && (!flame.style || flame.style === "normal")) {
       this.ctx.save();
       this.ctx.globalAlpha = alpha;
       this.ctx.drawImage(this.assets.props.flame, x, y, TILE_SIZE, TILE_SIZE);
       this.ctx.restore();
       return;
     }
-    this.ctx.fillStyle = `rgba(255, 160, 74, ${alpha})`;
+
+    const palette = flame.style === "toxic"
+      ? {
+        outer: `rgba(72, 214, 136, ${alpha})`,
+        inner: `rgba(192, 255, 177, ${alpha})`,
+      }
+      : {
+        outer: `rgba(255, 160, 74, ${alpha})`,
+        inner: `rgba(255, 244, 159, ${alpha})`,
+      };
+
+    this.ctx.fillStyle = palette.outer;
     this.ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
-    this.ctx.fillStyle = `rgba(255, 244, 159, ${alpha})`;
+    this.ctx.fillStyle = palette.inner;
     this.ctx.beginPath();
     this.ctx.moveTo(x + 16, y + 5);
     this.ctx.lineTo(x + 26, y + 16);
@@ -3518,7 +3590,6 @@ export class GameApp {
     this.ctx.lineCap = "round";
     this.ctx.lineJoin = "round";
 
-    // Outer glow pass (wide, faint) — replaces expensive shadowBlur
     this.ctx.strokeStyle = `rgba(153, 70, 255, ${glowAlpha * 0.25})`;
     this.ctx.lineWidth = NICO_BEAM_GLOW_WIDTH_PX + TILE_SIZE * 0.7;
     this.ctx.beginPath();
@@ -3526,7 +3597,6 @@ export class GameApp {
     this.ctx.lineTo(endCenter.x, endCenter.y);
     this.ctx.stroke();
 
-    // Mid glow pass
     this.ctx.strokeStyle = gradient;
     this.ctx.lineWidth = NICO_BEAM_GLOW_WIDTH_PX;
     this.ctx.beginPath();
@@ -3534,7 +3604,6 @@ export class GameApp {
     this.ctx.lineTo(endCenter.x, endCenter.y);
     this.ctx.stroke();
 
-    // Core pass (bright center)
     this.ctx.strokeStyle = `rgba(255, 241, 255, ${coreAlpha})`;
     this.ctx.lineWidth = NICO_BEAM_CORE_WIDTH_PX;
     this.ctx.beginPath();
@@ -3548,6 +3617,7 @@ export class GameApp {
       this.ctx.fillStyle = `rgba(153, 58, 255, ${0.12 + progress * 0.14})`;
       this.ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
       this.ctx.strokeStyle = `rgba(245, 219, 255, ${0.18 + progress * 0.2})`;
+      this.ctx.lineWidth = 1;
       this.ctx.strokeRect(x + 4.5, y + 4.5, TILE_SIZE - 9, TILE_SIZE - 9);
     }
 
@@ -3563,15 +3633,79 @@ export class GameApp {
     this.ctx.restore();
   }
 
+  private drawPlayerSkillPreview(player: PlayerState): void {
+    if (!player.active || !player.alive || player.skill.phase !== "channeling") {
+      return;
+    }
+    if (player.skill.id === "nico-arcane-beam") {
+      this.drawNicoBeamPreview(player);
+    }
+  }
+
+  private drawNicoBeamPreview(player: PlayerState): void {
+    const direction = player.skill.projectedLastMoveDirection ?? player.lastMoveDirection ?? player.direction;
+    const origin = this.getTileFromPosition(player.position);
+    const tiles = collectNicoBeamTiles(origin, direction, this.arena.solid);
+    if (tiles.length === 0) {
+      return;
+    }
+    const lastTile = tiles[tiles.length - 1];
+    const originCenter = {
+      x: ARENA_OFFSET_X + origin.x * TILE_SIZE + TILE_SIZE * 0.5,
+      y: ARENA_OFFSET_Y + origin.y * TILE_SIZE + TILE_SIZE * 0.5,
+    };
+    const endCenter = {
+      x: ARENA_OFFSET_X + lastTile.x * TILE_SIZE + TILE_SIZE * 0.5,
+      y: ARENA_OFFSET_Y + lastTile.y * TILE_SIZE + TILE_SIZE * 0.5,
+    };
+    const chargeProgress = Math.max(0, Math.min(1, player.skill.castElapsedMs / NICO_SKILL_CHANNEL_MS));
+    const pulse = 0.55 + Math.sin(this.animationClockMs / 90) * 0.18;
+    const tileAlpha = 0.05 + chargeProgress * 0.1 + pulse * 0.03;
+    const lineAlpha = 0.12 + chargeProgress * 0.18;
+
+    this.ctx.save();
+    this.ctx.globalCompositeOperation = "lighter";
+    this.ctx.setLineDash([6, 6]);
+    this.ctx.lineCap = "round";
+    this.ctx.lineJoin = "round";
+    this.ctx.strokeStyle = `rgba(197, 132, 255, ${lineAlpha})`;
+    this.ctx.lineWidth = NICO_BEAM_GLOW_WIDTH_PX * 0.66;
+    this.ctx.beginPath();
+    this.ctx.moveTo(originCenter.x, originCenter.y);
+    this.ctx.lineTo(endCenter.x, endCenter.y);
+    this.ctx.stroke();
+    this.ctx.setLineDash([]);
+
+    for (const tile of tiles) {
+      const x = ARENA_OFFSET_X + tile.x * TILE_SIZE;
+      const y = ARENA_OFFSET_Y + tile.y * TILE_SIZE;
+      this.ctx.fillStyle = `rgba(145, 52, 255, ${tileAlpha})`;
+      this.ctx.fillRect(x + 5, y + 5, TILE_SIZE - 10, TILE_SIZE - 10);
+      this.ctx.strokeStyle = `rgba(245, 226, 255, ${lineAlpha * 0.85})`;
+      this.ctx.lineWidth = 1;
+      this.ctx.strokeRect(x + 5.5, y + 5.5, TILE_SIZE - 11, TILE_SIZE - 11);
+    }
+
+    this.ctx.fillStyle = `rgba(245, 235, 255, ${0.18 + chargeProgress * 0.18})`;
+    this.ctx.beginPath();
+    this.ctx.arc(originCenter.x, originCenter.y, TILE_SIZE * (0.2 + chargeProgress * 0.08), 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.restore();
+  }
+
   private drawPlayer(player: PlayerState): void {
-    if (!player.active) {
+    const existingDeathState = this.playerDeathAnimations[player.id];
+    if (!player.active && !existingDeathState) {
+      return;
+    }
+    const deathState = this.ensurePlayerDeathAnimationState(player);
+    if (!player.active && player.alive) {
       return;
     }
     const position = this.getPlayerPixelPosition(player);
     const palette = PLAYER_COLORS[player.id];
     const x = position.x;
     const y = position.y;
-    const deathState = this.ensurePlayerDeathAnimationState(player);
     const renderDirection = deathState?.direction ?? player.direction;
     const alpha = player.alive ? 1 : (deathState ? 1 : 0.35);
     const activeCharacter = this.getActiveCharacterEntry(player.id);
@@ -3710,6 +3844,24 @@ export class GameApp {
     }
     if (player.skill.id === "nico-arcane-beam") {
       const exactCastFrames = this.getPlayerSprites(player.id).cast?.[renderDirection] ?? [];
+      const walkFrames = this.getPlayerSprites(player.id).walk?.[renderDirection] ?? [];
+      const idleFrames = this.getPlayerSprites(player.id).idle?.[renderDirection] ?? [];
+      const frames = exactCastFrames.length > 0
+        ? exactCastFrames
+        : (walkFrames.length > 0
+          ? walkFrames
+          : (idleFrames.length > 0 ? idleFrames : runFrames));
+      if (frames.length === 0) {
+        return null;
+      }
+      return {
+        frames,
+        frameMs: Math.max(SKILL_FRAME_MS, Math.floor(NICO_SKILL_CHANNEL_MS / Math.max(1, frames.length))),
+        playback: "hold",
+      };
+    }
+    if (player.skill.id === "crocodilo-emerald-surge") {
+      const exactCastFrames = this.getPlayerSprites(player.id).cast?.[renderDirection] ?? [];
       const frames = exactCastFrames.length > 0
         ? exactCastFrames
         : (attackFrames.length > 0 ? attackFrames : runFrames);
@@ -3718,7 +3870,7 @@ export class GameApp {
       }
       return {
         frames,
-        frameMs: Math.max(SKILL_FRAME_MS, Math.floor(NICO_SKILL_CHANNEL_MS / Math.max(1, frames.length))),
+        frameMs: Math.max(SKILL_FRAME_MS, Math.floor(CROCODILO_SKILL_CHANNEL_MS / Math.max(1, frames.length))),
         playback: "hold",
       };
     }
@@ -3806,17 +3958,18 @@ export class GameApp {
   }
 
   private renderMatchOverlay(): void {
+    const copy = SITE_COPY[this.language].canvas;
     if (this.paused) {
-      this.drawCenterOverlay("PAUSED", "Press Esc to resume.");
+      this.drawCenterOverlay(copy.pausedTitle, copy.pausedSubtitle);
       return;
     }
 
     if (this.roundOutcome) {
       const detail = this.roundOutcome.reason === "elimination"
-        ? "Arena rebooting..."
+        ? copy.arenaRebooting
         : this.roundOutcome.reason === "double-ko"
-          ? "Both cores overloaded."
-          : "No points awarded.";
+          ? copy.doubleKo
+          : copy.noPoints;
       this.drawCenterOverlay(this.roundOutcome.message, detail);
     }
   }
@@ -3830,38 +3983,11 @@ export class GameApp {
   }
 
   private renderMatchResult(): void {
+    const copy = SITE_COPY[this.language].canvas;
     this.drawCenterOverlay(
-      this.matchWinner ? `${this.players[this.matchWinner].name} wins the match!` : "Match complete",
-      "Q = Sim · R = VOLTAR PRO LOBBY",
+      this.matchWinner ? copy.matchWinner(this.players[this.matchWinner].name) : copy.matchComplete,
+      copy.rematchSummary,
     );
-    const localChoice = this.matchResultChoice[this.onlineLocalPlayerId];
-    this.drawChoicePanel(92, 332, "Q", "Sim", localChoice === "rematch");
-    this.drawChoicePanel(252, 332, "R", "VOLTAR PRO LOBBY", localChoice === "lobby");
-  }
-
-  private drawChoicePanel(
-    x: number,
-    y: number,
-    keyLabel: string,
-    label: string,
-    selected: boolean,
-  ): void {
-    this.ctx.fillStyle = selected ? "rgba(15, 41, 58, 0.96)" : "rgba(15, 20, 30, 0.92)";
-    this.ctx.fillRect(x, y, 178, 70);
-    this.ctx.strokeStyle = selected ? "#8bdcff" : "rgba(255,255,255,0.2)";
-    this.ctx.lineWidth = 1.5;
-    this.ctx.strokeRect(x + 0.5, y + 0.5, 177, 69);
-    this.ctx.fillStyle = selected ? "#8bdcff" : "rgba(255,255,255,0.08)";
-    this.ctx.fillRect(x, y, 178, 3);
-    this.ctx.textAlign = "left";
-    this.ctx.fillStyle = "#f4fbff";
-    this.ctx.font = "bold 10px monospace";
-    this.ctx.fillText(keyLabel, x + 12, y + 18);
-    this.ctx.fillStyle = "#d7eefc";
-    this.ctx.font = "9px monospace";
-    this.ctx.fillText(label, x + 12, y + 38);
-    this.ctx.fillStyle = "rgba(196, 219, 238, 0.88)";
-    this.ctx.fillText(selected ? "Choice locked" : `Press ${keyLabel} to select`, x + 12, y + 54);
   }
 
   private drawCenterOverlay(title: string, subtitle: string): void {

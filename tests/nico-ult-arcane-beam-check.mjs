@@ -44,7 +44,7 @@ const assets = {
 
 function createServerMatch(characterSelections) {
   const game = new GameApp(root, assets);
-  game.startServerAuthoritativeMatch([1, 2, 3], characterSelections);
+  game.startServerAuthoritativeMatch([1, 2, 3, 4], characterSelections);
   game.arena.solid.clear();
   game.arena.breakable.clear();
   game.bombs = [];
@@ -61,22 +61,35 @@ const neutralInput = {
 
 const game = createServerMatch({ 1: 0, 2: 1, 3: 2, 4: 0 });
 const nico = game.players[1];
-const closeEnemy = game.players[2];
-const farEnemy = game.players[3];
+const frontEnemy = game.players[2];
+const diagonalEnemy = game.players[3];
+const farEnemy = game.players[4];
 
 nico.position = { x: 2 * TILE_SIZE + TILE_SIZE * 0.5, y: 4 * TILE_SIZE + TILE_SIZE * 0.5 };
 nico.tile = { x: 2, y: 4 };
 nico.spawnProtectionMs = 0;
 
-closeEnemy.position = { x: 7 * TILE_SIZE + TILE_SIZE * 0.5, y: 4 * TILE_SIZE + TILE_SIZE * 0.5 };
-closeEnemy.tile = { x: 7, y: 4 };
-closeEnemy.spawnProtectionMs = 0;
+frontEnemy.position = { x: 7 * TILE_SIZE + TILE_SIZE * 0.5, y: 4 * TILE_SIZE + TILE_SIZE * 0.5 };
+frontEnemy.tile = { x: 7, y: 4 };
+frontEnemy.spawnProtectionMs = 0;
 
-farEnemy.position = { x: 9 * TILE_SIZE + TILE_SIZE * 0.5, y: 4 * TILE_SIZE + TILE_SIZE * 0.5 };
-farEnemy.tile = { x: 9, y: 4 };
+diagonalEnemy.position = { x: 5 * TILE_SIZE + TILE_SIZE * 0.5, y: 5 * TILE_SIZE + TILE_SIZE * 0.5 };
+diagonalEnemy.tile = { x: 5, y: 5 };
+diagonalEnemy.spawnProtectionMs = 0;
+
+farEnemy.position = { x: 10 * TILE_SIZE + TILE_SIZE * 0.5, y: 4 * TILE_SIZE + TILE_SIZE * 0.5 };
+farEnemy.tile = { x: 10, y: 4 };
 farEnemy.spawnProtectionMs = 0;
 
 game.arena.breakable.add("5,4");
+game.bombs.push({
+  id: 1,
+  ownerId: 2,
+  tile: { x: 8, y: 4 },
+  fuseMs: 9000,
+  ownerCanPass: false,
+  flameRange: 1,
+});
 
 game.setServerPlayerInput(1, {
   direction: "right",
@@ -106,17 +119,29 @@ for (; channelElapsedMs < 2600 && nico.skill.phase === "channeling"; channelElap
 }
 
 const afterFireSkill = { ...nico.skill };
-const activeBeam = game.magicBeams[0] ?? null;
-const beamTileKeys = new Set((activeBeam?.tiles ?? []).map((tile) => `${tile.x},${tile.y}`));
+const activeBlast = game.magicBeams[0] ?? null;
+const blastTileKeys = new Set((activeBlast?.tiles ?? []).map((tile) => `${tile.x},${tile.y}`));
+const blastBomb = game.bombs[0] ?? null;
 
 const stayedFrozen = Math.abs((midSnapshot?.x ?? nico.position.x) - channelStartX) < 1.5;
 const channelingObserved = midSnapshot?.skill?.phase === "channeling";
 const firedOnFullHold = afterFireSkill.phase === "cooldown" && afterFireSkill.cooldownRemainingMs === NICO_COOLDOWN_MS;
-const beamSpawned = Boolean(activeBeam) && activeBeam.direction === "right";
-const beamHitCloseEnemy = closeEnemy.alive === false;
-const beamMissedFarEnemy = farEnemy.alive === true;
-const beamBrokeCrate = game.arena.breakable.has("5,4") === false;
-const beamStayedWithinHalfMap = beamTileKeys.has("7,4") && beamTileKeys.has("8,4") && beamTileKeys.has("9,4") === false;
+const blastSpawned = Boolean(activeBlast) && activeBlast.direction === "right";
+const blastFrontEnemy = frontEnemy.alive === false;
+const blastDiagonalEnemy = diagonalEnemy.alive === true;
+const blastMissedFarEnemy = farEnemy.alive === true;
+const blastBrokeCrate = game.arena.breakable.has("5,4") === false;
+const blastTriggeredBomb = blastBomb?.fuseMs === 0 || game.bombs.length === 0;
+const blastMatchesFootprint = [
+  "3,4",
+  "4,4",
+  "5,4",
+  "6,4",
+  "7,4",
+  "8,4",
+].every((key) => blastTileKeys.has(key))
+  && blastTileKeys.has("5,5") === false
+  && blastTileKeys.has("9,4") === false;
 
 const cancelGame = createServerMatch({ 1: 0, 2: 1, 3: 2, 4: 0 });
 const cancelNico = cancelGame.players[1];
@@ -201,22 +226,26 @@ const report = {
   stayedFrozen,
   channelingObserved,
   firedOnFullHold,
-  beamSpawned,
-  beamTileKeys: [...beamTileKeys],
-  beamHitCloseEnemy,
-  beamMissedFarEnemy,
-  beamBrokeCrate,
-  beamStayedWithinHalfMap,
+  blastSpawned,
+  blastTileKeys: [...blastTileKeys],
+  blastFrontEnemy,
+  blastDiagonalEnemy,
+  blastMissedFarEnemy,
+  blastBrokeCrate,
+  blastTriggeredBomb,
+  blastMatchesFootprint,
   canceledBeforeFire,
   usesSlowCastTiming,
   pass: stayedFrozen
     && channelingObserved
     && firedOnFullHold
-    && beamSpawned
-    && beamHitCloseEnemy
-    && beamMissedFarEnemy
-    && beamBrokeCrate
-    && beamStayedWithinHalfMap
+    && blastSpawned
+    && blastFrontEnemy
+    && blastDiagonalEnemy
+    && blastMissedFarEnemy
+    && blastBrokeCrate
+    && blastTriggeredBomb
+    && blastMatchesFootprint
     && canceledBeforeFire
     && usesSlowCastTiming,
 };

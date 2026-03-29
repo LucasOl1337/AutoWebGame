@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-03-28T02:57:59.274Z",
-  "totalRequested": 3,
-  "imported": 3,
-  "skipped": 0,
+  "generatedAt": "2026-03-29T22:39:29.817Z",
+  "totalRequested": 78,
+  "imported": 15,
+  "skipped": 63,
   "invalid": false,
   "characters": [
     {
@@ -129,7 +129,16 @@
       "size": {
         "width": 116,
         "height": 116
-      }
+      },
+      "animations": {
+        "idle": false,
+        "walk": false,
+        "run": false,
+        "cast": false,
+        "attack": false,
+        "death": false
+      },
+      "pinned": false
     },
     {
       "id": "2f5e74cb-7387-461d-af4a-cc2a02694eb2",
@@ -186,6 +195,23 @@
         "width": 124,
         "height": 124
       }
+    },
+    {
+      "id": "d083c3dc-7162-4391-8628-6adde0b8d8d6",
+      "name": "Crocodilo Arcano",
+      "size": {
+        "width": 156,
+        "height": 156
+      },
+      "animations": {
+        "idle": true,
+        "walk": false,
+        "run": false,
+        "cast": false,
+        "attack": false,
+        "death": false
+      },
+      "pinned": false
     },
     {
       "id": "66bd2288-1e0e-4e19-8cb0-8566fe95bea2",
@@ -249,7 +275,16 @@
       "size": {
         "width": 124,
         "height": 124
-      }
+      },
+      "animations": {
+        "idle": false,
+        "walk": false,
+        "run": false,
+        "cast": false,
+        "attack": false,
+        "death": false
+      },
+      "pinned": false
     },
     {
       "id": "b2f68de2-4db4-40fd-b6b6-bed43adf47c4",
@@ -265,7 +300,16 @@
       "size": {
         "width": 120,
         "height": 120
-      }
+      },
+      "animations": {
+        "idle": false,
+        "walk": false,
+        "run": false,
+        "cast": false,
+        "attack": false,
+        "death": false
+      },
+      "pinned": false
     },
     {
       "id": "e607b7e0-e632-4718-a054-7ae08b1fd1a0",
@@ -297,7 +341,16 @@
       "size": {
         "width": 124,
         "height": 124
-      }
+      },
+      "animations": {
+        "idle": false,
+        "walk": false,
+        "run": false,
+        "cast": false,
+        "attack": false,
+        "death": false
+      },
+      "pinned": false
     },
     {
       "id": "678fbb3a-a586-4c1e-b3c1-1e8faa71003a",
@@ -369,7 +422,16 @@
       "size": {
         "width": 124,
         "height": 124
-      }
+      },
+      "animations": {
+        "idle": false,
+        "walk": false,
+        "run": false,
+        "cast": false,
+        "attack": false,
+        "death": false
+      },
+      "pinned": false
     },
     {
       "id": "5f508908-0f62-424f-b894-a0e446f7ec7c",
@@ -377,7 +439,16 @@
       "size": {
         "width": 124,
         "height": 124
-      }
+      },
+      "animations": {
+        "idle": false,
+        "walk": false,
+        "run": false,
+        "cast": false,
+        "attack": false,
+        "death": false
+      },
+      "pinned": false
     },
     {
       "id": "898e815e-d483-461f-9c1b-8e116357ea50",
@@ -401,7 +472,16 @@
       "size": {
         "width": 124,
         "height": 124
-      }
+      },
+      "animations": {
+        "idle": false,
+        "walk": false,
+        "run": false,
+        "cast": false,
+        "attack": false,
+        "death": false
+      },
+      "pinned": false
     },
     {
       "id": "62db841f-24b8-4a82-8370-e5d709da74bd",
@@ -486,8 +566,8 @@
         "idle": true,
         "walk": true,
         "run": true,
-        "cast": true,
-        "attack": true,
+        "cast": false,
+        "attack": false,
         "death": false
       },
       "pinned": false
@@ -514,7 +594,16 @@
       "size": {
         "width": 124,
         "height": 124
-      }
+      },
+      "animations": {
+        "idle": false,
+        "walk": false,
+        "run": false,
+        "cast": false,
+        "attack": false,
+        "death": false
+      },
+      "pinned": false
     },
     {
       "id": "85c70795-2fa6-4f81-88fe-f1dc37434ad5",
@@ -522,7 +611,16 @@
       "size": {
         "width": 120,
         "height": 120
-      }
+      },
+      "animations": {
+        "idle": false,
+        "walk": false,
+        "run": false,
+        "cast": false,
+        "attack": false,
+        "death": false
+      },
+      "pinned": false
     },
     {
       "id": "e8a5da63-cd7f-4ed2-bb1e-395d0d08009c",
@@ -554,7 +652,16 @@
       "size": {
         "width": 124,
         "height": 124
-      }
+      },
+      "animations": {
+        "idle": false,
+        "walk": false,
+        "run": false,
+        "cast": false,
+        "attack": false,
+        "death": false
+      },
+      "pinned": false
     },
     {
       "id": "839fcfec-5e19-4927-b51a-a181f7038bf5",
@@ -586,7 +693,16 @@
       "size": {
         "width": 120,
         "height": 120
-      }
+      },
+      "animations": {
+        "idle": false,
+        "walk": false,
+        "run": false,
+        "cast": false,
+        "attack": false,
+        "death": false
+      },
+      "pinned": false
     },
     {
       "id": "f640037c-6241-43b3-8b55-259153a8f4c2",
