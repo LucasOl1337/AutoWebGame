@@ -1,65 +1,78 @@
 import type { CharacterRosterEntry } from "../app/assets";
 import { assetUrl } from "../app/asset-url";
 import { ALL_PLAYER_IDS } from "../core/types";
-import type { PlayerId } from "../core/types";
+import type { Mode, PlayerId } from "../core/types";
 import type {
-  ChatEntry,
   LobbyState,
   LobbySummary,
   OnlineGameFrame,
   MatchStartConfig,
   OnlineGameSnapshot,
   OnlineInputState,
+  OnlinePresenceEntry,
   OnlineRole,
   OnlineSessionBridge,
   ServerMessage,
 } from "./protocol";
+import { GrowthTelemetryClient } from "./growth-telemetry";
 
 interface OnlineGameAppBridge {
   attachOnlineSession(session: OnlineSessionBridge): void;
   detachOnlineSession(): void;
   startOnlineMatch(config: MatchStartConfig): void;
+  startOfflineBotMatch(botFill?: number): void;
+  setOfflinePreferredCharacter(characterIndex: number): void;
+  getCurrentMode(): Mode;
   applyOnlineFrame(frame: OnlineGameFrame): void;
   applyOnlineSnapshot(snapshot: OnlineGameSnapshot): void;
   clearOnlinePeer(): void;
   receiveOnlineGuestInput(input: OnlineInputState): void;
 }
 
+type ExperienceScreen = "landing" | "lobby-list" | "setup" | "match";
+type IdleScreen = "landing" | "lobby-list";
+
 interface SessionElements {
   shell: HTMLDivElement;
-  browserList: HTMLDivElement;
-  onlineUsersValue: HTMLSpanElement;
-  openRoomsValue: HTMLSpanElement;
-  liveRoomsValue: HTMLSpanElement;
-  createTitle: HTMLInputElement;
-  createButton: HTMLButtonElement;
-  quickMatchButton: HTMLButtonElement;
-  quickMatchMeta: HTMLParagraphElement;
+  screens: Record<ExperienceScreen, HTMLElement>;
+  landingMeta: HTMLParagraphElement;
+  landingQuickMatchButton: HTMLButtonElement;
+  landingBotMatchButton: HTMLButtonElement;
+  landingLobbyButton: HTMLButtonElement;
+  landingRoster: HTMLDivElement;
+  lobbyListBackButton: HTMLButtonElement;
+  lobbyListCreateButton: HTMLButtonElement;
+  lobbyListCount: HTMLParagraphElement;
+  lobbyListList: HTMLDivElement;
+  setupBackButton: HTMLButtonElement;
+  setupLeaveButton: HTMLButtonElement;
+  setupCopyButton: HTMLButtonElement;
+  setupEyebrow: HTMLParagraphElement;
+  setupTitle: HTMLHeadingElement;
+  setupDescription: HTMLParagraphElement;
+  setupRoomMeta: HTMLParagraphElement;
+  setupSeatStrip: HTMLDivElement;
+  setupPresenceList: HTMLDivElement;
   selectorPortrait: HTMLImageElement;
   selectorName: HTMLParagraphElement;
   selectorNote: HTMLParagraphElement;
   selectorGrid: HTMLDivElement;
-  stageEyebrow: HTMLParagraphElement;
-  stageTitle: HTMLHeadingElement;
-  stageDescription: HTMLParagraphElement;
-  stageMeta: HTMLParagraphElement;
-  inviteInput: HTMLInputElement;
-  copyButton: HTMLButtonElement;
-  leaveButton: HTMLButtonElement;
-  matchMeta: HTMLParagraphElement;
+  setupPrimaryButton: HTMLButtonElement;
+  setupPrimaryHint: HTMLParagraphElement;
+  matchViewport: HTMLDivElement;
+  matchCode: HTMLSpanElement;
+  matchStatus: HTMLParagraphElement;
   matchCopyButton: HTMLButtonElement;
   matchLeaveButton: HTMLButtonElement;
-  arenaViewport: HTMLDivElement;
-  seatsHeading: HTMLDivElement;
-  seats: Record<PlayerId, HTMLDivElement>;
-  chatHeading: HTMLDivElement;
-  chatLog: HTMLDivElement;
-  chatInput: HTMLInputElement;
-  chatSend: HTMLButtonElement;
+  matchRoster: HTMLDivElement;
+  matchChatLog: HTMLDivElement;
+  matchChatInput: HTMLInputElement;
+  matchChatSend: HTMLButtonElement;
   status: HTMLParagraphElement;
 }
 
 const LOBBY_MAX_PLAYERS = 4;
+const DEFAULT_LOBBY_TITLE = "BOMBA PVP";
 
 export class OnlineSessionClient implements OnlineSessionBridge {
   public role: OnlineRole | null = null;
@@ -79,24 +92,28 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private quickMatchSearching = false;
   private quickMatchQueuedCount = 0;
   private onlineUsers = 0;
+  private onlinePlayers: OnlinePresenceEntry[] = [];
   private preferredCharacterIndex = 0;
+  private idleScreen: IdleScreen = "landing";
+  private autoClaimRoomCode: string | null = null;
+  private readonly telemetry: GrowthTelemetryClient;
+  private observedMatchWinner: PlayerId | null = null;
 
   constructor(root: HTMLElement, app: OnlineGameAppBridge, roster: CharacterRosterEntry[]) {
     this.app = app;
     this.roster = roster;
     this.pendingAutoJoinRoom = this.readRoomFromLocation();
     this.preferredCharacterIndex = this.readPreferredCharacterIndex();
+    this.telemetry = new GrowthTelemetryClient();
     this.elements = this.render(root);
     this.canvasObserver = new MutationObserver(() => this.mountCanvas(root));
     this.canvasObserver.observe(root, { childList: true });
     this.mountCanvas(root);
     this.bindEvents();
-    this.renderCharacterSelector();
-    this.renderLiveStats();
-    this.renderQuickMatchState();
-    this.renderLobbyList();
-    this.renderStage();
-    this.setStatus("Connecting to global lobby...");
+    this.renderAll();
+    this.app.setOfflinePreferredCharacter(this.preferredCharacterIndex);
+    this.telemetry.trackLandingView();
+    this.setStatus("Conectando ao lobby global...");
     this.connect();
   }
 
@@ -141,12 +158,16 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.socket = null;
       this.role = null;
       this.roomCode = null;
+      this.currentLobby = null;
+      this.quickMatchSearching = false;
+      this.pendingAutoJoinRoom = null;
       this.app.detachOnlineSession();
-      this.setStatus("Connection lost. Reconnecting to live lobby...");
+      this.renderAll();
+      this.setStatus("Conexao perdida. Reconectando...");
       this.scheduleReconnect();
     });
     socket.addEventListener("error", () => {
-      this.setStatus("Connection error. Retrying...");
+      this.setStatus("Erro de conexao. Tentando novamente...");
     });
   }
 
@@ -163,84 +184,135 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   }
 
   private bindEvents(): void {
-    this.elements.createButton.addEventListener("click", () => {
-      const title = this.elements.createTitle.value.trim() || "BOMBA";
-      this.send({ type: "create-lobby", title });
+    this.elements.landingQuickMatchButton.addEventListener("click", () => {
+      this.telemetry.track("quick_match_clicked", {
+        context: { screen: this.getScreen() },
+        payload: { characterIndex: this.preferredCharacterIndex },
+      });
+      this.startQuickMatch();
     });
-
-    this.elements.quickMatchButton.addEventListener("click", () => {
-      const currentLobby = this.currentLobby;
-      if (
-        currentLobby
-        && currentLobby.status === "open"
-        && currentLobby.selfSeat
-        && currentLobby.seats[currentLobby.selfSeat]?.ready
-      ) {
-        this.setStatus("Quick match ja armou sua vaga. Aguardando outro piloto entrar.");
+    this.elements.landingBotMatchButton.addEventListener("click", () => {
+      this.app.setOfflinePreferredCharacter(this.preferredCharacterIndex);
+      this.app.startOfflineBotMatch(3);
+      this.setStatus("Partida contra bots iniciada.");
+      this.renderAll();
+    });
+    this.elements.landingLobbyButton.addEventListener("click", () => {
+      this.idleScreen = "lobby-list";
+      this.telemetry.track("lobby_list_opened", {
+        context: { screen: "landing" },
+      });
+      this.renderAll();
+    });
+    this.elements.lobbyListBackButton.addEventListener("click", () => {
+      this.idleScreen = "landing";
+      this.renderAll();
+    });
+    this.elements.lobbyListCreateButton.addEventListener("click", () => {
+      this.telemetry.track("lobby_create_clicked", {
+        context: { screen: "lobby-list" },
+      });
+      if (!this.send({ type: "create-lobby", title: DEFAULT_LOBBY_TITLE })) {
+        this.setStatus("Nao foi possivel criar a sala agora.");
+        return;
+      }
+      this.setStatus("Criando um lobby novo...");
+    });
+    this.elements.setupBackButton.addEventListener("click", () => {
+      if (this.currentLobby) {
+        this.leaveCurrentLobby();
         return;
       }
       if (this.quickMatchSearching) {
+        this.quickMatchSearching = false;
+        this.send({ type: "quick-match-cancel" });
+      }
+      this.pendingAutoJoinRoom = null;
+      this.idleScreen = "landing";
+      this.renderAll();
+    });
+    this.elements.setupLeaveButton.addEventListener("click", () => {
+      if (this.currentLobby) {
+        this.leaveCurrentLobby();
         return;
       }
-      this.quickMatchSearching = true;
-      this.renderQuickMatchState();
-      if (!this.send({ type: "quick-match", characterIndex: this.preferredCharacterIndex })) {
+      if (this.quickMatchSearching) {
         this.quickMatchSearching = false;
-        this.renderQuickMatchState();
-        this.setStatus("Quick match unavailable. Reconnecting...");
+        this.send({ type: "quick-match-cancel" });
+        this.renderAll();
       }
     });
-
-    this.elements.copyButton.addEventListener("click", () => {
+    this.elements.setupCopyButton.addEventListener("click", () => {
       void this.copyInvite();
+    });
+    this.elements.setupPrimaryButton.addEventListener("click", () => {
+      this.handleSetupPrimaryAction();
     });
     this.elements.matchCopyButton.addEventListener("click", () => {
       void this.copyInvite();
     });
-
-    this.elements.leaveButton.addEventListener("click", () => {
-      this.leaveCurrentLobby();
-    });
     this.elements.matchLeaveButton.addEventListener("click", () => {
       this.leaveCurrentLobby();
     });
-
-    this.elements.chatSend.addEventListener("click", () => {
+    this.elements.matchChatSend.addEventListener("click", () => {
       this.sendChat();
     });
-    this.elements.chatInput.addEventListener("keydown", (event) => {
-      event.stopPropagation();
+    this.elements.matchChatInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
         this.sendChat();
       }
     });
-    this.elements.chatInput.addEventListener("keyup", (event) => {
-      event.stopPropagation();
-    });
-    this.elements.chatInput.addEventListener("pointerdown", (event) => {
-      event.stopPropagation();
-    });
-    this.elements.chatInput.addEventListener("click", (event) => {
-      event.stopPropagation();
-    });
   }
 
-  private sendChat(): void {
-    if (!this.currentLobby) {
-      this.setStatus("Join a room before sending chat.");
+  private startQuickMatch(): void {
+    if (this.quickMatchSearching) {
       return;
     }
-    const body = this.elements.chatInput.value.trim();
-    if (!body) {
+    this.idleScreen = "landing";
+    this.quickMatchSearching = true;
+    this.renderAll();
+    if (!this.send({ type: "quick-match", characterIndex: this.preferredCharacterIndex })) {
+      this.quickMatchSearching = false;
+      this.renderAll();
+      this.setStatus("Quick match indisponivel. Reconectando...");
       return;
     }
-    if (!this.send({ type: "chat-send", body })) {
-      this.setStatus("Chat temporarily unavailable. Reconnecting...");
+    this.setStatus("Buscando uma sala aberta...");
+  }
+
+  private handleSetupPrimaryAction(): void {
+    const lobby = this.currentLobby;
+    if (!lobby || lobby.status !== "open") {
       return;
     }
-    this.elements.chatInput.value = "";
-    this.elements.chatInput.focus();
+
+    if (!lobby.selfSeat) {
+      const firstFreeSeat = this.getFirstAvailableSeat(lobby);
+      if (!firstFreeSeat) {
+        this.setStatus("Essa sala lotou antes da entrada.");
+        this.renderAll();
+        return;
+      }
+      this.telemetry.track("seat_claim_clicked", {
+        context: { roomCode: lobby.roomCode, screen: "setup" },
+        payload: { seat: firstFreeSeat, characterIndex: this.preferredCharacterIndex },
+      });
+      this.autoClaimRoomCode = lobby.roomCode;
+      this.send({ type: "claim-seat", seat: firstFreeSeat, characterIndex: this.preferredCharacterIndex });
+      this.setStatus(`Entrando na vaga P${firstFreeSeat}...`);
+      return;
+    }
+
+    const selfSeat = lobby.seats[lobby.selfSeat];
+    if (!selfSeat.ready) {
+      this.telemetry.track("ready_clicked", {
+        context: { roomCode: lobby.roomCode, screen: "setup" },
+        payload: { seat: lobby.selfSeat },
+      });
+      this.send({ type: "set-ready", ready: true });
+      this.setStatus("Tudo certo. Sua vaga foi marcada como pronta.");
+    }
   }
 
   private async copyInvite(): Promise<void> {
@@ -249,14 +321,39 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     }
     try {
       await navigator.clipboard.writeText(this.buildInviteUrl(this.currentLobby.roomCode));
-      this.setStatus("Invite copied. Anyone can also join from the global lobby board.");
+      this.telemetry.track("invite_copied", {
+        context: { roomCode: this.currentLobby.roomCode, screen: this.getScreen() },
+      });
+      this.setStatus("Convite copiado.");
     } catch {
-      this.setStatus("Copy failed. Share the room code manually.");
+      this.setStatus("Nao foi possivel copiar o convite.");
     }
   }
 
   private leaveCurrentLobby(): void {
+    this.telemetry.track("lobby_left", {
+      context: { roomCode: this.currentLobby?.roomCode ?? null, screen: this.getScreen() },
+    });
     this.send({ type: "leave-lobby" });
+  }
+
+  private sendChat(): void {
+    if (!this.currentLobby) {
+      return;
+    }
+    const body = this.elements.matchChatInput.value.trim();
+    if (!body) {
+      return;
+    }
+    if (!this.send({ type: "chat-send", body })) {
+      this.setStatus("Chat indisponivel no momento.");
+      return;
+    }
+    this.telemetry.track("chat_sent", {
+      context: { roomCode: this.currentLobby.roomCode, screen: this.getScreen() },
+      payload: { length: body.length },
+    });
+    this.elements.matchChatInput.value = "";
   }
 
   private handleMessage(rawMessage: unknown): void {
@@ -276,111 +373,128 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.clientId = message.clientId;
         this.lobbies = message.lobbies;
         this.onlineUsers = message.onlineUsers;
+        this.onlinePlayers = message.onlinePlayers;
         this.quickMatchQueuedCount = message.quickMatchQueued;
-        this.quickMatchSearching = false;
-        this.syncPreferredCharacterFromLobby();
-        this.renderCharacterSelector();
-        this.renderLiveStats();
-        this.renderLobbyList();
-        this.renderQuickMatchState();
-        this.renderStage();
+        this.quickMatchSearching = message.searchingQuickMatch;
         if (this.pendingAutoJoinRoom) {
           this.send({ type: "join-lobby", roomCode: this.pendingAutoJoinRoom });
-          this.pendingAutoJoinRoom = null;
+          this.setStatus("Entrando no lobby...");
+        } else if (this.quickMatchSearching) {
+          this.setStatus("Buscando uma sala aberta...");
+        } else {
+          this.setStatus("Escolha partida rapida ou entre em um lobby.");
         }
-        this.setStatus("Bomba board online. Create a room or enter quick match.");
+        this.renderAll();
         break;
       case "lobby-list":
         this.lobbies = message.lobbies;
         this.onlineUsers = message.onlineUsers;
-        this.renderLiveStats();
-        this.renderLobbyList();
+        this.onlinePlayers = message.onlinePlayers;
+        this.renderAll();
         break;
       case "lobby-joined":
         this.role = message.role;
         this.currentLobby = message.lobby;
         this.roomCode = message.lobby.roomCode;
+        this.pendingAutoJoinRoom = null;
         this.quickMatchSearching = false;
         this.syncPreferredCharacterFromLobby();
-        this.renderCharacterSelector();
-        this.renderQuickMatchState();
         this.app.attachOnlineSession(this);
         this.updateLocation(message.lobby.roomCode);
-        this.renderStage();
-        this.renderLobbyList();
-        this.setStatus("Lobby joined. Claim a slot, pick a character, then ready up.");
+        this.maybeAutoClaimSeat();
+        this.telemetry.track("lobby_joined", {
+          context: { roomCode: message.lobby.roomCode, screen: "setup" },
+          payload: {
+            occupantCount: message.lobby.occupantCount,
+            selfSeat: message.lobby.selfSeat,
+          },
+        });
+        this.setStatus("Sala carregada. Revise o personagem e entre pronto.");
+        this.renderAll();
         break;
       case "lobby-updated":
-        {
-          const wasMatchState = this.elements.shell.dataset.state === "match";
-          this.currentLobby = message.lobby;
-          this.roomCode = message.lobby.roomCode;
-          this.syncPreferredCharacterFromLobby();
-          this.renderCharacterSelector();
-          if (message.lobby.status === "open" && wasMatchState) {
-            this.app.clearOnlinePeer();
-            this.elements.shell.dataset.state = "lobby";
-          }
-          this.renderStage();
-          this.renderLobbyList();
-          break;
+        if (this.currentLobby?.status === "playing" && message.lobby.status === "open") {
+          this.app.clearOnlinePeer();
         }
+        this.currentLobby = message.lobby;
+        this.roomCode = message.lobby.roomCode;
+        this.syncPreferredCharacterFromLobby();
+        this.maybeAutoClaimSeat();
+        this.renderAll();
+        break;
       case "lobby-left":
         this.role = null;
         this.roomCode = null;
         this.currentLobby = null;
+        this.pendingAutoJoinRoom = null;
         this.quickMatchSearching = false;
-        this.renderCharacterSelector();
+        this.autoClaimRoomCode = null;
         this.updateLocation(null);
         this.app.detachOnlineSession();
-        this.renderStage();
-        this.renderLobbyList();
-        this.renderQuickMatchState();
-        this.setStatus("Back in the global lobby.");
+        this.renderAll();
+        this.setStatus("Voce voltou para a entrada do jogo.");
         break;
       case "match-started":
         this.role = message.config.role;
         this.roomCode = message.config.roomCode;
+        this.pendingAutoJoinRoom = null;
         this.quickMatchSearching = false;
+        if (this.currentLobby) {
+          this.currentLobby = {
+            ...this.currentLobby,
+            status: "playing",
+          };
+        }
         this.syncPreferredCharacterFromMatchConfig(message.config);
-        this.renderCharacterSelector();
-        this.renderQuickMatchState();
         this.app.startOnlineMatch(message.config);
-        this.elements.shell.dataset.state = "match";
-        this.renderStage();
-        this.setStatus("Match live. Arena expanded and the player rail stays active until the room resets.");
+        this.observedMatchWinner = null;
+        this.telemetry.track("match_started", {
+          context: { roomCode: message.config.roomCode, screen: "match" },
+          payload: {
+            localPlayerId: message.config.localPlayerId,
+            activePlayerCount: message.config.activePlayerIds.length,
+          },
+        });
+        this.renderAll();
+        this.setStatus("Partida iniciada.");
         break;
       case "guest-input":
         this.app.receiveOnlineGuestInput(message.input);
         break;
       case "host-snapshot":
         this.app.applyOnlineSnapshot(message.snapshot);
+        this.maybeTrackMatchEnded(message.snapshot.matchWinner, message.snapshot.roundNumber);
         break;
       case "host-frame":
         this.app.applyOnlineFrame(message.frame);
+        this.maybeTrackMatchEnded(message.frame.matchWinner, message.frame.roundNumber);
         break;
       case "chat-message":
         if (this.currentLobby && this.currentLobby.roomCode === message.roomCode) {
           this.currentLobby.chat = [...this.currentLobby.chat, message.entry].slice(-40);
-          this.renderChat();
         }
         break;
       case "quick-match-state":
         this.quickMatchQueuedCount = message.queued;
         this.onlineUsers = message.onlineUsers;
-        this.renderLiveStats();
-        this.renderQuickMatchState();
+        this.onlinePlayers = message.onlinePlayers;
+        this.quickMatchSearching = message.searching;
+        this.renderAll();
         break;
       case "peer-left":
+        if (this.currentLobby) {
+          this.currentLobby = {
+            ...this.currentLobby,
+            status: "open",
+          };
+        }
         this.app.clearOnlinePeer();
-        this.elements.shell.dataset.state = "lobby";
-        this.quickMatchSearching = false;
-        this.renderQuickMatchState();
-        this.setStatus("A bomber left. The room is open again.");
+        this.renderAll();
+        this.setStatus("Um jogador saiu da sala.");
         break;
       case "error":
         this.quickMatchSearching = false;
-        this.renderQuickMatchState();
+        this.renderAll();
         this.setStatus(message.message);
         break;
       default:
@@ -388,370 +502,690 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     }
   }
 
+  private maybeAutoClaimSeat(): void {
+    const lobby = this.currentLobby;
+    if (!lobby || lobby.status !== "open" || lobby.selfSeat) {
+      if (!lobby || lobby.selfSeat) {
+        this.autoClaimRoomCode = null;
+      }
+      return;
+    }
+    const firstFreeSeat = this.getFirstAvailableSeat(lobby);
+    if (!firstFreeSeat) {
+      return;
+    }
+    if (this.autoClaimRoomCode === lobby.roomCode) {
+      return;
+    }
+    this.autoClaimRoomCode = lobby.roomCode;
+    this.send({ type: "claim-seat", seat: firstFreeSeat, characterIndex: this.preferredCharacterIndex });
+    this.setStatus(`Entrando automaticamente na vaga P${firstFreeSeat}...`);
+  }
+
+  private getFirstAvailableSeat(lobby: LobbySummary): PlayerId | null {
+    for (const playerId of ALL_PLAYER_IDS) {
+      if (!lobby.seats[playerId].clientId) {
+        return playerId;
+      }
+    }
+    return null;
+  }
+
   private render(root: HTMLElement): SessionElements {
     const shell = document.createElement("div");
-    shell.className = "lobby-shell";
-    shell.dataset.state = "browse";
+    shell.className = "experience-shell";
 
-    const browser = document.createElement("aside");
-    browser.className = "lobby-browser";
+    const landing = document.createElement("section");
+    landing.className = "experience-screen experience-screen--landing";
 
-    const brand = document.createElement("div");
-    brand.className = "lobby-brand";
-    brand.innerHTML = `
-      <p>Bomba board</p>
-      <h1>BOMBA</h1>
-      <span>Public rooms. Claim a slot. Drop in fast.</span>
+    const landingHero = document.createElement("div");
+    landingHero.className = "experience-hero";
+
+    const landingCopy = document.createElement("div");
+    landingCopy.className = "experience-hero__copy";
+    landingCopy.innerHTML = `
+      <p class="experience-kicker">Arena online</p>
+      <h1>BOMBA PVP</h1>
+      <p class="experience-hero__lead">Entre, escolha um bomber e entenda o jogo em segundos.</p>
     `;
-    const statsList = document.createElement("ul");
-    statsList.className = "lobby-brand__stats";
 
-    const onlineUsersValue = document.createElement("span");
-    onlineUsersValue.className = "lobby-brand__stat-value";
-    const openRoomsValue = document.createElement("span");
-    openRoomsValue.className = "lobby-brand__stat-value";
-    const liveRoomsValue = document.createElement("span");
-    liveRoomsValue.className = "lobby-brand__stat-value";
+    const landingMeta = document.createElement("p");
+    landingMeta.className = "experience-hero__meta";
 
-    const onlineItem = document.createElement("li");
-    onlineItem.className = "lobby-brand__stat";
-    onlineItem.innerHTML = `<span class="lobby-brand__stat-label">Online now</span>`;
-    onlineItem.appendChild(onlineUsersValue);
+    const landingActions = document.createElement("div");
+    landingActions.className = "experience-actions";
 
-    const openItem = document.createElement("li");
-    openItem.className = "lobby-brand__stat";
-    openItem.innerHTML = `<span class="lobby-brand__stat-label">Open rooms</span>`;
-    openItem.appendChild(openRoomsValue);
+    const landingQuickMatchButton = document.createElement("button");
+    landingQuickMatchButton.className = "experience-button experience-button--primary";
+    landingQuickMatchButton.type = "button";
+    landingQuickMatchButton.textContent = "Partida rapida";
 
-    const liveItem = document.createElement("li");
-    liveItem.className = "lobby-brand__stat";
-    liveItem.innerHTML = `<span class="lobby-brand__stat-label">Live rooms</span>`;
-    liveItem.appendChild(liveRoomsValue);
+    const landingBotMatchButton = document.createElement("button");
+    landingBotMatchButton.className = "experience-button experience-button--secondary";
+    landingBotMatchButton.type = "button";
+    landingBotMatchButton.textContent = "Partida contra bots";
 
-    statsList.append(onlineItem, openItem, liveItem);
-    brand.appendChild(statsList);
+    const landingLobbyButton = document.createElement("button");
+    landingLobbyButton.className = "experience-button experience-button--secondary";
+    landingLobbyButton.type = "button";
+    landingLobbyButton.textContent = "Entrar em lobby";
 
-    const createPanel = document.createElement("div");
-    createPanel.className = "lobby-create";
+    landingActions.append(landingQuickMatchButton, landingBotMatchButton, landingLobbyButton);
+    landingCopy.append(landingMeta, landingActions);
 
-    const createTitle = document.createElement("input");
-    createTitle.className = "lobby-create__input";
-    createTitle.type = "text";
-    createTitle.placeholder = "Room name";
-    createTitle.maxLength = 36;
-    createTitle.name = "lobby-name";
-    createTitle.autocomplete = "off";
-    createTitle.setAttribute("aria-label", "Lobby name");
+    const landingRoster = document.createElement("div");
+    landingRoster.className = "experience-hero__art";
 
-    const createButton = document.createElement("button");
-    createButton.className = "lobby-button lobby-button--primary";
-    createButton.type = "button";
-    createButton.textContent = "Create room";
+    landingHero.append(landingCopy, landingRoster);
+    landing.append(landingHero);
 
-    const quickMatchButton = document.createElement("button");
-    quickMatchButton.className = "lobby-button lobby-button--quickmatch";
-    quickMatchButton.type = "button";
-    quickMatchButton.textContent = "Find match";
+    const lobbyList = document.createElement("section");
+    lobbyList.className = "experience-screen experience-screen--lobbies";
 
-    const quickMatchMeta = document.createElement("p");
-    quickMatchMeta.className = "lobby-quickmatch-meta";
+    const lobbyHeader = document.createElement("div");
+    lobbyHeader.className = "experience-panel__header";
 
-    createPanel.append(createTitle, createButton, quickMatchButton, quickMatchMeta);
+    const lobbyListBackButton = document.createElement("button");
+    lobbyListBackButton.className = "experience-button experience-button--ghost";
+    lobbyListBackButton.type = "button";
+    lobbyListBackButton.textContent = "Voltar";
 
-    const selectorPanel = document.createElement("section");
-    selectorPanel.className = "lobby-selector";
+    const lobbyListCreateButton = document.createElement("button");
+    lobbyListCreateButton.className = "experience-button experience-button--primary";
+    lobbyListCreateButton.type = "button";
+    lobbyListCreateButton.textContent = "Criar lobby";
 
-    const selectorHeading = document.createElement("div");
-    selectorHeading.className = "lobby-selector__heading";
-    selectorHeading.textContent = "Champion select";
+    const lobbyTitleWrap = document.createElement("div");
+    lobbyTitleWrap.className = "experience-panel__title";
+    lobbyTitleWrap.innerHTML = `
+      <p class="experience-kicker">Salas abertas</p>
+      <h2>Escolha um lobby para entrar</h2>
+    `;
+
+    lobbyHeader.append(lobbyListBackButton, lobbyTitleWrap, lobbyListCreateButton);
+
+    const lobbyListCount = document.createElement("p");
+    lobbyListCount.className = "experience-room-list__count";
+
+    const lobbyListList = document.createElement("div");
+    lobbyListList.className = "experience-room-list";
+
+    lobbyList.append(lobbyHeader, lobbyListCount, lobbyListList);
+
+    const setup = document.createElement("section");
+    setup.className = "experience-screen experience-screen--setup";
+
+    const setupHeader = document.createElement("div");
+    setupHeader.className = "experience-panel__header";
+
+    const setupBackButton = document.createElement("button");
+    setupBackButton.className = "experience-button experience-button--ghost";
+    setupBackButton.type = "button";
+    setupBackButton.textContent = "Voltar";
+
+    const setupHeaderCopy = document.createElement("div");
+    setupHeaderCopy.className = "experience-panel__title";
+
+    const setupEyebrow = document.createElement("p");
+    setupEyebrow.className = "experience-kicker";
+    const setupTitle = document.createElement("h2");
+    const setupDescription = document.createElement("p");
+    setupDescription.className = "experience-panel__lead";
+    const setupRoomMeta = document.createElement("p");
+    setupRoomMeta.className = "experience-panel__meta";
+
+    setupHeaderCopy.append(setupEyebrow, setupTitle, setupDescription, setupRoomMeta);
+
+    const setupHeaderActions = document.createElement("div");
+    setupHeaderActions.className = "experience-panel__actions";
+
+    const setupCopyButton = document.createElement("button");
+    setupCopyButton.className = "experience-button experience-button--secondary";
+    setupCopyButton.type = "button";
+    setupCopyButton.textContent = "Copiar convite";
+
+    const setupLeaveButton = document.createElement("button");
+    setupLeaveButton.className = "experience-button experience-button--ghost";
+    setupLeaveButton.type = "button";
+    setupLeaveButton.textContent = "Sair";
+
+    setupHeaderActions.append(setupCopyButton, setupLeaveButton);
+    setupHeader.append(setupBackButton, setupHeaderCopy, setupHeaderActions);
+
+    const setupSeatStrip = document.createElement("div");
+    setupSeatStrip.className = "experience-seat-strip";
+
+    const setupGrid = document.createElement("div");
+    setupGrid.className = "experience-setup-grid";
+
+    const setupCharacter = document.createElement("section");
+    setupCharacter.className = "experience-panel experience-panel--character";
 
     const selectorSummary = document.createElement("div");
-    selectorSummary.className = "lobby-selector__summary";
+    selectorSummary.className = "experience-character-summary";
 
     const selectorPortrait = document.createElement("img");
-    selectorPortrait.className = "lobby-selector__portrait";
-    selectorPortrait.alt = "Selected character";
-    selectorPortrait.width = 72;
-    selectorPortrait.height = 72;
+    selectorPortrait.className = "experience-character-summary__portrait";
+    selectorPortrait.alt = "Personagem selecionado";
+    selectorPortrait.width = 96;
+    selectorPortrait.height = 96;
 
-    const selectorCopy = document.createElement("div");
-    selectorCopy.className = "lobby-selector__copy";
+    const selectorSummaryCopy = document.createElement("div");
+    selectorSummaryCopy.className = "experience-character-summary__copy";
 
     const selectorName = document.createElement("p");
-    selectorName.className = "lobby-selector__name";
+    selectorName.className = "experience-character-summary__name";
 
     const selectorNote = document.createElement("p");
-    selectorNote.className = "lobby-selector__note";
+    selectorNote.className = "experience-character-summary__note";
 
-    selectorCopy.append(selectorName, selectorNote);
-    selectorSummary.append(selectorPortrait, selectorCopy);
+    selectorSummaryCopy.append(selectorName, selectorNote);
+    selectorSummary.append(selectorPortrait, selectorSummaryCopy);
 
     const selectorGrid = document.createElement("div");
-    selectorGrid.className = "lobby-selector__grid";
+    selectorGrid.className = "experience-character-grid";
 
-    selectorPanel.append(selectorHeading, selectorSummary, selectorGrid);
+    setupCharacter.append(selectorSummary, selectorGrid);
 
-    const browserList = document.createElement("div");
-    browserList.className = "lobby-browser__list";
+    const setupControls = document.createElement("section");
+    setupControls.className = "experience-panel experience-panel--controls";
+    setupControls.innerHTML = `
+      <p class="experience-kicker">Comandos</p>
+      <h3>Jogue com WASD ou com as setas</h3>
+      <div class="experience-controls">
+        <div class="experience-controls__group">
+          <span class="experience-controls__label">Mover</span>
+          <div class="experience-key-columns">
+            <div class="experience-key-cluster">
+              <span class="experience-key experience-key--solo">W</span>
+              <div class="experience-key-row">
+                <span class="experience-key">A</span>
+                <span class="experience-key">S</span>
+                <span class="experience-key">D</span>
+              </div>
+            </div>
+            <div class="experience-key-cluster">
+              <span class="experience-key experience-key--solo">&uarr;</span>
+              <div class="experience-key-row">
+                <span class="experience-key">&larr;</span>
+                <span class="experience-key">&darr;</span>
+                <span class="experience-key">&rarr;</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="experience-controls__group">
+          <span class="experience-controls__label">Acoes</span>
+          <div class="experience-action-keys">
+            <div class="experience-action-card">
+              <span class="experience-key experience-key--action">Q</span>
+              <strong>Soltar bomba</strong>
+            </div>
+            <div class="experience-action-card">
+              <span class="experience-key experience-key--wide">Espaco</span>
+              <strong>Ultimate do personagem</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
 
-    browser.append(brand, createPanel, selectorPanel, browserList);
+    const setupPresenceList = document.createElement("div");
+    setupPresenceList.className = "experience-presence";
 
-    const stage = document.createElement("section");
-    stage.className = "lobby-stage";
+    const setupFooter = document.createElement("div");
+    setupFooter.className = "experience-setup__footer";
 
-    const stageTop = document.createElement("div");
-    stageTop.className = "lobby-stage__top";
+    const setupPrimaryButton = document.createElement("button");
+    setupPrimaryButton.className = "experience-button experience-button--primary";
+    setupPrimaryButton.type = "button";
+    setupPrimaryButton.textContent = "Pronto para jogar";
 
-    const stageIntro = document.createElement("div");
-    stageIntro.className = "lobby-stage__intro";
+    const setupPrimaryHint = document.createElement("p");
+    setupPrimaryHint.className = "experience-setup__hint";
 
-    const stageEyebrow = document.createElement("p");
-    stageEyebrow.className = "lobby-stage__eyebrow";
+    setupFooter.append(setupPrimaryButton, setupPrimaryHint);
+    setupControls.append(setupPresenceList, setupFooter);
 
-    const stageTitle = document.createElement("h2");
-    stageTitle.className = "lobby-stage__title";
+    setupGrid.append(setupCharacter, setupControls);
+    setup.append(setupHeader, setupSeatStrip, setupGrid);
 
-    const stageDescription = document.createElement("p");
-    stageDescription.className = "lobby-stage__description";
+    const match = document.createElement("section");
+    match.className = "experience-screen experience-screen--match";
 
-    const stageMeta = document.createElement("p");
-    stageMeta.className = "lobby-stage__meta";
+    const matchOverlay = document.createElement("div");
+    matchOverlay.className = "experience-match__overlay";
 
-    stageIntro.append(stageEyebrow, stageTitle, stageDescription, stageMeta);
+    const matchCode = document.createElement("span");
+    matchCode.className = "experience-match__code";
 
-    const inviteRow = document.createElement("div");
-    inviteRow.className = "lobby-stage__invite";
-
-    const inviteInput = document.createElement("input");
-    inviteInput.className = "lobby-stage__invite-input";
-    inviteInput.type = "text";
-    inviteInput.readOnly = true;
-    inviteInput.placeholder = "Invite URL";
-    inviteInput.name = "invite-url";
-    inviteInput.autocomplete = "off";
-    inviteInput.setAttribute("aria-label", "Invite URL");
-
-    const copyButton = document.createElement("button");
-    copyButton.className = "lobby-button";
-    copyButton.type = "button";
-    copyButton.textContent = "Copy invite";
-
-    const leaveButton = document.createElement("button");
-    leaveButton.className = "lobby-button lobby-button--danger";
-    leaveButton.type = "button";
-    leaveButton.textContent = "Leave lobby";
-
-    inviteRow.append(inviteInput, copyButton, leaveButton);
-    stageTop.append(stageIntro, inviteRow);
-
-    const workspace = document.createElement("div");
-    workspace.className = "lobby-stage__workspace";
-
-    const arenaViewport = document.createElement("div");
-    arenaViewport.className = "lobby-stage__viewport";
-
-    const sideRail = document.createElement("aside");
-    sideRail.className = "lobby-stage__rail";
-
-    const matchPanel = document.createElement("section");
-    matchPanel.className = "lobby-stage__panel lobby-stage__panel--match-menu";
-
-    const matchHeading = document.createElement("div");
-    matchHeading.className = "lobby-stage__panel-heading";
-    matchHeading.textContent = "Match menu";
-
-    const matchMeta = document.createElement("p");
-    matchMeta.className = "lobby-stage__match-meta";
+    const matchStatus = document.createElement("p");
+    matchStatus.className = "experience-match__status";
 
     const matchActions = document.createElement("div");
-    matchActions.className = "lobby-stage__match-actions";
+    matchActions.className = "experience-match__actions";
 
     const matchCopyButton = document.createElement("button");
-    matchCopyButton.className = "lobby-button";
+    matchCopyButton.className = "experience-button experience-button--secondary";
     matchCopyButton.type = "button";
-    matchCopyButton.textContent = "Copy invite";
+    matchCopyButton.textContent = "Convite";
 
     const matchLeaveButton = document.createElement("button");
-    matchLeaveButton.className = "lobby-button lobby-button--danger";
+    matchLeaveButton.className = "experience-button experience-button--ghost";
     matchLeaveButton.type = "button";
-    matchLeaveButton.textContent = "Exit match";
+    matchLeaveButton.textContent = "Sair da sala";
 
     matchActions.append(matchCopyButton, matchLeaveButton);
-    matchPanel.append(matchHeading, matchMeta, matchActions);
+    matchOverlay.append(matchCode, matchStatus, matchActions);
 
-    const seatsPanel = document.createElement("section");
-    seatsPanel.className = "lobby-stage__panel lobby-stage__panel--seats";
+    const matchLayout = document.createElement("div");
+    matchLayout.className = "experience-match__layout";
 
-    const seatsHeading = document.createElement("div");
-    seatsHeading.className = "lobby-stage__panel-heading";
-    seatsHeading.textContent = "Pilots";
+    const matchInfoRail = document.createElement("aside");
+    matchInfoRail.className = "experience-match__rail experience-match__rail--info";
+    matchInfoRail.innerHTML = `
+      <p class="experience-kicker">Sala</p>
+      <h3>BOMBA PVP</h3>
+      <p class="experience-match__rail-copy">Acompanhe quem esta jogando e mantenha os comandos importantes sempre a vista.</p>
+    `;
 
-    const seatsWrap = document.createElement("div");
-    seatsWrap.className = "lobby-seats";
+    const matchRoster = document.createElement("div");
+    matchRoster.className = "experience-match__roster";
+    matchInfoRail.append(matchRoster);
 
-    const seats = {
-      1: document.createElement("div"),
-      2: document.createElement("div"),
-      3: document.createElement("div"),
-      4: document.createElement("div"),
-    } as Record<PlayerId, HTMLDivElement>;
-    for (const playerId of ALL_PLAYER_IDS) {
-      seats[playerId].className = "lobby-seat";
-      seatsWrap.append(seats[playerId]);
-    }
-    seatsPanel.append(seatsHeading, seatsWrap);
+    const matchViewport = document.createElement("div");
+    matchViewport.className = "experience-match__viewport";
 
-    const chatPanel = document.createElement("section");
-    chatPanel.className = "lobby-chat lobby-stage__panel";
+    const matchChatRail = document.createElement("aside");
+    matchChatRail.className = "experience-match__rail experience-match__rail--chat";
 
-    const chatHeading = document.createElement("div");
-    chatHeading.className = "lobby-stage__panel-heading";
-    chatHeading.textContent = "Feed";
+    const matchChatHeading = document.createElement("div");
+    matchChatHeading.className = "experience-match__chat-heading";
+    matchChatHeading.innerHTML = `
+      <p class="experience-kicker">Chat da sala</p>
+      <h3>Fale com quem esta jogando</h3>
+    `;
 
-    const chatLog = document.createElement("div");
-    chatLog.className = "lobby-chat__log";
+    const matchChatLog = document.createElement("div");
+    matchChatLog.className = "experience-match__chat-log";
 
-    const chatInput = document.createElement("input");
-    chatInput.className = "lobby-chat__input";
-    chatInput.type = "text";
-    chatInput.placeholder = "Type a message";
-    chatInput.maxLength = 280;
-    chatInput.name = "chat-message";
-    chatInput.autocomplete = "off";
-    chatInput.spellcheck = false;
-    chatInput.autocapitalize = "off";
-    chatInput.setAttribute("aria-label", "Type a message");
+    const matchChatComposer = document.createElement("div");
+    matchChatComposer.className = "experience-match__chat-composer";
 
-    const chatSend = document.createElement("button");
-    chatSend.className = "lobby-button";
-    chatSend.type = "button";
-    chatSend.textContent = "Send";
+    const matchChatInput = document.createElement("input");
+    matchChatInput.className = "experience-match__chat-input";
+    matchChatInput.type = "text";
+    matchChatInput.maxLength = 280;
+    matchChatInput.placeholder = "Escreva uma mensagem";
+    matchChatInput.autocomplete = "off";
 
-    const chatComposer = document.createElement("div");
-    chatComposer.className = "lobby-chat__composer";
-    chatComposer.append(chatInput, chatSend);
+    const matchChatSend = document.createElement("button");
+    matchChatSend.className = "experience-button experience-button--primary";
+    matchChatSend.type = "button";
+    matchChatSend.textContent = "Enviar";
 
-    chatPanel.append(chatHeading, chatLog, chatComposer);
+    matchChatComposer.append(matchChatInput, matchChatSend);
+    matchChatRail.append(matchChatHeading, matchChatLog, matchChatComposer);
+
+    matchLayout.append(matchInfoRail, matchViewport, matchChatRail);
+    match.append(matchOverlay, matchLayout);
 
     const status = document.createElement("p");
-    status.className = "lobby-status";
+    status.className = "experience-status";
 
-    sideRail.append(matchPanel, seatsPanel, chatPanel);
-    workspace.append(arenaViewport, sideRail);
-    stage.append(stageTop, workspace, status);
-    shell.append(browser, stage);
+    shell.append(landing, lobbyList, setup, match, status);
     root.prepend(shell);
 
     return {
       shell,
-      browserList,
-      onlineUsersValue,
-      openRoomsValue,
-      liveRoomsValue,
-      createTitle,
-      createButton,
-      quickMatchButton,
-      quickMatchMeta,
+      screens: {
+        landing,
+        "lobby-list": lobbyList,
+        setup,
+        match,
+      },
+      landingMeta,
+      landingQuickMatchButton,
+      landingBotMatchButton,
+      landingLobbyButton,
+      landingRoster,
+      lobbyListBackButton,
+      lobbyListCreateButton,
+      lobbyListCount,
+      lobbyListList,
+      setupBackButton,
+      setupLeaveButton,
+      setupCopyButton,
+      setupEyebrow,
+      setupTitle,
+      setupDescription,
+      setupRoomMeta,
+      setupSeatStrip,
+      setupPresenceList,
       selectorPortrait,
       selectorName,
       selectorNote,
       selectorGrid,
-      stageEyebrow,
-      stageTitle,
-      stageDescription,
-      stageMeta,
-      inviteInput,
-      copyButton,
-      leaveButton,
-      matchMeta,
+      setupPrimaryButton,
+      setupPrimaryHint,
+      matchViewport,
+      matchCode,
+      matchStatus,
       matchCopyButton,
       matchLeaveButton,
-      arenaViewport,
-      seatsHeading,
-      seats,
-      chatHeading,
-      chatLog,
-      chatInput,
-      chatSend,
+      matchRoster,
+      matchChatLog,
+      matchChatInput,
+      matchChatSend,
       status,
     };
   }
 
+  private renderAll(): void {
+    this.renderLanding();
+    this.renderLobbyList();
+    this.renderCharacterSelector();
+    this.renderSetup();
+    this.renderMatch();
+    this.renderMatchRoster();
+    this.renderMatchChat();
+    this.renderShellState();
+  }
+
+  private renderShellState(): void {
+    const screen = this.getScreen();
+    this.telemetry.trackScreenView(screen, this.currentLobby?.roomCode ?? null);
+    this.elements.shell.dataset.screen = screen;
+    for (const [key, node] of Object.entries(this.elements.screens) as Array<[ExperienceScreen, HTMLElement]>) {
+      const active = key === screen;
+      node.dataset.active = active ? "true" : "false";
+      node.hidden = !active;
+    }
+    window.requestAnimationFrame(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
+  }
+
+  private getScreen(): ExperienceScreen {
+    if (this.currentLobby?.status === "playing") {
+      return "match";
+    }
+    const appMode = this.app.getCurrentMode();
+    if (appMode === "match" || appMode === "match-result") {
+      return "match";
+    }
+    if (this.currentLobby || this.quickMatchSearching || this.pendingAutoJoinRoom) {
+      return "setup";
+    }
+    return this.idleScreen;
+  }
+
+  private renderLanding(): void {
+    const queuedLabel = this.quickMatchQueuedCount === 1
+      ? "1 sala aberta agora"
+      : `${this.quickMatchQueuedCount} salas abertas agora`;
+    this.elements.landingMeta.textContent = this.quickMatchSearching
+      ? "Procurando a melhor sala para voce entrar."
+      : `${queuedLabel} | ${this.onlineUsers} jogadores online`;
+    this.elements.landingQuickMatchButton.disabled = this.quickMatchSearching;
+    this.elements.landingBotMatchButton.disabled = this.quickMatchSearching;
+    this.elements.landingQuickMatchButton.textContent = this.quickMatchSearching
+      ? "Buscando partida..."
+      : "Partida rapida";
+    this.elements.landingRoster.replaceChildren(
+      ...this.roster.slice(0, 3).map((entry, index) => {
+        const card = document.createElement("div");
+        card.className = "experience-hero__portrait";
+        if (index === (this.preferredCharacterIndex % Math.max(1, this.roster.length))) {
+          card.dataset.selected = "true";
+        }
+
+        const image = document.createElement("img");
+        image.src = assetUrl(`/assets/characters/${entry.id}/south.png`);
+        image.alt = entry.name;
+        image.width = 128;
+        image.height = 128;
+
+        const label = document.createElement("span");
+        label.textContent = entry.name;
+
+        card.append(image, label);
+        return card;
+      }),
+    );
+  }
+
   private renderLobbyList(): void {
-    this.elements.browserList.replaceChildren();
+    this.elements.lobbyListCount.textContent = this.lobbies.length === 0
+      ? "Nenhum lobby aberto no momento."
+      : `${this.lobbies.length} lobbies publicos disponiveis`;
+    this.elements.lobbyListList.replaceChildren();
 
     if (this.lobbies.length === 0) {
       const empty = document.createElement("div");
-      empty.className = "lobby-browser__empty";
-      empty.textContent = "No live rooms. Start the next bomb.";
-      this.elements.browserList.appendChild(empty);
+      empty.className = "experience-room-list__empty";
+      empty.textContent = "Nenhuma sala aberta agora. Crie um lobby novo ou volte para partida rapida.";
+      this.elements.lobbyListList.appendChild(empty);
       return;
     }
 
     for (const lobby of this.lobbies) {
       const card = document.createElement("button");
       card.type = "button";
-      card.className = "lobby-card";
-      if (this.currentLobby?.roomCode === lobby.roomCode) {
-        card.dataset.active = "true";
-      }
-
-      const title = document.createElement("strong");
-      title.textContent = lobby.title;
-
-      const meta = document.createElement("span");
-      meta.textContent = `${lobby.roomCode} | ${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} pilots | ${lobby.status}`;
-
-      const seatStrip = document.createElement("div");
-      seatStrip.className = "lobby-card__seats";
-      seatStrip.append(...ALL_PLAYER_IDS.map((playerId) => this.renderSeatPill(`P${playerId}`, lobby.seats[playerId])));
-
-      card.append(title, meta, seatStrip);
+      card.className = "experience-room-card";
       card.addEventListener("click", () => {
-        if (this.currentLobby?.roomCode === lobby.roomCode) {
+        this.idleScreen = "lobby-list";
+        this.pendingAutoJoinRoom = lobby.roomCode;
+        this.telemetry.track("lobby_join_clicked", {
+          context: { roomCode: lobby.roomCode, screen: "lobby-list" },
+          payload: { occupantCount: lobby.occupantCount },
+        });
+        if (!this.send({ type: "join-lobby", roomCode: lobby.roomCode })) {
+          this.setStatus("Nao foi possivel entrar no lobby agora.");
           return;
         }
-        this.send({ type: "join-lobby", roomCode: lobby.roomCode });
+        this.renderAll();
+        this.setStatus(`Entrando em ${lobby.title}...`);
       });
 
-      this.elements.browserList.appendChild(card);
+      const title = document.createElement("strong");
+      title.textContent = this.getLobbyDisplayTitle(lobby);
+
+      const meta = document.createElement("span");
+      meta.textContent = `${lobby.roomCode} | ${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} jogadores`;
+
+      const status = document.createElement("span");
+      status.className = "experience-room-card__status";
+      status.textContent = lobby.status === "playing" ? "Ao vivo" : "Pronto para entrar";
+
+      const occupants = document.createElement("div");
+      occupants.className = "experience-room-card__occupants";
+      occupants.append(
+        ...ALL_PLAYER_IDS.map((playerId) => {
+          const seat = lobby.seats[playerId];
+          const pill = document.createElement("span");
+          pill.className = "experience-room-card__occupant";
+          pill.textContent = seat.clientId ? `P${playerId}` : `P${playerId} livre`;
+          if (seat.clientId) {
+            pill.dataset.filled = "true";
+          }
+          return pill;
+        }),
+      );
+
+      card.append(title, meta, status, occupants);
+      this.elements.lobbyListList.appendChild(card);
     }
+  }
+
+  private renderSetup(): void {
+    const lobby = this.currentLobby;
+    this.elements.setupCopyButton.hidden = !lobby;
+    this.elements.setupLeaveButton.hidden = !lobby;
+    this.elements.setupBackButton.textContent = lobby ? "Inicio" : "Voltar";
+
+    if (!lobby) {
+      this.elements.setupEyebrow.textContent = this.quickMatchSearching ? "Partida rapida" : "Entrando no lobby";
+      this.elements.setupTitle.textContent = this.quickMatchSearching ? "Buscando sala" : "Carregando sala";
+      this.elements.setupDescription.textContent = "Escolha seu bomber enquanto preparamos a proxima arena.";
+      this.elements.setupRoomMeta.textContent = this.quickMatchSearching
+        ? "Voce entra automaticamente na primeira vaga livre."
+        : "Reconectando ou entrando por convite.";
+      this.elements.setupSeatStrip.replaceChildren(this.buildSeatStripPlaceholder());
+      this.renderPresenceList(this.quickMatchSearching);
+      this.elements.setupPrimaryButton.textContent = this.quickMatchSearching ? "Buscando..." : "Aguardando...";
+      this.elements.setupPrimaryButton.disabled = true;
+      this.elements.setupPrimaryHint.textContent = "Os comandos abaixo ja funcionam assim que a sala abrir.";
+      return;
+    }
+
+    const selfSeatId = lobby.selfSeat;
+    const selfSeat = selfSeatId ? lobby.seats[selfSeatId] : null;
+    this.elements.setupEyebrow.textContent = lobby.status === "playing" ? "Partida ao vivo" : "Setup da sala";
+    this.elements.setupTitle.textContent = this.getLobbyDisplayTitle(lobby);
+    this.elements.setupDescription.textContent = "Escolha seu personagem e entre na partida sem atrito.";
+    this.elements.setupRoomMeta.textContent = `${lobby.roomCode} | ${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} jogadores`;
+    this.elements.setupSeatStrip.replaceChildren(...this.buildSeatStrip(lobby));
+    this.renderPresenceList(lobby.status === "open" && lobby.occupantCount < LOBBY_MAX_PLAYERS);
+
+    if (!selfSeatId) {
+      const firstFreeSeat = this.getFirstAvailableSeat(lobby);
+      this.elements.setupPrimaryButton.textContent = firstFreeSeat
+        ? `Entrar na vaga P${firstFreeSeat}`
+        : "Sala cheia";
+      this.elements.setupPrimaryButton.disabled = !firstFreeSeat;
+      this.elements.setupPrimaryHint.textContent = firstFreeSeat
+        ? "A entrada na vaga livre acontece com um clique."
+        : "A sala ficou cheia antes da sua entrada.";
+      return;
+    }
+
+    if (selfSeat?.ready) {
+      this.elements.setupPrimaryButton.textContent = "Pronto";
+      this.elements.setupPrimaryButton.disabled = true;
+      this.elements.setupPrimaryHint.textContent = lobby.occupantCount < 2
+        ? "Sua vaga esta pronta. Falta mais gente para iniciar."
+        : "Tudo certo. A partida comeca assim que o servidor iniciar o match.";
+      return;
+    }
+
+    this.elements.setupPrimaryButton.textContent = "Pronto para jogar";
+    this.elements.setupPrimaryButton.disabled = false;
+    this.elements.setupPrimaryHint.textContent = "Seu personagem escolhido ja sera usado na vaga atual.";
+  }
+
+  private buildSeatStripPlaceholder(): HTMLElement {
+    const placeholder = document.createElement("div");
+    placeholder.className = "experience-seat-pill";
+    placeholder.textContent = "Preparando sala...";
+    return placeholder;
+  }
+
+  private buildSeatStrip(lobby: LobbySummary): HTMLElement[] {
+    return ALL_PLAYER_IDS.map((playerId) => {
+      const seat = lobby.seats[playerId];
+      const pill = document.createElement("div");
+      pill.className = "experience-seat-pill";
+      if (seat.ready) {
+        pill.dataset.ready = "true";
+      }
+      if (seat.clientId && seat.clientId === this.clientId) {
+        pill.dataset.self = "true";
+      }
+      const occupant = seat.clientId ? (seat.displayName || `P${playerId}`) : "Livre";
+      pill.textContent = `P${playerId} | ${occupant}`;
+      return pill;
+    });
+  }
+
+  private renderPresenceList(showPresence: boolean): void {
+    this.elements.setupPresenceList.replaceChildren();
+    this.elements.setupPresenceList.hidden = !showPresence;
+    if (!showPresence) {
+      return;
+    }
+
+    const heading = document.createElement("div");
+    heading.className = "experience-presence__header";
+
+    const title = document.createElement("span");
+    title.className = "experience-controls__label";
+    title.textContent = "Jogadores online";
+
+    const meta = document.createElement("strong");
+    meta.textContent = `${this.onlineUsers} conectados agora`;
+
+    heading.append(title, meta);
+
+    const list = document.createElement("div");
+    list.className = "experience-presence__list";
+    const players = this.getPresenceEntries();
+    list.append(
+      ...players.map((entry) => {
+        const item = document.createElement("div");
+        item.className = "experience-presence__item";
+        if (entry.clientId === this.clientId) {
+          item.dataset.self = "true";
+        }
+
+        const playerId = document.createElement("strong");
+        playerId.textContent = this.formatPresenceLabel(entry.clientId);
+
+        const status = document.createElement("span");
+        status.textContent = entry.clientId === this.clientId ? "Voce esta online" : "Disponivel para entrar";
+
+        item.append(playerId, status);
+        return item;
+      }),
+    );
+
+    this.elements.setupPresenceList.append(heading, list);
   }
 
   private renderCharacterSelector(): void {
     const selected = this.getCharacter(this.preferredCharacterIndex);
     this.elements.selectorPortrait.src = assetUrl(`/assets/characters/${selected.id}/south.png`);
     this.elements.selectorName.textContent = selected.name;
-    this.elements.selectorNote.textContent = this.currentLobby?.selfSeat
-      ? "Applied to your claimed slot and reused for quick match."
-      : "This pilot is used for quick match and your next claimed slot.";
+
+    const lobby = this.currentLobby;
+    if (lobby?.selfSeat) {
+      const selfSeat = lobby.seats[lobby.selfSeat];
+      this.elements.selectorNote.textContent = selfSeat.ready
+        ? "Voce ja esta pronto. O personagem continua aplicado nessa sala."
+        : "Esse personagem sera aplicado assim que voce ficar pronto.";
+    } else if (this.quickMatchSearching) {
+      this.elements.selectorNote.textContent = "Seu bomber entra automaticamente na primeira vaga livre encontrada.";
+    } else {
+      this.elements.selectorNote.textContent = "Escolha agora e entre no setup com tudo explicado na mesma tela.";
+    }
+
     this.elements.selectorGrid.replaceChildren(
       ...this.roster.map((entry, index) => {
         const option = document.createElement("button");
         option.type = "button";
-        option.className = "lobby-selector__option";
+        option.className = "experience-character-option";
         if (index === this.preferredCharacterIndex) {
           option.dataset.selected = "true";
         }
 
         const portrait = document.createElement("img");
-        portrait.className = "lobby-selector__option-portrait";
+        portrait.className = "experience-character-option__portrait";
         portrait.alt = entry.name;
         portrait.src = assetUrl(`/assets/characters/${entry.id}/south.png`);
-        portrait.width = 48;
-        portrait.height = 48;
+        portrait.width = 56;
+        portrait.height = 56;
 
-        const meta = document.createElement("div");
-        meta.className = "lobby-selector__option-meta";
+        const copy = document.createElement("div");
+        copy.className = "experience-character-option__copy";
 
         const name = document.createElement("strong");
         name.textContent = entry.name;
 
         const hint = document.createElement("span");
-        hint.textContent = entry.defaultSlot ? `Default P${entry.defaultSlot}` : "Selectable";
+        hint.textContent = entry.defaultSlot ? `Default P${entry.defaultSlot}` : "Selecionavel";
 
-        meta.append(name, hint);
-        option.append(portrait, meta);
+        copy.append(name, hint);
+        option.append(portrait, copy);
         option.addEventListener("click", () => {
           this.updatePreferredCharacter(index);
         });
@@ -763,7 +1197,15 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private updatePreferredCharacter(nextIndex: number): void {
     this.preferredCharacterIndex = this.wrapCharacterIndex(nextIndex);
     this.persistPreferredCharacterIndex();
-    this.renderCharacterSelector();
+    this.app.setOfflinePreferredCharacter(this.preferredCharacterIndex);
+    this.telemetry.track("character_selected", {
+      context: { roomCode: this.currentLobby?.roomCode ?? null, screen: this.getScreen() },
+      payload: {
+        characterIndex: this.preferredCharacterIndex,
+        characterId: this.getCharacter(this.preferredCharacterIndex).id,
+      },
+    });
+    this.renderAll();
 
     if (this.currentLobby?.selfSeat && this.currentLobby.status === "open") {
       this.send({ type: "set-character", characterIndex: this.preferredCharacterIndex });
@@ -781,266 +1223,117 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     }
     this.preferredCharacterIndex = this.wrapCharacterIndex(seat.characterIndex);
     this.persistPreferredCharacterIndex();
+    this.app.setOfflinePreferredCharacter(this.preferredCharacterIndex);
   }
 
   private syncPreferredCharacterFromMatchConfig(config: MatchStartConfig): void {
     const selected = config.characterSelections[config.localPlayerId] ?? this.preferredCharacterIndex;
     this.preferredCharacterIndex = this.wrapCharacterIndex(selected);
     this.persistPreferredCharacterIndex();
+    this.app.setOfflinePreferredCharacter(this.preferredCharacterIndex);
   }
 
-  private renderQuickMatchState(): void {
-    this.elements.quickMatchButton.textContent = this.quickMatchSearching ? "Finding room..." : "Find match";
-    this.elements.quickMatchButton.dataset.searching = this.quickMatchSearching ? "true" : "false";
-    this.elements.quickMatchButton.disabled = this.quickMatchSearching;
-    this.elements.quickMatchMeta.textContent = this.quickMatchSearching
-      ? "Looking for an open public room and claiming the first free slot."
-      : this.quickMatchQueuedCount > 0
-        ? this.quickMatchQueuedCount === 1
-          ? "1 public room has open slots."
-          : `${this.quickMatchQueuedCount} public rooms have open slots.`
-        : "No open public rooms right now. Quick match will create one.";
-  }
-
-  private renderLiveStats(): void {
-    const openRooms = this.lobbies.filter((lobby) => lobby.status === "open").length;
-    const liveRooms = this.lobbies.filter((lobby) => lobby.status === "playing").length;
-    this.elements.onlineUsersValue.textContent = String(this.onlineUsers);
-    this.elements.openRoomsValue.textContent = String(openRooms);
-    this.elements.liveRoomsValue.textContent = String(liveRooms);
-  }
-
-  private renderSeatPill(label: string, seat: LobbySummary["seats"][PlayerId]): HTMLElement {
-    const pill = document.createElement("span");
-    pill.className = "lobby-seat-pill";
-    pill.dataset.ready = seat.ready ? "true" : "false";
-    pill.textContent = `${label} ${seat.clientId ? "taken" : "open"}`;
-    return pill;
-  }
-
-  private renderStage(): void {
+  private renderMatch(): void {
     const lobby = this.currentLobby;
+    this.elements.matchCode.textContent = lobby ? `Sala ${lobby.roomCode}` : "Arena";
+    this.elements.matchStatus.textContent = lobby
+      ? `${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} jogadores na partida`
+      : "Partida ao vivo";
+    this.elements.matchCopyButton.disabled = !lobby;
+    this.elements.matchLeaveButton.disabled = !lobby;
+  }
+
+  private renderMatchRoster(): void {
+    const lobby = this.currentLobby;
+    this.elements.matchRoster.replaceChildren();
     if (!lobby) {
-      this.elements.shell.dataset.state = "browse";
-      this.elements.stageEyebrow.textContent = "Global board";
-      this.elements.stageTitle.textContent = "BOMBA";
-      this.elements.stageDescription.textContent =
-        "Create a room or use quick match to drop into the live fight.";
-      this.elements.stageMeta.textContent = "Public rooms | 2-4 pilots | P1 WASD Q/R E | P2 Arrows O/U P";
-      this.elements.inviteInput.value = "";
-      this.elements.copyButton.disabled = true;
-      this.elements.leaveButton.disabled = true;
-      this.elements.matchMeta.textContent = "";
-      this.elements.matchCopyButton.disabled = true;
-      this.elements.matchLeaveButton.disabled = true;
-      this.elements.seatsHeading.textContent = "Pilots";
-      this.elements.chatHeading.textContent = "Feed";
-      for (const playerId of ALL_PLAYER_IDS) {
-        this.elements.seats[playerId].replaceChildren(this.buildEmptySeat(playerId));
-      }
-      this.renderChat();
-      window.requestAnimationFrame(() => {
-        window.dispatchEvent(new Event("resize"));
-      });
       return;
     }
+    this.elements.matchRoster.append(
+      ...ALL_PLAYER_IDS.map((playerId) => {
+        const seat = lobby.seats[playerId];
+        const card = document.createElement("div");
+        card.className = "experience-match__seat";
+        if (seat.ready) {
+          card.dataset.ready = "true";
+        }
 
-    this.elements.shell.dataset.state = lobby.status === "playing" ? "match" : "lobby";
-    this.elements.stageEyebrow.textContent = lobby.status === "playing" ? "Live room" : "Open board";
-    this.elements.stageTitle.textContent = lobby.title;
-    this.elements.stageDescription.textContent = lobby.status === "playing"
-      ? "The room is live. The player rail and feed stay available on the side."
-      : "Claim a side, choose your bomber, and start as soon as every occupied slot is ready.";
-    this.elements.stageMeta.textContent =
-      `${lobby.roomCode} | ${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} pilots | ${lobby.status === "playing" ? "Live match" : "Ready room"} | P1 WASD Q/R E | P2 Arrows O/U P`;
-    this.elements.inviteInput.value = this.buildInviteUrl(lobby.roomCode);
-    this.elements.copyButton.disabled = false;
-    this.elements.leaveButton.disabled = false;
-    this.elements.matchMeta.textContent = `${lobby.roomCode} | ${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} pilots | ${lobby.status === "playing" ? "Live" : "Lobby"}`;
-    this.elements.matchCopyButton.disabled = false;
-    this.elements.matchLeaveButton.disabled = false;
-    this.elements.seatsHeading.textContent = "Pilots";
-    this.elements.chatHeading.textContent = lobby.status === "playing" ? "Match feed" : "Feed";
-    for (const playerId of ALL_PLAYER_IDS) {
-      this.elements.seats[playerId].replaceChildren(this.buildSeatContent(playerId, lobby));
-    }
-    this.renderChat();
-    if (lobby.status === "open" && lobby.selfSeat && lobby.seats[lobby.selfSeat]?.ready && lobby.occupantCount < 2) {
-      this.setStatus("Quick match pronto: vaga travada. Falta mais 1 piloto para iniciar.");
-    }
-    window.requestAnimationFrame(() => {
-      window.dispatchEvent(new Event("resize"));
-    });
+        const title = document.createElement("strong");
+        title.textContent = `P${playerId}`;
+
+        const body = document.createElement("span");
+        body.textContent = seat.clientId ? (seat.displayName || "Jogador conectado") : "Vaga livre";
+
+        card.append(title, body);
+        return card;
+      }),
+    );
   }
 
-  private renderChat(): void {
-    this.elements.chatLog.replaceChildren();
+  private renderMatchChat(): void {
+    this.elements.matchChatLog.replaceChildren();
     const entries = this.currentLobby?.chat ?? [];
-    const chatAvailable = Boolean(this.currentLobby);
     if (entries.length === 0) {
       const empty = document.createElement("div");
-      empty.className = "lobby-chat__empty";
-      empty.textContent = this.currentLobby
-        ? "No messages yet. Chat is live during lobby and match."
-        : "Join a room or match queue to chat.";
-      this.elements.chatLog.appendChild(empty);
-      this.elements.chatInput.disabled = !chatAvailable;
-      this.elements.chatSend.disabled = !chatAvailable;
-      return;
-    }
-
-    for (const entry of entries) {
-      this.elements.chatLog.appendChild(this.renderChatEntry(entry));
-    }
-
-    this.elements.chatInput.disabled = !chatAvailable;
-    this.elements.chatSend.disabled = !chatAvailable;
-    this.elements.chatLog.scrollTop = this.elements.chatLog.scrollHeight;
-  }
-
-  private renderChatEntry(entry: ChatEntry): HTMLElement {
-    const item = document.createElement("div");
-    item.className = "lobby-chat__entry";
-    if (entry.system) {
-      item.dataset.system = "true";
-    } else if (entry.authorClientId && entry.authorClientId === this.clientId) {
-      item.dataset.self = "true";
-    }
-
-    const meta = document.createElement("div");
-    meta.className = "lobby-chat__meta";
-    meta.textContent = `${entry.authorLabel} - ${new Date(entry.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
-
-    const body = document.createElement("p");
-    body.className = "lobby-chat__body";
-    body.textContent = entry.body;
-
-    item.append(meta, body);
-    return item;
-  }
-
-  private buildEmptySeat(playerId: PlayerId): HTMLElement {
-    const wrap = document.createElement("div");
-    wrap.className = "lobby-seat__content";
-
-    const header = document.createElement("div");
-    header.className = "lobby-seat__header";
-
-    const slot = document.createElement("span");
-    slot.textContent = `P${playerId}`;
-
-    const title = document.createElement("strong");
-    title.textContent = "Open";
-
-    const state = document.createElement("em");
-    state.textContent = "Available";
-
-    const placeholder = document.createElement("div");
-    placeholder.className = "lobby-seat__placeholder";
-    placeholder.textContent = "Claim slot.";
-
-    header.append(slot, title, state);
-    wrap.append(header, placeholder);
-    return wrap;
-  }
-
-  private buildSeatContent(playerId: PlayerId, lobby: LobbyState): HTMLElement {
-    const seat = lobby.seats[playerId];
-    const isSelf = seat.clientId === lobby.selfClientId;
-    const wrap = document.createElement("div");
-    wrap.className = "lobby-seat__content";
-    wrap.dataset.ready = seat.ready ? "true" : "false";
-    wrap.dataset.self = isSelf ? "true" : "false";
-
-    const header = document.createElement("div");
-    header.className = "lobby-seat__header";
-
-    const slotLabel = document.createElement("span");
-    slotLabel.textContent = `P${playerId}`;
-
-    const name = document.createElement("strong");
-    name.textContent = seat.clientId ? seat.displayName || `Pilot ${playerId}` : "Open";
-
-    const status = document.createElement("em");
-    status.textContent = seat.clientId
-      ? lobby.status === "playing"
-        ? (seat.ready ? "Live" : "Joining")
-        : (seat.ready ? "Ready" : isSelf ? "Selecting" : "Joined")
-      : "Available";
-
-    header.append(slotLabel, name, status);
-
-    const preview = document.createElement("div");
-    preview.className = "lobby-seat__preview";
-
-    const character = this.getCharacter(seat.characterIndex);
-    const image = document.createElement("img");
-    image.className = "lobby-seat__portrait";
-    image.alt = character.name;
-    image.src = assetUrl(`/assets/characters/${character.id}/south.png`);
-    image.width = 72;
-    image.height = 72;
-
-    const characterMeta = document.createElement("div");
-    characterMeta.className = "lobby-seat__meta";
-
-    const characterName = document.createElement("p");
-    characterName.textContent = character.name;
-
-    const characterState = document.createElement("span");
-    characterState.textContent = lobby.status === "playing"
-      ? (seat.ready ? "In arena" : "Joining")
-      : (seat.ready ? "Seat ready" : "Selected");
-
-    characterMeta.append(characterName, characterState);
-
-    preview.append(image, characterMeta);
-
-    const actions = document.createElement("div");
-    actions.className = "lobby-seat__actions";
-
-    if (!seat.clientId) {
-      const claimButton = document.createElement("button");
-      claimButton.className = "lobby-button lobby-button--primary";
-      claimButton.type = "button";
-      claimButton.textContent = "Claim";
-      claimButton.addEventListener("click", () => {
-        this.send({ type: "claim-seat", seat: playerId, characterIndex: this.preferredCharacterIndex });
-      });
-      actions.appendChild(claimButton);
-    } else if (isSelf && lobby.status === "open") {
-      const readyButton = document.createElement("button");
-      readyButton.className = `lobby-button ${seat.ready ? "lobby-button--danger" : "lobby-button--primary"}`;
-      readyButton.type = "button";
-      readyButton.textContent = seat.ready ? "Undo" : "Ready up";
-      readyButton.addEventListener("click", () => {
-        this.send({ type: "set-ready", ready: !seat.ready });
-      });
-
-      const info = document.createElement("span");
-      info.className = "lobby-seat__hint";
-      info.textContent = "Uses your selected bomber.";
-
-      actions.append(readyButton, info);
+      empty.className = "experience-match__chat-empty";
+      empty.textContent = "O chat aparece aqui durante a sala e a partida.";
+      this.elements.matchChatLog.appendChild(empty);
     } else {
-      const info = document.createElement("span");
-      info.className = "lobby-seat__hint";
-      info.textContent = lobby.status === "playing"
-        ? (seat.ready ? "Pilot deployed." : "Connecting to arena.")
-        : (seat.ready ? "Ready." : "Waiting.");
-      actions.appendChild(info);
+      for (const entry of entries.slice(-24)) {
+        const item = document.createElement("div");
+        item.className = "experience-match__chat-entry";
+        if (entry.system) {
+          item.dataset.system = "true";
+        } else if (entry.authorClientId && entry.authorClientId === this.clientId) {
+          item.dataset.self = "true";
+        }
+
+        const meta = document.createElement("div");
+        meta.className = "experience-match__chat-meta";
+        meta.textContent = entry.authorLabel;
+
+        const body = document.createElement("p");
+        body.className = "experience-match__chat-body";
+        body.textContent = entry.body;
+
+        item.append(meta, body);
+        this.elements.matchChatLog.appendChild(item);
+      }
+      this.elements.matchChatLog.scrollTop = this.elements.matchChatLog.scrollHeight;
     }
 
-    wrap.append(header, preview, actions);
-    return wrap;
+    const chatEnabled = Boolean(this.currentLobby);
+    this.elements.matchChatInput.disabled = !chatEnabled;
+    this.elements.matchChatSend.disabled = !chatEnabled;
+  }
+
+  private getPresenceEntries(): OnlinePresenceEntry[] {
+    if (this.onlinePlayers.length > 0) {
+      return [...this.onlinePlayers].sort((left, right) => {
+        if (left.clientId === this.clientId) {
+          return -1;
+        }
+        if (right.clientId === this.clientId) {
+          return 1;
+        }
+        return left.clientId.localeCompare(right.clientId);
+      });
+    }
+    return this.clientId ? [{ clientId: this.clientId }] : [];
+  }
+
+  private formatPresenceLabel(clientId: string): string {
+    const compact = clientId.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+    const suffix = compact.slice(-4) || compact;
+    return `ID ${suffix}`;
   }
 
   private mountCanvas(root: HTMLElement): void {
     const canvas = root.querySelector("canvas");
-    if (!canvas || canvas.parentElement === this.elements.arenaViewport) {
+    if (!canvas || canvas.parentElement === this.elements.matchViewport) {
       return;
     }
-    this.elements.arenaViewport.replaceChildren(canvas);
+    this.elements.matchViewport.replaceChildren(canvas);
     window.requestAnimationFrame(() => {
       window.dispatchEvent(new Event("resize"));
     });
@@ -1066,6 +1359,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         death: { up: [], down: [], left: [], right: [] },
       },
     };
+  }
+
+  private getLobbyDisplayTitle(lobby: LobbySummary | LobbyState): string {
+    return lobby.title === "BOMBA" ? DEFAULT_LOBBY_TITLE : lobby.title;
   }
 
   private wrapCharacterIndex(index: number): number {
@@ -1105,9 +1402,22 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   }
 
   private buildInviteUrl(roomCode: string): string {
-    const url = new URL(window.location.href);
-    url.searchParams.set("room", roomCode);
-    return url.toString();
+    return this.telemetry.buildInviteUrl(roomCode);
+  }
+
+  private maybeTrackMatchEnded(matchWinner: PlayerId | null, roundNumber: number): void {
+    if (!matchWinner || this.observedMatchWinner === matchWinner) {
+      return;
+    }
+    this.observedMatchWinner = matchWinner;
+    this.telemetry.track("match_ended", {
+      context: { roomCode: this.currentLobby?.roomCode ?? null, screen: "match" },
+      payload: {
+        winner: matchWinner,
+        roundNumber,
+        localWon: this.currentLobby?.selfSeat === matchWinner,
+      },
+    });
   }
 
   private updateLocation(roomCode: string | null): void {

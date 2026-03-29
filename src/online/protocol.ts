@@ -55,6 +55,10 @@ export interface ChatEntry {
   system?: boolean;
 }
 
+export interface OnlinePresenceEntry {
+  clientId: string;
+}
+
 export interface MatchStartConfig {
   roomCode: string;
   role: OnlineRole;
@@ -134,6 +138,7 @@ export interface ServerHelloMessage {
   clientId: string;
   lobbies: LobbySummary[];
   onlineUsers: number;
+  onlinePlayers: OnlinePresenceEntry[];
   quickMatchQueued: number;
   searchingQuickMatch: boolean;
 }
@@ -142,6 +147,7 @@ export interface ServerLobbyListMessage {
   type: "lobby-list";
   lobbies: LobbySummary[];
   onlineUsers: number;
+  onlinePlayers: OnlinePresenceEntry[];
 }
 
 export interface ServerLobbyJoinedMessage {
@@ -189,6 +195,7 @@ export interface ServerQuickMatchStateMessage {
   searching: boolean;
   countdownMs: number | null;
   onlineUsers: number;
+  onlinePlayers: OnlinePresenceEntry[];
 }
 
 export interface ServerChatMessage {

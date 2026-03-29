@@ -1,5 +1,7 @@
 import type { Direction, MenuPlayerId } from "../core/types";
-import { KEY_BINDINGS, SKILL_KEY } from "../core/config";
+import { KEY_BINDINGS, LOCAL_PLAYER_MOVEMENT_BINDINGS, SKILL_KEY } from "../core/config";
+
+type DirectionCodeMap = Record<Direction, readonly string[]>;
 
 export interface InputController {
   consumePress(code: string): boolean;
@@ -7,6 +9,7 @@ export interface InputController {
   clearPresses(): void;
   isDown(code: string): boolean;
   getMovementDirection(playerId: MenuPlayerId): Direction | null;
+  getDirectionFromCodes(codesByDirection: DirectionCodeMap): Direction | null;
 }
 
 export class InputManager {
@@ -36,6 +39,10 @@ export class InputManager {
     "KeyN",
     "KeyG",
     "KeyK",
+    ...LOCAL_PLAYER_MOVEMENT_BINDINGS.up,
+    ...LOCAL_PLAYER_MOVEMENT_BINDINGS.down,
+    ...LOCAL_PLAYER_MOVEMENT_BINDINGS.left,
+    ...LOCAL_PLAYER_MOVEMENT_BINDINGS.right,
   ]);
 
   constructor(target: Window) {
@@ -51,14 +58,20 @@ export class InputManager {
         this.pressCounts.set(code, (this.pressCounts.get(code) ?? 0) + 1);
       }
       this.keysDown.add(code);
-      this.keyOrder = this.keyOrder.filter((item) => item !== code);
+      const idx = this.keyOrder.indexOf(code);
+      if (idx !== -1) {
+        this.keyOrder.splice(idx, 1);
+      }
       this.keyOrder.push(code);
     });
 
     target.addEventListener("keyup", (event) => {
       const code = event.code;
       this.keysDown.delete(code);
-      this.keyOrder = this.keyOrder.filter((item) => item !== code);
+      const idx = this.keyOrder.indexOf(code);
+      if (idx !== -1) {
+        this.keyOrder.splice(idx, 1);
+      }
     });
 
     target.addEventListener("blur", () => {
@@ -95,18 +108,23 @@ export class InputManager {
 
   public getMovementDirection(playerId: MenuPlayerId): Direction | null {
     const binding = KEY_BINDINGS[playerId];
-    const options: Array<{ code: string; direction: Direction }> = [
-      { code: binding.up, direction: "up" },
-      { code: binding.down, direction: "down" },
-      { code: binding.left, direction: "left" },
-      { code: binding.right, direction: "right" },
-    ];
+    return this.getDirectionFromCodes({
+      up: [binding.up],
+      down: [binding.down],
+      left: [binding.left],
+      right: [binding.right],
+    });
+  }
 
+  public getDirectionFromCodes(codesByDirection: DirectionCodeMap): Direction | null {
     for (let index = this.keyOrder.length - 1; index >= 0; index -= 1) {
       const code = this.keyOrder[index];
-      const match = options.find((option) => option.code === code && this.keysDown.has(option.code));
-      if (match) {
-        return match.direction;
+      const directions: Direction[] = ["up", "down", "left", "right"];
+      for (const direction of directions) {
+        const codes = codesByDirection[direction];
+        if (codes.includes(code) && this.keysDown.has(code)) {
+          return direction;
+        }
       }
     }
 
@@ -144,6 +162,10 @@ export class NoopInputManager implements InputController {
   }
 
   public getMovementDirection(): Direction | null {
+    return null;
+  }
+
+  public getDirectionFromCodes(): Direction | null {
     return null;
   }
 }

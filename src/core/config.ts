@@ -77,3 +77,10 @@ export const KEY_BINDINGS: Record<MenuPlayerId, {
     ready: "KeyP",
   },
 };
+
+export const LOCAL_PLAYER_MOVEMENT_BINDINGS = {
+  up: ["KeyW", "ArrowUp"],
+  down: ["KeyS", "ArrowDown"],
+  left: ["KeyA", "ArrowLeft"],
+  right: ["KeyD", "ArrowRight"],
+} as const;

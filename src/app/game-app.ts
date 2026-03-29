@@ -11,6 +11,7 @@ import {
   GRID_WIDTH,
   HUD_HEIGHT,
   KEY_BINDINGS,
+  LOCAL_PLAYER_MOVEMENT_BINDINGS,
   MIN_MOVE_MS,
   PLAYER_COLORS,
   ROUND_DURATION_MS,
@@ -343,6 +344,13 @@ export class GameApp {
   private readonly spriteTrimCache = new SpriteTrimCache();
   private readonly soundManager = new SoundManager();
 
+  // ── Performance: offscreen caches ──
+  private backdropCache: HTMLCanvasElement | null = null;
+  private arenaStaticCache: HTMLCanvasElement | null = null;
+  private arenaStaticDirty = true;
+  private cachedDangerMap: Map<string, number> | null = null;
+  private arenaStaticMistGradient: CanvasGradient | null = null;
+
   constructor(root: HTMLElement, assets: GameAssets) {
     this.root = root;
     this.assets = assets;
@@ -517,6 +525,7 @@ export class GameApp {
         collected: powerUp.collected,
       })),
     };
+    this.invalidateArenaCache();
     this.players = createPlayerRecord((playerId) => this.clonePlayerState(snapshot.players[playerId]));
     this.bombs = snapshot.bombs.map((bomb) => ({
       ...bomb,
@@ -737,6 +746,34 @@ export class GameApp {
     window.requestAnimationFrame(this.loop);
   }
 
+  public getCurrentMode(): Mode {
+    return this.mode;
+  }
+
+  public startOfflineBotMatch(botFill = 3): void {
+    if (this.onlineSession) {
+      return;
+    }
+    this.mode = "menu";
+    this.paused = false;
+    this.roundOutcome = null;
+    this.matchWinner = null;
+    this.applyOfflineBotFill(botFill, false);
+    this.startMatch();
+  }
+
+  public setOfflinePreferredCharacter(characterIndex: number): void {
+    if (this.onlineSession) {
+      return;
+    }
+    const nextIndex = this.wrapCharacterIndex(characterIndex);
+    this.selectedCharacterIndex[1] = nextIndex;
+    this.pendingCharacterIndex[1] = nextIndex;
+    this.characterLocked[1] = true;
+    this.characterMenuOpen[1] = false;
+    this.syncPlayerLabels();
+  }
+
   private readonly loop = (timestamp: number): void => {
     if (this.lastTimestamp === 0) {
       this.lastTimestamp = timestamp;
@@ -801,7 +838,7 @@ export class GameApp {
     const input = this.onlineInputs[this.onlineLocalPlayerId];
     online_captureLocalInput(
       input,
-      this.input.getMovementDirection(1),
+      this.input.getDirectionFromCodes(LOCAL_PLAYER_MOVEMENT_BINDINGS),
       this.input.consumePress(localBindings.bomb),
       this.input.consumePress(localBindings.detonate),
       this.input.consumePress(SKILL_KEY),
@@ -1230,6 +1267,13 @@ export class GameApp {
     this.updateFlames(deltaMs);
     this.collectPowerUps();
     this.evaluateRoundState();
+
+    // Cache danger map so render doesn't need to recompute it
+    if (this.showDangerOverlay) {
+      this.cachedDangerMap = this.getDangerMap();
+    } else {
+      this.cachedDangerMap = null;
+    }
   }
 
   private updateMatchResult(): void {
@@ -1391,6 +1435,7 @@ export class GameApp {
 
   private resetRound(): void {
     this.arena = createArena();
+    this.invalidateArenaCache();
     this.players = this.createPlayers();
     this.bombs = [];
     this.flames = [];
@@ -1442,6 +1487,11 @@ export class GameApp {
       return configuredIndex;
     }
     return fallbackIndex;
+  }
+
+  private wrapCharacterIndex(index: number): number {
+    const total = Math.max(1, this.characterRoster.length);
+    return ((index % total) + total) % total;
   }
 
   private getActiveCharacterEntry(playerId: PlayerId): CharacterRosterEntry {
@@ -1578,8 +1628,6 @@ export class GameApp {
         this.botBombCooldownMs = BOT_BOMB_COOLDOWN_MS;
       }
     }
-
-    this.resolvePlayerDeathsFromFlames();
   }
 
   private getMovementDirection(id: PlayerId): Direction | null {
@@ -2226,7 +2274,7 @@ export class GameApp {
       this.addFlame({ x: Number(xText), y: Number(yText) });
     });
     this.soundManager.playOneShot("flames");
-    this.resolvePlayerDeathsFromFlames();
+    this.resolvePlayerDeathsAtTileKeys(flameTiles);
   }
 
   private revealPowerUpAt(key: string): void {
@@ -2241,6 +2289,7 @@ export class GameApp {
       return false;
     }
     this.arena.breakable.delete(key);
+    this.invalidateArenaCache();
     this.revealPowerUpAt(key);
     this.addCrateBreakAnimation(this.parseTileKey(key));
     return true;
@@ -2296,6 +2345,7 @@ export class GameApp {
           const key = tileKey(effect.tile.x, effect.tile.y);
           this.suddenDeathClosedTiles.add(key);
           this.arena.solid.add(key);
+          this.invalidateArenaCache();
         } else {
           this.applySuddenDeathClosure(effect.tile);
         }
@@ -2369,6 +2419,7 @@ export class GameApp {
     }
     this.suddenDeathClosedTiles.add(key);
     this.arena.solid.add(key);
+    this.invalidateArenaCache();
     this.resolveSuddenDeathClosureImpact(tile);
   }
 
@@ -2427,11 +2478,17 @@ export class GameApp {
       flame.remainingMs -= deltaMs;
     }
     this.flames = this.flames.filter((flame) => flame.remainingMs > 0);
-    this.resolvePlayerDeathsFromFlames();
   }
 
-  private resolvePlayerDeathsFromFlames(): void {
-    const flameKeys = new Set(this.flames.map((flame) => tileKey(flame.tile.x, flame.tile.y)));
+  resolvePlayerDeathsFromFlames(): void {
+    this.resolvePlayerDeathsAtTileKeys(this.flames.map((flame) => tileKey(flame.tile.x, flame.tile.y)));
+  }
+
+  private resolvePlayerDeathsAtTileKeys(keys: Iterable<string>): void {
+    const flameKeys = new Set(keys);
+    if (flameKeys.size === 0) {
+      return;
+    }
     for (const id of this.activePlayerIds) {
       const player = this.players[id];
       if (!player.alive) {
@@ -2584,7 +2641,13 @@ export class GameApp {
     }
   }
 
-  private renderBackdrop(): void {
+  private buildBackdropCache(): HTMLCanvasElement {
+    const offscreen = document.createElement("canvas");
+    offscreen.width = CANVAS_WIDTH * CANVAS_BACKBUFFER_SCALE;
+    offscreen.height = CANVAS_HEIGHT * CANVAS_BACKBUFFER_SCALE;
+    const c = offscreen.getContext("2d")!;
+    c.setTransform(CANVAS_BACKBUFFER_SCALE, 0, 0, CANVAS_BACKBUFFER_SCALE, 0, 0);
+
     const arenaWidth = GRID_WIDTH * TILE_SIZE;
     const arenaHeight = GRID_HEIGHT * TILE_SIZE;
     const arenaX = ARENA_OFFSET_X;
@@ -2596,83 +2659,83 @@ export class GameApp {
     const frameWidth = arenaWidth + 20;
     const frameHeight = arenaHeight + 20;
 
-    const gradient = this.ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+    const gradient = c.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
     gradient.addColorStop(0, "#2b466f");
     gradient.addColorStop(0.38, "#122540");
     gradient.addColorStop(1, "#050913");
-    this.ctx.fillStyle = gradient;
-    this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    c.fillStyle = gradient;
+    c.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    const mist = this.ctx.createRadialGradient(CANVAS_WIDTH - 92, 84, 18, CANVAS_WIDTH - 92, 84, 214);
+    const mist = c.createRadialGradient(CANVAS_WIDTH - 92, 84, 18, CANVAS_WIDTH - 92, 84, 214);
     mist.addColorStop(0, "rgba(198, 223, 255, 0.18)");
     mist.addColorStop(0.4, "rgba(128, 168, 214, 0.12)");
     mist.addColorStop(1, "rgba(9, 20, 39, 0)");
-    this.ctx.fillStyle = mist;
-    this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    c.fillStyle = mist;
+    c.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    const floorGlow = this.ctx.createLinearGradient(0, arenaBottom - 24, 0, CANVAS_HEIGHT);
+    const floorGlow = c.createLinearGradient(0, arenaBottom - 24, 0, CANVAS_HEIGHT);
     floorGlow.addColorStop(0, "rgba(31, 48, 72, 0)");
     floorGlow.addColorStop(1, "rgba(6, 12, 22, 0.9)");
-    this.ctx.fillStyle = floorGlow;
-    this.ctx.fillRect(0, arenaBottom - 24, CANVAS_WIDTH, CANVAS_HEIGHT - arenaBottom + 24);
+    c.fillStyle = floorGlow;
+    c.fillRect(0, arenaBottom - 24, CANVAS_WIDTH, CANVAS_HEIGHT - arenaBottom + 24);
 
-    this.ctx.fillStyle = "rgba(15, 26, 45, 0.72)";
-    this.ctx.beginPath();
-    this.ctx.moveTo(0, arenaY - 10);
-    this.ctx.lineTo(arenaX - 2, arenaY + 44);
-    this.ctx.lineTo(arenaX - 10, arenaBottom + 42);
-    this.ctx.lineTo(0, CANVAS_HEIGHT);
-    this.ctx.closePath();
-    this.ctx.fill();
+    c.fillStyle = "rgba(15, 26, 45, 0.72)";
+    c.beginPath();
+    c.moveTo(0, arenaY - 10);
+    c.lineTo(arenaX - 2, arenaY + 44);
+    c.lineTo(arenaX - 10, arenaBottom + 42);
+    c.lineTo(0, CANVAS_HEIGHT);
+    c.closePath();
+    c.fill();
 
-    this.ctx.beginPath();
-    this.ctx.moveTo(CANVAS_WIDTH, arenaY - 2);
-    this.ctx.lineTo(arenaRight + 2, arenaY + 58);
-    this.ctx.lineTo(arenaRight + 12, arenaBottom + 40);
-    this.ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT);
-    this.ctx.closePath();
-    this.ctx.fill();
+    c.beginPath();
+    c.moveTo(CANVAS_WIDTH, arenaY - 2);
+    c.lineTo(arenaRight + 2, arenaY + 58);
+    c.lineTo(arenaRight + 12, arenaBottom + 40);
+    c.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT);
+    c.closePath();
+    c.fill();
 
-    this.ctx.fillStyle = "rgba(7, 11, 20, 0.46)";
-    this.ctx.fillRect(frameX + 4, frameY + 14, frameWidth - 8, frameHeight - 4);
+    c.fillStyle = "rgba(7, 11, 20, 0.46)";
+    c.fillRect(frameX + 4, frameY + 14, frameWidth - 8, frameHeight - 4);
 
-    this.ctx.fillStyle = "rgba(129, 156, 194, 0.2)";
-    this.ctx.beginPath();
-    this.ctx.moveTo(frameX, frameY + 4);
-    this.ctx.lineTo(frameX + frameWidth, frameY + 4);
-    this.ctx.lineTo(frameX + frameWidth - 6, frameY + 18);
-    this.ctx.lineTo(frameX + 6, frameY + 18);
-    this.ctx.closePath();
-    this.ctx.fill();
+    c.fillStyle = "rgba(129, 156, 194, 0.2)";
+    c.beginPath();
+    c.moveTo(frameX, frameY + 4);
+    c.lineTo(frameX + frameWidth, frameY + 4);
+    c.lineTo(frameX + frameWidth - 6, frameY + 18);
+    c.lineTo(frameX + 6, frameY + 18);
+    c.closePath();
+    c.fill();
 
-    this.ctx.strokeStyle = "rgba(171, 214, 255, 0.18)";
-    this.ctx.lineWidth = 1;
-    this.ctx.strokeRect(frameX + 0.5, frameY + 0.5, frameWidth - 1, frameHeight - 1);
+    c.strokeStyle = "rgba(171, 214, 255, 0.18)";
+    c.lineWidth = 1;
+    c.strokeRect(frameX + 0.5, frameY + 0.5, frameWidth - 1, frameHeight - 1);
 
-    this.ctx.fillStyle = "rgba(176, 208, 248, 0.06)";
-    this.ctx.beginPath();
-    this.ctx.ellipse(CANVAS_WIDTH - 84, arenaBottom + 16, 104, 76, -0.35, 0, Math.PI * 2);
-    this.ctx.fill();
+    c.fillStyle = "rgba(176, 208, 248, 0.06)";
+    c.beginPath();
+    c.ellipse(CANVAS_WIDTH - 84, arenaBottom + 16, 104, 76, -0.35, 0, Math.PI * 2);
+    c.fill();
 
-    this.ctx.fillStyle = "rgba(9, 16, 28, 0.34)";
-    this.ctx.beginPath();
-    this.ctx.moveTo(24, arenaY + 54);
-    this.ctx.lineTo(56, arenaY + 120);
-    this.ctx.lineTo(42, arenaBottom - 30);
-    this.ctx.lineTo(14, arenaBottom - 40);
-    this.ctx.closePath();
-    this.ctx.fill();
+    c.fillStyle = "rgba(9, 16, 28, 0.34)";
+    c.beginPath();
+    c.moveTo(24, arenaY + 54);
+    c.lineTo(56, arenaY + 120);
+    c.lineTo(42, arenaBottom - 30);
+    c.lineTo(14, arenaBottom - 40);
+    c.closePath();
+    c.fill();
 
-    this.ctx.strokeStyle = "rgba(174, 206, 235, 0.09)";
-    this.ctx.lineWidth = 2;
+    c.strokeStyle = "rgba(174, 206, 235, 0.09)";
+    c.lineWidth = 2;
     for (let i = 0; i < 6; i += 1) {
-      this.ctx.beginPath();
-      this.ctx.moveTo(12 + i * 8, arenaY + 84 + i * 18);
-      this.ctx.lineTo(34 + i * 8, arenaY + 56 + i * 16);
-      this.ctx.stroke();
+      c.beginPath();
+      c.moveTo(12 + i * 8, arenaY + 84 + i * 18);
+      c.lineTo(34 + i * 8, arenaY + 56 + i * 16);
+      c.stroke();
     }
 
-    const vignette = this.ctx.createRadialGradient(
+    const vignette = c.createRadialGradient(
       CANVAS_WIDTH / 2,
       CANVAS_HEIGHT / 2,
       120,
@@ -2682,8 +2745,20 @@ export class GameApp {
     );
     vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
     vignette.addColorStop(1, "rgba(0, 0, 0, 0.34)");
-    this.ctx.fillStyle = vignette;
-    this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    c.fillStyle = vignette;
+    c.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    return offscreen;
+  }
+
+  private renderBackdrop(): void {
+    if (!this.backdropCache) {
+      this.backdropCache = this.buildBackdropCache();
+    }
+    this.ctx.save();
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.drawImage(this.backdropCache, 0, 0);
+    this.ctx.restore();
   }
 
   private renderMenu(): void {
@@ -2947,7 +3022,20 @@ export class GameApp {
     }
   }
 
-  private renderArena(): void {
+  private rebuildArenaStaticCache(): void {
+    if (!this.arenaStaticCache) {
+      this.arenaStaticCache = document.createElement("canvas");
+      this.arenaStaticCache.width = CANVAS_WIDTH * CANVAS_BACKBUFFER_SCALE;
+      this.arenaStaticCache.height = CANVAS_HEIGHT * CANVAS_BACKBUFFER_SCALE;
+    }
+    const c = this.arenaStaticCache.getContext("2d")!;
+    c.setTransform(CANVAS_BACKBUFFER_SCALE, 0, 0, CANVAS_BACKBUFFER_SCALE, 0, 0);
+    c.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    const savedCtx = this.ctx;
+    // Temporarily redirect draw calls to the offscreen canvas
+    (this as unknown as { ctx: CanvasRenderingContext2D }).ctx = c;
+
     const centerX = Math.floor(GRID_WIDTH / 2);
     const centerY = Math.floor(GRID_HEIGHT / 2);
     const sideColumn = Math.min(2, GRID_WIDTH - 3);
@@ -2985,19 +3073,19 @@ export class GameApp {
             ? this.assets.floor.lane
             : this.assets.floor.base;
         if (floorSprite) {
-          this.ctx.drawImage(floorSprite, screenX, screenY, TILE_SIZE, TILE_SIZE);
+          c.drawImage(floorSprite, screenX, screenY, TILE_SIZE, TILE_SIZE);
         } else {
-          this.ctx.fillStyle = baseTone;
-          this.ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+          c.fillStyle = baseTone;
+          c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
         }
         if (!floorSprite) {
-          this.ctx.strokeStyle = "rgba(146, 208, 255, 0.08)";
-          this.ctx.strokeRect(screenX + 0.5, screenY + 0.5, TILE_SIZE - 1, TILE_SIZE - 1);
+          c.strokeStyle = "rgba(146, 208, 255, 0.08)";
+          c.strokeRect(screenX + 0.5, screenY + 0.5, TILE_SIZE - 1, TILE_SIZE - 1);
         }
 
         if (!floorSprite && !this.arena.solid.has(key) && !this.arena.breakable.has(key)) {
-          this.ctx.fillStyle = isCenterLane ? "rgba(110, 214, 255, 0.1)" : "rgba(255, 255, 255, 0.04)";
-          this.ctx.fillRect(screenX + 8, screenY + 8, TILE_SIZE - 16, TILE_SIZE - 16);
+          c.fillStyle = isCenterLane ? "rgba(110, 214, 255, 0.1)" : "rgba(255, 255, 255, 0.04)";
+          c.fillRect(screenX + 8, screenY + 8, TILE_SIZE - 16, TILE_SIZE - 16);
         }
 
         if (this.arena.solid.has(key)) {
@@ -3009,14 +3097,45 @@ export class GameApp {
         } else if (this.arena.breakable.has(key)) {
           this.drawCrate(screenX, screenY);
         } else if (isWrapPortal) {
-          this.ctx.strokeStyle = "rgba(158, 230, 255, 0.48)";
-          this.ctx.strokeRect(screenX + 6.5, screenY + 6.5, TILE_SIZE - 13, TILE_SIZE - 13);
-          this.ctx.fillStyle = "rgba(126, 206, 255, 0.1)";
-          this.ctx.fillRect(screenX + 11, screenY + 11, TILE_SIZE - 22, TILE_SIZE - 22);
+          c.strokeStyle = "rgba(158, 230, 255, 0.48)";
+          c.strokeRect(screenX + 6.5, screenY + 6.5, TILE_SIZE - 13, TILE_SIZE - 13);
+          c.fillStyle = "rgba(126, 206, 255, 0.1)";
+          c.fillRect(screenX + 11, screenY + 11, TILE_SIZE - 22, TILE_SIZE - 22);
         }
       }
     }
 
+    c.strokeStyle = "rgba(188, 223, 255, 0.16)";
+    c.strokeRect(
+      ARENA_OFFSET_X - 0.5,
+      ARENA_OFFSET_Y - 0.5,
+      GRID_WIDTH * TILE_SIZE + 1,
+      GRID_HEIGHT * TILE_SIZE + 1,
+    );
+
+    c.fillStyle = "rgba(173, 204, 232, 0.04)";
+    c.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, GRID_WIDTH * TILE_SIZE, GRID_HEIGHT * TILE_SIZE);
+
+    // Restore the real context
+    (this as unknown as { ctx: CanvasRenderingContext2D }).ctx = savedCtx;
+    this.arenaStaticDirty = false;
+  }
+
+  private invalidateArenaCache(): void {
+    this.arenaStaticDirty = true;
+  }
+
+  private renderArena(): void {
+    // Blit cached static layer (floor, walls, crates)
+    if (this.arenaStaticDirty || !this.arenaStaticCache) {
+      this.rebuildArenaStaticCache();
+    }
+    this.ctx.save();
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.drawImage(this.arenaStaticCache!, 0, 0);
+    this.ctx.restore();
+
+    // Dynamic elements drawn on top every frame
     for (const effect of this.crateBreakAnimations) {
       this.drawCrateBreakAnimation(effect);
     }
@@ -3050,27 +3169,19 @@ export class GameApp {
       this.drawSuddenDeathClosureEffect(effect);
     }
 
-    this.ctx.strokeStyle = "rgba(188, 223, 255, 0.16)";
-    this.ctx.strokeRect(
-      ARENA_OFFSET_X - 0.5,
-      ARENA_OFFSET_Y - 0.5,
-      GRID_WIDTH * TILE_SIZE + 1,
-      GRID_HEIGHT * TILE_SIZE + 1,
-    );
-
-    this.ctx.fillStyle = "rgba(173, 204, 232, 0.04)";
-    this.ctx.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, GRID_WIDTH * TILE_SIZE, GRID_HEIGHT * TILE_SIZE);
-
-    const arenaMist = this.ctx.createLinearGradient(0, ARENA_OFFSET_Y, 0, CANVAS_HEIGHT);
-    arenaMist.addColorStop(0, "rgba(194, 220, 247, 0.05)");
-    arenaMist.addColorStop(0.35, "rgba(74, 108, 153, 0)");
-    arenaMist.addColorStop(1, "rgba(4, 8, 14, 0.1)");
-    this.ctx.fillStyle = arenaMist;
+    // Arena mist overlay (single pre-cached gradient)
+    if (!this.arenaStaticMistGradient) {
+      this.arenaStaticMistGradient = this.ctx.createLinearGradient(0, ARENA_OFFSET_Y, 0, CANVAS_HEIGHT);
+      this.arenaStaticMistGradient.addColorStop(0, "rgba(194, 220, 247, 0.05)");
+      this.arenaStaticMistGradient.addColorStop(0.35, "rgba(74, 108, 153, 0)");
+      this.arenaStaticMistGradient.addColorStop(1, "rgba(4, 8, 14, 0.1)");
+    }
+    this.ctx.fillStyle = this.arenaStaticMistGradient;
     this.ctx.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, GRID_WIDTH * TILE_SIZE, GRID_HEIGHT * TILE_SIZE);
   }
 
   private getDangerOverlayTiles(): Array<{ x: number; y: number; etaMs: number }> {
-    const dangerMap = this.getDangerMap();
+    const dangerMap = this.cachedDangerMap ?? this.getDangerMap();
     const tiles: Array<{ x: number; y: number; etaMs: number }> = [];
     for (const [key, etaMs] of dangerMap.entries()) {
       if (etaMs > DANGER_OVERLAY_MAX_ETA_MS) {
@@ -3390,8 +3501,16 @@ export class GameApp {
     this.ctx.globalCompositeOperation = "lighter";
     this.ctx.lineCap = "round";
     this.ctx.lineJoin = "round";
-    this.ctx.shadowBlur = TILE_SIZE * 0.85;
-    this.ctx.shadowColor = `rgba(153, 70, 255, ${glowAlpha})`;
+
+    // Outer glow pass (wide, faint) — replaces expensive shadowBlur
+    this.ctx.strokeStyle = `rgba(153, 70, 255, ${glowAlpha * 0.25})`;
+    this.ctx.lineWidth = NICO_BEAM_GLOW_WIDTH_PX + TILE_SIZE * 0.7;
+    this.ctx.beginPath();
+    this.ctx.moveTo(originCenter.x, originCenter.y);
+    this.ctx.lineTo(endCenter.x, endCenter.y);
+    this.ctx.stroke();
+
+    // Mid glow pass
     this.ctx.strokeStyle = gradient;
     this.ctx.lineWidth = NICO_BEAM_GLOW_WIDTH_PX;
     this.ctx.beginPath();
@@ -3399,8 +3518,7 @@ export class GameApp {
     this.ctx.lineTo(endCenter.x, endCenter.y);
     this.ctx.stroke();
 
-    this.ctx.shadowBlur = TILE_SIZE * 0.36;
-    this.ctx.shadowColor = `rgba(255, 234, 255, ${coreAlpha})`;
+    // Core pass (bright center)
     this.ctx.strokeStyle = `rgba(255, 241, 255, ${coreAlpha})`;
     this.ctx.lineWidth = NICO_BEAM_CORE_WIDTH_PX;
     this.ctx.beginPath();
