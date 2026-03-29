@@ -295,6 +295,53 @@ game.applyOnlineFrame({
 
 const idSwapCalls = calls.slice(placementCalls.length);
 
+game.onlinePendingInputs = [{
+  seq: 1,
+  input: {
+    direction: null,
+    bombPressed: true,
+    detonatePressed: false,
+    skillPressed: false,
+    skillHeld: false,
+  },
+}];
+
+game.bombs = [{
+  id: 777,
+  ownerId: 1,
+  tile: { x: 3, y: 2 },
+  fuseMs: 950,
+  ownerCanPass: true,
+  flameRange: 1,
+}];
+
+game.applyOnlineFrame({
+  serverTimeMs: 90,
+  serverTick: 1,
+  frameId: 1,
+  ackedInputSeq: { 1: 0, 2: 0, 3: 0, 4: 0 },
+  mode: "match",
+  players: basePlayers,
+  bombs: [],
+  flames: [],
+  nextBombId: 3,
+  score: { 1: 0, 2: 0, 3: 0, 4: 0 },
+  roundNumber: 1,
+  roundTimeMs: 59910,
+  paused: false,
+  roundOutcome: null,
+  matchWinner: null,
+  animationClockMs: 90,
+  suddenDeathActive: false,
+  suddenDeathTickMs: 735,
+  suddenDeathIndex: 0,
+  selectedCharacterIndex: { 1: 0, 2: 1, 3: 0, 4: 0 },
+  activePlayerIds: [1, 2],
+});
+
+const pendingRollbackCalls = calls.slice(placementCalls.length + idSwapCalls.length);
+game.onlinePendingInputs = [];
+
 game.applyOnlineSnapshot({
   serverTimeMs: 100,
   serverTick: 2,
@@ -382,10 +429,11 @@ game.applyOnlineFrame({
 const pass = placementCalls.length === 1
   && placementCalls[0] === "bombPlace"
   && idSwapCalls.length === 0
+  && pendingRollbackCalls.length === 0
   && expected.every((key) => calls.includes(key))
   && calls.includes("matchWin");
 
-console.log(JSON.stringify({ placementCalls, idSwapCalls, calls, expected, pass }, null, 2));
+console.log(JSON.stringify({ placementCalls, idSwapCalls, pendingRollbackCalls, calls, expected, pass }, null, 2));
 
 if (!pass) {
   process.exit(1);

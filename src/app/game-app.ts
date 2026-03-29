@@ -692,6 +692,8 @@ export class GameApp {
       headless: this.headless,
       role: this.onlineSession?.role ?? null,
       audioPrimed: this.onlineAudioPrimed,
+      localPlayerId: this.onlineLocalPlayerId,
+      suppressLocalBombAudio: this.hasPendingLocalBombAudioSuppression(),
       previousBombs: this.bombs,
       previousFlames: this.flames,
       previousMatchWinner: this.matchWinner,
@@ -699,6 +701,13 @@ export class GameApp {
       didCollectRemotePowerUp: (powerUps) => this.didCollectRemotePowerUp(powerUps),
       playSound: (name) => this.soundManager.playOneShot(name),
     });
+  }
+
+  private hasPendingLocalBombAudioSuppression(): boolean {
+    if (!this.onlineSession || this.onlineSession.role !== "guest") {
+      return false;
+    }
+    return this.onlinePendingInputs.some((pending) => pending.input.bombPressed);
   }
 
   private didCollectRemotePowerUp(nextPowerUps: PowerUpState[]): boolean {
@@ -1105,10 +1114,15 @@ export class GameApp {
   }
 
   private applyPredictedInputStep(player: PlayerState, input: OnlineInputState, deltaMs: number): void {
-    this.simulatePlayerInputStep(player, input, deltaMs);
+    this.simulatePlayerInputStep(player, input, deltaMs, false);
   }
 
-  private simulatePlayerInputStep(player: PlayerState, input: OnlineInputState, deltaMs: number): boolean {
+  private simulatePlayerInputStep(
+    player: PlayerState,
+    input: OnlineInputState,
+    deltaMs: number,
+    playAudio = true,
+  ): boolean {
     player.spawnProtectionMs = Math.max(0, player.spawnProtectionMs - deltaMs);
     player.flameGuardMs = Math.max(0, player.flameGuardMs - deltaMs);
     this.syncPlayerSkill(player);
@@ -1125,7 +1139,7 @@ export class GameApp {
 
     let placedBomb = false;
     if (input.bombPressed) {
-      placedBomb = this.placeBomb(player);
+      placedBomb = this.placeBomb(player, playAudio);
     }
     if (input.detonatePressed) {
       this.triggerRemoteDetonation(player);
@@ -2172,7 +2186,7 @@ export class GameApp {
     return left < tileRight && right > tileLeft && top < tileBottom && bottom > tileTop;
   }
 
-  private placeBomb(player: PlayerState): boolean {
+  private placeBomb(player: PlayerState, playAudio = true): boolean {
     if (!player.alive || player.activeBombs >= player.maxBombs) {
       return false;
     }
@@ -2193,7 +2207,9 @@ export class GameApp {
     });
     this.nextBombId += 1;
     player.activeBombs += 1;
-    this.soundManager.playOneShot("bombPlace");
+    if (playAudio) {
+      this.soundManager.playOneShot("bombPlace");
+    }
     return true;
   }
 

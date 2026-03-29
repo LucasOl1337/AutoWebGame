@@ -117,6 +117,8 @@ interface OnlineAudioTransitionArgs {
   headless: boolean;
   role: OnlineRole | null;
   audioPrimed: boolean;
+  localPlayerId: PlayerId;
+  suppressLocalBombAudio: boolean;
   previousBombs: BombState[];
   previousFlames: FlameState[];
   previousMatchWinner: PlayerId | null;
@@ -138,6 +140,8 @@ export function playOnlineAudioTransition({
   headless,
   role,
   audioPrimed,
+  localPlayerId,
+  suppressLocalBombAudio,
   previousBombs,
   previousFlames,
   previousMatchWinner,
@@ -151,8 +155,14 @@ export function playOnlineAudioTransition({
 
   const previousBombKeys = new Set(previousBombs.map((bomb) => getBombAudioKey(bomb)));
   const nextBombKeys = new Set(next.bombs.map((bomb) => getBombAudioKey(bomb)));
-  const addedBombs = next.bombs.filter((bomb) => !previousBombKeys.has(getBombAudioKey(bomb))).length;
-  const removedBombs = previousBombs.filter((bomb) => !nextBombKeys.has(getBombAudioKey(bomb))).length;
+  const addedBombs = next.bombs.filter((bomb) => (
+    !previousBombKeys.has(getBombAudioKey(bomb))
+    && !(suppressLocalBombAudio && bomb.ownerId === localPlayerId)
+  )).length;
+  const removedBombs = previousBombs.filter((bomb) => (
+    !nextBombKeys.has(getBombAudioKey(bomb))
+    && !(suppressLocalBombAudio && bomb.ownerId === localPlayerId)
+  )).length;
 
   const previousFlameKeys = new Set(previousFlames.map((flame) => tileKey(flame.tile.x, flame.tile.y)));
   const newFlames = next.flames.filter((flame) => !previousFlameKeys.has(tileKey(flame.tile.x, flame.tile.y))).length;

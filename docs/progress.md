@@ -1124,3 +1124,11 @@ Validacao 2026-03-29 bomb explode default-only
 - `npm run build` (pass)
 - `npm run test:online-audio` (pass)
 - `npm run compile:esm && node tests/sound-manager-variation-check.mjs` (pass)
+2026-03-29 online local-bomb audio suppression pass
+- Audio bridge do guest agora ignora place/explode de bombas do proprio jogador enquanto houver plantio local pendente sem ack.
+- Isso elimina ruído/falso positivo no momento de apertar `Q`, sem desligar os sons autoritativos de explosao real mais tarde.
+- `online-audio-bridge-check` foi ampliado para cobrir rollback temporario de bomba prevista localmente sem tocar SFX extra.
+
+Validacao 2026-03-29 online local-bomb audio suppression
+- `npm run build` (pass)
+- `npm run test:online-audio` (pass)
