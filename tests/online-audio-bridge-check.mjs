@@ -311,19 +311,45 @@ game.applyOnlineSnapshot({
 
 const expected = [
   "bombPlace",
-  "suddenDeath",
-  "bombExplode",
-  "flameIgnite",
-  "crateBreak",
-  "powerupCollect",
-  "shieldBlock",
-  "playerDeath",
-  "roundWin",
+  "bombExplodeMain",
+  "flames",
+  "powerCollect",
 ];
+
+game.applyOnlineFrame({
+  serverTimeMs: 150,
+  serverTick: 3,
+  frameId: 3,
+  ackedInputSeq: { 1: 0, 2: 0, 3: 0, 4: 0 },
+  mode: "match-result",
+  players: {
+    ...basePlayers,
+    2: {
+      ...basePlayers[2],
+      alive: false,
+    },
+  },
+  bombs: [],
+  flames: [],
+  nextBombId: 2,
+  score: { 1: 5, 2: 0, 3: 0, 4: 0 },
+  roundNumber: 5,
+  roundTimeMs: 59750,
+  paused: false,
+  roundOutcome: { winner: 1, reason: "elimination" },
+  matchWinner: 1,
+  animationClockMs: 150,
+  suddenDeathActive: true,
+  suddenDeathTickMs: 650,
+  suddenDeathIndex: 1,
+  selectedCharacterIndex: { 1: 0, 2: 1, 3: 0, 4: 0 },
+  activePlayerIds: [1, 2],
+});
 
 const pass = placementCalls.length === 1
   && placementCalls[0] === "bombPlace"
-  && expected.every((key) => calls.includes(key));
+  && expected.every((key) => calls.includes(key))
+  && calls.includes("matchWin");
 
 console.log(JSON.stringify({ placementCalls, calls, expected, pass }, null, 2));
 

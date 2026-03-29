@@ -498,14 +498,11 @@ export function resolveNicoBeamImpact(
   if (beamTiles.length === 0) {
     return;
   }
-  let brokeCrate = false;
   const hitKeys = new Set<string>();
   for (const tile of beamTiles) {
     const key = tileKey(tile.x, tile.y);
     hitKeys.add(key);
-    if (context.breakCrateAtKey(key)) {
-      brokeCrate = true;
-    }
+    context.breakCrateAtKey(key);
     const bomb = context.bombs.find((item) => item.tile.x === tile.x && item.tile.y === tile.y);
     if (bomb) {
       bomb.fuseMs = 0;
@@ -524,9 +521,6 @@ export function resolveNicoBeamImpact(
       continue;
     }
     context.tryAbsorbInstantHit(player);
-  }
-  if (brokeCrate) {
-    context.soundManager.playOneShot("crateBreak");
   }
 }
 

@@ -2,16 +2,11 @@ import { assetUrl } from "./asset-url";
 
 export type SfxKey =
   | "bombPlace"
-  | "bombExplode"
-  | "crateBreak"
-  | "flameIgnite"
+  | "bombExplodeMain"
+  | "flames"
   | "matchStart"
-  | "roundWin"
   | "matchWin"
-  | "playerDeath"
-  | "powerupCollect"
-  | "shieldBlock"
-  | "suddenDeath";
+  | "powerCollect";
 
 interface SoundDefinition {
   url: string;
@@ -22,10 +17,11 @@ const MASTER_VOLUME = 0.5;
 
 export const SFX_MANIFEST: Partial<Record<SfxKey, SoundDefinition>> = {
   bombPlace: { url: assetUrl("/assets/audio/sfx/bomb_place.mp3"), volume: 0.72 * MASTER_VOLUME },
-  bombExplode: { url: assetUrl("/assets/audio/sfx/explosion_boom_bak_1_1774651757711.wav"), volume: 1.0 * MASTER_VOLUME },
+  bombExplodeMain: { url: assetUrl("/assets/audio/sfx/bomb_explode_main.mp3"), volume: 0.92 * MASTER_VOLUME },
+  flames: { url: assetUrl("/assets/audio/sfx/flames.mp3"), volume: 0.74 * MASTER_VOLUME },
   matchStart: { url: assetUrl("/assets/audio/sfx/match_start.mp3"), volume: 0.84 * 0.2 * MASTER_VOLUME },
   matchWin: { url: assetUrl("/assets/audio/sfx/match_win.mp3"), volume: 0.9 * MASTER_VOLUME },
-  powerupCollect: { url: assetUrl("/assets/audio/sfx/powerup_collect.mp3"), volume: 0.68 * MASTER_VOLUME },
+  powerCollect: { url: assetUrl("/assets/audio/sfx/powerup_collect.mp3"), volume: 0.68 * MASTER_VOLUME },
 };
 
 export class SoundManager {

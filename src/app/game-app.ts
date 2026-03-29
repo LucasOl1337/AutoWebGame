@@ -683,16 +683,12 @@ export class GameApp {
       headless: this.headless,
       role: this.onlineSession?.role ?? null,
       audioPrimed: this.onlineAudioPrimed,
-      hadRoundOutcome: Boolean(this.roundOutcome),
       previousBombs: this.bombs,
       previousFlames: this.flames,
-      previousSuddenDeathActive: this.suddenDeathActive,
-      previousBreakableTileCount: this.arena.breakable.size,
+      previousMatchWinner: this.matchWinner,
       next,
       didCollectRemotePowerUp: (powerUps) => this.didCollectRemotePowerUp(powerUps),
-      didConsumeRemoteShield: (players) => this.didConsumeRemoteShield(players),
-      didLoseRemotePlayer: (players) => this.didLoseRemotePlayer(players),
-      playSound: (name) => this.soundManager.playOneShot(name as any),
+      playSound: (name) => this.soundManager.playOneShot(name),
     });
   }
 
@@ -706,17 +702,6 @@ export class GameApp {
       powerUp.collected
       && !previousCollected.has(`${powerUp.type}:${tileKey(powerUp.tile.x, powerUp.tile.y)}`)
     ));
-  }
-
-  private didConsumeRemoteShield(nextPlayers: Record<PlayerId, PlayerState>): boolean {
-    return this.activePlayerIds.some((playerId) => (
-      this.players[playerId].shieldCharges > nextPlayers[playerId].shieldCharges
-      && nextPlayers[playerId].alive
-    ));
-  }
-
-  private didLoseRemotePlayer(nextPlayers: Record<PlayerId, PlayerState>): boolean {
-    return this.activePlayerIds.some((playerId) => this.players[playerId].alive && !nextPlayers[playerId].alive);
   }
 
   private spawnCrateBreakAnimationsFromDiff(nextBreakableTiles: string[]): void {
@@ -2205,9 +2190,8 @@ export class GameApp {
 
     const [bomb] = this.bombs.splice(index, 1);
     this.players[bomb.ownerId].activeBombs = Math.max(0, this.players[bomb.ownerId].activeBombs - 1);
-    this.soundManager.playOneShot("bombExplode");
+    this.soundManager.playOneShot("bombExplodeMain");
     const flameTiles = new Set<string>();
-    let brokeCrate = false;
     const range = bomb.flameRange;
     flameTiles.add(tileKey(bomb.tile.x, bomb.tile.y));
 
@@ -2232,7 +2216,6 @@ export class GameApp {
         }
 
         if (this.breakCrateAtKey(key)) {
-          brokeCrate = true;
           break;
         }
       }
@@ -2242,10 +2225,7 @@ export class GameApp {
       const [xText, yText] = key.split(",");
       this.addFlame({ x: Number(xText), y: Number(yText) });
     });
-    this.soundManager.playOneShot("flameIgnite");
-    if (brokeCrate) {
-      this.soundManager.playOneShot("crateBreak");
-    }
+    this.soundManager.playOneShot("flames");
     this.resolvePlayerDeathsFromFlames();
   }
 
@@ -2339,7 +2319,6 @@ export class GameApp {
     if (!this.suddenDeathActive && this.roundTimeMs <= SUDDEN_DEATH_START_MS) {
       this.suddenDeathActive = true;
       this.suddenDeathTickMs = 0;
-      this.soundManager.playOneShot("suddenDeath");
     }
 
     if (!this.suddenDeathActive || this.suddenDeathPath.length === 0 || this.suddenDeathIndex >= this.suddenDeathPath.length) {
@@ -2380,9 +2359,7 @@ export class GameApp {
     if (this.suddenDeathClosedTiles.has(key)) {
       return;
     }
-    if (this.breakCrateAtKey(key)) {
-      this.soundManager.playOneShot("crateBreak", 0.92);
-    }
+    this.breakCrateAtKey(key);
     this.arena.powerUps = this.arena.powerUps.filter((powerUp) => (
       powerUp.tile.x !== tile.x || powerUp.tile.y !== tile.y
     ));
@@ -2480,7 +2457,6 @@ export class GameApp {
     if (player.shieldCharges > 0) {
       player.shieldCharges -= 1;
       player.flameGuardMs = SHIELD_GUARD_MS;
-      this.soundManager.playOneShot("shieldBlock");
       return false;
     }
     this.killPlayer(player);
@@ -2498,7 +2474,6 @@ export class GameApp {
       startedAtMs: this.animationClockMs,
       direction: player.lastMoveDirection ?? player.direction,
     };
-    this.soundManager.playOneShot("playerDeath");
   }
 
   private collectPowerUps(): void {
@@ -2517,7 +2492,7 @@ export class GameApp {
         if (powerUp.tile.x === tile.x && powerUp.tile.y === tile.y) {
           powerUp.collected = true;
           applyPowerUpToPlayer(player, powerUp.type);
-          this.soundManager.playOneShot("powerupCollect");
+          this.soundManager.playOneShot("powerCollect");
         }
       }
     }
@@ -2540,8 +2515,8 @@ export class GameApp {
       return;
     }
     const clinchesMatch = winner ? this.score[winner] + 1 >= TARGET_WINS : false;
-    if (reason === "elimination" || winner) {
-      this.soundManager.playOneShot(clinchesMatch ? "matchWin" : "roundWin");
+    if (clinchesMatch) {
+      this.soundManager.playOneShot("matchWin");
     }
     if (winner) {
       this.score[winner] += 1;

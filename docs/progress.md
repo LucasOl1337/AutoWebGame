@@ -1088,3 +1088,12 @@ Validacao 2026-03-27 sudden death spiral
 
 Observacao
 - `npm run test:bot` continua falhando no caso `strategicAvoidPass` com `direction: "down"`; nao mexi na heuristica desse cenario porque a mudanca desta rodada ficou restrita ao sudden death.
+2026-03-29 sfx reset pass
+- Sistema de som reduzido para 6 eventos: `bombPlace`, `bombExplodeMain`, `flames`, `powerCollect`, `matchStart` e `matchWin`.
+- Removidos gatilhos de audio para crate break, shield, player death, sudden death e round win intermediario.
+- Explosao local/online agora toca `bombExplodeMain` e em seguida `flames`; coleta de power-up foi normalizada para `powerCollect`.
+- Pasta `public/assets/audio/sfx` sera sincronizada com os arquivos aprovados de `CustomSFX/BASE`.
+
+Validacao 2026-03-29 sfx
+- `npm run build` (pass)
+- `npm run test:online-audio` (pass)

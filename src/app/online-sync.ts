@@ -17,6 +17,7 @@ import type {
   OnlineRole,
 } from "../online/protocol";
 import { tileKey } from "../game/arena";
+import type { SfxKey } from "./sound-manager";
 
 export const ONLINE_SNAPSHOT_INTERVAL_MS = 50;
 const ONLINE_RENDER_SMOOTHING = 0.48;
@@ -116,11 +117,9 @@ interface OnlineAudioTransitionArgs {
   headless: boolean;
   role: OnlineRole | null;
   audioPrimed: boolean;
-  hadRoundOutcome: boolean;
   previousBombs: BombState[];
   previousFlames: FlameState[];
-  previousSuddenDeathActive: boolean;
-  previousBreakableTileCount: number;
+  previousMatchWinner: PlayerId | null;
   next: {
     bombs: BombState[];
     flames: FlameState[];
@@ -132,24 +131,18 @@ interface OnlineAudioTransitionArgs {
     powerUps?: PowerUpState[];
   };
   didCollectRemotePowerUp: (nextPowerUps: PowerUpState[]) => boolean;
-  didConsumeRemoteShield: (nextPlayers: Record<PlayerId, PlayerState>) => boolean;
-  didLoseRemotePlayer: (nextPlayers: Record<PlayerId, PlayerState>) => boolean;
-  playSound: (name: string) => void;
+  playSound: (name: SfxKey) => void;
 }
 
 export function playOnlineAudioTransition({
   headless,
   role,
   audioPrimed,
-  hadRoundOutcome,
   previousBombs,
   previousFlames,
-  previousSuddenDeathActive,
-  previousBreakableTileCount,
+  previousMatchWinner,
   next,
   didCollectRemotePowerUp,
-  didConsumeRemoteShield,
-  didLoseRemotePlayer,
   playSound,
 }: OnlineAudioTransitionArgs): void {
   if (headless || role !== "guest" || !audioPrimed) {
@@ -163,34 +156,21 @@ export function playOnlineAudioTransition({
 
   const previousFlameKeys = new Set(previousFlames.map((flame) => tileKey(flame.tile.x, flame.tile.y)));
   const newFlames = next.flames.filter((flame) => !previousFlameKeys.has(tileKey(flame.tile.x, flame.tile.y))).length;
-  const startedSuddenDeath = !previousSuddenDeathActive && next.suddenDeathActive;
 
   if (addedBombs > 0) {
     playSound("bombPlace");
   }
-  if (startedSuddenDeath) {
-    playSound("suddenDeath");
-  }
   if (removedBombs > 0) {
-    playSound("bombExplode");
+    playSound("bombExplodeMain");
   }
   if (newFlames > 0) {
-    playSound("flameIgnite");
-  }
-  if (next.breakableTiles && previousBreakableTileCount > new Set(next.breakableTiles).size) {
-    playSound("crateBreak");
+    playSound("flames");
   }
   if (next.powerUps && didCollectRemotePowerUp(next.powerUps)) {
-    playSound("powerupCollect");
+    playSound("powerCollect");
   }
-  if (didConsumeRemoteShield(next.players)) {
-    playSound("shieldBlock");
-  }
-  if (didLoseRemotePlayer(next.players)) {
-    playSound("playerDeath");
-  }
-  if (!hadRoundOutcome && next.roundOutcome) {
-    playSound(next.matchWinner ? "matchWin" : "roundWin");
+  if (!previousMatchWinner && next.matchWinner) {
+    playSound("matchWin");
   }
 }
 
