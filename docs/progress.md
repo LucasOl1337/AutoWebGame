@@ -1115,3 +1115,12 @@ Validacao 2026-03-29 sfx variation
 Validacao 2026-03-29 online bomb audio fix
 - `npm run build` (pass)
 - `npm run test:online-audio` (pass)
+2026-03-29 bomb explode default-only pass
+- Explosao de bomba voltou para `bomb_explode_default.mp3` em 100% dos casos.
+- A variacao `main` saiu do manifest para evitar inconsistencias perceptiveis no som de explosao.
+- O teste do `SoundManager` foi simplificado para garantir que o manifest carrega apenas o `default`.
+
+Validacao 2026-03-29 bomb explode default-only
+- `npm run build` (pass)
+- `npm run test:online-audio` (pass)
+- `npm run compile:esm && node tests/sound-manager-variation-check.mjs` (pass)

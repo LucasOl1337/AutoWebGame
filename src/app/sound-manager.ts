@@ -19,10 +19,7 @@ const MASTER_VOLUME = 0.5;
 
 export const SFX_MANIFEST: Partial<Record<SfxKey, SoundManifestEntry>> = {
   bombPlace: { url: assetUrl("/assets/audio/sfx/bomb_place.mp3"), volume: 0.72 * MASTER_VOLUME },
-  bombExplode: [
-    { url: assetUrl("/assets/audio/sfx/bomb_explode_default.mp3"), volume: 0.84 * MASTER_VOLUME },
-    { url: assetUrl("/assets/audio/sfx/bomb_explode_main.mp3"), volume: 0.92 * MASTER_VOLUME },
-  ],
+  bombExplode: { url: assetUrl("/assets/audio/sfx/bomb_explode_default.mp3"), volume: 0.84 * MASTER_VOLUME },
   flames: { url: assetUrl("/assets/audio/sfx/flames.mp3"), volume: 0.74 * MASTER_VOLUME },
   matchStart: { url: assetUrl("/assets/audio/sfx/match_start.mp3"), volume: 0.84 * 0.2 * MASTER_VOLUME },
   matchWin: { url: assetUrl("/assets/audio/sfx/match_win.mp3"), volume: 0.9 * MASTER_VOLUME },
