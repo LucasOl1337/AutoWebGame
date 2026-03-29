@@ -161,7 +161,7 @@ export function playOnlineAudioTransition({
     playSound("bombPlace");
   }
   if (removedBombs > 0) {
-    playSound("bombExplodeMain");
+    playSound("bombExplode");
   }
   if (newFlames > 0) {
     playSound("flames");

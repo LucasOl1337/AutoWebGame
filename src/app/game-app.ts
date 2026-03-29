@@ -2190,7 +2190,7 @@ export class GameApp {
 
     const [bomb] = this.bombs.splice(index, 1);
     this.players[bomb.ownerId].activeBombs = Math.max(0, this.players[bomb.ownerId].activeBombs - 1);
-    this.soundManager.playOneShot("bombExplodeMain");
+    this.soundManager.playOneShot("bombExplode");
     const flameTiles = new Set<string>();
     const range = bomb.flameRange;
     flameTiles.add(tileKey(bomb.tile.x, bomb.tile.y));

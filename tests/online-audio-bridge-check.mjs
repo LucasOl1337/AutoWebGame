@@ -311,7 +311,7 @@ game.applyOnlineSnapshot({
 
 const expected = [
   "bombPlace",
-  "bombExplodeMain",
+  "bombExplode",
   "flames",
   "powerCollect",
 ];

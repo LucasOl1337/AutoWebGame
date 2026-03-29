@@ -1097,3 +1097,13 @@ Observacao
 Validacao 2026-03-29 sfx
 - `npm run build` (pass)
 - `npm run test:online-audio` (pass)
+2026-03-29 sfx explosion variation pass
+- Explosao de bomba agora usa um evento unico `bombExplode` com duas variacoes (`bomb_explode_default.mp3` e `bomb_explode_main.mp3`).
+- `SoundManager` passou a suportar multiplas variacoes por chave, escolhendo aleatoriamente entre elas em tempo de execucao.
+- Adicionado fallback interno: se a variacao escolhida falhar ao tocar, o manager tenta automaticamente a outra.
+- Fluxos local e online foram normalizados para disparar `bombExplode`, e o asset `bomb_explode_default.mp3` foi promovido para `public/assets/audio/sfx`.
+
+Validacao 2026-03-29 sfx variation
+- `npm run build` (pass)
+- `npm run test:online-audio` (pass)
+- `npm run compile:esm && node tests/sound-manager-variation-check.mjs` (pass)
