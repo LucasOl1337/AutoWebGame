@@ -8,6 +8,7 @@ const TEMP_DIR = path.join(PROJECT_ROOT, "output", "pixellab-sync");
 const PUBLIC_DIR = path.join(PROJECT_ROOT, "public", "assets", "characters");
 const MANIFEST_PATH = path.join(PUBLIC_DIR, "manifest.json");
 const APPROVED_MANIFEST_PATH = path.join(PUBLIC_DIR, "manifest.approved.json");
+const CORE_ROSTER_MANIFEST_PATH = path.join(PROJECT_ROOT, "src", "core", "character-roster-manifest.ts");
 const INVALID_REPORT_PATH = path.join(TEMP_DIR, "manifest-invalid.json");
 
 export const PINNED_CHARACTERS = [
@@ -27,7 +28,7 @@ export const PINNED_CHARACTERS = [
 const RANNI_CHARACTER_ID = "03a976fb-7313-4064-a477-5bb9b0760034";
 const KILLER_BEE_CHARACTER_ID = "6ee8baa5-3277-413b-ae0e-2659b9cc52e9";
 const NICO_CHARACTER_ID = "5474c45c-2987-43e0-af2c-a6500c836881";
-const NICO_SOURCE_CHARACTER_ID = (process.env.PIXELLAB_NICO_SOURCE_ID ?? NICO_CHARACTER_ID).trim() || NICO_CHARACTER_ID;
+const NICO_SOURCE_CHARACTER_ID = NICO_CHARACTER_ID;
 const CROCODILO_CHARACTER_ID = "d083c3dc-7162-4391-8628-6adde0b8d8d6";
 
 const CHARACTER_NAME_OVERRIDES = {
@@ -77,14 +78,11 @@ const KILLER_BEE_DASH_CAST_PATTERNS = [
   "bee dash with particle",
 ];
 const NICO_ARCANE_BEAM_CAST_PATTERNS = [
-  "nico ultimate arcane beam",
-  "spellbook",
-  "spell book",
-  "book",
-  "tome",
-  "arcane tome",
-  "fireball",
+  "custom-casting a dark-energy spell attack",
+  "dark-energy spell attack",
   "dark-energy spell",
+  "arcane beam",
+  "fireball",
 ];
 const DIRECTION_FALLBACKS = {
   south: ["south-east", "south-west", "east", "west", "north-east", "north-west", "north"],
@@ -481,6 +479,35 @@ async function writeManifestArtifacts(manifestEntries, summary) {
   };
   await writeFile(MANIFEST_PATH, JSON.stringify(payload, null, 2));
   await writeFile(APPROVED_MANIFEST_PATH, JSON.stringify(payload, null, 2));
+  await writeCoreRosterManifest(manifestEntries);
+}
+
+async function writeCoreRosterManifest(manifestEntries) {
+  const rosterEntries = manifestEntries.map((entry) => {
+    const serialized = {
+      id: entry.id,
+      name: entry.name,
+      ...(entry.defaultSlot === undefined ? {} : { defaultSlot: entry.defaultSlot }),
+      ...(entry.order === undefined ? {} : { order: entry.order }),
+    };
+    return `  ${JSON.stringify(serialized, null, 2).replace(/\n/g, "\n  ")}`;
+  });
+  const fileContents = [
+    'import type { PlayerId } from "./types";',
+    "",
+    "export interface CharacterRosterManifestEntry {",
+    "  id: string;",
+    "  name: string;",
+    "  defaultSlot?: PlayerId;",
+    "  order?: number;",
+    "}",
+    "",
+    "export const CHARACTER_ROSTER_MANIFEST: CharacterRosterManifestEntry[] = [",
+    rosterEntries.join(",\n"),
+    "];",
+    "",
+  ].join("\n");
+  await writeFile(CORE_ROSTER_MANIFEST_PATH, fileContents);
 }
 
 async function writeInvalidReport(summary, errors, attemptedIds) {

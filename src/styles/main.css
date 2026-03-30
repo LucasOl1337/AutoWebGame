@@ -68,6 +68,63 @@ button {
   min-height: 100%;
 }
 
+.experience-language-switcher {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 12;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid rgba(189, 209, 226, 0.14);
+  border-radius: 999px;
+  background: rgba(6, 11, 19, 0.72);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(14px);
+}
+
+.experience-language-switcher__label {
+  padding: 0 6px 0 10px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.experience-language-switcher__option {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgba(189, 209, 226, 0.14);
+  border-radius: 999px;
+  color: var(--muted-strong);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.experience-language-switcher__option:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(255, 191, 109, 0.34);
+  color: var(--text);
+}
+
+.experience-language-switcher__option[data-active="true"] {
+  border-color: rgba(255, 191, 109, 0.36);
+  color: #180f07;
+  background: linear-gradient(180deg, #ffbf77, #cf7330);
+}
+
+.experience-language-switcher__option:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
 .experience-screen[hidden] {
   display: none;
 }
@@ -208,11 +265,148 @@ button {
   line-height: 1.45;
 }
 
+.experience-account-card {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 18px;
+  border-radius: 24px;
+  border: 1px solid rgba(196, 214, 228, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.experience-account__title,
+.experience-account__value,
+.experience-account__hint {
+  margin: 0;
+}
+
+.experience-account__title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--muted-strong);
+}
+
+.experience-account__value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.experience-account__hint {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.experience-account__form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+}
+
+.experience-account__input {
+  min-width: 0;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid rgba(196, 214, 228, 0.1);
+  border-radius: 16px;
+  color: var(--text);
+  background: rgba(4, 9, 17, 0.84);
+}
+
+.experience-account__input::placeholder {
+  color: #718496;
+}
+
 .experience-actions {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.experience-actions__group {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 8px;
+}
+
+.experience-actions__group--primary .experience-button {
+  min-width: 220px;
+}
+
+.experience-actions__group--secondary .experience-button {
+  min-width: 180px;
+}
+
+.experience-feedback {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(4, 9, 16, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.experience-feedback[hidden] {
+  display: none;
+}
+
+.experience-feedback__card {
+  width: min(720px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 28px;
+  border-radius: 28px;
+  border: 1px solid rgba(196, 214, 228, 0.12);
+  background:
+    linear-gradient(180deg, rgba(17, 28, 43, 0.96), rgba(10, 16, 26, 0.92)),
+    radial-gradient(circle at top right, rgba(255, 181, 103, 0.16), transparent 42%);
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.42);
+}
+
+.experience-feedback__title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.experience-feedback__prompt {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.experience-feedback__textarea {
+  width: 100%;
+  min-height: 180px;
+  padding: 16px 18px;
+  resize: vertical;
+  border-radius: 20px;
+  border: 1px solid rgba(196, 214, 228, 0.12);
+  color: var(--text);
+  background: rgba(4, 9, 17, 0.84);
+  line-height: 1.5;
+}
+
+.experience-feedback__textarea::placeholder {
+  color: #718496;
+}
+
+.experience-feedback__status {
+  min-height: 1.2em;
+  margin: 0;
+  color: var(--muted);
+}
+
+.experience-feedback__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 .experience-hero__art {
@@ -221,11 +415,63 @@ button {
   border-radius: 36px;
   overflow: hidden;
   display: grid;
-  place-items: center;
+  align-items: stretch;
   background:
     linear-gradient(180deg, rgba(8, 14, 24, 0.64), rgba(5, 9, 15, 0.28)),
     radial-gradient(circle at 50% 0%, rgba(255, 181, 103, 0.18), transparent 46%),
     radial-gradient(circle at 50% 100%, rgba(94, 177, 255, 0.16), transparent 44%);
+}
+
+.experience-landing-picker {
+  width: 100%;
+  display: grid;
+  gap: 18px;
+  align-content: start;
+  padding: clamp(24px, 4vw, 34px);
+}
+
+.experience-landing-picker__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+}
+
+.experience-landing-picker__title {
+  display: grid;
+  gap: 8px;
+}
+
+.experience-landing-picker__title strong {
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 3.8vw, 2.5rem);
+  line-height: 0.94;
+}
+
+.experience-landing-picker__nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.experience-character-summary--landing {
+  grid-template-columns: 132px minmax(0, 1fr);
+  padding: 20px;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(11, 18, 28, 0.88), rgba(8, 13, 21, 0.82)),
+    radial-gradient(circle at top right, rgba(255, 181, 103, 0.16), transparent 42%);
+}
+
+.experience-character-summary--landing .experience-character-summary__portrait {
+  width: 132px;
+  height: 132px;
+}
+
+.experience-character-grid--landing {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .experience-hero__portrait {
@@ -287,6 +533,14 @@ button {
   padding-bottom: 96px;
 }
 
+.experience-screen--lobbies {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.experience-screen--setup {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
 .experience-panel__header {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -316,6 +570,8 @@ button {
   gap: 12px;
   padding: 18px;
   border-radius: 28px;
+  min-height: 0;
+  overflow: auto;
 }
 
 .experience-room-list__empty {
@@ -423,6 +679,7 @@ button {
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(420px, 0.92fr);
   gap: 22px;
+  min-height: 0;
 }
 
 .experience-panel {
@@ -441,13 +698,14 @@ button {
 
 .experience-character-summary__portrait,
 .experience-character-option__portrait {
-  object-fit: contain;
+  display: block;
   image-rendering: pixelated;
 }
 
 .experience-character-summary__portrait {
   width: 96px;
   height: 96px;
+  justify-self: center;
   border-radius: 22px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background:
@@ -458,6 +716,7 @@ button {
 .experience-character-summary__copy {
   display: grid;
   gap: 6px;
+  align-content: center;
 }
 
 .experience-character-summary__name {
@@ -476,6 +735,9 @@ button {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .experience-character-option {
@@ -510,6 +772,8 @@ button {
 .experience-character-option__portrait {
   width: 56px;
   height: 56px;
+  display: block;
+  justify-self: center;
   border-radius: 16px;
   background:
     radial-gradient(circle at top, rgba(255, 181, 103, 0.15), transparent 48%),
@@ -541,6 +805,20 @@ button {
 .experience-panel--controls h3 {
   font-size: 1.9rem;
   line-height: 0.96;
+}
+
+.experience-panel--character,
+.experience-panel--controls {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.experience-panel--character {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.experience-panel--controls {
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .experience-controls {
@@ -703,6 +981,7 @@ button {
 .experience-match__viewport {
   position: relative;
   min-height: 0;
+  padding: 8px;
   border-radius: 28px;
   overflow: hidden;
   display: grid;
@@ -737,6 +1016,8 @@ button {
 
 .experience-match__actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 10px;
 }
 
@@ -764,11 +1045,15 @@ button {
   margin: 0;
   color: var(--muted);
   line-height: 1.45;
+  overflow: hidden;
 }
 
 .experience-match__roster {
+  min-height: 0;
   display: grid;
   gap: 10px;
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .experience-match__seat {
@@ -797,6 +1082,12 @@ button {
 
 .experience-match__rail--chat {
   grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.experience-match__rail--info {
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .experience-match__chat-heading {
@@ -851,6 +1142,1128 @@ button {
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+@media (max-height: 900px) {
+  .experience-screen--landing,
+  .experience-screen--lobbies,
+  .experience-screen--setup {
+    padding: 16px;
+  }
+
+  .experience-hero {
+    gap: 18px;
+  }
+
+  .experience-hero__copy {
+    gap: 14px;
+    padding: clamp(22px, 3.6vw, 38px);
+  }
+
+  .experience-hero__art {
+    min-height: 420px;
+  }
+
+  .experience-account-card,
+  .experience-panel {
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .experience-setup-grid,
+  .experience-seat-strip {
+    gap: 12px;
+  }
+
+  .experience-screen--match {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .experience-match__overlay {
+    gap: 12px;
+    padding: 10px 12px;
+  }
+
+  .experience-match__layout {
+    grid-template-columns: minmax(210px, 244px) minmax(0, 1fr) minmax(240px, 300px);
+    gap: 10px;
+  }
+
+  .experience-match__rail {
+    gap: 10px;
+    padding: 14px;
+    border-radius: 22px;
+  }
+
+  .experience-match__rail h3,
+  .experience-match__chat-heading h3 {
+    font-size: 1.2rem;
+  }
+
+  .experience-match__rail-copy,
+  .experience-match__status,
+  .experience-status {
+    font-size: 0.92rem;
+    line-height: 1.35;
+  }
+
+  .experience-match__roster {
+    gap: 8px;
+  }
+
+  .experience-match__seat,
+  .experience-match__chat-entry {
+    padding: 10px 12px;
+    border-radius: 16px;
+  }
+
+  .experience-button {
+    min-height: 42px;
+    padding: 0 14px;
+  }
+}
+
+@media (max-height: 760px) {
+  .experience-screen--landing {
+    padding: 10px;
+  }
+
+  .experience-hero {
+    width: min(100%, calc(100% - 4px));
+    gap: 12px;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 0.84fr);
+  }
+
+  .experience-hero__copy {
+    gap: 10px;
+    padding: clamp(18px, 3vw, 28px);
+  }
+
+  .experience-hero__copy h1 {
+    font-size: clamp(2.8rem, 7.2vw, 5.1rem);
+  }
+
+  .experience-hero__lead,
+  .experience-hero__meta,
+  .experience-panel__lead,
+  .experience-panel__meta,
+  .experience-setup__hint {
+    font-size: 0.92rem;
+    line-height: 1.3;
+  }
+
+  .experience-actions {
+    gap: 10px;
+    margin-top: 2px;
+  }
+
+  .experience-actions__group {
+    gap: 10px;
+  }
+
+  .experience-actions__group--primary .experience-button,
+  .experience-actions__group--secondary .experience-button {
+    min-width: 0;
+  }
+
+  .experience-account-card {
+    gap: 8px;
+    margin-top: 2px;
+    padding: 14px;
+  }
+
+  .experience-account__title {
+    font-size: 0.94rem;
+  }
+
+  .experience-account__value {
+    font-size: 1.05rem;
+  }
+
+  .experience-account__hint {
+    font-size: 0.86rem;
+    line-height: 1.28;
+  }
+
+  .experience-account__input {
+    min-height: 40px;
+  }
+
+  .experience-landing-picker {
+    gap: 12px;
+    padding: 18px;
+  }
+
+  .experience-landing-picker__title {
+    gap: 6px;
+  }
+
+  .experience-landing-picker__title strong {
+    font-size: clamp(1.35rem, 3vw, 2rem);
+  }
+
+  .experience-character-summary--landing {
+    grid-template-columns: 100px minmax(0, 1fr);
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .experience-character-summary--landing .experience-character-summary__portrait {
+    width: 100px;
+    height: 100px;
+  }
+
+  .experience-character-summary__name {
+    font-size: 1.04rem;
+  }
+
+  .experience-character-summary__note {
+    font-size: 0.86rem;
+    line-height: 1.25;
+  }
+
+  .experience-character-grid--landing {
+    gap: 10px;
+  }
+
+  .experience-character-option {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .experience-character-option__portrait {
+    width: 48px;
+    height: 48px;
+  }
+
+  .experience-character-option__copy strong {
+    font-size: 0.96rem;
+  }
+
+  .experience-character-option__copy span {
+    font-size: 0.68rem;
+  }
+
+  .experience-screen--match {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .experience-match__overlay {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "code actions"
+      "status status";
+    align-items: start;
+    gap: 8px 10px;
+    padding: 8px 10px;
+  }
+
+  .experience-match__code {
+    grid-area: code;
+  }
+
+  .experience-match__status {
+    grid-area: status;
+    font-size: 0.84rem;
+  }
+
+  .experience-match__actions {
+    grid-area: actions;
+    align-self: start;
+  }
+
+  .experience-match__layout {
+    grid-template-columns: minmax(188px, 220px) minmax(0, 1fr) minmax(220px, 260px);
+    gap: 8px;
+  }
+
+  .experience-match__rail {
+    gap: 8px;
+    padding: 10px;
+    border-radius: 18px;
+  }
+
+  .experience-match__rail h3,
+  .experience-match__chat-heading h3 {
+    font-size: 1.02rem;
+  }
+
+  .experience-match__rail-copy,
+  .experience-match__seat span,
+  .experience-match__chat-body,
+  .experience-match__chat-input {
+    font-size: 0.82rem;
+    line-height: 1.28;
+  }
+
+  .experience-match__seat strong,
+  .experience-match__chat-meta {
+    font-size: 0.76rem;
+  }
+
+  .experience-match__seat,
+  .experience-match__chat-entry {
+    padding: 8px 10px;
+  }
+
+  .experience-status {
+    bottom: 10px;
+    width: min(520px, calc(100% - 24px));
+    padding: 8px 12px;
+    border-radius: 14px;
+    font-size: 0.8rem;
+    line-height: 1.2;
+  }
+}
+
+@media (max-height: 700px) {
+  .experience-screen--landing {
+    padding: 8px;
+  }
+
+  .experience-hero {
+    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) minmax(332px, 0.8fr);
+  }
+
+  .experience-hero__copy {
+    gap: 8px;
+    padding: 16px 18px;
+  }
+
+  .experience-hero__copy h1 {
+    font-size: clamp(2.45rem, 6.2vw, 4.5rem);
+  }
+
+  .experience-hero__lead,
+  .experience-hero__meta,
+  .experience-account__hint,
+  .experience-character-summary__note {
+    font-size: 0.82rem;
+    line-height: 1.22;
+  }
+
+  .experience-button {
+    min-height: 38px;
+    padding: 0 12px;
+  }
+
+  .experience-account-card {
+    gap: 6px;
+    padding: 12px;
+  }
+
+  .experience-account__form {
+    gap: 8px;
+  }
+
+  .experience-account__input {
+    min-height: 36px;
+    padding: 0 12px;
+  }
+
+  .experience-landing-picker {
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .experience-character-summary--landing {
+    grid-template-columns: 84px minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .experience-character-summary--landing .experience-character-summary__portrait {
+    width: 84px;
+    height: 84px;
+  }
+
+  .experience-character-grid--landing {
+    gap: 8px;
+  }
+
+  .experience-character-option {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px;
+    border-radius: 16px;
+  }
+
+  .experience-character-option__portrait {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+
+  .experience-character-option__copy strong {
+    font-size: 0.88rem;
+  }
+
+  .experience-character-option__copy span {
+    font-size: 0.62rem;
+  }
+
+  .experience-status {
+    bottom: 8px;
+    width: min(420px, calc(100% - 20px));
+    padding: 7px 10px;
+    font-size: 0.74rem;
+  }
+}
+
+@media (max-height: 820px) and (min-width: 1081px) {
+  .experience-language-switcher {
+    top: 10px;
+    right: 10px;
+    gap: 4px;
+    padding: 4px;
+  }
+
+  .experience-language-switcher__label {
+    padding: 0 4px 0 8px;
+    font-size: 0.64rem;
+    letter-spacing: 0.14em;
+  }
+
+  .experience-language-switcher__option {
+    min-height: 34px;
+    padding: 0 12px;
+  }
+
+  .experience-screen--lobbies,
+  .experience-screen--setup {
+    gap: 12px;
+    padding-top: 12px;
+    padding-bottom: 28px;
+  }
+
+  .experience-panel__header {
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 22px;
+  }
+
+  .experience-panel__title h2 {
+    font-size: clamp(1.5rem, 3vw, 2.2rem);
+  }
+
+  .experience-panel__lead,
+  .experience-panel__meta,
+  .experience-setup__hint {
+    font-size: 0.88rem;
+    line-height: 1.28;
+  }
+
+  .experience-room-list,
+  .experience-panel {
+    gap: 12px;
+    padding: 12px;
+    border-radius: 22px;
+  }
+
+  .experience-room-card {
+    gap: 4px;
+    padding: 14px 16px;
+    border-radius: 18px;
+  }
+
+  .experience-seat-strip,
+  .experience-setup-grid {
+    gap: 8px;
+  }
+
+  .experience-seat-pill {
+    min-height: 42px;
+    padding: 0 12px;
+    border-radius: 16px;
+    font-size: 0.76rem;
+  }
+
+  .experience-setup-grid {
+    grid-template-columns: minmax(0, 1.04fr) minmax(360px, 0.86fr);
+  }
+
+  .experience-character-summary {
+    grid-template-columns: 82px minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .experience-character-summary__portrait {
+    width: 82px;
+    height: 82px;
+    border-radius: 18px;
+  }
+
+  .experience-character-summary__name {
+    font-size: 1.04rem;
+  }
+
+  .experience-character-summary__note {
+    font-size: 0.84rem;
+    line-height: 1.28;
+  }
+
+  .experience-character-grid {
+    gap: 8px;
+  }
+
+  .experience-character-option {
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px;
+    border-radius: 18px;
+  }
+
+  .experience-character-option__portrait {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+  }
+
+  .experience-character-option__copy strong {
+    font-size: 0.92rem;
+  }
+
+  .experience-character-option__copy span,
+  .experience-controls__label {
+    font-size: 0.68rem;
+  }
+
+  .experience-panel--controls h3 {
+    font-size: 1.5rem;
+  }
+
+  .experience-controls,
+  .experience-controls__group {
+    gap: 10px;
+  }
+
+  .experience-key-columns {
+    gap: 10px;
+  }
+
+  .experience-key-cluster,
+  .experience-action-keys {
+    gap: 6px;
+  }
+
+  .experience-key-row {
+    grid-template-columns: repeat(3, 44px);
+    gap: 6px;
+  }
+
+  .experience-key {
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 14px;
+    font-size: 0.8rem;
+  }
+
+  .experience-key--action {
+    min-width: 56px;
+  }
+
+  .experience-key--wide {
+    min-width: 120px;
+  }
+
+  .experience-action-card {
+    gap: 10px;
+  }
+
+  .experience-action-card strong {
+    font-size: 0.84rem;
+  }
+
+  .experience-presence {
+    gap: 10px;
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .experience-presence__header strong {
+    font-size: 0.92rem;
+  }
+
+  .experience-presence__list {
+    gap: 6px;
+    max-height: 132px;
+  }
+
+  .experience-presence__item {
+    gap: 3px;
+    padding: 10px 12px;
+    border-radius: 14px;
+  }
+
+  .experience-presence__item strong {
+    font-size: 0.84rem;
+  }
+
+  .experience-presence__item span {
+    font-size: 0.76rem;
+  }
+
+  .experience-setup__footer {
+    gap: 8px;
+  }
+
+  .experience-setup__footer .experience-button,
+  .experience-panel__header .experience-button,
+  .experience-room-list .experience-button {
+    min-height: 40px;
+  }
+
+  .experience-screen--match {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .experience-match__overlay {
+    gap: 10px;
+    padding: 8px 10px;
+  }
+
+  .experience-match__layout {
+    grid-template-columns: minmax(180px, 208px) minmax(0, 1fr) minmax(216px, 244px);
+    gap: 8px;
+  }
+
+  .experience-match__viewport {
+    padding: 4px;
+    border-radius: 22px;
+  }
+
+  .experience-match__rail {
+    gap: 8px;
+    padding: 10px;
+    border-radius: 18px;
+  }
+
+  .experience-match__rail h3,
+  .experience-match__chat-heading h3 {
+    font-size: 1rem;
+  }
+
+  .experience-match__rail-copy,
+  .experience-match__status,
+  .experience-match__seat span,
+  .experience-match__chat-body,
+  .experience-match__chat-input {
+    font-size: 0.8rem;
+    line-height: 1.24;
+  }
+
+  .experience-match__seat strong,
+  .experience-match__chat-meta,
+  .experience-match__code {
+    font-size: 0.72rem;
+  }
+
+  .experience-match__seat,
+  .experience-match__chat-entry {
+    padding: 7px 9px;
+    border-radius: 14px;
+  }
+
+  .experience-match__chat-log,
+  .experience-match__roster {
+    gap: 7px;
+  }
+
+  .experience-match__chat-input,
+  .experience-match__actions .experience-button {
+    min-height: 38px;
+  }
+}
+
+@media (max-height: 690px) and (min-width: 1081px) {
+  .experience-screen--lobbies,
+  .experience-screen--setup {
+    gap: 10px;
+    padding-top: 10px;
+    padding-bottom: 16px;
+  }
+
+  .experience-panel__header {
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 18px;
+  }
+
+  .experience-panel__title {
+    gap: 4px;
+  }
+
+  .experience-panel__title h2 {
+    font-size: clamp(1.3rem, 2.6vw, 1.86rem);
+  }
+
+  .experience-panel__lead,
+  .experience-panel__meta,
+  .experience-setup__hint {
+    font-size: 0.8rem;
+    line-height: 1.18;
+  }
+
+  .experience-room-list,
+  .experience-panel {
+    gap: 8px;
+    padding: 10px;
+    border-radius: 18px;
+  }
+
+  .experience-room-card {
+    gap: 3px;
+    padding: 11px 13px;
+    border-radius: 16px;
+  }
+
+  .experience-room-card strong {
+    font-size: 0.96rem;
+  }
+
+  .experience-room-card span,
+  .experience-room-card__status,
+  .experience-room-card__occupant {
+    font-size: 0.7rem;
+  }
+
+  .experience-seat-strip,
+  .experience-setup-grid {
+    gap: 6px;
+  }
+
+  .experience-seat-pill {
+    min-height: 32px;
+    padding: 0 10px;
+    border-radius: 12px;
+    font-size: 0.68rem;
+  }
+
+  .experience-setup-grid {
+    grid-template-columns: minmax(0, 1.02fr) minmax(292px, 0.78fr);
+  }
+
+  .experience-character-summary {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .experience-character-summary__portrait {
+    width: 72px;
+    height: 72px;
+    border-radius: 16px;
+  }
+
+  .experience-character-summary__name {
+    font-size: 0.96rem;
+  }
+
+  .experience-character-summary__note {
+    font-size: 0.76rem;
+    line-height: 1.18;
+  }
+
+  .experience-character-grid {
+    gap: 6px;
+  }
+
+  .experience-character-option {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 6px;
+    padding: 6px;
+    border-radius: 14px;
+  }
+
+  .experience-character-option__portrait {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+
+  .experience-character-option__copy strong {
+    font-size: 0.84rem;
+  }
+
+  .experience-character-option__copy span,
+  .experience-controls__label {
+    font-size: 0.62rem;
+  }
+
+  .experience-panel--controls h3 {
+    font-size: 1.28rem;
+  }
+
+  .experience-controls,
+  .experience-controls__group,
+  .experience-key-columns {
+    gap: 8px;
+  }
+
+  .experience-key-cluster,
+  .experience-action-keys {
+    gap: 4px;
+  }
+
+  .experience-key-row {
+    grid-template-columns: repeat(3, 34px);
+    gap: 4px;
+  }
+
+  .experience-key {
+    min-width: 34px;
+    min-height: 34px;
+    padding: 0 6px;
+    border-radius: 10px;
+    font-size: 0.66rem;
+  }
+
+  .experience-key--action {
+    min-width: 42px;
+  }
+
+  .experience-key--wide {
+    min-width: 90px;
+  }
+
+  .experience-action-card {
+    gap: 8px;
+  }
+
+  .experience-action-card strong {
+    font-size: 0.78rem;
+  }
+
+  .experience-presence {
+    gap: 6px;
+    padding: 8px;
+    border-radius: 14px;
+  }
+
+  .experience-presence__header strong {
+    font-size: 0.84rem;
+  }
+
+  .experience-presence__list {
+    gap: 4px;
+    max-height: 96px;
+  }
+
+  .experience-presence__item {
+    gap: 2px;
+    padding: 6px 8px;
+    border-radius: 10px;
+  }
+
+  .experience-presence__item strong {
+    font-size: 0.78rem;
+  }
+
+  .experience-presence__item span {
+    font-size: 0.7rem;
+  }
+
+  .experience-setup__footer {
+    gap: 6px;
+  }
+
+  .experience-setup__footer .experience-button,
+  .experience-panel__header .experience-button,
+  .experience-room-list .experience-button {
+    min-height: 32px;
+  }
+
+  .experience-shell[data-screen="setup"] .experience-status,
+  .experience-shell[data-screen="lobbies"] .experience-status {
+    left: 10px;
+    right: auto;
+    bottom: 8px;
+    transform: none;
+    width: min(320px, calc(48vw - 20px));
+    padding: 6px 9px;
+    border-radius: 12px;
+    font-size: 0.66rem;
+    line-height: 1.1;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .experience-match__overlay {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "code actions"
+      "status status";
+    align-items: start;
+    gap: 6px 8px;
+    padding: 7px 9px;
+  }
+
+  .experience-match__code {
+    grid-area: code;
+  }
+
+  .experience-match__status {
+    grid-area: status;
+    font-size: 0.74rem;
+    line-height: 1.18;
+  }
+
+  .experience-match__actions {
+    grid-area: actions;
+    align-self: start;
+    gap: 8px;
+  }
+
+  .experience-match__layout {
+    grid-template-columns: minmax(164px, 188px) minmax(0, 1fr) minmax(198px, 226px);
+    gap: 6px;
+  }
+
+  .experience-match__rail {
+    gap: 6px;
+    padding: 8px;
+    border-radius: 16px;
+  }
+
+  .experience-match__rail h3,
+  .experience-match__chat-heading h3 {
+    font-size: 0.92rem;
+  }
+
+  .experience-match__rail-copy {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+
+  .experience-match__seat,
+  .experience-match__chat-entry {
+    padding: 6px 8px;
+  }
+
+  .experience-match__chat-log,
+  .experience-match__roster {
+    gap: 6px;
+  }
+
+  .experience-match__chat-input,
+  .experience-match__actions .experience-button,
+  .experience-match__chat-send {
+    min-height: 34px;
+  }
+
+  .experience-status {
+    bottom: 8px;
+    width: min(460px, calc(100% - 24px));
+    padding: 7px 10px;
+    font-size: 0.72rem;
+    line-height: 1.16;
+  }
+}
+
+@media (max-height: 620px) and (min-width: 1081px) {
+  .experience-language-switcher {
+    top: 8px;
+    right: 8px;
+    gap: 3px;
+    padding: 3px;
+  }
+
+  .experience-language-switcher__label {
+    display: none;
+  }
+
+  .experience-language-switcher__option {
+    min-height: 30px;
+    padding: 0 10px;
+  }
+
+  .experience-screen--lobbies,
+  .experience-screen--setup {
+    gap: 8px;
+    padding-top: 8px;
+    padding-bottom: 10px;
+  }
+
+  .experience-panel__header {
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 16px;
+  }
+
+  .experience-panel__title h2 {
+    font-size: clamp(1.1rem, 2.2vw, 1.58rem);
+  }
+
+  .experience-screen--setup .experience-panel__lead,
+  .experience-screen--lobbies .experience-panel__lead {
+    display: none;
+  }
+
+  .experience-room-list,
+  .experience-panel {
+    gap: 6px;
+    padding: 8px;
+    border-radius: 16px;
+  }
+
+  .experience-room-card {
+    padding: 10px 12px;
+    border-radius: 14px;
+  }
+
+  .experience-seat-strip,
+  .experience-setup-grid {
+    gap: 5px;
+  }
+
+  .experience-seat-pill {
+    min-height: 28px;
+    padding: 0 8px;
+    border-radius: 10px;
+    font-size: 0.62rem;
+  }
+
+  .experience-setup-grid {
+    grid-template-columns: minmax(0, 1.04fr) minmax(272px, 0.76fr);
+  }
+
+  .experience-character-summary {
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .experience-character-summary__portrait {
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
+  }
+
+  .experience-character-summary__name {
+    font-size: 0.9rem;
+  }
+
+  .experience-character-summary__note {
+    display: none;
+  }
+
+  .experience-character-grid {
+    gap: 5px;
+  }
+
+  .experience-character-option {
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 5px;
+    padding: 5px;
+    border-radius: 12px;
+  }
+
+  .experience-character-option__portrait {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+  }
+
+  .experience-character-option__copy strong {
+    font-size: 0.76rem;
+  }
+
+  .experience-character-option__copy span,
+  .experience-controls__label {
+    font-size: 0.56rem;
+  }
+
+  .experience-panel--controls h3 {
+    font-size: 1.06rem;
+  }
+
+  .experience-controls,
+  .experience-controls__group,
+  .experience-key-columns {
+    gap: 6px;
+  }
+
+  .experience-key-cluster,
+  .experience-action-keys {
+    gap: 3px;
+  }
+
+  .experience-key-row {
+    grid-template-columns: repeat(3, 30px);
+    gap: 3px;
+  }
+
+  .experience-key {
+    min-width: 30px;
+    min-height: 30px;
+    padding: 0 4px;
+    border-radius: 9px;
+    font-size: 0.6rem;
+  }
+
+  .experience-key--action {
+    min-width: 38px;
+  }
+
+  .experience-key--wide {
+    min-width: 76px;
+  }
+
+  .experience-action-card {
+    gap: 6px;
+  }
+
+  .experience-action-card strong {
+    font-size: 0.72rem;
+  }
+
+  .experience-presence {
+    gap: 5px;
+    padding: 6px;
+    border-radius: 12px;
+  }
+
+  .experience-presence__header strong {
+    font-size: 0.76rem;
+  }
+
+  .experience-presence__list {
+    max-height: 78px;
+  }
+
+  .experience-presence__item {
+    padding: 5px 7px;
+    border-radius: 9px;
+  }
+
+  .experience-presence__item strong,
+  .experience-presence__item span {
+    font-size: 0.66rem;
+  }
+
+  .experience-setup__hint {
+    display: none;
+  }
+
+  .experience-setup__footer .experience-button,
+  .experience-panel__header .experience-button,
+  .experience-room-list .experience-button {
+    min-height: 30px;
+    padding: 0 12px;
+  }
+
+  .experience-shell[data-screen="setup"] .experience-status,
+  .experience-shell[data-screen="lobbies"] .experience-status {
+    width: min(280px, calc(42vw - 20px));
+    font-size: 0.62rem;
+  }
 }
 
 .experience-match__chat-composer {
@@ -929,6 +2342,14 @@ button {
     min-height: 360px;
   }
 
+  .experience-landing-picker__header {
+    grid-template-columns: 1fr;
+  }
+
+  .experience-landing-picker__nav {
+    justify-content: flex-start;
+  }
+
   .experience-seat-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -936,9 +2357,24 @@ button {
   .experience-match__viewport {
     min-height: 60vh;
   }
+
+  .experience-language-switcher {
+    top: 14px;
+    right: 14px;
+  }
 }
 
 @media (max-width: 760px) {
+  .experience-language-switcher {
+    left: 14px;
+    right: 14px;
+    justify-content: space-between;
+  }
+
+  .experience-language-switcher__label {
+    padding-left: 8px;
+  }
+
   .experience-screen--landing,
   .experience-screen--lobbies,
   .experience-screen--setup,
@@ -956,6 +2392,23 @@ button {
   .experience-match__actions {
     width: 100%;
     flex-direction: column;
+  }
+
+  .experience-actions__group {
+    width: 100%;
+  }
+
+  .experience-actions__group .experience-button {
+    width: 100%;
+  }
+
+  .experience-feedback__actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .experience-feedback__actions .experience-button {
+    width: 100%;
   }
 
   .experience-button {
@@ -976,7 +2429,16 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .experience-character-summary--landing {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
   .experience-character-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .experience-character-grid--landing {
     grid-template-columns: 1fr;
   }
 
@@ -989,6 +2451,10 @@ button {
   }
 
   .experience-match__chat-composer {
+    grid-template-columns: 1fr;
+  }
+
+  .experience-account__form {
     grid-template-columns: 1fr;
   }
 }

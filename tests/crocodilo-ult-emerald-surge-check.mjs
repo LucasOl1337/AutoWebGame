@@ -6,7 +6,8 @@ const { GameApp } = await import("../output/esm/app/game-app.js");
 const { TILE_SIZE } = await import("../output/esm/core/config.js");
 
 const CROCODILO_CHANNEL_MS = 1_600;
-const CROCODILO_COOLDOWN_MS = 10_000;
+const CROCODILO_RELEASE_MS = 240;
+const CROCODILO_COOLDOWN_MS = 6_000;
 
 const emptyDirectionalSprites = {
   up: null,
@@ -121,9 +122,52 @@ const toxicTileKeys = new Set(
 );
 const bombTriggered = game.bombs.some((bomb) => bomb.id === 1 && bomb.fuseMs === 0);
 
+const immuneGame = createServerMatch({ 1: 0, 2: 1, 3: 2, 4: 0 });
+const immuneCrocodilo = immuneGame.players[1];
+immuneCrocodilo.position = { x: 4 * TILE_SIZE + TILE_SIZE * 0.5, y: 4 * TILE_SIZE + TILE_SIZE * 0.5 };
+immuneCrocodilo.tile = { x: 4, y: 4 };
+immuneCrocodilo.spawnProtectionMs = 0;
+immuneGame.setServerPlayerInput(1, {
+  direction: "right",
+  ...neutralInput,
+  skillPressed: true,
+  skillHeld: true,
+});
+immuneGame.advanceServerSimulation(17);
+for (let elapsedMs = 17; elapsedMs < 600; elapsedMs += 17) {
+  immuneGame.setServerPlayerInput(1, {
+    direction: "right",
+    ...neutralInput,
+    skillHeld: true,
+  });
+  immuneGame.advanceServerSimulation(17);
+}
+immuneGame.flames.push({
+  tile: { x: 4, y: 4 },
+  remainingMs: 500,
+  style: "normal",
+});
+immuneGame.resolvePlayerDeathsFromFlames();
+const stayedImmuneDuringChannel = immuneCrocodilo.alive === true
+  && immuneCrocodilo.skill.phase === "channeling";
+
+for (let elapsedMs = 0; elapsedMs < 800 && crocodilo.skill.phase === "releasing"; elapsedMs += 17) {
+  game.setServerPlayerInput(1, {
+    direction: "right",
+    ...neutralInput,
+  });
+  game.advanceServerSimulation(17);
+}
+
+const afterReleaseSkill = { ...crocodilo.skill };
+
 const stayedFrozen = Math.abs((midSnapshot?.x ?? crocodilo.position.x) - channelStartX) < 1.5;
 const channelingObserved = midSnapshot?.skill?.phase === "channeling";
-const firedOnFullHold = afterFireSkill.phase === "cooldown" && afterFireSkill.cooldownRemainingMs === CROCODILO_COOLDOWN_MS;
+const enteredReleaseOnFullHold = afterFireSkill.phase === "releasing"
+  && afterFireSkill.channelRemainingMs > 0
+  && afterFireSkill.cooldownRemainingMs === 0;
+const finishedIntoCooldown = afterReleaseSkill.phase === "cooldown"
+  && afterReleaseSkill.cooldownRemainingMs === CROCODILO_COOLDOWN_MS;
 const toxicCrossSpawned = toxicTileKeys.has("5,4")
   && toxicTileKeys.has("3,4")
   && toxicTileKeys.has("2,4")
@@ -212,15 +256,40 @@ const animationChoice = animationGame.getActiveSkillAnimationFrames(
   [],
   [],
 );
-const usesSlowCastTiming = animationChoice?.frames?.[0] === castMarkerA
-  && animationChoice?.frameMs === 400
+const usesChannelCastTiming = animationChoice?.frames?.length === 3
+  && animationChoice?.frames?.[0] === castMarkerA
+  && animationChoice?.frames?.[2] === castMarkerC
+  && animationChoice?.frameMs === Math.floor(CROCODILO_CHANNEL_MS / 3)
   && animationChoice?.playback === "hold";
+
+animationCrocodilo.skill = {
+  id: "crocodilo-emerald-surge",
+  phase: "releasing",
+  channelRemainingMs: 160,
+  cooldownRemainingMs: 0,
+  castElapsedMs: 80,
+  projectedPosition: null,
+  projectedLastMoveDirection: "right",
+};
+const releaseChoice = animationGame.getActiveSkillAnimationFrames(
+  animationCrocodilo,
+  "right",
+  [castMarkerA, castMarkerB, castMarkerC, castMarkerD],
+  [],
+  [],
+);
+const usesReleaseCastTiming = releaseChoice?.frames?.length === 2
+  && releaseChoice?.frames?.[0] === castMarkerC
+  && releaseChoice?.frames?.[1] === castMarkerD
+  && releaseChoice?.frameMs === Math.floor(CROCODILO_RELEASE_MS / 2)
+  && releaseChoice?.playback === "hold";
 
 const report = {
   channelElapsedMs,
   stayedFrozen,
   channelingObserved,
-  firedOnFullHold,
+  enteredReleaseOnFullHold,
+  finishedIntoCooldown,
   toxicTileKeys: [...toxicTileKeys],
   toxicCrossSpawned,
   surgeHitCloseEnemy,
@@ -228,19 +297,24 @@ const report = {
   surgeBrokeCrate,
   surgeTriggeredBomb,
   surgeKeptCasterSafe,
+  stayedImmuneDuringChannel,
   canceledBeforeFire,
-  usesSlowCastTiming,
+  usesChannelCastTiming,
+  usesReleaseCastTiming,
   pass: stayedFrozen
     && channelingObserved
-    && firedOnFullHold
+    && enteredReleaseOnFullHold
+    && finishedIntoCooldown
     && toxicCrossSpawned
     && surgeHitCloseEnemy
     && surgeMissedFarEnemy
     && surgeBrokeCrate
     && surgeTriggeredBomb
     && surgeKeptCasterSafe
+    && stayedImmuneDuringChannel
     && canceledBeforeFire
-    && usesSlowCastTiming,
+    && usesChannelCastTiming
+    && usesReleaseCastTiming,
 };
 
 console.log(JSON.stringify(report, null, 2));

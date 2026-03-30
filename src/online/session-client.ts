@@ -1,7 +1,19 @@
 import type { CharacterRosterEntry } from "../app/assets";
 import { assetUrl } from "../app/asset-url";
+import { SpriteTrimCache } from "../app/sprite-trim-cache";
 import { ALL_PLAYER_IDS } from "../core/types";
 import type { Mode, PlayerId } from "../core/types";
+import {
+  applyDocumentLanguage,
+  buildLocalizedUrl,
+  getInitialSiteLanguage,
+  persistSiteLanguage,
+  SITE_COPY,
+  type SiteLanguage,
+} from "../i18n";
+import type { PlayerAccount } from "./account";
+import { validateUsername } from "./account";
+import type { OnlineSessionState } from "./matchmaking";
 import type {
   LobbyState,
   LobbySummary,
@@ -22,6 +34,7 @@ interface OnlineGameAppBridge {
   startOnlineMatch(config: MatchStartConfig): void;
   startOfflineBotMatch(botFill?: number): void;
   setOfflinePreferredCharacter(characterIndex: number): void;
+  setLanguage(language: SiteLanguage): void;
   getCurrentMode(): Mode;
   applyOnlineFrame(frame: OnlineGameFrame): void;
   applyOnlineSnapshot(snapshot: OnlineGameSnapshot): void;
@@ -34,12 +47,29 @@ type IdleScreen = "landing" | "lobby-list";
 
 interface SessionElements {
   shell: HTMLDivElement;
+  languageSwitcher: HTMLDivElement;
+  languageLabel: HTMLSpanElement;
+  languagePortugueseButton: HTMLButtonElement;
+  languageEnglishButton: HTMLButtonElement;
   screens: Record<ExperienceScreen, HTMLElement>;
   landingMeta: HTMLParagraphElement;
+  landingAccountTitle: HTMLParagraphElement;
+  landingAccountValue: HTMLParagraphElement;
+  landingAccountUsernameInput: HTMLInputElement;
+  landingAccountPrimaryButton: HTMLButtonElement;
+  landingAccountSecondaryButton: HTMLButtonElement;
+  landingAccountHint: HTMLParagraphElement;
   landingQuickMatchButton: HTMLButtonElement;
+  landingEndlessButton: HTMLButtonElement;
   landingBotMatchButton: HTMLButtonElement;
   landingLobbyButton: HTMLButtonElement;
+  landingFeedbackButton: HTMLButtonElement;
   landingRoster: HTMLDivElement;
+  feedbackDialog: HTMLDivElement;
+  feedbackTextarea: HTMLTextAreaElement;
+  feedbackSendButton: HTMLButtonElement;
+  feedbackCancelButton: HTMLButtonElement;
+  feedbackStatus: HTMLParagraphElement;
   lobbyListBackButton: HTMLButtonElement;
   lobbyListCreateButton: HTMLButtonElement;
   lobbyListCount: HTMLParagraphElement;
@@ -53,7 +83,7 @@ interface SessionElements {
   setupRoomMeta: HTMLParagraphElement;
   setupSeatStrip: HTMLDivElement;
   setupPresenceList: HTMLDivElement;
-  selectorPortrait: HTMLImageElement;
+  selectorPortrait: HTMLCanvasElement;
   selectorName: HTMLParagraphElement;
   selectorNote: HTMLParagraphElement;
   selectorGrid: HTMLDivElement;
@@ -90,19 +120,34 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private pendingAutoJoinRoom: string | null;
   private reconnectAttempts = 0;
   private quickMatchSearching = false;
+  private endlessMatchStarting = false;
   private quickMatchQueuedCount = 0;
   private onlineUsers = 0;
   private onlinePlayers: OnlinePresenceEntry[] = [];
   private preferredCharacterIndex = 0;
   private idleScreen: IdleScreen = "landing";
   private autoClaimRoomCode: string | null = null;
+  private currentAccount: PlayerAccount | null = null;
+  private accountRequestPending = false;
+  private feedbackDialogOpen = false;
+  private feedbackRequestPending = false;
+  private reconnectingForAccountRefresh = false;
+  private realtimeReady = false;
+  private currentSessionState: OnlineSessionState | null = null;
   private readonly telemetry: GrowthTelemetryClient;
   private observedMatchWinner: PlayerId | null = null;
+  private readonly language: SiteLanguage;
+  private readonly spriteTrimCache = new SpriteTrimCache();
+  private readonly portraitImageCache = new Map<string, HTMLImageElement>();
 
   constructor(root: HTMLElement, app: OnlineGameAppBridge, roster: CharacterRosterEntry[]) {
     this.app = app;
     this.roster = roster;
-    this.pendingAutoJoinRoom = this.readRoomFromLocation();
+    this.language = getInitialSiteLanguage();
+    applyDocumentLanguage(this.language);
+    this.syncLanguageUrl();
+    this.app.setLanguage(this.language);
+    this.pendingAutoJoinRoom = null;
     this.preferredCharacterIndex = this.readPreferredCharacterIndex();
     this.telemetry = new GrowthTelemetryClient();
     this.elements = this.render(root);
@@ -110,10 +155,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.canvasObserver.observe(root, { childList: true });
     this.mountCanvas(root);
     this.bindEvents();
+    void this.refreshAccountState();
     this.renderAll();
     this.app.setOfflinePreferredCharacter(this.preferredCharacterIndex);
     this.telemetry.trackLandingView();
-    this.setStatus("Conectando ao lobby global...");
+    this.setStatus(this.copy.status.connecting);
     this.connect();
   }
 
@@ -138,36 +184,138 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     return this.send({ type: "match-result-choice", choice });
   }
 
+  private get copy() {
+    return SITE_COPY[this.language];
+  }
+
+  private translate(portuguese: string, english: string): string {
+    return this.language === "pt" ? portuguese : english;
+  }
+
+  private createPortraitCanvas(className: string, size: number, alt: string): HTMLCanvasElement {
+    const canvas = document.createElement("canvas");
+    canvas.className = className;
+    canvas.width = size;
+    canvas.height = size;
+    canvas.setAttribute("role", "img");
+    canvas.setAttribute("aria-label", alt);
+    return canvas;
+  }
+
+  private renderPortrait(canvas: HTMLCanvasElement, entry: CharacterRosterEntry): void {
+    const baseSrc = assetUrl(`/assets/characters/${entry.id}/south.png`);
+    const src = entry.assetVersion
+      ? `${baseSrc}?v=${encodeURIComponent(entry.assetVersion)}`
+      : baseSrc;
+    canvas.setAttribute("aria-label", entry.name);
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return;
+    }
+
+    const draw = (image: HTMLImageElement) => {
+      const width = image.naturalWidth || image.width || 0;
+      const height = image.naturalHeight || image.height || 0;
+      const bounds = this.spriteTrimCache.getBounds(image) ?? { x: 0, y: 0, width, height };
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.imageSmoothingEnabled = false;
+
+      const safeWidth = Math.max(1, bounds.width);
+      const safeHeight = Math.max(1, bounds.height);
+      const scale = Math.min((canvas.width * 0.72) / safeWidth, (canvas.height * 0.72) / safeHeight);
+      const drawWidth = Math.max(1, Math.round(safeWidth * scale));
+      const drawHeight = Math.max(1, Math.round(safeHeight * scale));
+      const drawX = Math.round((canvas.width - drawWidth) * 0.5);
+      const drawY = Math.round(canvas.height - drawHeight - canvas.height * 0.08);
+
+      context.drawImage(
+        image,
+        bounds.x,
+        bounds.y,
+        safeWidth,
+        safeHeight,
+        drawX,
+        drawY,
+        drawWidth,
+        drawHeight,
+      );
+    };
+
+    const cached = this.portraitImageCache.get(src);
+    if (cached && cached.complete) {
+      draw(cached);
+      return;
+    }
+
+    const image = cached ?? new Image();
+    if (!cached) {
+      image.decoding = "async";
+      image.src = src;
+      this.portraitImageCache.set(src, image);
+    }
+    image.onload = () => draw(image);
+    if (image.complete) {
+      draw(image);
+      return;
+    }
+    context.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
   private connect(): void {
     if (this.reconnectTimer !== null) {
       window.clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    this.realtimeReady = false;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const socket = new WebSocket(`${protocol}//${window.location.host}/online`);
     this.socket = socket;
 
     socket.addEventListener("open", () => {
       this.reconnectAttempts = 0;
+      this.realtimeReady = true;
       if (this.currentLobby?.roomCode) {
         this.pendingAutoJoinRoom = this.currentLobby.roomCode;
       }
+      this.renderAll();
     });
     socket.addEventListener("message", (event) => this.handleMessage(event.data));
     socket.addEventListener("close", () => {
+      const hadActiveOnlineSession = Boolean(this.currentLobby || this.role || this.roomCode);
+      const accountRefresh = this.reconnectingForAccountRefresh;
+      this.reconnectingForAccountRefresh = false;
+      this.realtimeReady = false;
       this.socket = null;
       this.role = null;
       this.roomCode = null;
       this.currentLobby = null;
+      this.currentSessionState = null;
       this.quickMatchSearching = false;
+      this.endlessMatchStarting = false;
       this.pendingAutoJoinRoom = null;
-      this.app.detachOnlineSession();
+      if (hadActiveOnlineSession) {
+        this.app.detachOnlineSession();
+      }
       this.renderAll();
-      this.setStatus("Conexao perdida. Reconectando...");
+      if (accountRefresh) {
+        this.setStatus(this.translate("Atualizando sua conta...", "Refreshing your account..."));
+      } else if (hadActiveOnlineSession) {
+        this.setStatus(this.copy.status.disconnected);
+      } else if (this.isLocalFrontendOnlyHost()) {
+        this.setStatus(this.translate("Conectando backend local...", "Connecting local backend..."));
+      } else {
+        this.setStatus(this.copy.status.disconnected);
+      }
       this.scheduleReconnect();
     });
     socket.addEventListener("error", () => {
-      this.setStatus("Erro de conexao. Tentando novamente...");
+      this.realtimeReady = false;
+      if (this.currentLobby || this.role || this.roomCode) {
+        this.setStatus(this.copy.status.connectionError);
+      } else if (this.isLocalFrontendOnlyHost()) {
+        this.setStatus(this.translate("Conectando backend local...", "Connecting local backend..."));
+      }
+      this.renderAll();
     });
   }
 
@@ -184,6 +332,12 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   }
 
   private bindEvents(): void {
+    this.elements.languagePortugueseButton.addEventListener("click", () => {
+      this.changeLanguage("pt");
+    });
+    this.elements.languageEnglishButton.addEventListener("click", () => {
+      this.changeLanguage("en");
+    });
     this.elements.landingQuickMatchButton.addEventListener("click", () => {
       this.telemetry.track("quick_match_clicked", {
         context: { screen: this.getScreen() },
@@ -191,11 +345,17 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       });
       this.startQuickMatch();
     });
+    this.elements.landingEndlessButton.addEventListener("click", () => {
+      this.startEndlessMatch();
+    });
     this.elements.landingBotMatchButton.addEventListener("click", () => {
       this.app.setOfflinePreferredCharacter(this.preferredCharacterIndex);
       this.app.startOfflineBotMatch(3);
-      this.setStatus("Partida contra bots iniciada.");
+      this.setStatus(this.copy.status.botMatchStarted);
       this.renderAll();
+    });
+    this.elements.landingFeedbackButton.addEventListener("click", () => {
+      this.openFeedbackDialog();
     });
     this.elements.landingLobbyButton.addEventListener("click", () => {
       this.idleScreen = "lobby-list";
@@ -213,10 +373,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         context: { screen: "lobby-list" },
       });
       if (!this.send({ type: "create-lobby", title: DEFAULT_LOBBY_TITLE })) {
-        this.setStatus("Nao foi possivel criar a sala agora.");
+        this.setStatus(this.copy.status.createLobbyUnavailable);
         return;
       }
-      this.setStatus("Criando um lobby novo...");
+      this.setStatus(this.copy.status.creatingLobby);
     });
     this.elements.setupBackButton.addEventListener("click", () => {
       if (this.currentLobby) {
@@ -263,6 +423,46 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.sendChat();
       }
     });
+    this.elements.landingAccountPrimaryButton.addEventListener("click", () => {
+      void this.createQuickAccount();
+    });
+    this.elements.landingAccountSecondaryButton.addEventListener("click", () => {
+      void this.logoutAccount();
+    });
+    this.elements.landingAccountUsernameInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        void this.createQuickAccount();
+      }
+    });
+    this.elements.feedbackCancelButton.addEventListener("click", () => {
+      this.closeFeedbackDialog();
+    });
+    this.elements.feedbackDialog.addEventListener("click", (event) => {
+      if (event.target === this.elements.feedbackDialog) {
+        this.closeFeedbackDialog();
+      }
+    });
+    this.elements.feedbackSendButton.addEventListener("click", () => {
+      void this.submitFeedback();
+    });
+    this.elements.feedbackTextarea.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.closeFeedbackDialog();
+      } else if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+        event.preventDefault();
+        void this.submitFeedback();
+      }
+    });
+  }
+
+  private changeLanguage(language: SiteLanguage): void {
+    if (language === this.language) {
+      return;
+    }
+    persistSiteLanguage(language);
+    window.location.assign(buildLocalizedUrl(language).toString());
   }
 
   private startQuickMatch(): void {
@@ -272,13 +472,30 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.idleScreen = "landing";
     this.quickMatchSearching = true;
     this.renderAll();
-    if (!this.send({ type: "quick-match", characterIndex: this.preferredCharacterIndex })) {
+    if (!this.send({ type: "quick-match", characterIndex: this.getPreferredAuthoritativeCharacterIndex() })) {
       this.quickMatchSearching = false;
       this.renderAll();
-      this.setStatus("Quick match indisponivel. Reconectando...");
+      this.setStatus(this.copy.status.quickMatchUnavailable);
       return;
     }
-    this.setStatus("Buscando uma sala aberta...");
+    this.setStatus(this.copy.status.searchingRoom);
+  }
+
+  private startEndlessMatch(): void {
+    if (this.endlessMatchStarting) {
+      return;
+    }
+    this.idleScreen = "landing";
+    this.endlessMatchStarting = true;
+    this.quickMatchSearching = false;
+    this.renderAll();
+    if (!this.send({ type: "endless-match", characterIndex: this.getPreferredAuthoritativeCharacterIndex() })) {
+      this.endlessMatchStarting = false;
+      this.renderAll();
+      this.setStatus(this.translate("Modo infinito indisponivel. Reconectando...", "Endless mode is unavailable. Reconnecting..."));
+      return;
+    }
+    this.setStatus(this.translate("Entrando na partida infinita...", "Joining the endless match..."));
   }
 
   private handleSetupPrimaryAction(): void {
@@ -290,7 +507,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     if (!lobby.selfSeat) {
       const firstFreeSeat = this.getFirstAvailableSeat(lobby);
       if (!firstFreeSeat) {
-        this.setStatus("Essa sala lotou antes da entrada.");
+        this.setStatus(this.copy.status.roomFilledBeforeEnter);
         this.renderAll();
         return;
       }
@@ -299,8 +516,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         payload: { seat: firstFreeSeat, characterIndex: this.preferredCharacterIndex },
       });
       this.autoClaimRoomCode = lobby.roomCode;
-      this.send({ type: "claim-seat", seat: firstFreeSeat, characterIndex: this.preferredCharacterIndex });
-      this.setStatus(`Entrando na vaga P${firstFreeSeat}...`);
+        this.send({ type: "claim-seat", seat: firstFreeSeat, characterIndex: this.getPreferredAuthoritativeCharacterIndex() });
+      this.setStatus(this.copy.status.enteringSeat(firstFreeSeat));
       return;
     }
 
@@ -311,7 +528,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         payload: { seat: lobby.selfSeat },
       });
       this.send({ type: "set-ready", ready: true });
-      this.setStatus("Tudo certo. Sua vaga foi marcada como pronta.");
+      this.setStatus(this.copy.status.readyMarked);
     }
   }
 
@@ -320,13 +537,13 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       return;
     }
     try {
-      await navigator.clipboard.writeText(this.buildInviteUrl(this.currentLobby.roomCode));
+      await navigator.clipboard.writeText(this.currentLobby.roomCode);
       this.telemetry.track("invite_copied", {
         context: { roomCode: this.currentLobby.roomCode, screen: this.getScreen() },
       });
-      this.setStatus("Convite copiado.");
+      this.setStatus(this.copy.status.inviteCopied);
     } catch {
-      this.setStatus("Nao foi possivel copiar o convite.");
+      this.setStatus(this.copy.status.inviteCopyFailed);
     }
   }
 
@@ -346,7 +563,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       return;
     }
     if (!this.send({ type: "chat-send", body })) {
-      this.setStatus("Chat indisponivel no momento.");
+      this.setStatus(this.copy.status.chatUnavailable);
       return;
     }
     this.telemetry.track("chat_sent", {
@@ -371,33 +588,37 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     switch (message.type) {
       case "hello":
         this.clientId = message.clientId;
+        this.currentAccount = message.account;
+        this.applySessionState(message.sessionState);
         this.lobbies = message.lobbies;
         this.onlineUsers = message.onlineUsers;
         this.onlinePlayers = message.onlinePlayers;
         this.quickMatchQueuedCount = message.quickMatchQueued;
-        this.quickMatchSearching = message.searchingQuickMatch;
         if (this.pendingAutoJoinRoom) {
           this.send({ type: "join-lobby", roomCode: this.pendingAutoJoinRoom });
-          this.setStatus("Entrando no lobby...");
+          this.setStatus(this.copy.status.enteringLobby);
         } else if (this.quickMatchSearching) {
-          this.setStatus("Buscando uma sala aberta...");
+          this.setStatus(this.copy.status.searchingRoom);
+        } else if (this.endlessMatchStarting) {
+          this.setStatus(this.translate("Entrando na partida infinita...", "Joining the endless match..."));
         } else {
-          this.setStatus("Escolha partida rapida ou entre em um lobby.");
+          this.setStatus(this.copy.status.chooseStart);
         }
         this.renderAll();
         break;
       case "lobby-list":
+        this.applySessionState(message.sessionState);
         this.lobbies = message.lobbies;
         this.onlineUsers = message.onlineUsers;
         this.onlinePlayers = message.onlinePlayers;
         this.renderAll();
         break;
       case "lobby-joined":
+        this.applySessionState(message.sessionState);
         this.role = message.role;
         this.currentLobby = message.lobby;
         this.roomCode = message.lobby.roomCode;
         this.pendingAutoJoinRoom = null;
-        this.quickMatchSearching = false;
         this.syncPreferredCharacterFromLobby();
         this.app.attachOnlineSession(this);
         this.updateLocation(message.lobby.roomCode);
@@ -409,10 +630,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
             selfSeat: message.lobby.selfSeat,
           },
         });
-        this.setStatus("Sala carregada. Revise o personagem e entre pronto.");
+        this.setStatus(this.copy.status.lobbyLoaded);
         this.renderAll();
         break;
       case "lobby-updated":
+        this.applySessionState(message.sessionState);
         if (this.currentLobby?.status === "playing" && message.lobby.status === "open") {
           this.app.clearOnlinePeer();
         }
@@ -423,22 +645,22 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.renderAll();
         break;
       case "lobby-left":
+        this.applySessionState(message.sessionState);
         this.role = null;
         this.roomCode = null;
         this.currentLobby = null;
         this.pendingAutoJoinRoom = null;
-        this.quickMatchSearching = false;
         this.autoClaimRoomCode = null;
         this.updateLocation(null);
         this.app.detachOnlineSession();
         this.renderAll();
-        this.setStatus("Voce voltou para a entrada do jogo.");
+        this.setStatus(this.copy.status.returnedHome);
         break;
       case "match-started":
+        this.applySessionState(message.sessionState);
         this.role = message.config.role;
         this.roomCode = message.config.roomCode;
         this.pendingAutoJoinRoom = null;
-        this.quickMatchSearching = false;
         if (this.currentLobby) {
           this.currentLobby = {
             ...this.currentLobby,
@@ -456,7 +678,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
           },
         });
         this.renderAll();
-        this.setStatus("Partida iniciada.");
+        this.setStatus(this.copy.status.matchStarted);
         break;
       case "guest-input":
         this.app.receiveOnlineGuestInput(message.input);
@@ -475,10 +697,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         }
         break;
       case "quick-match-state":
+        this.applySessionState(message.sessionState);
         this.quickMatchQueuedCount = message.queued;
         this.onlineUsers = message.onlineUsers;
         this.onlinePlayers = message.onlinePlayers;
-        this.quickMatchSearching = message.searching;
         this.renderAll();
         break;
       case "peer-left":
@@ -490,10 +712,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         }
         this.app.clearOnlinePeer();
         this.renderAll();
-        this.setStatus("Um jogador saiu da sala.");
+        this.setStatus(this.copy.status.peerLeft);
         break;
       case "error":
-        this.quickMatchSearching = false;
+        this.applySessionState(this.currentSessionState);
         this.renderAll();
         this.setStatus(message.message);
         break;
@@ -518,8 +740,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       return;
     }
     this.autoClaimRoomCode = lobby.roomCode;
-    this.send({ type: "claim-seat", seat: firstFreeSeat, characterIndex: this.preferredCharacterIndex });
-    this.setStatus(`Entrando automaticamente na vaga P${firstFreeSeat}...`);
+    this.send({ type: "claim-seat", seat: firstFreeSeat, characterIndex: this.getPreferredAuthoritativeCharacterIndex() });
+    this.setStatus(this.copy.status.autoEnteringSeat(firstFreeSeat));
   }
 
   private getFirstAvailableSeat(lobby: LobbySummary): PlayerId | null {
@@ -532,8 +754,28 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   }
 
   private render(root: HTMLElement): SessionElements {
+    const copy = this.copy;
     const shell = document.createElement("div");
     shell.className = "experience-shell";
+
+    const languageSwitcher = document.createElement("div");
+    languageSwitcher.className = "experience-language-switcher";
+
+    const languageLabel = document.createElement("span");
+    languageLabel.className = "experience-language-switcher__label";
+    languageLabel.textContent = this.translate("Idioma", "Language");
+
+    const languagePortugueseButton = document.createElement("button");
+    languagePortugueseButton.className = "experience-language-switcher__option";
+    languagePortugueseButton.type = "button";
+    languagePortugueseButton.textContent = copy.language.portuguese;
+
+    const languageEnglishButton = document.createElement("button");
+    languageEnglishButton.className = "experience-language-switcher__option";
+    languageEnglishButton.type = "button";
+    languageEnglishButton.textContent = copy.language.english;
+
+    languageSwitcher.append(languageLabel, languagePortugueseButton, languageEnglishButton);
 
     const landing = document.createElement("section");
     landing.className = "experience-screen experience-screen--landing";
@@ -544,9 +786,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const landingCopy = document.createElement("div");
     landingCopy.className = "experience-hero__copy";
     landingCopy.innerHTML = `
-      <p class="experience-kicker">Arena online</p>
+      <p class="experience-kicker">${copy.landing.kicker}</p>
       <h1>BOMBA PVP</h1>
-      <p class="experience-hero__lead">Entre, escolha um bomber e entenda o jogo em segundos.</p>
+      <p class="experience-hero__lead">${copy.landing.lead}</p>
     `;
 
     const landingMeta = document.createElement("p");
@@ -555,26 +797,130 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const landingActions = document.createElement("div");
     landingActions.className = "experience-actions";
 
+    const landingActionsPrimary = document.createElement("div");
+    landingActionsPrimary.className = "experience-actions__group experience-actions__group--primary";
+
+    const landingActionsSecondary = document.createElement("div");
+    landingActionsSecondary.className = "experience-actions__group experience-actions__group--secondary";
+
+    const landingAccountCard = document.createElement("div");
+    landingAccountCard.className = "experience-account-card";
+
+    const landingAccountKicker = document.createElement("p");
+    landingAccountKicker.className = "experience-kicker";
+    landingAccountKicker.textContent = this.translate("Conta opcional", "Optional account");
+
+    const landingAccountTitle = document.createElement("p");
+    landingAccountTitle.className = "experience-account__title";
+
+    const landingAccountValue = document.createElement("p");
+    landingAccountValue.className = "experience-account__value";
+
+    const landingAccountForm = document.createElement("div");
+    landingAccountForm.className = "experience-account__form";
+
+    const landingAccountUsernameInput = document.createElement("input");
+    landingAccountUsernameInput.className = "experience-account__input";
+    landingAccountUsernameInput.type = "text";
+    landingAccountUsernameInput.maxLength = 16;
+    landingAccountUsernameInput.placeholder = this.translate("Seu username", "Your username");
+    landingAccountUsernameInput.autocomplete = "off";
+    landingAccountUsernameInput.spellcheck = false;
+
+    const landingAccountPrimaryButton = document.createElement("button");
+    landingAccountPrimaryButton.className = "experience-button experience-button--primary";
+    landingAccountPrimaryButton.type = "button";
+
+    const landingAccountSecondaryButton = document.createElement("button");
+    landingAccountSecondaryButton.className = "experience-button experience-button--ghost";
+    landingAccountSecondaryButton.type = "button";
+    landingAccountSecondaryButton.textContent = this.translate("Sair da conta", "Log out");
+
+    landingAccountForm.append(landingAccountUsernameInput, landingAccountPrimaryButton, landingAccountSecondaryButton);
+
+    const landingAccountHint = document.createElement("p");
+    landingAccountHint.className = "experience-account__hint";
+
+    landingAccountCard.append(
+      landingAccountKicker,
+      landingAccountTitle,
+      landingAccountValue,
+      landingAccountForm,
+      landingAccountHint,
+    );
+
     const landingQuickMatchButton = document.createElement("button");
     landingQuickMatchButton.className = "experience-button experience-button--primary";
     landingQuickMatchButton.type = "button";
-    landingQuickMatchButton.textContent = "Partida rapida";
+    landingQuickMatchButton.textContent = copy.landing.quickMatch;
+
+    const landingEndlessButton = document.createElement("button");
+    landingEndlessButton.className = "experience-button experience-button--secondary";
+    landingEndlessButton.type = "button";
+    landingEndlessButton.textContent = this.translate("Partida infinita", "Infinite match");
 
     const landingBotMatchButton = document.createElement("button");
     landingBotMatchButton.className = "experience-button experience-button--secondary";
     landingBotMatchButton.type = "button";
-    landingBotMatchButton.textContent = "Partida contra bots";
+    landingBotMatchButton.textContent = copy.landing.botMatch;
 
     const landingLobbyButton = document.createElement("button");
     landingLobbyButton.className = "experience-button experience-button--secondary";
     landingLobbyButton.type = "button";
-    landingLobbyButton.textContent = "Entrar em lobby";
+    landingLobbyButton.textContent = copy.landing.enterLobby;
 
-    landingActions.append(landingQuickMatchButton, landingBotMatchButton, landingLobbyButton);
-    landingCopy.append(landingMeta, landingActions);
+    const landingFeedbackButton = document.createElement("button");
+    landingFeedbackButton.className = "experience-button experience-button--ghost";
+    landingFeedbackButton.type = "button";
+    landingFeedbackButton.textContent = copy.landing.feedback;
+
+    landingActionsPrimary.append(landingQuickMatchButton, landingLobbyButton);
+    landingActionsSecondary.append(landingEndlessButton, landingBotMatchButton, landingFeedbackButton);
+    landingActions.append(landingActionsPrimary, landingActionsSecondary);
+    landingCopy.append(landingMeta, landingActions, landingAccountCard);
 
     const landingRoster = document.createElement("div");
     landingRoster.className = "experience-hero__art";
+
+    const feedbackDialog = document.createElement("div");
+    feedbackDialog.className = "experience-feedback";
+    feedbackDialog.hidden = true;
+
+    const feedbackCard = document.createElement("div");
+    feedbackCard.className = "experience-feedback__card";
+
+    const feedbackTitle = document.createElement("p");
+    feedbackTitle.className = "experience-feedback__title";
+    feedbackTitle.textContent = copy.landing.feedbackTitle;
+
+    const feedbackPrompt = document.createElement("p");
+    feedbackPrompt.className = "experience-feedback__prompt";
+    feedbackPrompt.textContent = copy.landing.feedbackPrompt;
+
+    const feedbackTextarea = document.createElement("textarea");
+    feedbackTextarea.className = "experience-feedback__textarea";
+    feedbackTextarea.rows = 6;
+    feedbackTextarea.placeholder = copy.landing.feedbackPlaceholder;
+
+    const feedbackStatus = document.createElement("p");
+    feedbackStatus.className = "experience-feedback__status";
+
+    const feedbackActions = document.createElement("div");
+    feedbackActions.className = "experience-feedback__actions";
+
+    const feedbackCancelButton = document.createElement("button");
+    feedbackCancelButton.className = "experience-button experience-button--ghost";
+    feedbackCancelButton.type = "button";
+    feedbackCancelButton.textContent = copy.landing.feedbackCancel;
+
+    const feedbackSendButton = document.createElement("button");
+    feedbackSendButton.className = "experience-button experience-button--primary";
+    feedbackSendButton.type = "button";
+    feedbackSendButton.textContent = copy.landing.feedbackSend;
+
+    feedbackActions.append(feedbackCancelButton, feedbackSendButton);
+    feedbackCard.append(feedbackTitle, feedbackPrompt, feedbackTextarea, feedbackStatus, feedbackActions);
+    feedbackDialog.append(feedbackCard);
 
     landingHero.append(landingCopy, landingRoster);
     landing.append(landingHero);
@@ -588,18 +934,18 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const lobbyListBackButton = document.createElement("button");
     lobbyListBackButton.className = "experience-button experience-button--ghost";
     lobbyListBackButton.type = "button";
-    lobbyListBackButton.textContent = "Voltar";
+    lobbyListBackButton.textContent = copy.common.back;
 
     const lobbyListCreateButton = document.createElement("button");
     lobbyListCreateButton.className = "experience-button experience-button--primary";
     lobbyListCreateButton.type = "button";
-    lobbyListCreateButton.textContent = "Criar lobby";
+    lobbyListCreateButton.textContent = copy.lobbies.create;
 
     const lobbyTitleWrap = document.createElement("div");
     lobbyTitleWrap.className = "experience-panel__title";
     lobbyTitleWrap.innerHTML = `
-      <p class="experience-kicker">Salas abertas</p>
-      <h2>Escolha um lobby para entrar</h2>
+      <p class="experience-kicker">${copy.lobbies.kicker}</p>
+      <h2>${copy.lobbies.title}</h2>
     `;
 
     lobbyHeader.append(lobbyListBackButton, lobbyTitleWrap, lobbyListCreateButton);
@@ -621,7 +967,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const setupBackButton = document.createElement("button");
     setupBackButton.className = "experience-button experience-button--ghost";
     setupBackButton.type = "button";
-    setupBackButton.textContent = "Voltar";
+    setupBackButton.textContent = copy.common.back;
 
     const setupHeaderCopy = document.createElement("div");
     setupHeaderCopy.className = "experience-panel__title";
@@ -642,12 +988,12 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const setupCopyButton = document.createElement("button");
     setupCopyButton.className = "experience-button experience-button--secondary";
     setupCopyButton.type = "button";
-    setupCopyButton.textContent = "Copiar convite";
+    setupCopyButton.textContent = copy.setup.copyInvite;
 
     const setupLeaveButton = document.createElement("button");
     setupLeaveButton.className = "experience-button experience-button--ghost";
     setupLeaveButton.type = "button";
-    setupLeaveButton.textContent = "Sair";
+    setupLeaveButton.textContent = copy.setup.leaveRoom;
 
     setupHeaderActions.append(setupCopyButton, setupLeaveButton);
     setupHeader.append(setupBackButton, setupHeaderCopy, setupHeaderActions);
@@ -664,11 +1010,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const selectorSummary = document.createElement("div");
     selectorSummary.className = "experience-character-summary";
 
-    const selectorPortrait = document.createElement("img");
-    selectorPortrait.className = "experience-character-summary__portrait";
-    selectorPortrait.alt = "Personagem selecionado";
-    selectorPortrait.width = 96;
-    selectorPortrait.height = 96;
+    const selectorPortrait = this.createPortraitCanvas(
+      "experience-character-summary__portrait",
+      96,
+      this.translate("Personagem selecionado", "Selected character"),
+    );
 
     const selectorSummaryCopy = document.createElement("div");
     selectorSummaryCopy.className = "experience-character-summary__copy";
@@ -690,11 +1036,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const setupControls = document.createElement("section");
     setupControls.className = "experience-panel experience-panel--controls";
     setupControls.innerHTML = `
-      <p class="experience-kicker">Comandos</p>
-      <h3>Jogue com WASD ou com as setas</h3>
+      <p class="experience-kicker">${copy.controls.kicker}</p>
+      <h3>${copy.controls.title}</h3>
       <div class="experience-controls">
         <div class="experience-controls__group">
-          <span class="experience-controls__label">Mover</span>
+          <span class="experience-controls__label">${copy.controls.move}</span>
           <div class="experience-key-columns">
             <div class="experience-key-cluster">
               <span class="experience-key experience-key--solo">W</span>
@@ -715,15 +1061,15 @@ export class OnlineSessionClient implements OnlineSessionBridge {
           </div>
         </div>
         <div class="experience-controls__group">
-          <span class="experience-controls__label">Acoes</span>
+          <span class="experience-controls__label">${copy.controls.actions}</span>
           <div class="experience-action-keys">
             <div class="experience-action-card">
               <span class="experience-key experience-key--action">Q</span>
-              <strong>Soltar bomba</strong>
+              <strong>${copy.controls.bomb}</strong>
             </div>
             <div class="experience-action-card">
               <span class="experience-key experience-key--wide">Espaco</span>
-              <strong>Ultimate do personagem</strong>
+              <strong>${copy.controls.ultimate}</strong>
             </div>
           </div>
         </div>
@@ -739,7 +1085,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const setupPrimaryButton = document.createElement("button");
     setupPrimaryButton.className = "experience-button experience-button--primary";
     setupPrimaryButton.type = "button";
-    setupPrimaryButton.textContent = "Pronto para jogar";
+    setupPrimaryButton.textContent = copy.setup.readyButton;
 
     const setupPrimaryHint = document.createElement("p");
     setupPrimaryHint.className = "experience-setup__hint";
@@ -768,12 +1114,12 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const matchCopyButton = document.createElement("button");
     matchCopyButton.className = "experience-button experience-button--secondary";
     matchCopyButton.type = "button";
-    matchCopyButton.textContent = "Convite";
+    matchCopyButton.textContent = copy.match.invite;
 
     const matchLeaveButton = document.createElement("button");
     matchLeaveButton.className = "experience-button experience-button--ghost";
     matchLeaveButton.type = "button";
-    matchLeaveButton.textContent = "Sair da sala";
+    matchLeaveButton.textContent = copy.match.leave;
 
     matchActions.append(matchCopyButton, matchLeaveButton);
     matchOverlay.append(matchCode, matchStatus, matchActions);
@@ -784,9 +1130,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const matchInfoRail = document.createElement("aside");
     matchInfoRail.className = "experience-match__rail experience-match__rail--info";
     matchInfoRail.innerHTML = `
-      <p class="experience-kicker">Sala</p>
-      <h3>BOMBA PVP</h3>
-      <p class="experience-match__rail-copy">Acompanhe quem esta jogando e mantenha os comandos importantes sempre a vista.</p>
+      <p class="experience-kicker">${copy.match.infoKicker}</p>
+      <h3>${copy.match.infoTitle}</h3>
+      <p class="experience-match__rail-copy">${copy.match.infoCopy}</p>
     `;
 
     const matchRoster = document.createElement("div");
@@ -802,8 +1148,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const matchChatHeading = document.createElement("div");
     matchChatHeading.className = "experience-match__chat-heading";
     matchChatHeading.innerHTML = `
-      <p class="experience-kicker">Chat da sala</p>
-      <h3>Fale com quem esta jogando</h3>
+      <p class="experience-kicker">${copy.match.chatKicker}</p>
+      <h3>${copy.match.chatTitle}</h3>
     `;
 
     const matchChatLog = document.createElement("div");
@@ -816,13 +1162,13 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     matchChatInput.className = "experience-match__chat-input";
     matchChatInput.type = "text";
     matchChatInput.maxLength = 280;
-    matchChatInput.placeholder = "Escreva uma mensagem";
+    matchChatInput.placeholder = copy.match.chatPlaceholder;
     matchChatInput.autocomplete = "off";
 
     const matchChatSend = document.createElement("button");
     matchChatSend.className = "experience-button experience-button--primary";
     matchChatSend.type = "button";
-    matchChatSend.textContent = "Enviar";
+    matchChatSend.textContent = copy.match.send;
 
     matchChatComposer.append(matchChatInput, matchChatSend);
     matchChatRail.append(matchChatHeading, matchChatLog, matchChatComposer);
@@ -833,11 +1179,15 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const status = document.createElement("p");
     status.className = "experience-status";
 
-    shell.append(landing, lobbyList, setup, match, status);
+    shell.append(languageSwitcher, landing, feedbackDialog, lobbyList, setup, match, status);
     root.prepend(shell);
 
     return {
       shell,
+      languageSwitcher,
+      languageLabel,
+      languagePortugueseButton,
+      languageEnglishButton,
       screens: {
         landing,
         "lobby-list": lobbyList,
@@ -845,10 +1195,23 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         match,
       },
       landingMeta,
+      landingAccountTitle,
+      landingAccountValue,
+      landingAccountUsernameInput,
+      landingAccountPrimaryButton,
+      landingAccountSecondaryButton,
+      landingAccountHint,
       landingQuickMatchButton,
+      landingEndlessButton,
       landingBotMatchButton,
       landingLobbyButton,
+      landingFeedbackButton,
       landingRoster,
+      feedbackDialog,
+      feedbackTextarea,
+      feedbackSendButton,
+      feedbackCancelButton,
+      feedbackStatus,
       lobbyListBackButton,
       lobbyListCreateButton,
       lobbyListCount,
@@ -882,7 +1245,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   }
 
   private renderAll(): void {
+    this.renderLanguageSwitcher();
     this.renderLanding();
+    this.renderAccountPanel();
+    this.renderFeedbackDialog();
     this.renderLobbyList();
     this.renderCharacterSelector();
     this.renderSetup();
@@ -910,61 +1276,137 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     if (this.currentLobby?.status === "playing") {
       return "match";
     }
+    if (this.currentSessionState?.kind === "queueing-classic" || this.currentSessionState?.kind === "queueing-endless") {
+      return "setup";
+    }
     const appMode = this.app.getCurrentMode();
     if (appMode === "match" || appMode === "match-result") {
       return "match";
     }
-    if (this.currentLobby || this.quickMatchSearching || this.pendingAutoJoinRoom) {
+    if (this.currentLobby || this.quickMatchSearching || this.endlessMatchStarting || this.pendingAutoJoinRoom) {
       return "setup";
     }
     return this.idleScreen;
   }
 
+  private renderLanguageSwitcher(): void {
+    this.elements.languageLabel.textContent = this.translate("Idioma", "Language");
+    this.elements.languagePortugueseButton.textContent = this.copy.language.portuguese;
+    this.elements.languageEnglishButton.textContent = this.copy.language.english;
+    this.elements.languagePortugueseButton.dataset.active = this.language === "pt" ? "true" : "false";
+    this.elements.languageEnglishButton.dataset.active = this.language === "en" ? "true" : "false";
+    this.elements.languagePortugueseButton.disabled = this.language === "pt";
+    this.elements.languageEnglishButton.disabled = this.language === "en";
+  }
+
+  private applySessionState(nextState: OnlineSessionState | null | undefined): void {
+    this.currentSessionState = nextState ?? null;
+    this.quickMatchSearching = nextState?.kind === "queueing-classic";
+    this.endlessMatchStarting = nextState?.kind === "queueing-endless";
+  }
+
   private renderLanding(): void {
-    const queuedLabel = this.quickMatchQueuedCount === 1
-      ? "1 sala aberta agora"
-      : `${this.quickMatchQueuedCount} salas abertas agora`;
+    const copy = this.copy;
+    const pendingEntry = this.quickMatchSearching || this.endlessMatchStarting;
+    const onlineActionsAvailable = this.realtimeReady;
+    const feedbackAvailable = !this.isLocalFrontendOnlyHost();
     this.elements.landingMeta.textContent = this.quickMatchSearching
-      ? "Procurando a melhor sala para voce entrar."
-      : `${queuedLabel} | ${this.onlineUsers} jogadores online`;
-    this.elements.landingQuickMatchButton.disabled = this.quickMatchSearching;
-    this.elements.landingBotMatchButton.disabled = this.quickMatchSearching;
+      ? copy.landing.searching
+      : this.endlessMatchStarting
+        ? this.translate("Entrando na arena infinita com jogadores e bots.", "Entering the endless arena with players and bots.")
+        : onlineActionsAvailable
+          ? copy.landing.meta(this.quickMatchQueuedCount, this.onlineUsers)
+          : this.isLocalFrontendOnlyHost()
+            ? this.translate("Conectando backend local. Contra bots continua funcionando.", "Connecting local backend. Bot matches still work.")
+            : this.translate("Online indisponivel no momento. Contra bots continua funcionando.", "Online is unavailable right now. Bot matches still work.");
+    this.elements.landingQuickMatchButton.disabled = pendingEntry || !onlineActionsAvailable;
+    this.elements.landingEndlessButton.disabled = pendingEntry || !onlineActionsAvailable;
+    this.elements.landingBotMatchButton.disabled = pendingEntry;
+    this.elements.landingLobbyButton.disabled = pendingEntry || !onlineActionsAvailable;
+    this.elements.landingFeedbackButton.disabled = !feedbackAvailable;
+    this.elements.landingFeedbackButton.hidden = !feedbackAvailable;
+    if (!feedbackAvailable && this.feedbackDialogOpen && !this.feedbackRequestPending) {
+      this.feedbackDialogOpen = false;
+    }
     this.elements.landingQuickMatchButton.textContent = this.quickMatchSearching
-      ? "Buscando partida..."
-      : "Partida rapida";
-    this.elements.landingRoster.replaceChildren(
-      ...this.roster.slice(0, 3).map((entry, index) => {
-        const card = document.createElement("div");
-        card.className = "experience-hero__portrait";
-        if (index === (this.preferredCharacterIndex % Math.max(1, this.roster.length))) {
-          card.dataset.selected = "true";
-        }
+      ? copy.landing.quickMatchBusy
+      : copy.landing.quickMatch;
+    this.elements.landingEndlessButton.textContent = this.endlessMatchStarting
+      ? this.translate("Entrando...", "Joining...")
+      : this.translate("Partida infinita", "Infinite match");
+    this.renderLandingCharacterPicker();
+  }
 
-        const image = document.createElement("img");
-        image.src = assetUrl(`/assets/characters/${entry.id}/south.png`);
-        image.alt = entry.name;
-        image.width = 128;
-        image.height = 128;
+  private renderFeedbackDialog(): void {
+    const copy = this.copy;
+    this.elements.feedbackDialog.hidden = !this.feedbackDialogOpen;
+    this.elements.feedbackTextarea.disabled = this.feedbackRequestPending;
+    this.elements.feedbackSendButton.disabled = this.feedbackRequestPending;
+    this.elements.feedbackCancelButton.disabled = this.feedbackRequestPending;
+    this.elements.feedbackSendButton.textContent = this.feedbackRequestPending
+      ? copy.landing.feedbackSending
+      : copy.landing.feedbackSend;
+    if (!this.feedbackDialogOpen) {
+      this.elements.feedbackStatus.textContent = "";
+    }
+  }
 
-        const label = document.createElement("span");
-        label.textContent = entry.name;
+  private renderAccountPanel(): void {
+    const account = this.currentAccount;
+    const loggedIn = Boolean(account);
+    const onlineActionsAvailable = this.realtimeReady;
+    this.elements.landingAccountValue.hidden = !loggedIn;
+    this.elements.landingAccountUsernameInput.hidden = loggedIn;
+    this.elements.landingAccountPrimaryButton.hidden = loggedIn;
+    this.elements.landingAccountSecondaryButton.hidden = !loggedIn;
+    this.elements.landingAccountUsernameInput.disabled = this.accountRequestPending || !onlineActionsAvailable;
+    this.elements.landingAccountPrimaryButton.disabled = this.accountRequestPending || loggedIn || !onlineActionsAvailable;
+    this.elements.landingAccountSecondaryButton.disabled = this.accountRequestPending || !onlineActionsAvailable;
+    this.elements.landingAccountUsernameInput.placeholder = this.translate("Seu username", "Your username");
 
-        card.append(image, label);
-        return card;
-      }),
-    );
+    if (loggedIn && account) {
+      this.elements.landingAccountTitle.textContent = this.translate("Conta ativa", "Active account");
+      this.elements.landingAccountValue.textContent = account.username;
+      this.elements.landingAccountPrimaryButton.textContent = this.translate("Conta salva", "Account saved");
+      this.elements.landingAccountHint.textContent = this.translate(
+        "Seu perfil ja fica reservado para progresso, personagens e skins quando essas partes entrarem no jogo.",
+        "Your profile is already reserved for progression, characters, and skins when those systems ship.",
+      );
+      return;
+    }
+
+    this.elements.landingAccountTitle.textContent = this.translate("Reserve seu nome em um clique", "Reserve your name in one click");
+    this.elements.landingAccountValue.textContent = "";
+    this.elements.landingAccountPrimaryButton.textContent = this.accountRequestPending
+      ? this.translate("Criando...", "Creating...")
+      : this.translate("Criar conta", "Create account");
+    this.elements.landingAccountHint.textContent = onlineActionsAvailable
+      ? this.translate(
+        "Continuar como convidado ainda funciona. A conta so adiciona um perfil pessoal para progresso futuro.",
+        "Continuing as guest still works. The account only adds a personal profile for future progression.",
+      )
+      : this.isLocalFrontendOnlyHost()
+        ? this.translate(
+          "Seu perfil libera assim que o backend local terminar de conectar.",
+          "Your profile becomes available as soon as the local backend finishes connecting.",
+        )
+        : this.translate(
+          "Conta e progresso online ficam disponiveis quando o backend local estiver ativo.",
+          "Account and online progression become available when the local backend is active.",
+        );
   }
 
   private renderLobbyList(): void {
+    const copy = this.copy;
     this.elements.lobbyListCount.textContent = this.lobbies.length === 0
-      ? "Nenhum lobby aberto no momento."
-      : `${this.lobbies.length} lobbies publicos disponiveis`;
+      ? copy.lobbies.emptyCount
+      : copy.lobbies.count(this.lobbies.length);
     this.elements.lobbyListList.replaceChildren();
 
     if (this.lobbies.length === 0) {
       const empty = document.createElement("div");
       empty.className = "experience-room-list__empty";
-      empty.textContent = "Nenhuma sala aberta agora. Crie um lobby novo ou volte para partida rapida.";
+      empty.textContent = copy.lobbies.emptyBody;
       this.elements.lobbyListList.appendChild(empty);
       return;
     }
@@ -981,22 +1423,22 @@ export class OnlineSessionClient implements OnlineSessionBridge {
           payload: { occupantCount: lobby.occupantCount },
         });
         if (!this.send({ type: "join-lobby", roomCode: lobby.roomCode })) {
-          this.setStatus("Nao foi possivel entrar no lobby agora.");
+          this.setStatus(copy.lobbies.joinUnavailable);
           return;
         }
         this.renderAll();
-        this.setStatus(`Entrando em ${lobby.title}...`);
+        this.setStatus(copy.lobbies.entering(this.getLobbyDisplayTitle(lobby)));
       });
 
       const title = document.createElement("strong");
       title.textContent = this.getLobbyDisplayTitle(lobby);
 
       const meta = document.createElement("span");
-      meta.textContent = `${lobby.roomCode} | ${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} jogadores`;
+      meta.textContent = copy.setup.roomMeta(lobby.roomCode, lobby.occupantCount, LOBBY_MAX_PLAYERS);
 
       const status = document.createElement("span");
       status.className = "experience-room-card__status";
-      status.textContent = lobby.status === "playing" ? "Ao vivo" : "Pronto para entrar";
+      status.textContent = lobby.status === "playing" ? copy.lobbies.roomStatusLive : copy.lobbies.roomStatusOpen;
 
       const occupants = document.createElement("div");
       occupants.className = "experience-room-card__occupants";
@@ -1005,7 +1447,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
           const seat = lobby.seats[playerId];
           const pill = document.createElement("span");
           pill.className = "experience-room-card__occupant";
-          pill.textContent = seat.clientId ? `P${playerId}` : `P${playerId} livre`;
+          pill.textContent = seat.clientId ? (seat.displayName || copy.lobbies.filledSeat(playerId)) : copy.lobbies.freeSeat(playerId);
           if (seat.clientId) {
             pill.dataset.filled = "true";
           }
@@ -1019,69 +1461,96 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   }
 
   private renderSetup(): void {
+    const copy = this.copy;
     const lobby = this.currentLobby;
     this.elements.setupCopyButton.hidden = !lobby;
     this.elements.setupLeaveButton.hidden = !lobby;
-    this.elements.setupBackButton.textContent = lobby ? "Inicio" : "Voltar";
+    this.elements.setupBackButton.textContent = lobby ? copy.common.home : copy.common.back;
 
     if (!lobby) {
-      this.elements.setupEyebrow.textContent = this.quickMatchSearching ? "Partida rapida" : "Entrando no lobby";
-      this.elements.setupTitle.textContent = this.quickMatchSearching ? "Buscando sala" : "Carregando sala";
-      this.elements.setupDescription.textContent = "Escolha seu bomber enquanto preparamos a proxima arena.";
+      this.elements.setupEyebrow.textContent = this.quickMatchSearching
+        ? copy.setup.kickerQuickMatch
+        : this.endlessMatchStarting
+          ? this.translate("Partida infinita", "Infinite match")
+          : copy.setup.kickerLoading;
+      this.elements.setupTitle.textContent = this.quickMatchSearching
+        ? copy.setup.titleQuickMatch
+        : this.endlessMatchStarting
+          ? this.translate("Entrando na arena", "Joining arena")
+          : copy.setup.titleLoading;
+      this.elements.setupDescription.textContent = copy.setup.loadingDescription;
       this.elements.setupRoomMeta.textContent = this.quickMatchSearching
-        ? "Voce entra automaticamente na primeira vaga livre."
-        : "Reconectando ou entrando por convite.";
+        ? copy.setup.loadingMetaQuickMatch
+        : this.endlessMatchStarting
+          ? this.translate(
+            "Essa sala nunca para. Humanos assumem vagas de bots automaticamente.",
+            "This room never stops. Humans automatically take over bot seats.",
+          )
+          : copy.setup.loadingMetaInvite;
       this.elements.setupSeatStrip.replaceChildren(this.buildSeatStripPlaceholder());
-      this.renderPresenceList(this.quickMatchSearching);
-      this.elements.setupPrimaryButton.textContent = this.quickMatchSearching ? "Buscando..." : "Aguardando...";
+      this.renderPresenceList(this.quickMatchSearching || this.endlessMatchStarting);
+      this.elements.setupPrimaryButton.textContent = this.quickMatchSearching || this.endlessMatchStarting
+        ? this.translate("Entrando...", "Joining...")
+        : copy.setup.loadingPrimaryWaiting;
       this.elements.setupPrimaryButton.disabled = true;
-      this.elements.setupPrimaryHint.textContent = "Os comandos abaixo ja funcionam assim que a sala abrir.";
+      this.elements.setupPrimaryHint.textContent = copy.setup.loadingHint;
       return;
     }
 
     const selfSeatId = lobby.selfSeat;
     const selfSeat = selfSeatId ? lobby.seats[selfSeatId] : null;
-    this.elements.setupEyebrow.textContent = lobby.status === "playing" ? "Partida ao vivo" : "Setup da sala";
+    const isMatchmakingLobby = lobby.roomKind === "matchmaking";
+    this.elements.setupEyebrow.textContent = lobby.status === "playing"
+      ? copy.setup.kickerLive
+      : isMatchmakingLobby
+        ? copy.setup.kickerQuickMatch
+        : copy.setup.kickerRoom;
     this.elements.setupTitle.textContent = this.getLobbyDisplayTitle(lobby);
-    this.elements.setupDescription.textContent = "Escolha seu personagem e entre na partida sem atrito.";
-    this.elements.setupRoomMeta.textContent = `${lobby.roomCode} | ${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} jogadores`;
+    this.elements.setupDescription.textContent = isMatchmakingLobby
+      ? this.translate(
+        "Voce entrou na fila classica. Assim que mais gente chegar, a partida comeca pelas regras normais.",
+        "You entered the classic queue. As soon as more people arrive, the match starts with the standard rules.",
+      )
+      : copy.setup.description;
+    this.elements.setupRoomMeta.textContent = copy.setup.roomMeta(lobby.roomCode, lobby.occupantCount, LOBBY_MAX_PLAYERS);
     this.elements.setupSeatStrip.replaceChildren(...this.buildSeatStrip(lobby));
     this.renderPresenceList(lobby.status === "open" && lobby.occupantCount < LOBBY_MAX_PLAYERS);
 
     if (!selfSeatId) {
       const firstFreeSeat = this.getFirstAvailableSeat(lobby);
       this.elements.setupPrimaryButton.textContent = firstFreeSeat
-        ? `Entrar na vaga P${firstFreeSeat}`
-        : "Sala cheia";
+        ? copy.setup.enterSeat(firstFreeSeat)
+        : copy.setup.roomFull;
       this.elements.setupPrimaryButton.disabled = !firstFreeSeat;
       this.elements.setupPrimaryHint.textContent = firstFreeSeat
-        ? "A entrada na vaga livre acontece com um clique."
-        : "A sala ficou cheia antes da sua entrada.";
+        ? copy.setup.enterHint
+        : copy.setup.roomFilledBeforeEnter;
       return;
     }
 
     if (selfSeat?.ready) {
-      this.elements.setupPrimaryButton.textContent = "Pronto";
+      this.elements.setupPrimaryButton.textContent = copy.common.ready;
       this.elements.setupPrimaryButton.disabled = true;
       this.elements.setupPrimaryHint.textContent = lobby.occupantCount < 2
-        ? "Sua vaga esta pronta. Falta mais gente para iniciar."
-        : "Tudo certo. A partida comeca assim que o servidor iniciar o match.";
+        ? copy.setup.readyDisabledSolo
+        : copy.setup.readyDisabledQueue;
       return;
     }
 
-    this.elements.setupPrimaryButton.textContent = "Pronto para jogar";
+    this.elements.setupPrimaryButton.textContent = copy.setup.readyButton;
     this.elements.setupPrimaryButton.disabled = false;
-    this.elements.setupPrimaryHint.textContent = "Seu personagem escolhido ja sera usado na vaga atual.";
+    this.elements.setupPrimaryHint.textContent = copy.setup.readyHint;
   }
 
   private buildSeatStripPlaceholder(): HTMLElement {
     const placeholder = document.createElement("div");
     placeholder.className = "experience-seat-pill";
-    placeholder.textContent = "Preparando sala...";
+    placeholder.textContent = this.copy.setup.preparingRoom;
     return placeholder;
   }
 
   private buildSeatStrip(lobby: LobbySummary): HTMLElement[] {
+    const copy = this.copy;
     return ALL_PLAYER_IDS.map((playerId) => {
       const seat = lobby.seats[playerId];
       const pill = document.createElement("div");
@@ -1092,13 +1561,18 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       if (seat.clientId && seat.clientId === this.clientId) {
         pill.dataset.self = "true";
       }
-      const occupant = seat.clientId ? (seat.displayName || `P${playerId}`) : "Livre";
+      const occupant = seat.occupantType === "bot"
+        ? (seat.displayName || "BOT")
+        : seat.clientId
+          ? (seat.displayName || copy.lobbies.filledSeat(playerId))
+          : this.translate("Livre", "Open");
       pill.textContent = `P${playerId} | ${occupant}`;
       return pill;
     });
   }
 
   private renderPresenceList(showPresence: boolean): void {
+    const copy = this.copy;
     this.elements.setupPresenceList.replaceChildren();
     this.elements.setupPresenceList.hidden = !showPresence;
     if (!showPresence) {
@@ -1110,10 +1584,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     const title = document.createElement("span");
     title.className = "experience-controls__label";
-    title.textContent = "Jogadores online";
+    title.textContent = copy.presence.title;
 
     const meta = document.createElement("strong");
-    meta.textContent = `${this.onlineUsers} conectados agora`;
+    meta.textContent = copy.presence.count(this.onlineUsers);
 
     heading.append(title, meta);
 
@@ -1129,10 +1603,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         }
 
         const playerId = document.createElement("strong");
-        playerId.textContent = this.formatPresenceLabel(entry.clientId);
+        playerId.textContent = this.formatPresenceLabel(entry);
 
         const status = document.createElement("span");
-        status.textContent = entry.clientId === this.clientId ? "Voce esta online" : "Disponivel para entrar";
+        status.textContent = entry.clientId === this.clientId ? copy.presence.self : copy.presence.available;
 
         item.append(playerId, status);
         return item;
@@ -1143,72 +1617,197 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   }
 
   private renderCharacterSelector(): void {
+    const copy = this.copy;
     const selected = this.getCharacter(this.preferredCharacterIndex);
-    this.elements.selectorPortrait.src = assetUrl(`/assets/characters/${selected.id}/south.png`);
+    this.renderPortrait(this.elements.selectorPortrait, selected);
     this.elements.selectorName.textContent = selected.name;
 
     const lobby = this.currentLobby;
     if (lobby?.selfSeat) {
       const selfSeat = lobby.seats[lobby.selfSeat];
       this.elements.selectorNote.textContent = selfSeat.ready
-        ? "Voce ja esta pronto. O personagem continua aplicado nessa sala."
-        : "Esse personagem sera aplicado assim que voce ficar pronto.";
+        ? copy.character.readyNote
+        : copy.character.pendingNote;
     } else if (this.quickMatchSearching) {
-      this.elements.selectorNote.textContent = "Seu bomber entra automaticamente na primeira vaga livre encontrada.";
+      this.elements.selectorNote.textContent = this.translate(
+        "Seu bomber entra automaticamente na primeira vaga livre encontrada.",
+        "Your bomber automatically joins the first open seat that is found.",
+      );
+    } else if (this.endlessMatchStarting) {
+      this.elements.selectorNote.textContent = this.translate(
+        "Voce entra na sala especial infinita e assume uma vaga de bot.",
+        "You enter the special endless room and take over a bot seat.",
+      );
     } else {
-      this.elements.selectorNote.textContent = "Escolha agora e entre no setup com tudo explicado na mesma tela.";
+      this.elements.selectorNote.textContent = copy.character.defaultNote;
     }
 
     this.elements.selectorGrid.replaceChildren(
-      ...this.roster.map((entry, index) => {
-        const option = document.createElement("button");
-        option.type = "button";
-        option.className = "experience-character-option";
-        if (index === this.preferredCharacterIndex) {
-          option.dataset.selected = "true";
-        }
+      ...this.roster.map((entry, index) => this.createCharacterOptionButton(
+        entry,
+        index,
+        entry.defaultSlot ? copy.character.defaultSlot(entry.defaultSlot) : copy.character.selectable,
+      )),
+    );
+  }
 
-        const portrait = document.createElement("img");
-        portrait.className = "experience-character-option__portrait";
-        portrait.alt = entry.name;
-        portrait.src = assetUrl(`/assets/characters/${entry.id}/south.png`);
-        portrait.width = 56;
-        portrait.height = 56;
+  private renderLandingCharacterPicker(): void {
+    const selected = this.getCharacter(this.preferredCharacterIndex);
+    const shell = document.createElement("div");
+    shell.className = "experience-landing-picker";
 
-        const copy = document.createElement("div");
-        copy.className = "experience-character-option__copy";
+    const header = document.createElement("div");
+    header.className = "experience-landing-picker__header";
 
-        const name = document.createElement("strong");
-        name.textContent = entry.name;
+    const titleWrap = document.createElement("div");
+    titleWrap.className = "experience-landing-picker__title";
 
-        const hint = document.createElement("span");
-        hint.textContent = entry.defaultSlot ? `Default P${entry.defaultSlot}` : "Selecionavel";
+    const kicker = document.createElement("p");
+    kicker.className = "experience-kicker";
+    kicker.textContent = this.translate("Bomber selecionado", "Selected bomber");
 
-        copy.append(name, hint);
-        option.append(portrait, copy);
-        option.addEventListener("click", () => {
-          this.updatePreferredCharacter(index);
-        });
-        return option;
+    const title = document.createElement("strong");
+    title.textContent = selected.name;
+
+    const note = document.createElement("p");
+    note.className = "experience-hero__meta";
+    note.textContent = this.translate(
+      "Sua escolha ja vale para partida rapida, infinita e contra bots.",
+      "Your choice already applies to quick match, endless, and bot matches.",
+    );
+
+    titleWrap.append(kicker, title, note);
+
+    const nav = document.createElement("div");
+    nav.className = "experience-landing-picker__nav";
+
+    const previousButton = document.createElement("button");
+    previousButton.type = "button";
+    previousButton.className = "experience-button experience-button--ghost";
+    previousButton.textContent = this.translate("Anterior", "Previous");
+    previousButton.addEventListener("click", () => {
+      this.updatePreferredCharacter(this.preferredCharacterIndex - 1);
+    });
+
+    const nextButton = document.createElement("button");
+    nextButton.type = "button";
+    nextButton.className = "experience-button experience-button--ghost";
+    nextButton.textContent = this.translate("Proximo", "Next");
+    nextButton.addEventListener("click", () => {
+      this.updatePreferredCharacter(this.preferredCharacterIndex + 1);
+    });
+
+    nav.append(previousButton, nextButton);
+    header.append(titleWrap, nav);
+
+    const focus = document.createElement("div");
+    focus.className = "experience-character-summary experience-character-summary--landing";
+
+    const portrait = this.createPortraitCanvas("experience-character-summary__portrait", 144, selected.name);
+    this.renderPortrait(portrait, selected);
+
+    const focusCopy = document.createElement("div");
+    focusCopy.className = "experience-character-summary__copy";
+
+    const focusName = document.createElement("p");
+    focusName.className = "experience-character-summary__name";
+    focusName.textContent = selected.name;
+
+    const focusHint = document.createElement("p");
+    focusHint.className = "experience-character-summary__note";
+    focusHint.textContent = this.translate(
+      "Troque aqui mesmo antes de entrar. O jogo abre ja com esse personagem preparado.",
+      "Switch here before entering. The game opens with this character already prepared.",
+    );
+
+    focusCopy.append(focusName, focusHint);
+    focus.append(portrait, focusCopy);
+
+    const grid = document.createElement("div");
+    grid.className = "experience-character-grid experience-character-grid--landing";
+    grid.append(
+      ...this.getLandingCharacterWindow(6).map((index) => {
+        const entry = this.getCharacter(index);
+        return this.createCharacterOptionButton(
+          entry,
+          index,
+          index === this.preferredCharacterIndex
+            ? this.translate("Selecionado agora", "Selected now")
+            : this.translate("Clique para usar", "Click to use"),
+        );
       }),
     );
+
+    shell.append(header, focus, grid);
+    this.elements.landingRoster.replaceChildren(shell);
+  }
+
+  private getLandingCharacterWindow(maxItems: number): number[] {
+    if (this.roster.length === 0) {
+      return [];
+    }
+
+    const desiredCount = Math.min(Math.max(1, maxItems), this.roster.length);
+    const startIndex = this.preferredCharacterIndex - Math.floor(desiredCount / 2);
+    const indices: number[] = [];
+    const seen = new Set<number>();
+
+    for (let offset = 0; indices.length < desiredCount && offset < this.roster.length * 2; offset += 1) {
+      const index = this.wrapCharacterIndex(startIndex + offset);
+      if (seen.has(index)) {
+        continue;
+      }
+      seen.add(index);
+      indices.push(index);
+    }
+
+    return indices;
+  }
+
+  private createCharacterOptionButton(entry: CharacterRosterEntry, index: number, hintText: string): HTMLButtonElement {
+    const option = document.createElement("button");
+    option.type = "button";
+    option.className = "experience-character-option";
+    if (index === this.preferredCharacterIndex) {
+      option.dataset.selected = "true";
+    }
+
+    const portrait = this.createPortraitCanvas("experience-character-option__portrait", 56, entry.name);
+    this.renderPortrait(portrait, entry);
+
+    const copy = document.createElement("div");
+    copy.className = "experience-character-option__copy";
+
+    const name = document.createElement("strong");
+    name.textContent = entry.name;
+
+    const hint = document.createElement("span");
+    hint.textContent = hintText;
+
+    copy.append(name, hint);
+    option.append(portrait, copy);
+    option.addEventListener("click", () => {
+      this.updatePreferredCharacter(index);
+    });
+    return option;
   }
 
   private updatePreferredCharacter(nextIndex: number): void {
     this.preferredCharacterIndex = this.wrapCharacterIndex(nextIndex);
     this.persistPreferredCharacterIndex();
     this.app.setOfflinePreferredCharacter(this.preferredCharacterIndex);
-    this.telemetry.track("character_selected", {
-      context: { roomCode: this.currentLobby?.roomCode ?? null, screen: this.getScreen() },
-      payload: {
-        characterIndex: this.preferredCharacterIndex,
-        characterId: this.getCharacter(this.preferredCharacterIndex).id,
-      },
-    });
+      this.telemetry.track("character_selected", {
+        context: { roomCode: this.currentLobby?.roomCode ?? null, screen: this.getScreen() },
+        payload: {
+          characterIndex: this.preferredCharacterIndex,
+          authoritativeCharacterIndex: this.getPreferredAuthoritativeCharacterIndex(),
+          characterId: this.getCharacter(this.preferredCharacterIndex).id,
+        },
+      });
     this.renderAll();
 
     if (this.currentLobby?.selfSeat && this.currentLobby.status === "open") {
-      this.send({ type: "set-character", characterIndex: this.preferredCharacterIndex });
+      this.send({ type: "set-character", characterIndex: this.getPreferredAuthoritativeCharacterIndex() });
     }
   }
 
@@ -1221,29 +1820,48 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     if (!seat) {
       return;
     }
-    this.preferredCharacterIndex = this.wrapCharacterIndex(seat.characterIndex);
+    this.preferredCharacterIndex = this.findRosterIndexByAuthoritativeCharacterIndex(seat.characterIndex);
     this.persistPreferredCharacterIndex();
     this.app.setOfflinePreferredCharacter(this.preferredCharacterIndex);
   }
 
   private syncPreferredCharacterFromMatchConfig(config: MatchStartConfig): void {
-    const selected = config.characterSelections[config.localPlayerId] ?? this.preferredCharacterIndex;
-    this.preferredCharacterIndex = this.wrapCharacterIndex(selected);
+    const selected = config.characterSelections[config.localPlayerId] ?? this.getPreferredAuthoritativeCharacterIndex();
+    this.preferredCharacterIndex = this.findRosterIndexByAuthoritativeCharacterIndex(selected);
     this.persistPreferredCharacterIndex();
     this.app.setOfflinePreferredCharacter(this.preferredCharacterIndex);
   }
 
   private renderMatch(): void {
+    const copy = this.copy;
     const lobby = this.currentLobby;
-    this.elements.matchCode.textContent = lobby ? `Sala ${lobby.roomCode}` : "Arena";
+    this.elements.matchCode.textContent = lobby
+      ? lobby.roomMode === "endless"
+        ? this.translate("Modo infinito", "Endless mode")
+        : lobby.roomKind === "matchmaking"
+          ? copy.setup.kickerQuickMatch
+          : `${copy.common.room} ${lobby.roomCode}`
+      : copy.common.arena;
+    const botCount = lobby
+      ? ALL_PLAYER_IDS.filter((playerId) => lobby.seats[playerId].occupantType === "bot").length
+      : 0;
     this.elements.matchStatus.textContent = lobby
-      ? `${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} jogadores na partida`
-      : "Partida ao vivo";
+      ? lobby.roomMode === "endless"
+        ? this.translate(
+          `${lobby.occupantCount} jogadores + ${botCount} bots`,
+          `${lobby.occupantCount} players + ${botCount} bots`,
+        )
+        : this.translate(
+          `${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} jogadores na partida`,
+          `${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} players in match`,
+        )
+      : copy.match.liveStatus;
     this.elements.matchCopyButton.disabled = !lobby;
     this.elements.matchLeaveButton.disabled = !lobby;
   }
 
   private renderMatchRoster(): void {
+    const copy = this.copy;
     const lobby = this.currentLobby;
     this.elements.matchRoster.replaceChildren();
     if (!lobby) {
@@ -1257,12 +1875,19 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         if (seat.ready) {
           card.dataset.ready = "true";
         }
+        if (seat.occupantType === "bot") {
+          card.dataset.bot = "true";
+        }
 
         const title = document.createElement("strong");
         title.textContent = `P${playerId}`;
 
         const body = document.createElement("span");
-        body.textContent = seat.clientId ? (seat.displayName || "Jogador conectado") : "Vaga livre";
+        body.textContent = seat.occupantType === "bot"
+          ? (seat.displayName || "BOT")
+          : seat.clientId
+            ? (seat.displayName || copy.match.seatConnected)
+            : copy.match.seatOpen;
 
         card.append(title, body);
         return card;
@@ -1271,12 +1896,13 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   }
 
   private renderMatchChat(): void {
+    const copy = this.copy;
     this.elements.matchChatLog.replaceChildren();
     const entries = this.currentLobby?.chat ?? [];
     if (entries.length === 0) {
       const empty = document.createElement("div");
       empty.className = "experience-match__chat-empty";
-      empty.textContent = "O chat aparece aqui durante a sala e a partida.";
+      empty.textContent = copy.match.chatEmpty;
       this.elements.matchChatLog.appendChild(empty);
     } else {
       for (const entry of entries.slice(-24)) {
@@ -1319,17 +1945,193 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         return left.clientId.localeCompare(right.clientId);
       });
     }
-    return this.clientId ? [{ clientId: this.clientId }] : [];
+    return this.clientId ? [{ clientId: this.clientId, displayName: null }] : [];
   }
 
-  private formatPresenceLabel(clientId: string): string {
+  private formatPresenceLabel(entry: OnlinePresenceEntry): string {
+    if (entry.displayName) {
+      return entry.displayName;
+    }
+    const clientId = entry.clientId;
     const compact = clientId.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
     const suffix = compact.slice(-4) || compact;
-    return `ID ${suffix}`;
+    return this.copy.presence.id(suffix);
+  }
+
+  private async refreshAccountState(): Promise<void> {
+    try {
+      const response = await fetch("/api/me", {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        return;
+      }
+      const payload = await response.json() as { account?: PlayerAccount | null };
+      this.currentAccount = payload.account ?? null;
+      this.renderAll();
+    } catch {
+      // Account state is optional and must not block gameplay.
+    }
+  }
+
+  private async createQuickAccount(): Promise<void> {
+    if (this.accountRequestPending || this.currentAccount) {
+      return;
+    }
+    const validation = validateUsername(this.elements.landingAccountUsernameInput.value);
+    if (!validation.ok) {
+      this.setStatus(validation.message ?? this.translate("Username invalido.", "Invalid username."));
+      return;
+    }
+
+    this.accountRequestPending = true;
+    this.renderAll();
+    try {
+      const response = await fetch("/api/account/quick-create", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ username: validation.username }),
+      });
+      const payload = await response.json() as { account?: PlayerAccount | null; error?: string };
+      if (!response.ok) {
+        this.setStatus(payload.error ?? this.translate("Nao foi possivel criar sua conta agora.", "Could not create your account right now."));
+        return;
+      }
+      this.currentAccount = payload.account ?? null;
+      this.elements.landingAccountUsernameInput.value = "";
+      if (this.currentAccount) {
+        this.setStatus(this.translate(`Conta ${this.currentAccount.username} criada.`, `Account ${this.currentAccount.username} created.`));
+      }
+      this.refreshConnectionForAccountChange();
+    } catch {
+      this.setStatus(this.translate("Erro ao criar a conta.", "Error creating account."));
+    } finally {
+      this.accountRequestPending = false;
+      this.renderAll();
+    }
+  }
+
+  private async logoutAccount(): Promise<void> {
+    if (this.accountRequestPending || !this.currentAccount) {
+      return;
+    }
+    this.accountRequestPending = true;
+    this.renderAll();
+    try {
+      const response = await fetch("/api/logout", {
+        method: "POST",
+      });
+      if (!response.ok) {
+        this.setStatus(this.translate("Nao foi possivel sair da conta agora.", "Could not log out right now."));
+        return;
+      }
+      this.currentAccount = null;
+      this.setStatus(this.translate(
+        "Conta desconectada. Voce pode continuar jogando como convidado.",
+        "Account disconnected. You can keep playing as a guest.",
+      ));
+      this.refreshConnectionForAccountChange();
+    } catch {
+      this.setStatus(this.translate("Erro ao sair da conta.", "Error logging out."));
+    } finally {
+      this.accountRequestPending = false;
+      this.renderAll();
+    }
+  }
+
+  private openFeedbackDialog(): void {
+    if (this.feedbackDialogOpen) {
+      this.elements.feedbackTextarea.focus();
+      return;
+    }
+    this.feedbackDialogOpen = true;
+    this.feedbackRequestPending = false;
+    this.telemetry.track("feedback_opened", {
+      context: {
+        screen: this.getScreen(),
+        roomCode: this.currentLobby?.roomCode ?? null,
+      },
+    });
+    this.renderAll();
+    window.setTimeout(() => {
+      this.elements.feedbackTextarea.focus();
+      this.elements.feedbackTextarea.select();
+    }, 0);
+  }
+
+  private closeFeedbackDialog(): void {
+    if (this.feedbackRequestPending) {
+      return;
+    }
+    this.feedbackDialogOpen = false;
+    this.renderAll();
+  }
+
+  private async submitFeedback(): Promise<void> {
+    if (!this.feedbackDialogOpen || this.feedbackRequestPending) {
+      return;
+    }
+
+    const message = this.elements.feedbackTextarea.value.trim();
+    if (!message) {
+      this.elements.feedbackStatus.textContent = this.translate("Escreva alguma coisa antes de enviar.", "Write something before sending.");
+      return;
+    }
+
+    this.feedbackRequestPending = true;
+    this.elements.feedbackStatus.textContent = "";
+    this.renderAll();
+    try {
+      const response = await fetch("/api/feedback", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          message,
+          screen: this.getScreen(),
+          roomCode: this.currentLobby?.roomCode ?? null,
+        }),
+      });
+      const payload = await response.json().catch(() => ({} as { error?: string }));
+      if (!response.ok) {
+        this.elements.feedbackStatus.textContent = payload.error ?? this.copy.landing.feedbackError;
+        return;
+      }
+
+      this.telemetry.track("feedback_submitted", {
+        context: {
+          screen: this.getScreen(),
+          roomCode: this.currentLobby?.roomCode ?? null,
+        },
+        payload: { messageLength: message.length },
+      });
+      this.elements.feedbackTextarea.value = "";
+      this.feedbackDialogOpen = false;
+      this.setStatus(this.copy.landing.feedbackThanks);
+      this.renderAll();
+    } catch {
+      this.elements.feedbackStatus.textContent = this.copy.landing.feedbackError;
+    } finally {
+      this.feedbackRequestPending = false;
+      this.renderAll();
+    }
+  }
+
+  private refreshConnectionForAccountChange(): void {
+    if (!this.socket || this.socket.readyState === WebSocket.CLOSED) {
+      this.connect();
+      return;
+    }
+    this.reconnectingForAccountRefresh = true;
+    this.socket.close();
   }
 
   private mountCanvas(root: HTMLElement): void {
-    const canvas = root.querySelector("canvas");
+    const canvas = root.querySelector('canvas[data-game-canvas="true"]');
     if (!canvas || canvas.parentElement === this.elements.matchViewport) {
       return;
     }
@@ -1363,6 +2165,22 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
   private getLobbyDisplayTitle(lobby: LobbySummary | LobbyState): string {
     return lobby.title === "BOMBA" ? DEFAULT_LOBBY_TITLE : lobby.title;
+  }
+
+  private getPreferredAuthoritativeCharacterIndex(): number {
+    return this.getAuthoritativeCharacterIndex(this.preferredCharacterIndex);
+  }
+
+  private getAuthoritativeCharacterIndex(rosterIndex: number): number {
+    const entry = this.getCharacter(rosterIndex);
+    return typeof entry.selectionIndex === "number"
+      ? entry.selectionIndex
+      : this.wrapCharacterIndex(rosterIndex);
+  }
+
+  private findRosterIndexByAuthoritativeCharacterIndex(authoritativeIndex: number): number {
+    const rosterIndex = this.roster.findIndex((entry) => entry.selectionIndex === authoritativeIndex);
+    return rosterIndex >= 0 ? rosterIndex : this.wrapCharacterIndex(authoritativeIndex);
   }
 
   private wrapCharacterIndex(index: number): number {
@@ -1401,8 +2219,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     return true;
   }
 
-  private buildInviteUrl(roomCode: string): string {
-    return this.telemetry.buildInviteUrl(roomCode);
+  private isLocalFrontendOnlyHost(): boolean {
+    return (
+      window.location.hostname === "127.0.0.1"
+      || window.location.hostname === "localhost"
+    ) && window.location.port !== "8787";
   }
 
   private maybeTrackMatchEnded(matchWinner: PlayerId | null, roundNumber: number): void {
@@ -1421,21 +2242,19 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   }
 
   private updateLocation(roomCode: string | null): void {
-    const url = new URL(window.location.href);
-    if (roomCode) {
-      url.searchParams.set("room", roomCode);
-    } else {
-      url.searchParams.delete("room");
-    }
+    const url = buildLocalizedUrl(this.language);
+    void roomCode;
+    url.searchParams.delete("room");
     window.history.replaceState({}, "", url);
   }
 
-  private readRoomFromLocation(): string | null {
-    const roomCode = new URL(window.location.href).searchParams.get("room");
-    if (!roomCode) {
-      return null;
+  private syncLanguageUrl(): void {
+    const localizedUrl = buildLocalizedUrl(this.language);
+    localizedUrl.searchParams.delete("room");
+    if (localizedUrl.toString() === window.location.href) {
+      return;
     }
-    const normalized = roomCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
-    return normalized || null;
+    window.history.replaceState({}, "", localizedUrl);
   }
+
 }

@@ -9,10 +9,15 @@ import {
 } from "../../core/config";
 import { tileKey } from "../../game/arena";
 import type { SkillContext } from "./shared";
+import { CROCODILO_SKILL_COOLDOWN_MS } from "./skill-registry";
 
-export const CROCODILO_CHARACTER_ID = "d083c3dc-7162-4391-8628-6adde0b8d8d6";
+export {
+  CROCODILO_CHARACTER_ID,
+  CROCODILO_SKILL_COOLDOWN_MS,
+} from "./skill-registry";
+
 export const CROCODILO_SKILL_CHANNEL_MS = 1_600;
-export const CROCODILO_SKILL_COOLDOWN_MS = 10_000;
+export const CROCODILO_SKILL_RELEASE_MS = 240;
 export const CROCODILO_SURGE_DURATION_MS = 720;
 export const CROCODILO_SURGE_RANGE = 2;
 
@@ -52,6 +57,16 @@ export function updateCrocodiloEmeraldSurgeChannel(
 ): boolean {
   if (player.skill.id !== "crocodilo-emerald-surge") {
     return false;
+  }
+  if (player.skill.phase === "releasing") {
+    player.velocity.x = 0;
+    player.velocity.y = 0;
+    player.skill.channelRemainingMs = Math.max(0, player.skill.channelRemainingMs - deltaMs);
+    player.skill.castElapsedMs += deltaMs;
+    if (player.skill.channelRemainingMs <= 0) {
+      finishCrocodiloEmeraldSurgeRelease(player);
+    }
+    return true;
   }
   player.velocity.x = 0;
   player.velocity.y = 0;
@@ -119,11 +134,26 @@ export function fireCrocodiloEmeraldSurge(player: PlayerState, context: SkillCon
     if (!hitKeys.has(tileKey(target.tile.x, target.tile.y))) {
       continue;
     }
-    context.tryAbsorbInstantHit(target);
+    context.tryAbsorbInstantHit(target, player.id);
   }
 
   player.direction = direction;
   player.lastMoveDirection = direction;
+  player.velocity.x = 0;
+  player.velocity.y = 0;
+  player.skill.phase = "releasing";
+  player.skill.channelRemainingMs = CROCODILO_SKILL_RELEASE_MS;
+  player.skill.cooldownRemainingMs = 0;
+  player.skill.castElapsedMs = 0;
+  player.skill.projectedPosition = null;
+  player.skill.projectedLastMoveDirection = direction;
+  context.soundManager.playOneShot("flames");
+}
+
+export function finishCrocodiloEmeraldSurgeRelease(player: PlayerState): void {
+  if (player.skill.id !== "crocodilo-emerald-surge") {
+    return;
+  }
   player.velocity.x = 0;
   player.velocity.y = 0;
   player.skill.phase = "cooldown";
@@ -132,7 +162,6 @@ export function fireCrocodiloEmeraldSurge(player: PlayerState, context: SkillCon
   player.skill.castElapsedMs = 0;
   player.skill.projectedPosition = null;
   player.skill.projectedLastMoveDirection = null;
-  context.soundManager.playOneShot("flames");
 }
 
 export function computeCrocodiloSurgeTiles(
@@ -160,4 +189,8 @@ export function computeCrocodiloSurgeTiles(
     }
   }
   return tiles;
+}
+
+export function isCrocodiloImmuneDuringChannel(player: PlayerState): boolean {
+  return player.skill.id === "crocodilo-emerald-surge" && player.skill.phase === "channeling";
 }

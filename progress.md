@@ -93,3 +93,41 @@ TODOs / sugestões:
 - Novo pacote do Nico agora tem rotações, `idle`, `walk` e `run` com livro visível nas principais direções. O `fireball` do PixelLab ficou inconsistente e foi deliberadamente desativado no jogo ao remover `cast-*` do Nico e marcar `animations.cast = false` no manifest.
 - Fallback do runtime do Nico durante channel agora prioriza `walk`, depois `idle`, depois `run`, evitando cair em `attack` antigo sem livro.
 - Validação pós-sync concluída com `npm run test:nico-ult`, `npm run test:online-skill-reconcile`, `npm run test:player-sprite`, `npm run build` e um smoke via `$WEB_GAME_CLIENT` em `output/web-game-nico-postsync/`.
+
+- Corrigido escape hatch do feedback no shell online: clique no backdrop agora fecha o modal, e o CTA de feedback fica oculto em hosts locais frontend-only (qualquer localhost/127.0.0.1 fora de :8787) para nao atrapalhar testes sem backend.
+- Status de conexao local tambem foi ampliado para preview/ports locais alem de 5173, orientando serve:online quando o backend online nao esta ativo.
+
+- Iniciado o trabalho de biblioteca de tilesets da arena com pesquisa dedicada em layouts de Bomberman e regras de legibilidade 2D. Novo material em docs/arena-tileset-research.md e configs/arena-theme-library.json.
+- Runtime agora suporta temas de arena por pasta via src/app/arena-theme-library.ts, sem mudar a lógica de gameplay; o tema pode ser escolhido por query string (?arenaTheme=verdant-ruins), com fallback seguro para o set padrão.
+- Assets atuais foram organizados em public/assets/tiles/themes/arcane-citadel/, e o candidato antigo do PixelLab foi preservado como variante navegável em public/assets/tiles/themes/verdant-ruins/.
+- Adicionado check de consistência 	ests/arena-theme-library-check.mjs para validar o catálogo e a presença física dos arquivos-base por tema.
+- PixelLab: job inicial enfileirado para skyfoundry-bastion com tile id defe7f7-b965-4422-8275-5606eff7e502; estado espelhado em output/arena-theme-jobs.json.
+
+TODOs / sugestões:
+- Rodar playtest visual comparando rcane-citadel e erdant-ruins para decidir se a variante verde mantém contraste suficiente contra chamas, danger overlay e pickups.
+- Assim que o job defe7f7-b965-4422-8275-5606eff7e502 concluir, revisar os PNGs e decidir se skyfoundry-bastion entra como terceiro tema integrado.- skyfoundry-bastion foi gerado no PixelLab (defe7f7-b965-4422-8275-5606eff7e502), revisado visualmente e promovido como terceiro tema integrado em public/assets/tiles/themes/skyfoundry-bastion/.
+- Capturas de comparação salvas em output/playwright/arena-default-theme.png, output/playwright/arena-verdant-theme.png e output/playwright/arena-skyfoundry-theme.png.- Tema padrão trocado para 	ournament-clean, renderizado proceduralmente com famílias de cor separadas: piso frio/neutro, parede estrutural escura, crate quente, e acentos reservados para spawn/portal.
+- src/app/arena-theme-library.ts, src/app/assets.ts e src/app/game-app.ts agora suportam enderMode por tema, permitindo misturar temas sprite e procedural.
+- Screenshot atual do novo visual salvo em output/playwright/arena-tournament-clean.png.
+- PixelLab crocodilo pack concluido em 2026-03-30 com reathing-idle, walk, unning-8-frames, ireball, cross-punch e alling-back-death para o personagem d083c3dc-7162-4391-8628-6adde0b8d8d6.
+- Rodado PIXELLAB_CHARACTER_IDS=d083c3dc-7162-4391-8628-6adde0b8d8d6 npm run sync:pixellab; manifest do crocodilo agora marca idle/walk/run/cast/attack/death = true e os frames foram copiados para public/assets/characters/d083c3dc-7162-4391-8628-6adde0b8d8d6/.
+- Validacao concluida com 
+pm run build, 
+pm run test:crocodilo-ult, 
+pm run test:online-skill-reconcile e 
+pm run test:player-sprite (o ultimo exigiu adicionar dataset ao fake canvas do harness).
+- Deploy Cloudflare concluido via 
+pm run deploy:cloudflare; versao ativa 1c7a59a-f76b-4245-a50e-39d2f066e23f, publicada em bombapvp.com e tambem em https://autowebgame-online.lucasplays2000.workers.dev .
+- Smoke live concluido em bombapvp.com com crocodilo e bot match visiveis na landing; artefatos em output/deploy-crocodilo-live/.
+
+
+- v0.1 consolidation pass completed on 2026-03-30.
+- Added README.md and PATCHNOTES.md as the official release docs for the main branch baseline.
+- Cleaned release hygiene by ignoring root tmp screenshots, exported remote HTML files, and local commit notes.
+- Validation completed with: npm run build, npm run compile:esm, node tests/matchmaking-session-state-check.mjs, node tests/online-character-selection-index-check.mjs, node tests/server-character-skill-mapping-check.mjs, node tests/character-skill-contract-check.mjs, node tests/online-skill-reconcile-check.mjs, node tests/bomb-hit-window-check.mjs, node tests/bomb-chain-reaction-check.mjs, node tests/shield-powerup-check.mjs, node tests/player-sprite-render-check.mjs, node tests/character-roster-manifest-sync-check.mjs, node tests/lobby-rules-check.mjs, node tests/online-four-player-check.mjs, node tests/crocodilo-ult-emerald-surge-check.mjs, node tests/nico-ult-arcane-beam-check.mjs.
+- Browser smoke completed through the local dev stack at http://127.0.0.1:5174 with screenshot output/web-game/shot-0.png showing the landing page, roster panel, quick match CTA, lobby CTA, endless CTA, and bot match CTA.
+- Test harness drift fixed: fake canvas objects used by release checks now include dataset, and the shield regression was updated to validate the current shield-charge/flame-guard mechanic directly instead of the removed shield-up pickup.
+
+TODOs / suggestions:
+- If more legacy canvas-based tests are brought back into the active release suite, audit them for the same dataset expectation introduced by GameApp canvas tagging.
+- Decide whether AgentHandoff.md should remain as a committed internal engineering note or be folded into README/developer docs later.

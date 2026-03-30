@@ -1,0 +1,172 @@
+{
+  "version": "1.0",
+  "defaultTheme": "tournament-clean",
+  "selectionQueryParam": "arenaTheme",
+  "sourceReferences": [
+    {
+      "label": "StrategyWiki - Super Bomberman Gameplay",
+      "url": "https://strategywiki.org/wiki/Super_Bomberman/Gameplay",
+      "insight": "Single-screen top-down play, soft blocks hiding powerups, and sudden-death wall closure reinforce that route comprehension is the core visual requirement."
+    },
+    {
+      "label": "Bomberman Wiki - Bomberman DS Battle Stage",
+      "url": "https://bomberman.fandom.com/wiki/Bomberman_(DS)/Battle_Stage",
+      "insight": "The series still treats a gimmick-free Normal stage as the baseline reference map, which is useful when evaluating clarity before adding theme flair."
+    },
+    {
+      "label": "Konami - Build-and-Bomb! Super Bomberman R 2",
+      "url": "https://www.konami.com/games/bomberman/r2/us/en/pickup_build/",
+      "insight": "Modern Bomberman explicitly supports custom stage building and sharing, so a reusable local tileset library maps well to the franchise direction."
+    },
+    {
+      "label": "Game Developer - How Valve Makes Art To Enhance Gameplay",
+      "url": "https://www.gamedeveloper.com/art/in-depth-how-valve-makes-art-to-enhance-gameplay",
+      "insight": "Readability layers should be handled through color grouping, distinct silhouette, and only then fine detail."
+    }
+  ],
+  "themes": [
+    {
+      "id": "tournament-clean",
+      "name": "Tournament Clean",
+      "status": "active",
+      "renderMode": "procedural",
+      "layoutTargets": [
+        "route tiles are brighter than neutral floor without becoming noisy",
+        "spawn bays are clear but restrained",
+        "walls and crates are separated first by value family, then by detail"
+      ],
+      "visualTargets": [
+        "cool neutral floor family",
+        "dark steel wall family",
+        "warm wooden crate family"
+      ],
+      "pixellabDescription": "Not used directly. This theme is procedurally rendered to keep the arena clean, structured, and category-led."
+    },
+    {
+      "id": "royal-marble",
+      "name": "Royal Marble",
+      "status": "active",
+      "renderMode": "procedural",
+      "layoutTargets": [
+        "bright premium floor with calm route guidance",
+        "spawn landmarks feel ceremonial, not noisy",
+        "walls and crates remain clearly separated by family"
+      ],
+      "visualTargets": [
+        "cool marble floor family",
+        "navy structural wall family",
+        "crafted warm crate family with restrained gold accents"
+      ],
+      "pixellabDescription": "high-resolution clean royal marble arena, pale cool stone floor, navy fortress walls, restrained gold trim, elegant readable destructible crates, low top-down, minimal noise, crisp silhouettes"
+    },
+    {
+      "id": "glacier-sanctum",
+      "name": "Glacier Sanctum",
+      "status": "active",
+      "renderMode": "procedural",
+      "layoutTargets": [
+        "icy board stays low-noise and easy to parse",
+        "spawn seals feel sacred and cold",
+        "warm crates preserve breakability contrast"
+      ],
+      "visualTargets": [
+        "blue-white sanctuary floor family",
+        "frost-cut architectural wall family",
+        "expedition crate language for warmth and life"
+      ],
+      "pixellabDescription": "clean glacier sanctum arena, pale icy stone floor, dark frozen walls, subtle sacred frost seals, warm expedition crates, high resolution, low noise, readable downscaled"
+    },
+    {
+      "id": "obsidian-garden",
+      "name": "Obsidian Garden",
+      "status": "active",
+      "renderMode": "procedural",
+      "layoutTargets": [
+        "dark board with clear lane and crate contrast",
+        "jade accents reserved for landmarks",
+        "dramatic atmosphere without muddy gameplay"
+      ],
+      "visualTargets": [
+        "polished obsidian floor family",
+        "charcoal structural wall family",
+        "warm elegant crate family to prevent monochrome collapse"
+      ],
+      "pixellabDescription": "clean obsidian garden arena, polished dark volcanic floor, structured charcoal walls, restrained jade landmark accents, warm elegant crates, high resolution, premium readability, minimal noise"
+    },
+    {
+      "id": "arcane-citadel",
+      "name": "Arcane Citadel",
+      "status": "active",
+      "renderMode": "sprite",
+      "assetFolder": "public/assets/tiles/themes/arcane-citadel",
+      "tilePaths": {
+        "base": "public/assets/tiles/themes/arcane-citadel/floor-base.png",
+        "lane": "public/assets/tiles/themes/arcane-citadel/floor-lane.png",
+        "spawn": "public/assets/tiles/themes/arcane-citadel/floor-spawn.png",
+        "wall": "public/assets/tiles/themes/arcane-citadel/wall.png",
+        "crate": "public/assets/tiles/themes/arcane-citadel/crate.png"
+      },
+      "layoutTargets": [
+        "spawn bays visibly safer than the rest of the arena",
+        "central routes brighter than neutral floor",
+        "solid wall closure readable in sudden death"
+      ],
+      "visualTargets": [
+        "cool floor to preserve hot hazard contrast",
+        "stone edges more detailed than tile centers",
+        "rune accents used only for orientation landmarks"
+      ],
+      "pixellabDescription": "1). cool blue-gray fortress floor tile with subtle wear and clean center 2). brighter combat-lane slab tile with clearer edge cuts and readable path rhythm 3). protected spawn tile with restrained cyan-gold rune ring and open center 4). thick carved stone wall tile with clear top lip and strong silhouette 5). reinforced wooden crate with iron bands, readable crack seams and low-top-down depth 6). optional accent tile with faint rune fracture and moss only on the edge"
+    },
+    {
+      "id": "verdant-ruins",
+      "name": "Verdant Ruins",
+      "status": "preview-ready",
+      "renderMode": "sprite",
+      "assetFolder": "public/assets/tiles/themes/verdant-ruins",
+      "tilePaths": {
+        "base": "public/assets/tiles/themes/verdant-ruins/floor-base.png",
+        "lane": "public/assets/tiles/themes/verdant-ruins/floor-lane.png",
+        "spawn": "public/assets/tiles/themes/verdant-ruins/floor-spawn.png",
+        "wall": "public/assets/tiles/themes/verdant-ruins/wall.png",
+        "crate": "public/assets/tiles/themes/verdant-ruins/crate.png"
+      },
+      "layoutTargets": [
+        "lane tile remains more legible than the decorated floor",
+        "spawn seal reads instantly as a safe landmark",
+        "crate must stay readable against greener ground"
+      ],
+      "visualTargets": [
+        "adventure tone without touching collision language",
+        "moss bias kept near edges and crowns",
+        "use only as an alternate until blast contrast is approved"
+      ],
+      "pixellabDescription": "1). moss-kissed ruin floor tile with large readable slab breakup and dark grout 2). clean sandstone combat lane tile with brighter value grouping and minimal noise 3). ancient spawn seal tile with teal circular rune inset and open negative space 4). ruined garden wall tile with moss only on the crown and crisp block silhouette 5). sturdy travel crate with brass bindings and bright lid planes 6). optional cracked obsidian accent tile with vine edge detail"
+    },
+    {
+      "id": "skyfoundry-bastion",
+      "name": "Skyfoundry Bastion",
+      "status": "active",
+      "renderMode": "sprite",
+      "assetFolder": "public/assets/tiles/themes/skyfoundry-bastion",
+      "tilePaths": {
+        "base": "public/assets/tiles/themes/skyfoundry-bastion/floor-base.png",
+        "lane": "public/assets/tiles/themes/skyfoundry-bastion/floor-lane.png",
+        "spawn": "public/assets/tiles/themes/skyfoundry-bastion/floor-spawn.png",
+        "wall": "public/assets/tiles/themes/skyfoundry-bastion/wall.png",
+        "crate": "public/assets/tiles/themes/skyfoundry-bastion/crate.png"
+      },
+      "layoutTargets": [
+        "normal floor quiet enough for bomb telegraphs",
+        "lane tile indicates rush routes clearly",
+        "spawn bays protected by geometry, not by loud color"
+      ],
+      "visualTargets": [
+        "steel-blue base with amber trim only on landmarks",
+        "walls read heavy and industrial",
+        "crate remains wood-first so destructibility stays obvious"
+      ],
+      "pixellabDescription": "1). steel-blue bastion floor tile with subtle riveted slab seams and dark center 2). brighter route lane tile with amber guide cuts near edges only 3). restrained spawn dais tile with circular brass inlay and open center 4). heavy skyforge wall tile with layered stone-metal crown and strong silhouette 5). breakable cargo crate with wood face, steel corners and readable crack geometry 6). optional accent tile with tiny spark vent and soot edge"
+    }
+  ]
+}

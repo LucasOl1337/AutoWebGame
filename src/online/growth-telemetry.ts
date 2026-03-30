@@ -13,6 +13,8 @@ export type GrowthTelemetryEventName =
   | "character_selected"
   | "invite_copied"
   | "chat_sent"
+  | "feedback_opened"
+  | "feedback_submitted"
   | "match_started"
   | "match_ended"
   | "lobby_left";
@@ -103,16 +105,6 @@ export class GrowthTelemetryClient {
     };
 
     this.enqueue(body);
-  }
-
-  public buildInviteUrl(roomCode: string): string {
-    const url = new URL(window.location.href);
-    url.searchParams.set("room", roomCode);
-    url.searchParams.set("utm_source", "invite");
-    url.searchParams.set("utm_medium", "share");
-    url.searchParams.set("utm_campaign", "player_invite");
-    url.searchParams.set("ref", this.anonPlayerId.slice(0, 12));
-    return url.toString();
   }
 
   private bindLifecycleEvents(): void {

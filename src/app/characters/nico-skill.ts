@@ -12,14 +12,19 @@ import {
 } from "../../core/config";
 import { tileKey } from "../../game/arena";
 import type { SkillContext } from "./shared";
+import { NICO_SKILL_COOLDOWN_MS } from "./skill-registry";
 import {
   addMagicBeam,
   directionDelta,
 } from "./shared";
 
-export const NICO_CHARACTER_ID = "5474c45c-2987-43e0-af2c-a6500c836881";
+export {
+  NICO_CHARACTER_ID,
+  NICO_SKILL_COOLDOWN_MS,
+} from "./skill-registry";
+
 export const NICO_SKILL_CHANNEL_MS = 2_000;
-export const NICO_SKILL_COOLDOWN_MS = 10_000;
+export const NICO_SKILL_RELEASE_MS = 260;
 export const NICO_BEAM_DURATION_MS = 260;
 export const NICO_BEAM_CORE_WIDTH_PX = TILE_SIZE * 0.26;
 export const NICO_BEAM_GLOW_WIDTH_PX = TILE_SIZE * 0.56;
@@ -53,6 +58,16 @@ export function updateNicoArcaneBeamChannel(
 ): boolean {
   if (player.skill.id !== "nico-arcane-beam") {
     return false;
+  }
+  if (player.skill.phase === "releasing") {
+    player.velocity.x = 0;
+    player.velocity.y = 0;
+    player.skill.channelRemainingMs = Math.max(0, player.skill.channelRemainingMs - deltaMs);
+    player.skill.castElapsedMs += deltaMs;
+    if (player.skill.channelRemainingMs <= 0) {
+      finishNicoArcaneBeamRelease(player);
+    }
+    return true;
   }
   player.velocity.x = 0;
   player.velocity.y = 0;
@@ -97,6 +112,20 @@ export function fireNicoArcaneBeam(player: PlayerState, context: SkillContext): 
   resolveNicoBeamImpact(player.id, beam.tiles, context);
   player.direction = direction;
   player.lastMoveDirection = direction;
+  player.velocity.x = 0;
+  player.velocity.y = 0;
+  player.skill.phase = "releasing";
+  player.skill.channelRemainingMs = NICO_SKILL_RELEASE_MS;
+  player.skill.cooldownRemainingMs = 0;
+  player.skill.castElapsedMs = 0;
+  player.skill.projectedPosition = null;
+  player.skill.projectedLastMoveDirection = direction;
+}
+
+export function finishNicoArcaneBeamRelease(player: PlayerState): void {
+  if (player.skill.id !== "nico-arcane-beam") {
+    return;
+  }
   player.velocity.x = 0;
   player.velocity.y = 0;
   player.skill.phase = "cooldown";
@@ -179,6 +208,6 @@ export function resolveNicoBeamImpact(
     if (!hitKeys.has(tileKey(target.tile.x, target.tile.y))) {
       continue;
     }
-    context.tryAbsorbInstantHit(target);
+    context.tryAbsorbInstantHit(target, ownerId);
   }
 }

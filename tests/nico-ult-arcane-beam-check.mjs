@@ -6,7 +6,8 @@ const { GameApp } = await import("../output/esm/app/game-app.js");
 const { TILE_SIZE } = await import("../output/esm/core/config.js");
 
 const NICO_CHANNEL_MS = 2_000;
-const NICO_COOLDOWN_MS = 10_000;
+const NICO_RELEASE_MS = 260;
+const NICO_COOLDOWN_MS = 8_000;
 
 const emptyDirectionalSprites = {
   up: null,
@@ -123,9 +124,23 @@ const activeBlast = game.magicBeams[0] ?? null;
 const blastTileKeys = new Set((activeBlast?.tiles ?? []).map((tile) => `${tile.x},${tile.y}`));
 const blastBomb = game.bombs[0] ?? null;
 
+for (let elapsedMs = 0; elapsedMs < 800 && nico.skill.phase === "releasing"; elapsedMs += 17) {
+  game.setServerPlayerInput(1, {
+    direction: "right",
+    ...neutralInput,
+  });
+  game.advanceServerSimulation(17);
+}
+
+const afterReleaseSkill = { ...nico.skill };
+
 const stayedFrozen = Math.abs((midSnapshot?.x ?? nico.position.x) - channelStartX) < 1.5;
 const channelingObserved = midSnapshot?.skill?.phase === "channeling";
-const firedOnFullHold = afterFireSkill.phase === "cooldown" && afterFireSkill.cooldownRemainingMs === NICO_COOLDOWN_MS;
+const enteredReleaseOnFullHold = afterFireSkill.phase === "releasing"
+  && afterFireSkill.channelRemainingMs > 0
+  && afterFireSkill.cooldownRemainingMs === 0;
+const finishedIntoCooldown = afterReleaseSkill.phase === "cooldown"
+  && afterReleaseSkill.cooldownRemainingMs === NICO_COOLDOWN_MS;
 const blastSpawned = Boolean(activeBlast) && activeBlast.direction === "right";
 const blastFrontEnemy = frontEnemy.alive === false;
 const blastDiagonalEnemy = diagonalEnemy.alive === true;
@@ -217,15 +232,40 @@ const animationChoice = animationGame.getActiveSkillAnimationFrames(
   [],
   [],
 );
-const usesSlowCastTiming = animationChoice?.frames?.[0] === castMarkerA
-  && animationChoice?.frameMs === 500
+const usesChannelCastTiming = animationChoice?.frames?.length === 3
+  && animationChoice?.frames?.[0] === castMarkerA
+  && animationChoice?.frames?.[2] === castMarkerC
+  && animationChoice?.frameMs === Math.floor(NICO_CHANNEL_MS / 3)
   && animationChoice?.playback === "hold";
+
+animationNico.skill = {
+  id: "nico-arcane-beam",
+  phase: "releasing",
+  channelRemainingMs: 180,
+  cooldownRemainingMs: 0,
+  castElapsedMs: 80,
+  projectedPosition: null,
+  projectedLastMoveDirection: "right",
+};
+const releaseChoice = animationGame.getActiveSkillAnimationFrames(
+  animationNico,
+  "right",
+  [castMarkerA, castMarkerB, castMarkerC, castMarkerD],
+  [],
+  [],
+);
+const usesReleaseCastTiming = releaseChoice?.frames?.length === 2
+  && releaseChoice?.frames?.[0] === castMarkerC
+  && releaseChoice?.frames?.[1] === castMarkerD
+  && releaseChoice?.frameMs === Math.floor(NICO_RELEASE_MS / 2)
+  && releaseChoice?.playback === "hold";
 
 const report = {
   channelElapsedMs,
   stayedFrozen,
   channelingObserved,
-  firedOnFullHold,
+  enteredReleaseOnFullHold,
+  finishedIntoCooldown,
   blastSpawned,
   blastTileKeys: [...blastTileKeys],
   blastFrontEnemy,
@@ -235,10 +275,12 @@ const report = {
   blastTriggeredBomb,
   blastMatchesFootprint,
   canceledBeforeFire,
-  usesSlowCastTiming,
+  usesChannelCastTiming,
+  usesReleaseCastTiming,
   pass: stayedFrozen
     && channelingObserved
-    && firedOnFullHold
+    && enteredReleaseOnFullHold
+    && finishedIntoCooldown
     && blastSpawned
     && blastFrontEnemy
     && blastDiagonalEnemy
@@ -247,7 +289,8 @@ const report = {
     && blastTriggeredBomb
     && blastMatchesFootprint
     && canceledBeforeFire
-    && usesSlowCastTiming,
+    && usesChannelCastTiming
+    && usesReleaseCastTiming,
 };
 
 console.log(JSON.stringify(report, null, 2));

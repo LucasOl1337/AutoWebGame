@@ -46,6 +46,7 @@ const fakeCtx = {
 const fakeCanvas = {
   width: 0,
   height: 0,
+  dataset: {},
   style: {},
   setAttribute: noop,
   getContext: () => fakeCtx,
@@ -102,8 +103,8 @@ const report = {
   hasDenseBreakables,
   pass: (
     hasDenseBreakables
-    && dropRatio >= 0.4
-    && dropRatio <= 0.6
+    && dropRatio >= 0.85
+    && dropRatio <= 0.95
     && speedDropCount > 0
   ),
 };

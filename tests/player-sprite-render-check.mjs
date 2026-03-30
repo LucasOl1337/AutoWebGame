@@ -52,6 +52,7 @@ const fakeTrimCtx = {
 const makeCanvas = (ctx) => ({
   width: 0,
   height: 0,
+  dataset: {},
   style: {},
   setAttribute: noop,
   getContext: () => ctx,

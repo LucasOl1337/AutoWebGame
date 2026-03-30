@@ -117,7 +117,7 @@ const dashStarted = firstSkill.phase === "channeling";
 const dashMovedOnFirstFrame = firstStepX > beforeX + 1 && firstStepX < beforeX + KILLER_BEE_DASH_DISTANCE_PX - 1;
 const dashReachedFullDistance = Math.abs(finishX - (beforeX + KILLER_BEE_DASH_DISTANCE_PX)) < 1.5;
 const dashEndedInCooldown = finishSkill.phase === "cooldown";
-const dashCooldownApplied = finishSkill.cooldownRemainingMs === 10_000;
+const dashCooldownApplied = finishSkill.cooldownRemainingMs === 4_000;
 const blockedByWall = blockedTile.x === 5 && blockedTile.y === 4 && blockedFinishX < beforeX + KILLER_BEE_DASH_DISTANCE_PX - 20;
 
 const castMarker = { id: "bee-cast" };

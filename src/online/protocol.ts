@@ -11,9 +11,13 @@ import type {
   RoundOutcome,
   SuddenDeathClosingTileState,
 } from "../core/types";
+import type { PlayerAccount } from "./account";
+import type { OnlineRoomKind, OnlineSessionState } from "./matchmaking";
 
 export type OnlineRole = "host" | "guest";
 export type LobbyStatus = "open" | "playing";
+export type LobbyMode = "classic" | "endless";
+export type LobbySeatOccupantType = "empty" | "human" | "bot";
 
 export interface OnlineInputState {
   direction: Direction | null;
@@ -28,12 +32,15 @@ export interface LobbySeatState {
   displayName: string | null;
   characterIndex: number;
   ready: boolean;
+  occupantType: LobbySeatOccupantType;
 }
 
 export interface LobbySummary {
   roomCode: string;
   title: string;
   status: LobbyStatus;
+  roomMode: LobbyMode;
+  roomKind: OnlineRoomKind;
   createdAt: number;
   seats: Record<PlayerId, LobbySeatState>;
   occupantCount: number;
@@ -57,14 +64,23 @@ export interface ChatEntry {
 
 export interface OnlinePresenceEntry {
   clientId: string;
+  displayName: string | null;
 }
 
 export interface MatchStartConfig {
   roomCode: string;
   role: OnlineRole;
+  roomMode: LobbyMode;
   localPlayerId: PlayerId;
   activePlayerIds: PlayerId[];
+  botPlayerIds: PlayerId[];
   characterSelections: Record<PlayerId, number>;
+  playerLabels: Record<PlayerId, string>;
+}
+
+export interface OnlineEndlessStats {
+  kills: MatchScore;
+  roundWins: MatchScore;
 }
 
 export interface OnlineGameSnapshot {
@@ -73,6 +89,7 @@ export interface OnlineGameSnapshot {
   frameId: number;
   ackedInputSeq: Record<PlayerId, number>;
   mode: Mode;
+  roomMode: LobbyMode;
   breakableTiles: string[];
   powerUps: PowerUpState[];
   players: Record<PlayerId, PlayerState>;
@@ -96,6 +113,8 @@ export interface OnlineGameSnapshot {
   showBombPreview: boolean;
   selectedCharacterIndex: Record<PlayerId, number>;
   activePlayerIds: PlayerId[];
+  botPlayerIds: PlayerId[];
+  endlessStats: OnlineEndlessStats | null;
 }
 
 export interface OnlineGameFrame {
@@ -104,6 +123,7 @@ export interface OnlineGameFrame {
   frameId: number;
   ackedInputSeq: Record<PlayerId, number>;
   mode: Mode;
+  roomMode: LobbyMode;
   players: Record<PlayerId, PlayerState>;
   bombs: BombState[];
   flames: FlameState[];
@@ -123,6 +143,8 @@ export interface OnlineGameFrame {
   suddenDeathClosingTiles: SuddenDeathClosingTileState[];
   selectedCharacterIndex: Record<PlayerId, number>;
   activePlayerIds: PlayerId[];
+  botPlayerIds: PlayerId[];
+  endlessStats: OnlineEndlessStats | null;
 }
 
 export interface OnlineSessionBridge {
@@ -136,6 +158,8 @@ export interface OnlineSessionBridge {
 export interface ServerHelloMessage {
   type: "hello";
   clientId: string;
+  account: PlayerAccount | null;
+  sessionState: OnlineSessionState;
   lobbies: LobbySummary[];
   onlineUsers: number;
   onlinePlayers: OnlinePresenceEntry[];
@@ -148,26 +172,31 @@ export interface ServerLobbyListMessage {
   lobbies: LobbySummary[];
   onlineUsers: number;
   onlinePlayers: OnlinePresenceEntry[];
+  sessionState: OnlineSessionState;
 }
 
 export interface ServerLobbyJoinedMessage {
   type: "lobby-joined";
   lobby: LobbyState;
   role: OnlineRole;
+  sessionState: OnlineSessionState;
 }
 
 export interface ServerLobbyUpdatedMessage {
   type: "lobby-updated";
   lobby: LobbyState;
+  sessionState: OnlineSessionState;
 }
 
 export interface ServerLobbyLeftMessage {
   type: "lobby-left";
+  sessionState: OnlineSessionState;
 }
 
 export interface ServerMatchStartedMessage {
   type: "match-started";
   config: MatchStartConfig;
+  sessionState: OnlineSessionState;
 }
 
 export interface ServerPeerLeftMessage {
@@ -196,6 +225,7 @@ export interface ServerQuickMatchStateMessage {
   countdownMs: number | null;
   onlineUsers: number;
   onlinePlayers: OnlinePresenceEntry[];
+  sessionState: OnlineSessionState;
 }
 
 export interface ServerChatMessage {
@@ -266,6 +296,11 @@ export interface QuickMatchMessage {
   characterIndex?: number;
 }
 
+export interface EndlessMatchMessage {
+  type: "endless-match";
+  characterIndex?: number;
+}
+
 export interface QuickMatchCancelMessage {
   type: "quick-match-cancel";
 }
@@ -289,6 +324,7 @@ export type ClientMessage =
   | SetReadyMessage
   | GuestInputMessage
   | QuickMatchMessage
+  | EndlessMatchMessage
   | QuickMatchCancelMessage
   | MatchResultChoiceMessage
   | ChatSendMessage

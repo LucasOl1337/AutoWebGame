@@ -46,6 +46,7 @@ const fakeCtx = {
 const fakeCanvas = {
   width: 0,
   height: 0,
+  dataset: {},
   style: {},
   setAttribute: noop,
   getContext: () => fakeCtx,
@@ -73,7 +74,7 @@ const assets = {
   players: { 1: { up: null, down: null, left: null, right: null }, 2: { up: null, down: null, left: null, right: null } },
   floor: { base: null, lane: null, spawn: null },
   props: { wall: null, crate: null, bomb: null, flame: null },
-  powerUps: { "bomb-up": null, "flame-up": null, "speed-up": null, "remote-up": null, "shield-up": null },
+  powerUps: { "bomb-up": null, "flame-up": null, "speed-up": null, "remote-up": null },
 };
 
 const game = new GameApp(root, assets);
@@ -88,14 +89,11 @@ const p1 = game.players[1];
 p1.position = { x: 2.5 * TILE_SIZE, y: 1.5 * TILE_SIZE };
 p1.tile = { x: 2, y: 1 };
 p1.spawnProtectionMs = 0;
-
-game.arena.powerUps = [
-  { type: "shield-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
-];
+p1.shieldCharges = 1;
 window.advanceTime(17);
 
-const collectedShield = game.arena.powerUps[0]?.collected === true;
-const shieldLevelAfterPickup = game.players[1].shieldCharges ?? 0;
+const startedWithShieldCharge = game.players[1].shieldCharges === 1;
+const shieldLevelAfterSetup = game.players[1].shieldCharges ?? 0;
 
 game.flames = [{ tile: { x: 2, y: 1 }, remainingMs: 400 }];
 game.resolvePlayerDeathsFromFlames();
@@ -115,15 +113,15 @@ window.advanceTime(17);
 const diesWithoutShieldOrGuard = game.players[1].alive === false;
 
 const report = {
-  collectedShield,
-  shieldLevelAfterPickup,
+  startedWithShieldCharge,
+  shieldLevelAfterSetup,
   survivedFirstFlame,
   shieldSpentOnHit,
   guardWindowActive,
   stillAliveDuringGuard,
   diesWithoutShieldOrGuard,
-  pass: collectedShield
-    && shieldLevelAfterPickup === 1
+  pass: startedWithShieldCharge
+    && shieldLevelAfterSetup === 1
     && survivedFirstFlame
     && shieldSpentOnHit
     && guardWindowActive

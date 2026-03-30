@@ -27,6 +27,11 @@ import {
   type DirectionalSprites,
   type GameAssets,
 } from "./assets";
+import {
+  DEFAULT_ARENA_THEME_ID,
+  getArenaThemeById,
+  type ArenaThemePalette,
+} from "./arena-theme-library";
 import { pickAnimationFrame } from "./animation-frame";
 import { SpriteTrimCache, type SpriteTrimBounds } from "./sprite-trim-cache";
 import {
@@ -62,7 +67,9 @@ import {
   SKILL_POWER_UP_TYPES,
 } from "../core/powerups";
 import type {
+  LobbyMode,
   MatchStartConfig,
+  OnlineEndlessStats,
   OnlineGameFrame,
   OnlineGameSnapshot,
   OnlineInputState,
@@ -82,17 +89,17 @@ import {
   activatePlayerSkill as skill_activatePlayerSkill,
   updatePlayerSkillChannel as skill_updatePlayerSkillChannel,
   isPlayerImmuneDuringSkillChannel as skill_isPlayerImmuneDuringSkillChannel,
-  RANNI_CHARACTER_ID,
-  KILLER_BEE_CHARACTER_ID,
-  NICO_CHARACTER_ID,
-  CROCODILO_CHARACTER_ID,
+  getCharacterSkillId,
   KILLER_BEE_DASH_FRAME_MS,
   NICO_SKILL_CHANNEL_MS,
+  NICO_SKILL_RELEASE_MS,
   NICO_BEAM_DURATION_MS,
   NICO_BEAM_CORE_WIDTH_PX,
   NICO_BEAM_GLOW_WIDTH_PX,
   collectNicoBeamTiles,
+  computeCrocodiloSurgeTiles,
   CROCODILO_SKILL_CHANNEL_MS,
+  CROCODILO_SKILL_RELEASE_MS,
 } from "./skill-system";
 import type { OnlineRenderSample, PendingOnlineInput } from "./online-sync";
 import {
@@ -293,6 +300,7 @@ export class GameApp {
   private onlineSession: OnlineSessionBridge | null = null;
   private activePlayerIds: PlayerId[] = [1, 2];
   private onlineLocalPlayerId: PlayerId = 1;
+  private customPlayerLabels: Record<PlayerId, string | null> = createPlayerRecord(() => null);
   private onlineInputs: Record<PlayerId, OnlineInputState> = createPlayerRecord(() => createNeutralOnlineInput());
   private onlineSnapshotCooldownMs = 0;
   private visualPlayerPositions: Record<PlayerId, PixelCoord> = createPlayerRecord(() => ({ x: 0, y: 0 }));
@@ -326,6 +334,9 @@ export class GameApp {
   private roundOutcome: RoundOutcome | null = null;
   private matchWinner: PlayerId | null = null;
   private matchResultCooldownMs = 0;
+  private onlineRoomMode: LobbyMode = "classic";
+  private endlessKills: MatchScore = createNumberPlayerRecord(0);
+  private endlessRoundWins: MatchScore = createNumberPlayerRecord(0);
   private readonly automationMode = typeof navigator !== "undefined" ? navigator.webdriver : false;
   private automationControlledPlayer: PlayerId = 2;
   private localBotFill = 0;
@@ -373,6 +384,7 @@ export class GameApp {
       this.canvas.width = CANVAS_WIDTH * CANVAS_BACKBUFFER_SCALE;
       this.canvas.height = CANVAS_HEIGHT * CANVAS_BACKBUFFER_SCALE;
       this.canvas.setAttribute("aria-label", "BOMBA game canvas");
+      this.canvas.dataset.gameCanvas = "true";
 
       const ctx = this.canvas.getContext("2d");
       if (!ctx) {
@@ -443,7 +455,7 @@ export class GameApp {
       resolveMovementDirection: (player, dir, dt) => this.resolveMovementDirection(player, dir, dt),
       movePlayerSimulated: (player, dir, dt) => this.movePlayerSimulated(player, dir, dt),
       clonePlayerState: (player) => this.clonePlayerState(player),
-      tryAbsorbInstantHit: (player) => this.tryAbsorbInstantHit(player),
+      tryAbsorbInstantHit: (player, attackerId) => this.tryAbsorbInstantHit(player, attackerId),
       breakCrateAtKey: (key) => this.breakCrateAtKey(key),
       addFlame: (tile, durationMs, style) => this.addFlame(tile, durationMs, style),
       soundManager: { playOneShot: (name: string) => this.soundManager.playOneShot(name as any) },
@@ -452,6 +464,8 @@ export class GameApp {
 
   public attachOnlineSession(session: OnlineSessionBridge): void {
     this.onlineSession = session;
+    this.onlineRoomMode = "classic";
+    this.customPlayerLabels = createPlayerRecord(() => null);
     this.activePlayerIds = [1, 2];
     this.localBotFill = 0;
     this.botControlledPlayers = createBooleanPlayerRecord(false);
@@ -466,12 +480,16 @@ export class GameApp {
     this.onlineObservedRoundNumber = null;
     this.onlineAudioPrimed = false;
     this.onlineRenderSamples = [];
+    this.endlessKills = createNumberPlayerRecord(0);
+    this.endlessRoundWins = createNumberPlayerRecord(0);
     this.syncPlayerLabels();
   }
 
   public startOnlineMatch(config: MatchStartConfig): void {
+    this.onlineRoomMode = config.roomMode ?? "classic";
     this.activePlayerIds = normalizeActivePlayerIds(config.activePlayerIds);
     this.onlineLocalPlayerId = config.localPlayerId;
+    this.customPlayerLabels = createPlayerRecord((playerId) => config.playerLabels?.[playerId] ?? null);
     this.onlineNextInputSeq = 0;
     this.onlinePendingInputs = [];
     this.onlineInputs = createPlayerRecord(() => createNeutralOnlineInput());
@@ -484,7 +502,8 @@ export class GameApp {
     this.matchResultChoice = createPlayerRecord(() => null);
     this.matchResultCooldownMs = 0;
     this.localBotFill = 0;
-    this.botControlledPlayers = createBooleanPlayerRecord(false);
+    this.setBotPlayers(config.botPlayerIds ?? []);
+    this.applyEndlessStats(null);
 
     if (config.role === "host") {
       this.startMatch();
@@ -492,7 +511,6 @@ export class GameApp {
     }
     this.soundManager.playOneShot("matchStart");
     this.mode = "match";
-    this.botEnabled = false;
     this.matchWinner = null;
     this.paused = false;
     this.roundOutcome = null;
@@ -504,6 +522,7 @@ export class GameApp {
 
   public applyOnlineSnapshot(snapshot: OnlineGameSnapshot): void {
     const previousMode = this.mode;
+    this.onlineRoomMode = snapshot.roomMode ?? "classic";
     this.playOnlineAudioTransition({
       bombs: snapshot.bombs,
       flames: snapshot.flames,
@@ -571,10 +590,10 @@ export class GameApp {
     this.characterMenuOpen = createBooleanPlayerRecord(false);
     this.activePlayerIds = normalizeActivePlayerIds(snapshot.activePlayerIds);
     this.localBotFill = 0;
-    this.botControlledPlayers = createBooleanPlayerRecord(false);
-    this.botEnabled = false;
+    this.setBotPlayers(snapshot.botPlayerIds ?? []);
     this.matchResultChoice = createPlayerRecord(() => null);
     this.matchResultCooldownMs = 0;
+    this.applyEndlessStats(snapshot.endlessStats);
     this.resetOnlineRoundBuffers(snapshot.roundNumber);
     this.pushOnlineRenderSample(snapshot.serverTimeMs, snapshot.serverTick, snapshot.players);
     this.nextBombId = snapshot.nextBombId;
@@ -588,6 +607,7 @@ export class GameApp {
 
   public applyOnlineFrame(frame: OnlineGameFrame): void {
     const previousMode = this.mode;
+    this.onlineRoomMode = frame.roomMode ?? "classic";
     this.playOnlineAudioTransition({
       bombs: frame.bombs,
       flames: frame.flames,
@@ -632,8 +652,9 @@ export class GameApp {
     this.pendingCharacterIndex = { ...frame.selectedCharacterIndex };
     this.activePlayerIds = normalizeActivePlayerIds(frame.activePlayerIds);
     this.localBotFill = 0;
-    this.botControlledPlayers = createBooleanPlayerRecord(false);
+    this.setBotPlayers(frame.botPlayerIds ?? []);
     this.nextBombId = frame.nextBombId;
+    this.applyEndlessStats(frame.endlessStats);
     this.resetOnlineRoundBuffers(frame.roundNumber);
     this.pushOnlineRenderSample(frame.serverTimeMs, frame.serverTick, frame.players);
     this.reconcileGuestState(frame.ackedInputSeq[this.onlineLocalPlayerId] ?? 0);
@@ -653,6 +674,7 @@ export class GameApp {
     this.onlineAudioPrimed = false;
     this.onlineRenderSamples = [];
     this.botEnabled = false;
+    this.onlineRoomMode = "classic";
   }
 
   private resetToLobbyState(): void {
@@ -664,6 +686,9 @@ export class GameApp {
     this.matchResultChoice = createPlayerRecord(() => null);
     this.matchResultCooldownMs = 0;
     this.score = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    this.endlessKills = createNumberPlayerRecord(0);
+    this.endlessRoundWins = createNumberPlayerRecord(0);
+    this.onlineRoomMode = "classic";
     this.roundNumber = 1;
     this.matchWinner = null;
     this.paused = false;
@@ -748,7 +773,11 @@ export class GameApp {
   }
 
   public detachOnlineSession(): void {
+    if (!this.onlineSession) {
+      return;
+    }
     this.onlineSession = null;
+    this.customPlayerLabels = createPlayerRecord(() => null);
     this.clearOnlinePeer();
     this.mode = "menu";
     this.paused = false;
@@ -786,6 +815,32 @@ export class GameApp {
     }
   }
 
+  public eliminateServerPlayer(playerId: PlayerId): void {
+    const player = this.players[playerId];
+    if (!player) {
+      return;
+    }
+    this.killPlayer(player);
+    if (this.mode === "match" && !this.roundOutcome) {
+      this.evaluateRoundState();
+    }
+  }
+
+  public setServerBotPlayers(botPlayerIds: PlayerId[]): void {
+    this.setBotPlayers(botPlayerIds);
+  }
+
+  public setServerCharacterSelections(characterSelections: Record<PlayerId, number>): void {
+    this.selectedCharacterIndex = { ...characterSelections };
+    this.pendingCharacterIndex = { ...characterSelections };
+    this.syncPlayerLabels();
+  }
+
+  public setServerPlayerLabels(playerLabels: Record<PlayerId, string>): void {
+    this.customPlayerLabels = createPlayerRecord((playerId) => playerLabels[playerId] ?? null);
+    this.syncPlayerLabels();
+  }
+
   public start(): void {
     if (this.headless) {
       return;
@@ -814,10 +869,14 @@ export class GameApp {
     if (this.onlineSession) {
       return;
     }
+    this.customPlayerLabels = createPlayerRecord(() => null);
+    this.onlineRoomMode = "classic";
     this.mode = "menu";
     this.paused = false;
     this.roundOutcome = null;
     this.matchWinner = null;
+    this.endlessKills = createNumberPlayerRecord(0);
+    this.endlessRoundWins = createNumberPlayerRecord(0);
     this.applyOfflineBotFill(botFill, false);
     this.startMatch();
   }
@@ -832,6 +891,23 @@ export class GameApp {
     this.characterLocked[1] = true;
     this.characterMenuOpen[1] = false;
     this.syncPlayerLabels();
+  }
+
+  private setBotPlayers(botPlayerIds: PlayerId[]): void {
+    const nextBots = new Set(botPlayerIds);
+    this.botControlledPlayers = createPlayerRecord((playerId) => (
+      nextBots.has(playerId) && this.activePlayerIds.includes(playerId)
+    ));
+    this.botEnabled = ALL_PLAYER_IDS.some((playerId) => this.botControlledPlayers[playerId]);
+    this.syncPlayerLabels();
+  }
+
+  private applyEndlessStats(stats: OnlineEndlessStats | null | undefined): void {
+    this.endlessKills = stats ? { ...stats.kills } : createNumberPlayerRecord(0);
+    this.endlessRoundWins = stats ? { ...stats.roundWins } : createNumberPlayerRecord(0);
+    if (this.onlineRoomMode === "endless") {
+      this.score = { ...this.endlessRoundWins };
+    }
   }
 
   private readonly loop = (timestamp: number): void => {
@@ -936,6 +1012,7 @@ export class GameApp {
   private createOnlineSnapshot(): OnlineGameSnapshot {
     return {
       mode: this.mode,
+      roomMode: this.onlineRoomMode,
       serverTimeMs: 0,
       serverTick: 0,
       frameId: 0,
@@ -982,6 +1059,13 @@ export class GameApp {
       showBombPreview: this.showBombPreview,
       selectedCharacterIndex: { ...this.selectedCharacterIndex },
       activePlayerIds: [...this.activePlayerIds],
+      botPlayerIds: ALL_PLAYER_IDS.filter((playerId) => this.isBotControlled(playerId)),
+      endlessStats: this.onlineRoomMode === "endless"
+        ? {
+          kills: { ...this.endlessKills },
+          roundWins: { ...this.endlessRoundWins },
+        }
+        : null,
     };
   }
 
@@ -1037,7 +1121,16 @@ export class GameApp {
     }
   }
 
-  public startServerAuthoritativeMatch(activePlayerIds: PlayerId[], characterSelections: Record<PlayerId, number>): void {
+  public startServerAuthoritativeMatch(
+    activePlayerIds: PlayerId[],
+    characterSelections: Record<PlayerId, number>,
+    options: {
+      roomMode?: LobbyMode;
+      botPlayerIds?: PlayerId[];
+      endlessStats?: OnlineEndlessStats | null;
+      playerLabels?: Record<PlayerId, string>;
+    } = {},
+  ): void {
     this.onlineSession = {
       role: "host",
       roomCode: "server",
@@ -1045,6 +1138,7 @@ export class GameApp {
       sendHostSnapshot: () => undefined,
       sendMatchResultChoice: () => false,
     };
+    this.onlineRoomMode = options.roomMode ?? "classic";
     this.activePlayerIds = normalizeActivePlayerIds(activePlayerIds);
     this.onlineLocalPlayerId = 1;
     this.onlineInputs = createPlayerRecord(() => createNeutralOnlineInput());
@@ -1054,11 +1148,12 @@ export class GameApp {
     this.onlineRenderSamples = [];
     this.selectedCharacterIndex = { ...characterSelections };
     this.pendingCharacterIndex = { ...characterSelections };
+    this.customPlayerLabels = createPlayerRecord((playerId) => options.playerLabels?.[playerId] ?? null);
     this.characterLocked = createBooleanPlayerRecord(true);
     this.characterMenuOpen = createBooleanPlayerRecord(false);
     this.localBotFill = 0;
-    this.botControlledPlayers = createBooleanPlayerRecord(false);
-    this.botEnabled = false;
+    this.setBotPlayers(options.botPlayerIds ?? []);
+    this.applyEndlessStats(options.endlessStats);
     this.startMatch();
   }
 
@@ -1459,7 +1554,9 @@ export class GameApp {
     this.menuReady = createBooleanPlayerRecord(false);
     this.matchResultChoice = createPlayerRecord(() => null);
     this.matchResultCooldownMs = 0;
-    this.score = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    this.score = this.onlineRoomMode === "endless"
+      ? { ...this.endlessRoundWins }
+      : { 1: 0, 2: 0, 3: 0, 4: 0 };
     this.roundNumber = 1;
     this.matchWinner = null;
     this.resetRound();
@@ -1504,11 +1601,17 @@ export class GameApp {
 
   private syncPlayerLabels(): void {
     for (const playerId of ALL_PLAYER_IDS) {
-      this.players[playerId].name = this.isBotControlled(playerId) ? "BOT" : `P${playerId}`;
+      this.players[playerId].name = this.isBotControlled(playerId)
+        ? "BOT"
+        : (this.customPlayerLabels[playerId] || `P${playerId}`);
     }
   }
 
   private getCharacterEntry(index: number): CharacterRosterEntry {
+    const entryBySelectionIndex = this.characterRoster.find((entry) => entry.selectionIndex === index);
+    if (entryBySelectionIndex) {
+      return entryBySelectionIndex;
+    }
     const total = this.characterRoster.length;
     const normalized = ((index % total) + total) % total;
     return this.characterRoster[normalized];
@@ -1543,20 +1646,7 @@ export class GameApp {
   }
 
   private getPlayerSkillId(playerId: PlayerId): CharacterSkillId | null {
-    const characterId = this.getActiveCharacterEntry(playerId).id;
-    if (characterId === RANNI_CHARACTER_ID) {
-      return "ranni-ice-blink";
-    }
-    if (characterId === KILLER_BEE_CHARACTER_ID) {
-      return "killer-bee-wing-dash";
-    }
-    if (characterId === NICO_CHARACTER_ID) {
-      return "nico-arcane-beam";
-    }
-    if (characterId === CROCODILO_CHARACTER_ID) {
-      return "crocodilo-emerald-surge";
-    }
-    return null;
+    return getCharacterSkillId(this.getActiveCharacterEntry(playerId).id);
   }
 
   private getCharacterLabel(playerId: PlayerId, maxLength = 18): string {
@@ -2294,12 +2384,7 @@ export class GameApp {
         }
 
         flameTiles.add(key);
-
-        const chainedBomb = this.bombs.find((item) => item.tile.x === x && item.tile.y === y);
-        if (chainedBomb) {
-          chainedBomb.fuseMs = 0;
-          queue.push(chainedBomb.id);
-        }
+        this.armBombAtTile({ x, y }, queue);
 
         if (this.breakCrateAtKey(key)) {
           break;
@@ -2309,10 +2394,21 @@ export class GameApp {
 
     flameTiles.forEach((key) => {
       const [xText, yText] = key.split(",");
-      this.addFlame({ x: Number(xText), y: Number(yText) });
+      this.addFlame({ x: Number(xText), y: Number(yText) }, FLAME_DURATION_MS, "normal", queue);
     });
     this.soundManager.playOneShot("flames");
-    this.resolvePlayerDeathsAtTileKeys(flameTiles);
+    this.resolvePlayerDeathsAtTileKeys(flameTiles, bomb.ownerId);
+  }
+
+  private armBombAtTile(tile: TileCoord, queue?: number[]): void {
+    const bomb = this.bombs.find((item) => item.tile.x === tile.x && item.tile.y === tile.y);
+    if (!bomb) {
+      return;
+    }
+    bomb.fuseMs = 0;
+    if (queue && !queue.includes(bomb.id)) {
+      queue.push(bomb.id);
+    }
   }
 
   private revealPowerUpAt(key: string): void {
@@ -2398,7 +2494,9 @@ export class GameApp {
     tile: TileCoord,
     durationMs: number = FLAME_DURATION_MS,
     style: FlameState["style"] = "normal",
+    queue?: number[],
   ): void {
+    this.armBombAtTile(tile, queue);
     const existing = this.flames.find((flame) => flame.tile.x === tile.x && flame.tile.y === tile.y);
     if (existing) {
       existing.remainingMs = Math.max(existing.remainingMs, durationMs);
@@ -2529,7 +2627,7 @@ export class GameApp {
     this.resolvePlayerDeathsAtTileKeys(this.flames.map((flame) => tileKey(flame.tile.x, flame.tile.y)));
   }
 
-  private resolvePlayerDeathsAtTileKeys(keys: Iterable<string>): void {
+  private resolvePlayerDeathsAtTileKeys(keys: Iterable<string>, attackerId: PlayerId | null = null): void {
     const flameKeys = new Set(keys);
     if (flameKeys.size === 0) {
       return;
@@ -2541,12 +2639,12 @@ export class GameApp {
       }
       player.tile = this.getTileFromPosition(player.position);
       if (flameKeys.has(tileKey(player.tile.x, player.tile.y))) {
-        this.tryAbsorbInstantHit(player);
+        this.tryAbsorbInstantHit(player, attackerId);
       }
     }
   }
 
-  private tryAbsorbInstantHit(player: PlayerState): boolean {
+  private tryAbsorbInstantHit(player: PlayerState, attackerId: PlayerId | null = null): boolean {
     if (player.spawnProtectionMs > 0) {
       return false;
     }
@@ -2560,6 +2658,9 @@ export class GameApp {
       player.shieldCharges -= 1;
       player.flameGuardMs = SHIELD_GUARD_MS;
       return false;
+    }
+    if (this.onlineRoomMode === "endless" && attackerId && attackerId !== player.id) {
+      this.endlessKills[attackerId] += 1;
     }
     this.killPlayer(player);
     return true;
@@ -2616,12 +2717,18 @@ export class GameApp {
     if (this.roundOutcome) {
       return;
     }
-    const clinchesMatch = winner ? this.score[winner] + 1 >= TARGET_WINS : false;
+    const clinchesMatch = this.onlineRoomMode !== "endless" && winner
+      ? this.score[winner] + 1 >= TARGET_WINS
+      : false;
     if (clinchesMatch) {
       this.soundManager.playOneShot("matchWin");
     }
     if (winner) {
-      this.score[winner] += 1;
+      if (this.onlineRoomMode === "endless") {
+        this.score[winner] = this.endlessRoundWins[winner] + 1;
+      } else {
+        this.score[winner] += 1;
+      }
     }
     this.roundOutcome = {
       winner,
@@ -2632,6 +2739,17 @@ export class GameApp {
   }
 
   private advanceAfterRound(): void {
+    if (this.onlineRoomMode === "endless") {
+      const winner = this.roundOutcome?.winner ?? null;
+      if (winner) {
+        this.endlessRoundWins[winner] += 1;
+      }
+      this.score = { ...this.endlessRoundWins };
+      this.input.clearPresses();
+      this.roundNumber += 1;
+      this.resetRound();
+      return;
+    }
     for (const playerId of this.activePlayerIds) {
       if (this.score[playerId] >= TARGET_WINS) {
         this.matchWinner = playerId;
@@ -2930,7 +3048,15 @@ export class GameApp {
 
     this.ctx.textAlign = "center";
     this.ctx.font = "bold 7px monospace";
-    this.drawHudText(`R${this.roundNumber} | FIRST TO ${TARGET_WINS}`, CANVAS_WIDTH / 2, 8, "#d8eaf8", "rgba(4, 10, 19, 0.9)");
+    this.drawHudText(
+      this.onlineRoomMode === "endless"
+        ? `R${this.roundNumber} | ENDLESS`
+        : `R${this.roundNumber} | FIRST TO ${TARGET_WINS}`,
+      CANVAS_WIDTH / 2,
+      8,
+      "#d8eaf8",
+      "rgba(4, 10, 19, 0.9)",
+    );
     this.ctx.font = "bold 8px monospace";
     this.drawHudText("TIME", CANVAS_WIDTH / 2, 17, "#b8cde2", "rgba(4, 10, 19, 0.9)");
     this.ctx.font = "bold 16px monospace";
@@ -2988,10 +3114,14 @@ export class GameApp {
     this.ctx.textAlign = "right";
     this.drawHudText(status, x + width - 6, y + 10, player.alive ? "#e5fff7" : "rgba(210, 220, 231, 0.55)", "rgba(4, 10, 19, 0.85)");
     this.drawHudText(statLine, x + width - 6, y + 18, "#dbefff", "rgba(4, 10, 19, 0.85)");
-    this.drawRoundPips(x + 6, y + 25, this.score[playerId], palette);
+    if (this.onlineRoomMode === "endless") {
+      this.drawEndlessHudStats(x + 6, y + 28, playerId, palette);
+    } else {
+      this.drawRoundPips(x + 6, y + 25, this.score[playerId], palette);
+    }
 
     const insetX = x + 4;
-    const insetY = y + 30;
+    const insetY = this.onlineRoomMode === "endless" ? y + 32 : y + 30;
     const insetWidth = Math.max(12, width - 8);
     const gap = 2;
     const slotCount = skillSlots.length;
@@ -3027,6 +3157,23 @@ export class GameApp {
       this.ctx.fillStyle = "#fff6cf";
       this.ctx.fill();
     }
+  }
+
+  private drawEndlessHudStats(
+    x: number,
+    y: number,
+    playerId: PlayerId,
+    palette: { primary: string; secondary: string; glow: string },
+  ): void {
+    this.ctx.textAlign = "left";
+    this.ctx.font = "bold 6px monospace";
+    this.drawHudText(
+      `K ${this.endlessKills[playerId]}  W ${this.endlessRoundWins[playerId]}`,
+      x,
+      y,
+      palette.primary,
+      "rgba(4, 10, 19, 0.9)",
+    );
   }
 
   private getHudSkillSlots(playerId: PlayerId): HudSkillSlot[] {
@@ -3127,19 +3274,13 @@ export class GameApp {
           || (x >= GRID_WIDTH - 3 && y <= 2)
           || (x <= 2 && y >= GRID_HEIGHT - 3)
           || (x >= GRID_WIDTH - 3 && y >= GRID_HEIGHT - 3);
-        let baseTone = (x + y) % 2 === 0 ? "#10233d" : "#0b1830";
-        if (isSideLane) {
-          baseTone = (x + y) % 2 === 0 ? "#112946" : "#0d2140";
-        }
-        if (isCenterLane) {
-          baseTone = (x + y) % 2 === 0 ? "#143152" : "#112947";
-        }
-        if (isSpawnBay) {
-          baseTone = (x + y) % 2 === 0 ? "#163656" : "#13304f";
-        }
-        if (isWrapPortal) {
-          baseTone = (x + y) % 2 === 0 ? "#1f3a52" : "#183149";
-        }
+        const floorVariant = isSpawnBay
+          ? "spawn"
+          : isWrapPortal
+            ? "portal"
+            : isCenterLane || isSideLane
+              ? "lane"
+              : "base";
         const floorSprite = isSpawnBay
           ? this.assets.floor.spawn
           : isWrapPortal || isCenterLane || isSideLane
@@ -3148,17 +3289,7 @@ export class GameApp {
         if (floorSprite) {
           c.drawImage(floorSprite, screenX, screenY, TILE_SIZE, TILE_SIZE);
         } else {
-          c.fillStyle = baseTone;
-          c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
-        }
-        if (!floorSprite) {
-          c.strokeStyle = "rgba(146, 208, 255, 0.08)";
-          c.strokeRect(screenX + 0.5, screenY + 0.5, TILE_SIZE - 1, TILE_SIZE - 1);
-        }
-
-        if (!floorSprite && !this.arena.solid.has(key) && !this.arena.breakable.has(key)) {
-          c.fillStyle = isCenterLane ? "rgba(110, 214, 255, 0.1)" : "rgba(255, 255, 255, 0.04)";
-          c.fillRect(screenX + 8, screenY + 8, TILE_SIZE - 16, TILE_SIZE - 16);
+          this.drawArenaFloorTile(screenX, screenY, floorVariant, (x + y) % 2);
         }
 
         if (this.arena.solid.has(key)) {
@@ -3170,15 +3301,13 @@ export class GameApp {
         } else if (this.arena.breakable.has(key)) {
           this.drawCrate(screenX, screenY);
         } else if (isWrapPortal) {
-          c.strokeStyle = "rgba(158, 230, 255, 0.48)";
-          c.strokeRect(screenX + 6.5, screenY + 6.5, TILE_SIZE - 13, TILE_SIZE - 13);
-          c.fillStyle = "rgba(126, 206, 255, 0.1)";
-          c.fillRect(screenX + 11, screenY + 11, TILE_SIZE - 22, TILE_SIZE - 22);
+          c.strokeStyle = this.getArenaPalette().portalRing;
+          c.strokeRect(screenX + 7.5, screenY + 7.5, TILE_SIZE - 15, TILE_SIZE - 15);
         }
       }
     }
 
-    c.strokeStyle = "rgba(188, 223, 255, 0.16)";
+    c.strokeStyle = this.getArenaPalette().arenaFrame;
     c.strokeRect(
       ARENA_OFFSET_X - 0.5,
       ARENA_OFFSET_Y - 0.5,
@@ -3186,7 +3315,7 @@ export class GameApp {
       GRID_HEIGHT * TILE_SIZE + 1,
     );
 
-    c.fillStyle = "rgba(173, 204, 232, 0.04)";
+    c.fillStyle = this.getArenaPalette().arenaGlow;
     c.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, GRID_WIDTH * TILE_SIZE, GRID_HEIGHT * TILE_SIZE);
 
     // Restore the real context
@@ -3248,13 +3377,139 @@ export class GameApp {
 
     // Arena mist overlay (single pre-cached gradient)
     if (!this.arenaStaticMistGradient) {
+      const palette = this.getArenaPalette();
       this.arenaStaticMistGradient = this.ctx.createLinearGradient(0, ARENA_OFFSET_Y, 0, CANVAS_HEIGHT);
-      this.arenaStaticMistGradient.addColorStop(0, "rgba(194, 220, 247, 0.05)");
+      this.arenaStaticMistGradient.addColorStop(0, palette.arenaMistTop);
       this.arenaStaticMistGradient.addColorStop(0.35, "rgba(74, 108, 153, 0)");
-      this.arenaStaticMistGradient.addColorStop(1, "rgba(4, 8, 14, 0.1)");
+      this.arenaStaticMistGradient.addColorStop(1, palette.arenaMistBottom);
     }
     this.ctx.fillStyle = this.arenaStaticMistGradient;
     this.ctx.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, GRID_WIDTH * TILE_SIZE, GRID_HEIGHT * TILE_SIZE);
+  }
+
+  private getArenaPalette(): ArenaThemePalette {
+    return this.assets.arenaTheme?.palette
+      ?? getArenaThemeById(DEFAULT_ARENA_THEME_ID)?.palette
+      ?? getArenaThemeById("arcane-citadel")!.palette;
+  }
+
+  private getArenaThemeDefinition() {
+    return this.assets.arenaTheme
+      ?? getArenaThemeById(DEFAULT_ARENA_THEME_ID)
+      ?? getArenaThemeById("arcane-citadel")!;
+  }
+
+  private drawArenaFloorTile(
+    x: number,
+    y: number,
+    variant: "base" | "lane" | "spawn" | "portal",
+    checker: number,
+  ): void {
+    const theme = this.getArenaThemeDefinition();
+    const palette = theme.palette;
+    let outer = checker === 0 ? palette.floorBase : palette.floorBaseAlt;
+    let inner = checker === 0 ? palette.floorBaseAlt : palette.floorBase;
+    if (variant === "lane") {
+      outer = checker === 0 ? palette.floorLane : palette.floorLaneAlt;
+      inner = checker === 0 ? palette.floorLaneAlt : palette.floorLane;
+    } else if (variant === "spawn") {
+      outer = checker === 0 ? palette.floorSpawn : palette.floorSpawnAlt;
+      inner = checker === 0 ? palette.floorSpawnAlt : palette.floorSpawn;
+    } else if (variant === "portal") {
+      outer = checker === 0 ? palette.floorPortal : palette.floorPortalAlt;
+      inner = checker === 0 ? palette.floorPortalAlt : palette.floorPortal;
+    }
+
+    this.ctx.fillStyle = outer;
+    this.ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+    this.ctx.fillStyle = inner;
+    this.ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+    this.ctx.fillStyle = palette.floorEdgeLight;
+    this.ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, 2);
+    this.ctx.fillRect(x + 2, y + 2, 2, TILE_SIZE - 4);
+    this.ctx.fillStyle = palette.floorEdgeDark;
+    this.ctx.fillRect(x + 2, y + TILE_SIZE - 4, TILE_SIZE - 4, 2);
+    this.ctx.fillRect(x + TILE_SIZE - 4, y + 2, 2, TILE_SIZE - 4);
+    this.ctx.strokeStyle = palette.floorBorder;
+    this.ctx.strokeRect(x + 0.5, y + 0.5, TILE_SIZE - 1, TILE_SIZE - 1);
+
+    if (variant === "base") {
+      this.ctx.fillStyle = palette.floorCenterMark;
+      if (theme.motif.floorPattern === "diamond") {
+        this.ctx.beginPath();
+        this.ctx.moveTo(x + TILE_SIZE * 0.5, y + 12);
+        this.ctx.lineTo(x + TILE_SIZE - 12, y + TILE_SIZE * 0.5);
+        this.ctx.lineTo(x + TILE_SIZE * 0.5, y + TILE_SIZE - 12);
+        this.ctx.lineTo(x + 12, y + TILE_SIZE * 0.5);
+        this.ctx.closePath();
+        this.ctx.fill();
+      } else if (theme.motif.floorPattern === "vein") {
+        this.ctx.fillRect(x + 9, y + 18, TILE_SIZE - 18, 2);
+        this.ctx.fillRect(x + 15, y + 10, 2, TILE_SIZE - 20);
+        this.ctx.fillRect(x + 23, y + 14, 2, 10);
+      } else {
+        this.ctx.fillRect(x + 14, y + 14, TILE_SIZE - 28, TILE_SIZE - 28);
+      }
+      return;
+    }
+
+    if (variant === "lane") {
+      this.ctx.fillStyle = palette.floorCenterMark;
+      if (theme.motif.lanePattern === "stripe") {
+        this.ctx.fillRect(x + 8, y + 11, 4, TILE_SIZE - 22);
+        this.ctx.fillRect(x + TILE_SIZE - 12, y + 11, 4, TILE_SIZE - 22);
+        this.ctx.fillRect(x + 17, y + 8, 6, TILE_SIZE - 16);
+      } else if (theme.motif.lanePattern === "chevron") {
+        this.ctx.beginPath();
+        this.ctx.moveTo(x + 10, y + 16);
+        this.ctx.lineTo(x + 18, y + 10);
+        this.ctx.lineTo(x + 26, y + 16);
+        this.ctx.lineTo(x + 22, y + 16);
+        this.ctx.lineTo(x + 18, y + 13);
+        this.ctx.lineTo(x + 14, y + 16);
+        this.ctx.closePath();
+        this.ctx.fill();
+        this.ctx.beginPath();
+        this.ctx.moveTo(x + 10, y + 24);
+        this.ctx.lineTo(x + 18, y + 18);
+        this.ctx.lineTo(x + 26, y + 24);
+        this.ctx.lineTo(x + 22, y + 24);
+        this.ctx.lineTo(x + 18, y + 21);
+        this.ctx.lineTo(x + 14, y + 24);
+        this.ctx.closePath();
+        this.ctx.fill();
+      } else {
+        this.ctx.fillRect(x + 10, y + 17, TILE_SIZE - 20, 6);
+        this.ctx.fillRect(x + 17, y + 10, 6, TILE_SIZE - 20);
+      }
+      return;
+    }
+
+    this.ctx.save();
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeStyle = variant === "spawn" ? palette.spawnRing : palette.portalRing;
+    if (theme.motif.spawnPattern === "diamond") {
+      this.ctx.beginPath();
+      this.ctx.moveTo(x + TILE_SIZE * 0.5, y + 8);
+      this.ctx.lineTo(x + TILE_SIZE - 8, y + TILE_SIZE * 0.5);
+      this.ctx.lineTo(x + TILE_SIZE * 0.5, y + TILE_SIZE - 8);
+      this.ctx.lineTo(x + 8, y + TILE_SIZE * 0.5);
+      this.ctx.closePath();
+      this.ctx.stroke();
+    } else {
+      this.ctx.beginPath();
+      this.ctx.arc(x + TILE_SIZE * 0.5, y + TILE_SIZE * 0.5, TILE_SIZE * 0.22, 0, Math.PI * 2);
+      this.ctx.stroke();
+      if (theme.motif.spawnPattern === "seal") {
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        this.ctx.arc(x + TILE_SIZE * 0.5, y + TILE_SIZE * 0.5, TILE_SIZE * 0.31, 0, Math.PI * 2);
+        this.ctx.stroke();
+      }
+    }
+    this.ctx.lineWidth = 1;
+    this.ctx.strokeRect(x + 10.5, y + 10.5, TILE_SIZE - 21, TILE_SIZE - 21);
+    this.ctx.restore();
   }
 
   private getDangerOverlayTiles(): Array<{ x: number; y: number; etaMs: number }> {
@@ -3377,29 +3632,44 @@ export class GameApp {
       this.ctx.fillRect(x + 1, y + 1, TILE_SIZE - 2, 2);
       return;
     }
-    this.ctx.fillStyle = "#5b5d5f";
-    this.ctx.fillRect(x + 2, y + 4, TILE_SIZE - 4, TILE_SIZE - 6);
-    this.ctx.fillStyle = "#797b7d";
-    this.ctx.fillRect(x + 4, y + 6, TILE_SIZE - 8, TILE_SIZE - 12);
-    this.ctx.fillStyle = "#9c9d97";
-    this.ctx.fillRect(x + 3, y + 4, TILE_SIZE - 6, 5);
-    this.ctx.fillStyle = "#3b3e42";
-    this.ctx.fillRect(x + 4, y + TILE_SIZE - 11, TILE_SIZE - 8, 5);
-    this.ctx.fillStyle = "rgba(98, 124, 102, 0.65)";
-    this.ctx.fillRect(x + 5, y + 7, 5, 3);
-    this.ctx.fillRect(x + TILE_SIZE - 11, y + 12, 4, 3);
-    this.ctx.fillStyle = "rgba(185, 191, 185, 0.45)";
-    this.ctx.fillRect(x + 8, y + 9, 7, 2);
-    this.ctx.fillRect(x + 18, y + 16, 5, 2);
-    this.ctx.strokeStyle = "rgba(24, 25, 28, 0.5)";
-    this.ctx.strokeRect(x + 2.5, y + 4.5, TILE_SIZE - 5, TILE_SIZE - 7);
+    const theme = this.getArenaThemeDefinition();
+    const palette = theme.palette;
+    this.ctx.fillStyle = palette.wallShadow;
+    this.ctx.fillRect(x + 2, y + TILE_SIZE - 5, TILE_SIZE - 4, 4);
+    this.ctx.fillStyle = palette.wallOuter;
+    this.ctx.fillRect(x + 2, y + 3, TILE_SIZE - 4, TILE_SIZE - 6);
+    this.ctx.fillStyle = palette.wallInner;
+    this.ctx.fillRect(x + 5, y + 9, TILE_SIZE - 10, TILE_SIZE - 17);
+    this.ctx.fillStyle = palette.wallTop;
+    this.ctx.fillRect(x + 3, y + 4, TILE_SIZE - 6, 6);
+    this.ctx.fillStyle = palette.wallAccent;
+    if (theme.motif.wallStyle === "royal") {
+      this.ctx.fillRect(x + 6, y + 11, TILE_SIZE - 12, 2);
+      this.ctx.fillRect(x + 6, y + 18, TILE_SIZE - 12, 2);
+      this.ctx.fillRect(x + 11, y + 8, 2, TILE_SIZE - 18);
+      this.ctx.fillRect(x + TILE_SIZE - 13, y + 8, 2, TILE_SIZE - 18);
+    } else if (theme.motif.wallStyle === "frost") {
+      this.ctx.fillRect(x + 8, y + 11, TILE_SIZE - 16, 2);
+      this.ctx.fillRect(x + 11, y + 16, TILE_SIZE - 22, 2);
+      this.ctx.fillRect(x + 14, y + 21, TILE_SIZE - 28, 2);
+    } else if (theme.motif.wallStyle === "obsidian") {
+      this.ctx.fillRect(x + 7, y + 12, TILE_SIZE - 14, 1);
+      this.ctx.fillRect(x + 9, y + 17, TILE_SIZE - 18, 1);
+      this.ctx.fillRect(x + 13, y + 22, TILE_SIZE - 26, 1);
+    } else {
+      this.ctx.fillRect(x + 7, y + 12, TILE_SIZE - 14, 2);
+      this.ctx.fillRect(x + 11, y + 17, TILE_SIZE - 22, 2);
+    }
+    this.ctx.strokeStyle = palette.wallBorder;
+    this.ctx.strokeRect(x + 2.5, y + 3.5, TILE_SIZE - 5, TILE_SIZE - 7);
   }
 
   private drawSuddenDeathClosedSlot(x: number, y: number): void {
     this.drawWall(x, y);
-    this.ctx.fillStyle = "rgba(40, 11, 8, 0.28)";
+    const palette = this.getArenaPalette();
+    this.ctx.fillStyle = palette.suddenDeathWash;
     this.ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-    this.ctx.strokeStyle = "rgba(255, 156, 102, 0.32)";
+    this.ctx.strokeStyle = palette.suddenDeathStroke;
     this.ctx.strokeRect(x + 4.5, y + 4.5, TILE_SIZE - 9, TILE_SIZE - 9);
   }
 
@@ -3449,19 +3719,39 @@ export class GameApp {
       this.ctx.drawImage(this.assets.props.crate, x, y, TILE_SIZE, TILE_SIZE);
       return;
     }
-    this.ctx.fillStyle = "#8a512c";
-    this.ctx.fillRect(x + 3, y + 3, TILE_SIZE - 6, TILE_SIZE - 6);
-    this.ctx.fillStyle = "#cf7b45";
-    this.ctx.fillRect(x + 5, y + 5, TILE_SIZE - 10, 5);
-    this.ctx.fillStyle = "#5e3118";
-    this.ctx.fillRect(x + 5, y + TILE_SIZE - 10, TILE_SIZE - 10, 4);
-    this.ctx.strokeStyle = "rgba(255, 214, 168, 0.22)";
-    this.ctx.beginPath();
-    this.ctx.moveTo(x + 6, y + 6);
-    this.ctx.lineTo(x + TILE_SIZE - 6, y + TILE_SIZE - 6);
-    this.ctx.moveTo(x + TILE_SIZE - 6, y + 6);
-    this.ctx.lineTo(x + 6, y + TILE_SIZE - 6);
-    this.ctx.stroke();
+    const theme = this.getArenaThemeDefinition();
+    const palette = theme.palette;
+    this.ctx.fillStyle = palette.crateShadow;
+    this.ctx.fillRect(x + 3, y + TILE_SIZE - 5, TILE_SIZE - 6, 4);
+    this.ctx.fillStyle = palette.crateOuter;
+    this.ctx.fillRect(x + 4, y + 5, TILE_SIZE - 8, TILE_SIZE - 10);
+    this.ctx.fillStyle = palette.crateInner;
+    this.ctx.fillRect(x + 7, y + 8, TILE_SIZE - 14, TILE_SIZE - 16);
+    this.ctx.fillStyle = palette.crateBand;
+    if (theme.motif.crateStyle === "trimmed") {
+      this.ctx.fillRect(x + 8, y + 8, TILE_SIZE - 16, 2);
+      this.ctx.fillRect(x + 8, y + TILE_SIZE - 10, TILE_SIZE - 16, 2);
+      this.ctx.fillRect(x + 8, y + 8, 2, TILE_SIZE - 16);
+      this.ctx.fillRect(x + TILE_SIZE - 10, y + 8, 2, TILE_SIZE - 16);
+    } else if (theme.motif.crateStyle === "expedition") {
+      this.ctx.fillRect(x + 15, y + 6, 3, TILE_SIZE - 12);
+      this.ctx.fillRect(x + 22, y + 6, 3, TILE_SIZE - 12);
+      this.ctx.fillRect(x + 6, y + 18, TILE_SIZE - 12, 3);
+    } else {
+      this.ctx.fillRect(x + 16, y + 6, 4, TILE_SIZE - 12);
+      this.ctx.fillRect(x + 6, y + 16, TILE_SIZE - 12, 4);
+    }
+    this.ctx.fillStyle = palette.crateMark;
+    if (theme.motif.crateStyle === "trimmed") {
+      this.ctx.fillRect(x + 11, y + 12, TILE_SIZE - 22, 2);
+      this.ctx.fillRect(x + 11, y + 20, TILE_SIZE - 22, 2);
+    } else if (theme.motif.crateStyle === "expedition") {
+      this.ctx.fillRect(x + 9, y + 11, TILE_SIZE - 18, 2);
+      this.ctx.fillRect(x + 13, y + 23, TILE_SIZE - 26, 2);
+    } else {
+      this.ctx.fillRect(x + 9, y + 10, TILE_SIZE - 18, 2);
+      this.ctx.fillRect(x + 10, y + 22, TILE_SIZE - 20, 2);
+    }
   }
 
   private drawCrateBreakAnimation(effect: CrateBreakAnimation): void {
@@ -3639,6 +3929,10 @@ export class GameApp {
     }
     if (player.skill.id === "nico-arcane-beam") {
       this.drawNicoBeamPreview(player);
+      return;
+    }
+    if (player.skill.id === "crocodilo-emerald-surge") {
+      this.drawCrocodiloSurgePreview(player);
     }
   }
 
@@ -3690,6 +3984,48 @@ export class GameApp {
     this.ctx.beginPath();
     this.ctx.arc(originCenter.x, originCenter.y, TILE_SIZE * (0.2 + chargeProgress * 0.08), 0, Math.PI * 2);
     this.ctx.fill();
+    this.ctx.restore();
+  }
+
+  private drawCrocodiloSurgePreview(player: PlayerState): void {
+    const origin = this.getTileFromPosition(player.position);
+    const tiles = computeCrocodiloSurgeTiles(origin, this.createSkillContext());
+    if (tiles.length === 0) {
+      return;
+    }
+    const chargeProgress = Math.max(0, Math.min(1, player.skill.castElapsedMs / CROCODILO_SKILL_CHANNEL_MS));
+    const pulse = 0.52 + Math.sin(this.animationClockMs / 100) * 0.16;
+    const centerX = ARENA_OFFSET_X + origin.x * TILE_SIZE + TILE_SIZE * 0.5;
+    const centerY = ARENA_OFFSET_Y + origin.y * TILE_SIZE + TILE_SIZE * 0.5;
+
+    this.ctx.save();
+    this.ctx.globalCompositeOperation = "lighter";
+    this.ctx.strokeStyle = `rgba(176, 255, 122, ${0.18 + chargeProgress * 0.24})`;
+    this.ctx.lineWidth = 2;
+
+    for (const tile of tiles) {
+      const x = ARENA_OFFSET_X + tile.x * TILE_SIZE;
+      const y = ARENA_OFFSET_Y + tile.y * TILE_SIZE;
+      const tileCenterX = x + TILE_SIZE * 0.5;
+      const tileCenterY = y + TILE_SIZE * 0.5;
+      this.ctx.fillStyle = `rgba(86, 214, 95, ${0.07 + chargeProgress * 0.1 + pulse * 0.03})`;
+      this.ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+      this.ctx.strokeStyle = `rgba(221, 255, 192, ${0.12 + chargeProgress * 0.18})`;
+      this.ctx.strokeRect(x + 4.5, y + 4.5, TILE_SIZE - 9, TILE_SIZE - 9);
+      this.ctx.beginPath();
+      this.ctx.moveTo(centerX, centerY);
+      this.ctx.lineTo(tileCenterX, tileCenterY);
+      this.ctx.stroke();
+    }
+
+    this.ctx.fillStyle = `rgba(122, 255, 107, ${0.12 + chargeProgress * 0.15})`;
+    this.ctx.beginPath();
+    this.ctx.arc(centerX, centerY, TILE_SIZE * (0.34 + chargeProgress * 0.08), 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.strokeStyle = `rgba(232, 255, 196, ${0.18 + chargeProgress * 0.16})`;
+    this.ctx.beginPath();
+    this.ctx.arc(centerX, centerY, TILE_SIZE * (0.42 + pulse * 0.03), 0, Math.PI * 2);
+    this.ctx.stroke();
     this.ctx.restore();
   }
 
@@ -3818,6 +4154,92 @@ export class GameApp {
     runFrames: HTMLImageElement[],
     attackFrames: HTMLImageElement[],
   ): { frames: HTMLImageElement[]; frameMs: number; playback: "loop" | "hold" } | null {
+    if (player.skill.id === "nico-arcane-beam") {
+      const exactCastFrames = this.getAnimationFramesForDirection(
+        this.getPlayerSprites(player.id).cast,
+        renderDirection,
+      );
+      const walkFrames = this.getAnimationFramesForDirection(
+        this.getPlayerSprites(player.id).walk,
+        renderDirection,
+      );
+      const idleFrames = this.getAnimationFramesForDirection(
+        this.getPlayerSprites(player.id).idle,
+        renderDirection,
+      );
+      const fallbackFrames = walkFrames.length > 0
+        ? walkFrames
+        : (idleFrames.length > 0 ? idleFrames : runFrames);
+      if (player.skill.phase === "channeling") {
+        const frames = exactCastFrames.length >= 3
+          ? exactCastFrames.slice(0, exactCastFrames.length - 1)
+          : (exactCastFrames.length > 0 ? exactCastFrames : fallbackFrames);
+        if (frames.length === 0) {
+          return null;
+        }
+        return {
+          frames,
+          frameMs: Math.max(SKILL_FRAME_MS, Math.floor(NICO_SKILL_CHANNEL_MS / Math.max(1, frames.length))),
+          playback: "hold",
+        };
+      }
+      if (player.skill.phase === "releasing") {
+        const frames = exactCastFrames.length >= 2
+          ? exactCastFrames.slice(Math.max(0, exactCastFrames.length - 2))
+          : (exactCastFrames.length > 0 ? exactCastFrames : fallbackFrames);
+        if (frames.length === 0) {
+          return null;
+        }
+        return {
+          frames,
+          frameMs: Math.max(60, Math.floor(NICO_SKILL_RELEASE_MS / Math.max(1, frames.length))),
+          playback: "hold",
+        };
+      }
+      return null;
+    }
+    if (player.skill.id === "crocodilo-emerald-surge") {
+      const exactCastFrames = this.getAnimationFramesForDirection(
+        this.getPlayerSprites(player.id).cast,
+        renderDirection,
+      );
+      const idleFrames = this.getAnimationFramesForDirection(
+        this.getPlayerSprites(player.id).idle,
+        renderDirection,
+      );
+      const fallbackFrames = exactCastFrames.length > 0
+        ? exactCastFrames
+        : (attackFrames.length > 0
+          ? attackFrames
+          : (runFrames.length > 0 ? runFrames : idleFrames));
+      if (player.skill.phase === "channeling") {
+        const frames = exactCastFrames.length >= 3
+          ? exactCastFrames.slice(0, exactCastFrames.length - 1)
+          : fallbackFrames;
+        if (frames.length === 0) {
+          return null;
+        }
+        return {
+          frames,
+          frameMs: Math.max(SKILL_FRAME_MS, Math.floor(CROCODILO_SKILL_CHANNEL_MS / Math.max(1, frames.length))),
+          playback: "hold",
+        };
+      }
+      if (player.skill.phase === "releasing") {
+        const frames = exactCastFrames.length >= 2
+          ? exactCastFrames.slice(Math.max(0, exactCastFrames.length - 2))
+          : fallbackFrames;
+        if (frames.length === 0) {
+          return null;
+        }
+        return {
+          frames,
+          frameMs: Math.max(60, Math.floor(CROCODILO_SKILL_RELEASE_MS / Math.max(1, frames.length))),
+          playback: "hold",
+        };
+      }
+      return null;
+    }
     if (player.skill.phase !== "channeling") {
       return null;
     }
@@ -3840,38 +4262,6 @@ export class GameApp {
         frames,
         frameMs: KILLER_BEE_DASH_FRAME_MS,
         playback: "loop",
-      };
-    }
-    if (player.skill.id === "nico-arcane-beam") {
-      const exactCastFrames = this.getPlayerSprites(player.id).cast?.[renderDirection] ?? [];
-      const walkFrames = this.getPlayerSprites(player.id).walk?.[renderDirection] ?? [];
-      const idleFrames = this.getPlayerSprites(player.id).idle?.[renderDirection] ?? [];
-      const frames = exactCastFrames.length > 0
-        ? exactCastFrames
-        : (walkFrames.length > 0
-          ? walkFrames
-          : (idleFrames.length > 0 ? idleFrames : runFrames));
-      if (frames.length === 0) {
-        return null;
-      }
-      return {
-        frames,
-        frameMs: Math.max(SKILL_FRAME_MS, Math.floor(NICO_SKILL_CHANNEL_MS / Math.max(1, frames.length))),
-        playback: "hold",
-      };
-    }
-    if (player.skill.id === "crocodilo-emerald-surge") {
-      const exactCastFrames = this.getPlayerSprites(player.id).cast?.[renderDirection] ?? [];
-      const frames = exactCastFrames.length > 0
-        ? exactCastFrames
-        : (attackFrames.length > 0 ? attackFrames : runFrames);
-      if (frames.length === 0) {
-        return null;
-      }
-      return {
-        frames,
-        frameMs: Math.max(SKILL_FRAME_MS, Math.floor(CROCODILO_SKILL_CHANNEL_MS / Math.max(1, frames.length))),
-        playback: "hold",
       };
     }
     return null;

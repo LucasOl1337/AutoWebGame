@@ -1,5 +1,7 @@
 Object.defineProperty(globalThis, "navigator", { value: { webdriver: true }, configurable: true });
 
+import { readFileSync } from "node:fs";
+
 const noop = () => {};
 
 const { GameApp } = await import("../output/esm/app/game-app.js");
@@ -10,6 +12,9 @@ const RANNI_ID = "03a976fb-7313-4064-a477-5bb9b0760034";
 const KILLER_BEE_ID = "6ee8baa5-3277-413b-ae0e-2659b9cc52e9";
 const NICO_ID = "5474c45c-2987-43e0-af2c-a6500c836881";
 const CROCODILO_ID = "d083c3dc-7162-4391-8628-6adde0b8d8d6";
+const PUBLIC_CHARACTER_MANIFEST = JSON.parse(
+  readFileSync(new URL("../public/assets/characters/manifest.json", import.meta.url), "utf8"),
+).characters;
 
 const emptyDirectionalSprites = {
   up: null,
@@ -55,7 +60,7 @@ function createWorkerStyleAssets() {
 
 function createServerGame() {
   const game = new GameApp(root, createWorkerStyleAssets());
-  const indexById = new Map(CHARACTER_ROSTER_MANIFEST.map((entry, index) => [entry.id, index]));
+  const indexById = new Map(PUBLIC_CHARACTER_MANIFEST.map((entry, index) => [entry.id, index]));
   game.startServerAuthoritativeMatch(
     [1, 2, 3, 4],
     {
@@ -70,6 +75,10 @@ function createServerGame() {
   game.bombs = [];
   return game;
 }
+
+const rosterOrderMatchesPublicManifest = PUBLIC_CHARACTER_MANIFEST.every(
+  (entry, index) => entry?.id === CHARACTER_ROSTER_MANIFEST[index]?.id,
+);
 
 const neutralInput = {
   bombPressed: false,
@@ -136,6 +145,8 @@ const report = {
 };
 
 report.pass = report.ranniStarted && report.beeStarted && report.nicoStarted && report.crocodiloStarted;
+report.rosterOrderMatchesPublicManifest = rosterOrderMatchesPublicManifest;
+report.pass = report.pass && report.rosterOrderMatchesPublicManifest;
 
 console.log(JSON.stringify(report, null, 2));
 

@@ -27,6 +27,7 @@ const fakeCtx = {
 const fakeCanvas = {
   width: 0,
   height: 0,
+  dataset: {},
   style: {},
   setAttribute: noop,
   getContext: () => fakeCtx,

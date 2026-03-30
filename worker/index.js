@@ -1,6 +1,15 @@
 import { DurableObject } from "cloudflare:workers";
 import { GameApp } from "../src/app/game-app";
 import { CHARACTER_ROSTER_MANIFEST } from "../src/core/character-roster-manifest";
+import {
+  canReuseCurrentRoomForQuickMatch,
+  createIdleSessionState,
+  isManualLobbyVisible,
+  isQuickMatchCandidate,
+  resolveOnlineSessionState,
+  shouldResetPlayingRoom,
+} from "../src/online/matchmaking";
+import { validateUsername } from "../src/online/account";
 import { mergeSequencedOnlineInputState } from "../src/online/input-latch";
 import { createFixedRatePumpState, consumeFixedRatePumpSteps } from "../src/online/server-tick";
 
@@ -10,7 +19,15 @@ const FULL_SNAPSHOT_EVERY_TICKS = 6;
 const MATCH_PUMP_INTERVAL_MS = 8;
 const MAX_MATCH_STEPS_PER_PUMP = 5;
 const MATCH_RESULT_RESTART_DELAY_MS = 900;
+const ENDLESS_ROOM_CODE = "ENDLS1";
+const ENDLESS_ROOM_TITLE = "Partida infinita";
 const PLAYER_IDS = [1, 2, 3, 4];
+const ACCOUNT_SESSION_COOKIE = "bomba_session";
+const ACCOUNT_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 180;
+const ADMIN_SESSION_COOKIE = "bomba_admin_session";
+const ADMIN_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+const ADMIN_DEFAULT_USERNAME = "slicingstorm";
+const ADMIN_DEFAULT_PASSWORD = "pingodilocorvo00";
 const ANALYTICS_TIME_ZONE = "America/Sao_Paulo";
 const ANALYTICS_LOOKBACK_DAYS = 7;
 const TELEMETRY_EVENT_NAMES = new Set([
@@ -28,6 +45,8 @@ const TELEMETRY_EVENT_NAMES = new Set([
   "character_selected",
   "invite_copied",
   "chat_sent",
+  "feedback_opened",
+  "feedback_submitted",
   "match_started",
   "match_ended",
   "lobby_left",
@@ -47,6 +66,8 @@ const LEGACY_AUDIO_PATHS = new Set([
  *   roomCode: string;
  *   title: string;
  *   status: "open" | "playing";
+ *   roomMode: "classic" | "endless";
+ *   roomKind: "manual" | "matchmaking" | "endless";
  *   createdAt: number;
   *   hostClientId: string | null;
  *   clients: Set<string>;
@@ -59,6 +80,7 @@ const LEGACY_AUDIO_PATHS = new Set([
  *   displayName: string | null;
  *   characterIndex: number;
  *   ready: boolean;
+ *   occupantType: "empty" | "human" | "bot";
  * }} LobbySeat
  *
  * @typedef {{
@@ -93,15 +115,53 @@ export default {
     }
 
     if (url.pathname === "/api/admin/summary") {
-      const auth = await authorizeAdminRequest(request, env);
-      if (!auth.ok) {
-        return auth.response;
-      }
       return globalLobby.fetch(rewriteRequestPath(request, "/internal/admin/summary"));
     }
 
+    if (url.pathname === "/api/admin/login") {
+      if (request.method !== "POST") {
+        return new Response("Method not allowed", { status: 405 });
+      }
+      return globalLobby.fetch(rewriteRequestPath(request, "/internal/admin/login"));
+    }
+
+    if (url.pathname === "/api/admin/logout") {
+      if (request.method !== "POST") {
+        return new Response("Method not allowed", { status: 405 });
+      }
+      return globalLobby.fetch(rewriteRequestPath(request, "/internal/admin/logout"));
+    }
+
+    if (url.pathname === "/api/feedback") {
+      if (request.method !== "POST") {
+        return new Response("Method not allowed", { status: 405 });
+      }
+      return globalLobby.fetch(rewriteRequestPath(request, "/internal/feedback"));
+    }
+
+    if (url.pathname === "/api/me") {
+      if (request.method !== "GET") {
+        return new Response("Method not allowed", { status: 405 });
+      }
+      return globalLobby.fetch(rewriteRequestPath(request, "/internal/account/me"));
+    }
+
+    if (url.pathname === "/api/account/quick-create") {
+      if (request.method !== "POST") {
+        return new Response("Method not allowed", { status: 405 });
+      }
+      return globalLobby.fetch(rewriteRequestPath(request, "/internal/account/quick-create"));
+    }
+
+    if (url.pathname === "/api/logout") {
+      if (request.method !== "POST") {
+        return new Response("Method not allowed", { status: 405 });
+      }
+      return globalLobby.fetch(rewriteRequestPath(request, "/internal/account/logout"));
+    }
+
     if (url.pathname === "/admin") {
-      return new Response(renderAdminHtml(url.searchParams.get("token")), {
+      return new Response(renderAdminHtml(env), {
         headers: {
           "content-type": "text/html; charset=utf-8",
           "cache-control": "no-store",
@@ -120,7 +180,18 @@ export default {
       return new Response("Not found", { status: 404 });
     }
 
-    return env.ASSETS.fetch(request);
+    const assetResponse = await env.ASSETS.fetch(request);
+    const contentType = assetResponse.headers.get("content-type") || "";
+    if (!contentType.includes("text/html")) {
+      return assetResponse;
+    }
+    const headers = new Headers(assetResponse.headers);
+    headers.set("cache-control", "no-store");
+    return new Response(assetResponse.body, {
+      status: assetResponse.status,
+      statusText: assetResponse.statusText,
+      headers,
+    });
   },
 
   async scheduled(controller, env, ctx) {
@@ -148,11 +219,15 @@ export class GlobalLobby extends DurableObject {
   rooms = new Map();
   /** @type {Map<string, WebSocket>} */
   sockets = new Map();
+  /** @type {Map<string, import("../src/online/account").PlayerAccount | null>} */
+  clientAccounts = new Map();
+  /** @type {Map<string, import("../src/online/matchmaking").OnlineClientIntent>} */
+  clientIntents = new Map();
   /** @type {Set<string>} */
   quickMatchPendingClients = new Set();
   /** @type {Map<string, number>} */
   preferredCharacterSelections = new Map();
-  /** @type {Map<string, { game: GameApp, inputs: Record<1 | 2 | 3 | 4, import("../src/online/protocol").OnlineInputState & { inputSeq?: number, sentAtMs?: number }>, ackedInputSeq: Record<1 | 2 | 3 | 4, number>, timer: ReturnType<typeof setInterval> | null, tick: number, activePlayerIds: Array<1 | 2 | 3 | 4>, characterSelections: Record<1 | 2 | 3 | 4, number>, matchResultChoices: Record<1 | 2 | 3 | 4, "rematch" | "lobby" | null>, clock: import("../src/online/server-tick").FixedRatePumpState, resultRestartAtMs: number | null }>} */
+  /** @type {Map<string, { game: GameApp, inputs: Record<1 | 2 | 3 | 4, import("../src/online/protocol").OnlineInputState & { inputSeq?: number, sentAtMs?: number }>, ackedInputSeq: Record<1 | 2 | 3 | 4, number>, timer: ReturnType<typeof setInterval> | null, tick: number, activePlayerIds: Array<1 | 2 | 3 | 4>, botPlayerIds: Array<1 | 2 | 3 | 4>, characterSelections: Record<1 | 2 | 3 | 4, number>, matchResultChoices: Record<1 | 2 | 3 | 4, "rematch" | "lobby" | null>, clock: import("../src/online/server-tick").FixedRatePumpState, resultRestartAtMs: number | null, roomMode: "classic" | "endless" }>} */
   matches = new Map();
   /** @type {Promise<void>} */
   ready;
@@ -180,11 +255,13 @@ export class GlobalLobby extends DurableObject {
             roomCode: room.roomCode,
             title: room.title,
             status: "open",
+            roomMode: room.roomMode === "endless" ? "endless" : "classic",
+            roomKind: normalizeStoredRoomKind(room.roomKind, room.roomMode),
             createdAt: room.createdAt,
             hostClientId: null,
             clients: new Set(room.clients),
             chat: Array.isArray(room.chat) ? room.chat.slice(-40) : [],
-            seats: createSeatMap((seatId) => ({ ...(room.seats?.[seatId] ?? createEmptySeat()), ready: false })),
+            seats: createSeatMap((seatId) => normalizeStoredSeat(room.seats?.[seatId], room.roomMode === "endless")),
           },
         ]),
       );
@@ -193,6 +270,8 @@ export class GlobalLobby extends DurableObject {
         const attachment = websocket.deserializeAttachment();
         if (attachment && typeof attachment === "object" && typeof attachment.clientId === "string") {
           this.sockets.set(attachment.clientId, websocket);
+          this.clientAccounts.set(attachment.clientId, normalizeStoredAttachmentAccount(attachment.account));
+          this.clientIntents.set(attachment.clientId, "idle");
         }
       }
 
@@ -213,6 +292,38 @@ export class GlobalLobby extends DurableObject {
       return this.handleTelemetryIngest(request);
     }
 
+    if (url.pathname === "/internal/feedback") {
+      return this.handleFeedbackIngest(request);
+    }
+
+    if (url.pathname === "/internal/admin/login") {
+      return this.handleAdminLogin(request, this.env);
+    }
+
+    if (url.pathname === "/internal/admin/logout") {
+      return this.handleAdminLogout(request);
+    }
+
+    if (url.pathname === "/internal/admin/summary") {
+      const auth = await authorizeAdminRequest(request, this.env, this.ctx.storage);
+      if (!auth.ok) {
+        return auth.response;
+      }
+      return this.handleAdminSummary();
+    }
+
+    if (url.pathname === "/internal/account/me") {
+      return this.handleAccountMe(request);
+    }
+
+    if (url.pathname === "/internal/account/quick-create") {
+      return this.handleQuickAccountCreate(request);
+    }
+
+    if (url.pathname === "/internal/account/logout") {
+      return this.handleAccountLogout(request);
+    }
+
     if (url.pathname === "/internal/admin/summary") {
       return this.handleAdminSummary();
     }
@@ -231,13 +342,19 @@ export class GlobalLobby extends DurableObject {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     const clientId = createId("cli");
+    const account = await this.readCurrentAccountFromRequest(request);
+    await this.recordDailyIp(request);
 
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ clientId });
+    server.serializeAttachment({ clientId, account });
     this.sockets.set(clientId, server);
+    this.clientAccounts.set(clientId, account);
+    this.clientIntents.set(clientId, "idle");
     this.send(server, {
       type: "hello",
       clientId,
+      account,
+      sessionState: this.buildClientSessionState(clientId),
       lobbies: this.buildLobbyList(),
       onlineUsers: this.sockets.size,
       onlinePlayers: this.buildOnlinePresenceList(),
@@ -297,8 +414,12 @@ export class GlobalLobby extends DurableObject {
       case "quick-match":
         await this.handleQuickMatch(clientId, payload.characterIndex);
         break;
+      case "endless-match":
+        await this.handleEndlessMatch(clientId, payload.characterIndex);
+        break;
       case "quick-match-cancel":
         this.quickMatchPendingClients.delete(clientId);
+        this.clientIntents.set(clientId, "idle");
         this.broadcastQuickMatchState();
         break;
       case "chat-send":
@@ -334,11 +455,199 @@ export class GlobalLobby extends DurableObject {
   }
 
   /**
+   * @param {Request} request
+   * @returns {Promise<Response>}
+   */
+  async handleAccountMe(request) {
+    const account = await this.readCurrentAccountFromRequest(request);
+    return Response.json(
+      { account },
+      {
+        headers: {
+          "cache-control": "no-store",
+        },
+      },
+    );
+  }
+
+  /**
+   * @param {Request} request
+   * @returns {Promise<Response>}
+   */
+  async handleQuickAccountCreate(request) {
+    const existingAccount = await this.readCurrentAccountFromRequest(request);
+    if (existingAccount) {
+      return Response.json(
+        { account: existingAccount },
+        {
+          headers: {
+            "cache-control": "no-store",
+          },
+        },
+      );
+    }
+
+    let payload;
+    try {
+      payload = await request.json();
+    } catch {
+      return Response.json(
+        { error: "Nao foi possivel ler os dados da conta." },
+        {
+          status: 400,
+          headers: {
+            "cache-control": "no-store",
+          },
+        },
+      );
+    }
+
+    const validation = validateUsername(String(payload?.username ?? ""));
+    if (!validation.ok || !validation.username || !validation.normalizedUsername) {
+      return Response.json(
+        { error: validation.message ?? "Username invalido." },
+        {
+          status: 400,
+          headers: {
+            "cache-control": "no-store",
+          },
+        },
+      );
+    }
+
+    const usernameLookupKey = buildAccountUsernameLookupKey(validation.normalizedUsername);
+    const existingAccountId = await this.ctx.storage.get(usernameLookupKey);
+    if (typeof existingAccountId === "string" && existingAccountId) {
+      return Response.json(
+        { error: "Esse username ja foi escolhido." },
+        {
+          status: 409,
+          headers: {
+            "cache-control": "no-store",
+          },
+        },
+      );
+    }
+
+    const now = Date.now();
+    const account = {
+      id: createId("acct"),
+      username: validation.username,
+      authLevel: "username",
+      createdAt: now,
+    };
+    const session = {
+      id: createId("sess"),
+      accountId: account.id,
+      createdAt: now,
+      expiresAt: now + (ACCOUNT_SESSION_MAX_AGE_SECONDS * 1000),
+    };
+
+    await Promise.all([
+      this.ctx.storage.put(buildAccountKey(account.id), account),
+      this.ctx.storage.put(usernameLookupKey, account.id),
+      this.ctx.storage.put(buildAccountSessionKey(session.id), session),
+    ]);
+
+    return Response.json(
+      { account },
+      {
+        status: 201,
+        headers: {
+          "cache-control": "no-store",
+          "set-cookie": buildSessionCookieHeader(session.id, request.url),
+        },
+      },
+    );
+  }
+
+  /**
+   * @param {Request} request
+   * @returns {Promise<Response>}
+   */
+  async handleAccountLogout(request) {
+    const sessionId = readCookieValue(request.headers.get("cookie"), ACCOUNT_SESSION_COOKIE);
+    if (sessionId) {
+      await this.ctx.storage.delete(buildAccountSessionKey(sessionId));
+    }
+    return Response.json(
+      { account: null },
+      {
+        headers: {
+          "cache-control": "no-store",
+          "set-cookie": buildClearedSessionCookieHeader(),
+        },
+      },
+    );
+  }
+
+  /**
+   * @param {Request} request
+   * @returns {Promise<import("../src/online/account").PlayerAccount | null>}
+   */
+  async readCurrentAccountFromRequest(request) {
+    const sessionId = readCookieValue(request.headers.get("cookie"), ACCOUNT_SESSION_COOKIE);
+    if (!sessionId) {
+      return null;
+    }
+
+    const storedSession = await this.ctx.storage.get(buildAccountSessionKey(sessionId));
+    const session = normalizeStoredSession(storedSession);
+    if (!session) {
+      return null;
+    }
+    if (session.expiresAt <= Date.now()) {
+      await this.ctx.storage.delete(buildAccountSessionKey(sessionId));
+      return null;
+    }
+
+    const storedAccount = await this.ctx.storage.get(buildAccountKey(session.accountId));
+    return normalizeStoredAccount(storedAccount);
+  }
+
+  /**
+   * @param {string} clientId
+   * @param {import("../src/online/matchmaking").OnlineClientIntent} intent
+   */
+  setClientIntent(clientId, intent) {
+    if (intent === "idle") {
+      this.clientIntents.delete(clientId);
+      return;
+    }
+    this.clientIntents.set(clientId, intent);
+  }
+
+  /**
+   * @param {string} clientId
+   * @param {{ room?: LobbyRoom | null, hasActiveMatch?: boolean }} [options]
+   */
+  buildClientSessionState(clientId, options = {}) {
+    const room = options.room === undefined ? this.findRoomForClient(clientId) : (options.room ?? null);
+    const hasActiveMatch = options.hasActiveMatch === undefined
+      ? Boolean(room && this.matches.get(room.roomCode))
+      : options.hasActiveMatch;
+
+    return resolveOnlineSessionState(
+      this.clientIntents.get(clientId) ?? "idle",
+      room
+        ? {
+          roomCode: room.roomCode,
+          roomMode: room.roomMode === "endless" ? "endless" : "classic",
+          roomKind: room.roomKind,
+          status: room.status,
+        }
+        : null,
+      hasActiveMatch,
+    );
+  }
+
+  /**
    * @param {string} clientId
    * @param {string} rawTitle
    */
   async handleCreateLobby(clientId, rawTitle) {
     this.quickMatchPendingClients.delete(clientId);
+    this.setClientIntent(clientId, "manual");
     const currentRoom = this.findRoomForClient(clientId);
     if (currentRoom) {
       await this.releaseClientFromRoom(currentRoom, clientId);
@@ -351,6 +660,8 @@ export class GlobalLobby extends DurableObject {
       title: normalizeLobbyTitle(rawTitle),
       createdAt: Date.now(),
       status: "open",
+      roomMode: "classic",
+      roomKind: "manual",
       hostClientId: null,
       clients: new Set([clientId]),
       chat: [],
@@ -372,11 +683,22 @@ export class GlobalLobby extends DurableObject {
     this.quickMatchPendingClients.delete(clientId);
     this.reconcileRoomsWithActiveSockets();
     const roomCode = normalizeRoomCode(rawRoomCode);
+    if (roomCode === ENDLESS_ROOM_CODE) {
+      await this.handleEndlessMatch(clientId, this.preferredCharacterSelections.get(clientId) ?? 0);
+      return;
+    }
     const room = this.rooms.get(roomCode);
     if (!room) {
       this.sendToClient(clientId, { type: "error", message: "Lobby not found." });
       return;
     }
+
+    if (room.roomMode === "endless") {
+      await this.handleEndlessMatch(clientId, this.preferredCharacterSelections.get(clientId) ?? 0);
+      return;
+    }
+
+    this.setClientIntent(clientId, room.roomKind === "matchmaking" ? "queue_classic" : "manual");
 
     const alreadySeated = PLAYER_IDS.some((seatId) => room.seats[seatId].clientId === clientId);
     const seatsFull = PLAYER_IDS.every((seatId) => Boolean(room.seats[seatId].clientId));
@@ -408,16 +730,34 @@ export class GlobalLobby extends DurableObject {
    */
   async handleLeaveLobby(clientId) {
     this.quickMatchPendingClients.delete(clientId);
+    this.setClientIntent(clientId, "idle");
     this.reconcileRoomsWithActiveSockets();
     const room = this.findRoomForClient(clientId);
     if (!room) {
-      this.sendToClient(clientId, { type: "lobby-left" });
+      this.sendToClient(clientId, {
+        type: "lobby-left",
+        sessionState: this.buildClientSessionState(clientId, { room: null, hasActiveMatch: false }),
+      });
+      this.broadcastQuickMatchState();
+      return;
+    }
+
+    if (room.roomMode === "endless") {
+      await this.leaveEndlessRoom(room, clientId);
+      this.sendToClient(clientId, {
+        type: "lobby-left",
+        sessionState: this.buildClientSessionState(clientId, { room: null, hasActiveMatch: false }),
+      });
+      this.broadcastLobbyList();
       this.broadcastQuickMatchState();
       return;
     }
 
     await this.releaseClientFromRoom(room, clientId);
-    this.sendToClient(clientId, { type: "lobby-left" });
+    this.sendToClient(clientId, {
+      type: "lobby-left",
+      sessionState: this.buildClientSessionState(clientId, { room: null, hasActiveMatch: false }),
+    });
     this.broadcastLobbyList();
     this.broadcastQuickMatchState();
   }
@@ -508,11 +848,12 @@ export class GlobalLobby extends DurableObject {
    * @param {unknown} rawCharacterIndex
    */
   async handleQuickMatch(clientId, rawCharacterIndex) {
+    this.setClientIntent(clientId, "queue_classic");
     this.quickMatchPendingClients.add(clientId);
     try {
       this.reconcileRoomsWithActiveSockets();
       const activeRoom = this.findRoomForClient(clientId);
-      if (activeRoom && activeRoom.status === "open") {
+      if (canReuseCurrentRoomForQuickMatch(activeRoom)) {
         const reusedCurrentLobby = await this.readyClientForQuickMatch(activeRoom, clientId, rawCharacterIndex);
         if (reusedCurrentLobby) {
           return;
@@ -522,7 +863,10 @@ export class GlobalLobby extends DurableObject {
       const previousRoomCode = activeRoom?.roomCode ?? null;
       if (activeRoom) {
         await this.releaseClientFromRoom(activeRoom, clientId);
-        this.sendToClient(clientId, { type: "lobby-left" });
+        this.sendToClient(clientId, {
+          type: "lobby-left",
+          sessionState: this.buildClientSessionState(clientId, { room: null, hasActiveMatch: false }),
+        });
       }
 
       this.preferredCharacterSelections.set(clientId, normalizeCharacterIndex(rawCharacterIndex, 0));
@@ -536,6 +880,169 @@ export class GlobalLobby extends DurableObject {
     } finally {
       this.quickMatchPendingClients.delete(clientId);
       this.broadcastQuickMatchState();
+    }
+  }
+
+  /**
+   * @param {string} clientId
+   * @param {unknown} rawCharacterIndex
+   */
+  async handleEndlessMatch(clientId, rawCharacterIndex) {
+    this.quickMatchPendingClients.delete(clientId);
+    this.setClientIntent(clientId, "queue_endless");
+    this.preferredCharacterSelections.set(clientId, normalizeCharacterIndex(rawCharacterIndex, 0));
+    this.reconcileRoomsWithActiveSockets();
+
+    const currentRoom = this.findRoomForClient(clientId);
+    if (currentRoom && currentRoom.roomMode === "endless") {
+      await this.joinEndlessRoom(currentRoom, clientId, rawCharacterIndex);
+      return;
+    }
+    if (currentRoom) {
+      await this.releaseClientFromRoom(currentRoom, clientId);
+      this.sendToClient(clientId, {
+        type: "lobby-left",
+        sessionState: this.buildClientSessionState(clientId, { room: null, hasActiveMatch: false }),
+      });
+    }
+
+    let room = this.findEndlessRoom();
+    if (!room) {
+      room = this.createEndlessRoom();
+      this.rooms.set(room.roomCode, room);
+    }
+
+    await this.joinEndlessRoom(room, clientId, rawCharacterIndex);
+    this.broadcastLobbyList();
+    this.broadcastQuickMatchState();
+  }
+
+  createEndlessRoom() {
+    const room = {
+      roomCode: ENDLESS_ROOM_CODE,
+      title: ENDLESS_ROOM_TITLE,
+      createdAt: Date.now(),
+      status: "playing",
+      roomMode: "endless",
+      roomKind: "endless",
+      hostClientId: null,
+      clients: new Set(),
+      chat: [],
+      seats: createSeatMap((seatId) => createBotSeat((seatId - 1) % 4)),
+    };
+    this.refreshSeatLabels(room);
+    return room;
+  }
+
+  findEndlessRoom() {
+    for (const room of this.rooms.values()) {
+      if (room.roomMode === "endless") {
+        return room;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * @param {LobbyRoom} room
+   * @param {string} clientId
+   * @param {unknown} rawCharacterIndex
+   */
+  async joinEndlessRoom(room, clientId, rawCharacterIndex) {
+    let seatId = this.findSeatForClient(room, clientId);
+    if (!seatId) {
+      seatId = PLAYER_IDS.find((candidateSeatId) => room.seats[candidateSeatId].occupantType === "bot") ?? null;
+    }
+    if (!seatId) {
+      this.sendToClient(clientId, { type: "error", message: "A partida infinita esta lotada agora." });
+      return false;
+    }
+
+    const fallbackCharacterIndex = room.seats[seatId]?.characterIndex ?? ((seatId - 1) % 4);
+    room.clients.add(clientId);
+    room.seats[seatId] = createHumanSeat(clientId, normalizeCharacterIndex(rawCharacterIndex, fallbackCharacterIndex));
+    room.hostClientId = room.hostClientId && this.sockets.has(room.hostClientId)
+      ? room.hostClientId
+      : clientId;
+    room.status = "playing";
+    this.refreshSeatLabels(room);
+
+    let match = this.matches.get(room.roomCode);
+    if (!match) {
+      const activePlayerIds = PLAYER_IDS.slice();
+      const characterSelections = createSeatMap((playerId) => room.seats[playerId].characterIndex ?? 0);
+      const botPlayerIds = PLAYER_IDS.filter((playerId) => room.seats[playerId].occupantType === "bot");
+      this.startRoomMatch(room, activePlayerIds, characterSelections, {
+        roomMode: "endless",
+        botPlayerIds,
+        broadcastInitialSnapshot: false,
+      });
+      match = this.matches.get(room.roomCode) ?? null;
+      this.appendRoomSystemMessage(room, "Modo infinito iniciado.");
+    } else {
+      match.characterSelections[seatId] = room.seats[seatId].characterIndex ?? fallbackCharacterIndex;
+      await this.syncEndlessMatchState(room, match);
+    }
+
+    await this.persistState();
+    this.sendJoinedLobby(clientId, room);
+    this.sendMatchStartedToSeat(room, seatId, match?.activePlayerIds ?? PLAYER_IDS.slice(), match?.characterSelections ?? createSeatMap((playerId) => room.seats[playerId].characterIndex ?? 0), match?.botPlayerIds ?? []);
+    this.broadcastLobbyToMembers(room);
+    this.broadcastSnapshot(room.roomCode);
+    return true;
+  }
+
+  /**
+   * @param {LobbyRoom} room
+   * @param {string} clientId
+   */
+  async leaveEndlessRoom(room, clientId) {
+    room.clients.delete(clientId);
+    const seatId = this.findSeatForClient(room, clientId);
+    if (!seatId) {
+      if (room.clients.size === 0) {
+        this.stopRoomMatch(room.roomCode);
+        this.rooms.delete(room.roomCode);
+        await this.persistState();
+      }
+      return;
+    }
+
+    const seat = room.seats[seatId];
+    room.seats[seatId] = createBotSeat(seat.characterIndex ?? ((seatId - 1) % 4));
+    this.refreshSeatLabels(room);
+
+    const match = this.matches.get(room.roomCode);
+    if (match) {
+      match.inputs[seatId] = createNeutralInput();
+      await this.syncEndlessMatchState(room, match, seatId);
+      this.appendRoomSystemMessage(room, `P${seatId} saiu. Um bot assumiu a vaga.`);
+    }
+
+    if (room.clients.size === 0) {
+      this.stopRoomMatch(room.roomCode);
+      this.rooms.delete(room.roomCode);
+      await this.persistState();
+      return;
+    }
+
+    await this.persistState();
+    this.broadcastLobbyToMembers(room);
+  }
+
+  /**
+   * @param {LobbyRoom} room
+   * @param {ReturnType<GlobalLobby["matches"]["get"]>} match
+   * @param {1 | 2 | 3 | 4 | null} eliminatedSeatId
+   */
+  async syncEndlessMatchState(room, match, eliminatedSeatId = null) {
+    match.botPlayerIds = PLAYER_IDS.filter((playerId) => room.seats[playerId].occupantType === "bot");
+    match.characterSelections = createSeatMap((seatId) => room.seats[seatId].characterIndex ?? 0);
+    match.game.setServerBotPlayers(match.botPlayerIds);
+    match.game.setServerCharacterSelections(match.characterSelections);
+    match.game.setServerPlayerLabels(this.buildRoomPlayerLabels(room));
+    if (eliminatedSeatId) {
+      match.game.eliminateServerPlayer(eliminatedSeatId);
     }
   }
 
@@ -619,7 +1126,7 @@ export class GlobalLobby extends DurableObject {
    * @param {LobbyRoom} room
    */
   async maybeStartMatch(room) {
-    if (room.status !== "open") {
+    if (room.roomMode !== "classic" || room.status !== "open") {
       return;
     }
 
@@ -718,8 +1225,10 @@ export class GlobalLobby extends DurableObject {
     }
 
     this.sockets.delete(clientId);
+    this.clientAccounts.delete(clientId);
     this.quickMatchPendingClients.delete(clientId);
     this.preferredCharacterSelections.delete(clientId);
+    this.clientIntents.delete(clientId);
     const room = this.findRoomForClient(clientId);
     if (room) {
       await this.releaseClientFromRoom(room, clientId);
@@ -734,6 +1243,8 @@ export class GlobalLobby extends DurableObject {
    * @returns {Promise<Response>}
    */
   async handleTelemetryIngest(request) {
+    await this.recordDailyIp(request);
+
     /** @type {unknown} */
     let payload;
     try {
@@ -805,6 +1316,126 @@ export class GlobalLobby extends DurableObject {
   }
 
   /**
+   * @param {Request} request
+   * @returns {Promise<Response>}
+   */
+  async handleFeedbackIngest(request) {
+    await this.recordDailyIp(request);
+
+    /** @type {unknown} */
+    let payload;
+    try {
+      payload = await request.json();
+    } catch {
+      return Response.json({ ok: false, error: "Invalid JSON body." }, { status: 400 });
+    }
+
+    const message = typeof payload?.message === "string" ? payload.message.trim() : "";
+    if (!message) {
+      return Response.json({ ok: false, error: "Feedback message is required." }, { status: 400 });
+    }
+    if (message.length > 2000) {
+      return Response.json({ ok: false, error: "Feedback message is too long." }, { status: 400 });
+    }
+
+    const occurredAtMs = Date.now();
+    const dateKey = formatDateKey(occurredAtMs);
+    const feedback = {
+      id: createId("fb"),
+      dateKey,
+      message,
+      screen: typeof payload?.screen === "string" ? payload.screen.trim().slice(0, 64) : null,
+      roomCode: typeof payload?.roomCode === "string" ? payload.roomCode.trim().slice(0, 12) : null,
+      referrerHost: request.headers.get("referer") ? safeHostFromUrl(request.headers.get("referer")) : null,
+      createdAt: occurredAtMs,
+    };
+
+    await this.ctx.storage.put(buildFeedbackKey(dateKey, occurredAtMs, feedback.id), feedback);
+
+    return Response.json(
+      { ok: true, feedbackId: feedback.id },
+      {
+        headers: {
+          "cache-control": "no-store",
+        },
+      },
+    );
+  }
+
+  /**
+   * @param {Request} request
+   * @param {Record<string, string | undefined>} env
+   * @returns {Promise<Response>}
+   */
+  async handleAdminLogin(request, env) {
+    /** @type {unknown} */
+    let payload;
+    try {
+      payload = await request.json();
+    } catch {
+      return Response.json({ ok: false, error: "Invalid JSON body." }, { status: 400 });
+    }
+
+    const username = typeof payload?.username === "string" ? payload.username.trim() : "";
+    const password = typeof payload?.password === "string" ? payload.password.trim() : "";
+    const expectedUsername = getAdminUsername(env);
+    const expectedPassword = getAdminPassword(env);
+
+    if (!username || !password) {
+      return Response.json({ ok: false, error: "Username and password are required." }, { status: 400 });
+    }
+
+    if (!timingSafeEqual(username, expectedUsername) || !timingSafeEqual(password, expectedPassword)) {
+      return Response.json({ ok: false, error: "Invalid credentials." }, {
+        status: 401,
+        headers: {
+          "cache-control": "no-store",
+        },
+      });
+    }
+
+    const session = {
+      id: createId("admin"),
+      username,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + ADMIN_SESSION_MAX_AGE_SECONDS * 1000,
+    };
+
+    await this.ctx.storage.put(buildAdminSessionKey(session.id), session);
+
+    return Response.json(
+      { ok: true, username: session.username },
+      {
+        headers: {
+          "cache-control": "no-store",
+          "set-cookie": buildAdminSessionCookieHeader(session.id, request.url),
+        },
+      },
+    );
+  }
+
+  /**
+   * @param {Request} request
+   * @returns {Promise<Response>}
+   */
+  async handleAdminLogout(request) {
+    const sessionId = readCookieValue(request.headers.get("cookie"), ADMIN_SESSION_COOKIE);
+    if (sessionId) {
+      await this.ctx.storage.delete(buildAdminSessionKey(sessionId));
+    }
+
+    return Response.json(
+      { ok: true },
+      {
+        headers: {
+          "cache-control": "no-store",
+          "set-cookie": buildClearedAdminSessionCookieHeader(),
+        },
+      },
+    );
+  }
+
+  /**
    * @returns {Promise<Response>}
    */
   async handleAdminSummary() {
@@ -853,6 +1484,7 @@ export class GlobalLobby extends DurableObject {
    *   onlineNow: number;
    *   quickMatchQueued: number;
    *   rooms: { open: number; playing: number; openLobbies: unknown[]; };
+   *   recentFeedbacks: unknown[];
    *   recentDays: unknown[];
    * }>}
    */
@@ -888,6 +1520,7 @@ export class GlobalLobby extends DurableObject {
         playing: playingRooms,
         openLobbies: openRooms.slice(0, 8),
       },
+      recentFeedbacks: await this.readRecentFeedbacks(12),
       recentDays,
     };
   }
@@ -897,9 +1530,12 @@ export class GlobalLobby extends DurableObject {
    * @returns {Promise<{
    *   date: string;
    *   uniquePlayers: number;
+   *   uniqueIps: number;
    *   sessions: number;
    *   totalEvents: number;
    *   completedSessions: number;
+   *   completedMatches: number;
+   *   feedbackCount: number;
    *   averageSessionSeconds: number;
    *   eventCounts: Record<string, number>;
    *   topReferrerHosts: Array<{ key: string; count: number }>;
@@ -915,15 +1551,20 @@ export class GlobalLobby extends DurableObject {
       dateKey,
     );
     const uniquePlayers = await this.countAnalyticsKeys(`analytics:player:${dateKey}:`);
+    const uniqueIps = await this.countAnalyticsKeys(`analytics:ip:${dateKey}:`);
     const sessions = await this.countAnalyticsKeys(`analytics:session:${dateKey}:`);
+    const feedbackCount = await this.countFeedbackEntries(dateKey);
     const retentionD1 = await this.computeRetentionD1(dateKey);
 
     return {
       date: dateKey,
       uniquePlayers,
+      uniqueIps,
       sessions,
       totalEvents: metrics.totalEvents,
       completedSessions: metrics.completedSessions,
+      completedMatches: metrics.eventCounts.match_ended || 0,
+      feedbackCount,
       averageSessionSeconds: metrics.completedSessions > 0
         ? Math.round((metrics.totalSessionDurationMs / metrics.completedSessions) / 1000)
         : 0,
@@ -944,6 +1585,55 @@ export class GlobalLobby extends DurableObject {
   async countAnalyticsKeys(prefix) {
     const records = await this.ctx.storage.list({ prefix });
     return records.size;
+  }
+
+  /**
+   * @param {string} dateKey
+   * @returns {Promise<number>}
+   */
+  async countFeedbackEntries(dateKey) {
+    const records = await this.ctx.storage.list({ prefix: `feedback:${dateKey}:` });
+    return records.size;
+  }
+
+  /**
+   * @param {number} limit
+   * @returns {Promise<Array<{ id: string; dateKey: string; message: string; screen: string | null; roomCode: string | null; referrerHost: string | null; createdAt: number; }>>}
+   */
+  async readRecentFeedbacks(limit) {
+    const records = await this.ctx.storage.list({ prefix: "feedback:" });
+    const feedbacks = [];
+    for (const value of records.values()) {
+      const normalized = normalizeStoredFeedback(value);
+      if (normalized) {
+        feedbacks.push(normalized);
+      }
+    }
+
+    return feedbacks
+      .sort((left, right) => right.createdAt - left.createdAt || right.id.localeCompare(left.id))
+      .slice(0, Math.max(0, limit));
+  }
+
+  /**
+   * @param {Request} request
+   * @returns {Promise<void>}
+   */
+  async recordDailyIp(request) {
+    const ip = readRequestIpAddress(request);
+    if (!ip) {
+      return;
+    }
+
+    const hash = await hashStableText(ip);
+    if (!hash) {
+      return;
+    }
+
+    const dateKey = formatDateKey(Date.now());
+    await this.ctx.storage.put(buildAnalyticsIpKey(dateKey, hash), {
+      seenAt: Date.now(),
+    });
   }
 
   /**
@@ -1023,6 +1713,10 @@ export class GlobalLobby extends DurableObject {
    * @param {string} clientId
    */
   async releaseClientFromRoom(room, clientId) {
+    if (room.roomMode === "endless") {
+      await this.leaveEndlessRoom(room, clientId);
+      return;
+    }
     room.clients.delete(clientId);
 
     for (const seatId of PLAYER_IDS) {
@@ -1066,6 +1760,10 @@ export class GlobalLobby extends DurableObject {
       this.sendToClient(clientId, {
         type: "lobby-updated",
         lobby: this.serializeLobbyForClient(room, clientId),
+        sessionState: this.buildClientSessionState(clientId, {
+          room,
+          hasActiveMatch: Boolean(this.matches.get(room.roomCode)),
+        }),
       });
     }
   }
@@ -1079,6 +1777,10 @@ export class GlobalLobby extends DurableObject {
       type: "lobby-joined",
       role: "guest",
       lobby: this.serializeLobbyForClient(room, clientId),
+      sessionState: this.buildClientSessionState(clientId, {
+        room,
+        hasActiveMatch: Boolean(this.matches.get(room.roomCode)),
+      }),
     });
   }
 
@@ -1087,19 +1789,29 @@ export class GlobalLobby extends DurableObject {
     const lobbies = this.buildLobbyList();
     const onlineUsers = this.sockets.size;
     const onlinePlayers = this.buildOnlinePresenceList();
-    for (const websocket of this.sockets.values()) {
-      this.send(websocket, { type: "lobby-list", lobbies, onlineUsers, onlinePlayers });
+    for (const [clientId, websocket] of this.sockets.entries()) {
+      this.send(websocket, {
+        type: "lobby-list",
+        lobbies,
+        onlineUsers,
+        onlinePlayers,
+        sessionState: this.buildClientSessionState(clientId),
+      });
     }
   }
 
   buildOnlinePresenceList() {
     return Array.from(this.sockets.keys())
       .sort((left, right) => left.localeCompare(right))
-      .map((clientId) => ({ clientId }));
+      .map((clientId) => ({
+        clientId,
+        displayName: this.clientAccounts.get(clientId)?.username ?? null,
+      }));
   }
 
   buildLobbyList() {
     return Array.from(this.rooms.values())
+      .filter((room) => isManualLobbyVisible(room))
       .map((room) => this.serializeLobbySummary(room))
       .filter((room) => {
         const sourceRoom = this.rooms.get(room.roomCode);
@@ -1127,6 +1839,8 @@ export class GlobalLobby extends DurableObject {
       roomCode: room.roomCode,
       title: room.title,
       status: room.status,
+      roomMode: room.roomMode === "endless" ? "endless" : "classic",
+      roomKind: room.roomKind,
       createdAt: room.createdAt,
       seats,
       occupantCount: PLAYER_IDS.filter((seatId) => Boolean(seats[seatId].clientId)).length,
@@ -1167,12 +1881,11 @@ export class GlobalLobby extends DurableObject {
    * @param {string} clientId
    */
   assignSeat(room, seat, clientId, rawCharacterIndex) {
-    room.seats[seat] = {
+    room.seats[seat] = createHumanSeat(
       clientId,
-      displayName: `Pilot ${seat}`,
-      characterIndex: normalizeCharacterIndex(rawCharacterIndex, room.seats[seat].characterIndex ?? ((seat - 1) % 2)),
-      ready: false,
-    };
+      normalizeCharacterIndex(rawCharacterIndex, room.seats[seat].characterIndex ?? ((seat - 1) % 2)),
+      this.getHumanSeatDisplayName(clientId, seat),
+    );
   }
 
   /**
@@ -1181,12 +1894,40 @@ export class GlobalLobby extends DurableObject {
   refreshSeatLabels(room) {
     for (const seatId of PLAYER_IDS) {
       const seat = room.seats[seatId];
+      if (seat.occupantType === "bot") {
+        seat.displayName = "BOT";
+        continue;
+      }
       if (!seat.clientId) {
         seat.displayName = null;
         continue;
       }
-      seat.displayName = `Pilot ${seatId}`;
+      seat.displayName = this.getHumanSeatDisplayName(seat.clientId, seatId);
     }
+  }
+
+  /**
+   * @param {string} clientId
+   * @param {number} seatId
+   * @returns {string}
+   */
+  getHumanSeatDisplayName(clientId, seatId) {
+    const account = this.clientAccounts.get(clientId);
+    return account?.username || `Pilot ${seatId}`;
+  }
+
+  /**
+   * @param {LobbyRoom} room
+   * @returns {Record<1 | 2 | 3 | 4, string>}
+   */
+  buildRoomPlayerLabels(room) {
+    return createSeatMap((seatId) => {
+      const seat = room.seats[seatId];
+      if (seat.occupantType === "bot") {
+        return "BOT";
+      }
+      return seat.displayName || `P${seatId}`;
+    });
   }
 
   /**
@@ -1265,7 +2006,9 @@ export class GlobalLobby extends DurableObject {
     for (const seatId of PLAYER_IDS) {
       const seat = room.seats[seatId];
       if (seat.clientId && !this.sockets.has(seat.clientId)) {
-        room.seats[seatId] = createEmptySeat();
+        room.seats[seatId] = room.roomMode === "endless"
+          ? createBotSeat(seat.characterIndex ?? ((seatId - 1) % 4))
+          : createEmptySeat();
         changed = true;
       } else if (seat.clientId) {
         room.clients.add(seat.clientId);
@@ -1278,16 +2021,32 @@ export class GlobalLobby extends DurableObject {
     }
 
     const activeMatch = this.matches.get(room.roomCode);
-    const matchMissingPlayer = activeMatch
-      ? activeMatch.activePlayerIds.some((seatId) => !room.seats[seatId].clientId)
-      : false;
-    if (room.status === "playing" && (PLAYER_IDS.filter((seatId) => room.seats[seatId].clientId).length < 2 || matchMissingPlayer)) {
+    const mustResetPlayingRoom = room.status === "playing"
+      && (
+        !activeMatch
+        || shouldResetPlayingRoom(
+          {
+            roomCode: room.roomCode,
+            roomMode: room.roomMode === "endless" ? "endless" : "classic",
+            roomKind: room.roomKind,
+            status: room.status,
+          },
+          room.seats,
+          activeMatch.activePlayerIds,
+        )
+      );
+    if (mustResetPlayingRoom) {
       this.stopRoomMatch(room.roomCode);
       room.status = "open";
       for (const seatId of PLAYER_IDS) {
         room.seats[seatId].ready = false;
       }
-      this.appendRoomSystemMessage(room, "Match reset after a pilot disconnected.");
+      this.appendRoomSystemMessage(
+        room,
+        room.roomMode === "endless"
+          ? "Partida infinita sincronizada novamente."
+          : "Match reset after a pilot disconnected.",
+      );
       changed = true;
     }
 
@@ -1333,6 +2092,8 @@ export class GlobalLobby extends DurableObject {
         roomCode: room.roomCode,
         title: room.title,
         status: room.status,
+        roomMode: room.roomMode === "endless" ? "endless" : "classic",
+        roomKind: room.roomKind,
         createdAt: room.createdAt,
         hostClientId: room.hostClientId,
         clients: Array.from(room.clients),
@@ -1347,10 +2108,18 @@ export class GlobalLobby extends DurableObject {
    * @param {Array<1 | 2 | 3 | 4>} activePlayerIds
    * @param {Record<1 | 2 | 3 | 4, number>} characterSelections
    */
-  startRoomMatch(room, activePlayerIds, characterSelections) {
+  startRoomMatch(room, activePlayerIds, characterSelections, options = {}) {
     this.stopRoomMatch(room.roomCode);
     const game = createServerGame();
-    game.startServerAuthoritativeMatch(activePlayerIds, characterSelections);
+    const roomMode = options.roomMode === "endless" ? "endless" : room.roomMode === "endless" ? "endless" : "classic";
+    const botPlayerIds = Array.isArray(options.botPlayerIds) ? options.botPlayerIds.filter((seatId) => PLAYER_IDS.includes(seatId)) : [];
+    const playerLabels = options.playerLabels ?? this.buildRoomPlayerLabels(room);
+    game.startServerAuthoritativeMatch(activePlayerIds, characterSelections, {
+      roomMode,
+      botPlayerIds,
+      endlessStats: options.endlessStats ?? null,
+      playerLabels,
+    });
     const match = {
       game,
       inputs: createSeatMap(() => createNeutralInput()),
@@ -1358,16 +2127,20 @@ export class GlobalLobby extends DurableObject {
       timer: null,
       tick: 0,
       activePlayerIds,
+      botPlayerIds,
       characterSelections,
       matchResultChoices: createSeatMap(() => null),
       clock: createFixedRatePumpState(Date.now()),
       resultRestartAtMs: null,
+      roomMode,
     };
     match.timer = setInterval(() => {
       this.pumpRoomMatch(room.roomCode);
     }, MATCH_PUMP_INTERVAL_MS);
     this.matches.set(room.roomCode, match);
-    this.broadcastSnapshot(room.roomCode);
+    if (options.broadcastInitialSnapshot !== false) {
+      this.broadcastSnapshot(room.roomCode);
+    }
   }
 
   /**
@@ -1425,7 +2198,7 @@ export class GlobalLobby extends DurableObject {
     }
 
     const snapshot = this.broadcastFrame(roomCode);
-    if (snapshot?.matchWinner) {
+    if (match.roomMode !== "endless" && snapshot?.matchWinner) {
       if (!match.resultRestartAtMs) {
         match.resultRestartAtMs = Date.now() + MATCH_RESULT_RESTART_DELAY_MS;
       } else if (Date.now() >= match.resultRestartAtMs) {
@@ -1462,6 +2235,7 @@ export class GlobalLobby extends DurableObject {
         frameId: match.tick,
         ackedInputSeq: createSeatMap((playerId) => match.ackedInputSeq[playerId] ?? 0),
         mode: snapshot.mode,
+        roomMode: snapshot.roomMode,
         players: snapshot.players,
         bombs: snapshot.bombs,
         flames: snapshot.flames,
@@ -1481,6 +2255,8 @@ export class GlobalLobby extends DurableObject {
         suddenDeathClosingTiles: snapshot.suddenDeathClosingTiles,
         selectedCharacterIndex: snapshot.selectedCharacterIndex,
         activePlayerIds: snapshot.activePlayerIds,
+        botPlayerIds: snapshot.botPlayerIds,
+        endlessStats: snapshot.endlessStats,
       },
     });
     return snapshot;
@@ -1520,6 +2296,7 @@ export class GlobalLobby extends DurableObject {
         countdownMs: null,
         onlineUsers,
         onlinePlayers,
+        sessionState: this.buildClientSessionState(clientId),
       });
     }
   }
@@ -1528,7 +2305,7 @@ export class GlobalLobby extends DurableObject {
     let availableRooms = 0;
     for (const room of this.rooms.values()) {
       this.sanitizeRoomOccupancy(room);
-      if (room.status !== "open") {
+      if (!isQuickMatchCandidate(room)) {
         continue;
       }
       if (PLAYER_IDS.some((seatId) => !room.seats[seatId].clientId)) {
@@ -1549,7 +2326,7 @@ export class GlobalLobby extends DurableObject {
 
     for (const room of this.rooms.values()) {
       this.sanitizeRoomOccupancy(room);
-      if (room.roomCode === excludeRoomCode || room.status !== "open") {
+      if (!isQuickMatchCandidate(room, excludeRoomCode)) {
         continue;
       }
       if (!PLAYER_IDS.some((seatId) => !room.seats[seatId].clientId)) {
@@ -1609,6 +2386,8 @@ export class GlobalLobby extends DurableObject {
       title: "BOMBA PVP",
       createdAt: Date.now(),
       status: "open",
+      roomMode: "classic",
+      roomKind: "matchmaking",
       hostClientId: null,
       clients: new Set([clientId]),
       chat: [],
@@ -1701,17 +2480,39 @@ export class GlobalLobby extends DurableObject {
       if (!seat.clientId) {
         continue;
       }
-      this.sendToClient(seat.clientId, {
-        type: "match-started",
-        config: {
-          roomCode: room.roomCode,
-          role: "guest",
-          localPlayerId: seatId,
-          activePlayerIds,
-          characterSelections,
-        },
-      });
+      const match = this.matches.get(room.roomCode);
+      this.sendMatchStartedToSeat(
+        room,
+        seatId,
+        activePlayerIds,
+        characterSelections,
+        match?.botPlayerIds ?? [],
+      );
     }
+  }
+
+  sendMatchStartedToSeat(room, seatId, activePlayerIds, characterSelections, botPlayerIds = []) {
+    const seat = room.seats[seatId];
+    if (!seat?.clientId) {
+      return;
+    }
+    this.sendToClient(seat.clientId, {
+      type: "match-started",
+      config: {
+        roomCode: room.roomCode,
+        role: "guest",
+        roomMode: room.roomMode === "endless" ? "endless" : "classic",
+        localPlayerId: seatId,
+        activePlayerIds,
+        botPlayerIds,
+        characterSelections,
+        playerLabels: this.buildRoomPlayerLabels(room),
+      },
+      sessionState: this.buildClientSessionState(seat.clientId, {
+        room,
+        hasActiveMatch: true,
+      }),
+    });
   }
 
   /**
@@ -1737,9 +2538,9 @@ export class GlobalLobby extends DurableObject {
   resolveChatAuthorLabel(room, clientId) {
     const seat = this.findSeatForClient(room, clientId);
     if (seat) {
-      return `P${seat}`;
+      return room.seats[seat].displayName || `P${seat}`;
     }
-    return "Pilot";
+    return this.clientAccounts.get(clientId)?.username || "Pilot";
   }
 }
 
@@ -1749,7 +2550,149 @@ function createEmptySeat() {
     displayName: null,
     characterIndex: 0,
     ready: false,
+    occupantType: "empty",
   };
+}
+
+function createHumanSeat(clientId, characterIndex = 0, displayName = null) {
+  return {
+    clientId,
+    displayName,
+    characterIndex,
+    ready: false,
+    occupantType: "human",
+  };
+}
+
+function createBotSeat(characterIndex = 0) {
+  return {
+    clientId: null,
+    displayName: "BOT",
+    characterIndex,
+    ready: true,
+    occupantType: "bot",
+  };
+}
+
+function normalizeStoredRoomKind(roomKind, roomMode = "classic") {
+  if (roomMode === "endless") {
+    return "endless";
+  }
+  return roomKind === "matchmaking" ? "matchmaking" : "manual";
+}
+
+function normalizeStoredSeat(seat, endlessRoom = false) {
+  if (!seat || typeof seat !== "object") {
+    return endlessRoom ? createBotSeat(0) : createEmptySeat();
+  }
+  if (seat.clientId) {
+    return {
+      clientId: seat.clientId,
+      displayName: seat.displayName ?? null,
+      characterIndex: normalizeCharacterIndex(seat.characterIndex, 0),
+      ready: Boolean(seat.ready),
+      occupantType: "human",
+    };
+  }
+  if (seat.occupantType === "bot" || endlessRoom) {
+    return createBotSeat(normalizeCharacterIndex(seat.characterIndex, 0));
+  }
+  return createEmptySeat();
+}
+
+function normalizeStoredAccount(account) {
+  if (!account || typeof account !== "object") {
+    return null;
+  }
+  if (typeof account.id !== "string" || typeof account.username !== "string") {
+    return null;
+  }
+  return {
+    id: account.id,
+    username: account.username,
+    authLevel: account.authLevel === "email" ? "email" : "username",
+    createdAt: Number.isFinite(account.createdAt) ? account.createdAt : 0,
+  };
+}
+
+function normalizeStoredAttachmentAccount(account) {
+  return normalizeStoredAccount(account);
+}
+
+function normalizeStoredSession(session) {
+  if (!session || typeof session !== "object") {
+    return null;
+  }
+  if (typeof session.id !== "string" || typeof session.accountId !== "string") {
+    return null;
+  }
+  const expiresAt = Number(session.expiresAt);
+  if (!Number.isFinite(expiresAt)) {
+    return null;
+  }
+  return {
+    id: session.id,
+    accountId: session.accountId,
+    createdAt: Number.isFinite(session.createdAt) ? session.createdAt : 0,
+    expiresAt,
+  };
+}
+
+function buildAccountKey(accountId) {
+  return `account:${accountId}`;
+}
+
+function buildAccountUsernameLookupKey(normalizedUsername) {
+  return `account-username:${normalizedUsername}`;
+}
+
+function buildAccountSessionKey(sessionId) {
+  return `account-session:${sessionId}`;
+}
+
+function readCookieValue(cookieHeader, name) {
+  if (!cookieHeader) {
+    return null;
+  }
+  const cookies = cookieHeader.split(";");
+  for (const cookie of cookies) {
+    const separatorIndex = cookie.indexOf("=");
+    if (separatorIndex === -1) {
+      continue;
+    }
+    const key = cookie.slice(0, separatorIndex).trim();
+    if (key !== name) {
+      continue;
+    }
+    const value = cookie.slice(separatorIndex + 1).trim();
+    return value || null;
+  }
+  return null;
+}
+
+function buildSessionCookieHeader(sessionId, requestUrl) {
+  const url = new URL(requestUrl);
+  const parts = [
+    `${ACCOUNT_SESSION_COOKIE}=${sessionId}`,
+    "Path=/",
+    `Max-Age=${ACCOUNT_SESSION_MAX_AGE_SECONDS}`,
+    "HttpOnly",
+    "SameSite=Lax",
+  ];
+  if (url.protocol === "https:") {
+    parts.push("Secure");
+  }
+  return parts.join("; ");
+}
+
+function buildClearedSessionCookieHeader() {
+  return [
+    `${ACCOUNT_SESSION_COOKIE}=`,
+    "Path=/",
+    "Max-Age=0",
+    "HttpOnly",
+    "SameSite=Lax",
+  ].join("; ");
 }
 
 function createSeatMap(factory) {
@@ -1800,34 +2743,29 @@ function rewriteRequestPath(request, pathname) {
   return new Request(url.toString(), request);
 }
 
-async function authorizeAdminRequest(request, env) {
-  if (!env.ADMIN_TOKEN) {
-    return {
-      ok: false,
-      response: Response.json(
-        { ok: false, error: "ADMIN_TOKEN is not configured on this Worker." },
-        { status: 503 },
-      ),
-    };
+async function authorizeAdminRequest(request, env, storage) {
+  const session = await readStoredAdminSession(request, storage);
+  if (session) {
+    return { ok: true, session };
   }
 
-  const providedToken = readAdminToken(request);
-  if (!providedToken || !timingSafeEqual(providedToken, env.ADMIN_TOKEN)) {
-    return {
-      ok: false,
-      response: Response.json(
-        { ok: false, error: "Unauthorized." },
-        {
-          status: 401,
-          headers: {
-            "cache-control": "no-store",
-          },
+  const legacyToken = readAdminToken(request);
+  if (legacyToken && env.ADMIN_TOKEN && timingSafeEqual(legacyToken, env.ADMIN_TOKEN)) {
+    return { ok: true, legacy: true };
+  }
+
+  return {
+    ok: false,
+    response: Response.json(
+      { ok: false, error: "Unauthorized." },
+      {
+        status: 401,
+        headers: {
+          "cache-control": "no-store",
         },
-      ),
-    };
-  }
-
-  return { ok: true };
+      },
+    ),
+  };
 }
 
 function readAdminToken(request) {
@@ -1837,6 +2775,143 @@ function readAdminToken(request) {
     return headerToken.replace(/^Bearer\s+/i, "").trim();
   }
   return (url.searchParams.get("token") || "").trim();
+}
+
+async function readStoredAdminSession(request, storage) {
+  if (!storage) {
+    return null;
+  }
+  const sessionId = readCookieValue(request.headers.get("cookie"), ADMIN_SESSION_COOKIE);
+  if (!sessionId) {
+    return null;
+  }
+
+  const stored = normalizeStoredAdminSession(await storage.get(buildAdminSessionKey(sessionId)));
+  if (!stored) {
+    return null;
+  }
+
+  if (stored.expiresAt <= Date.now()) {
+    await storage.delete(buildAdminSessionKey(sessionId));
+    return null;
+  }
+
+  return stored;
+}
+
+function getAdminUsername(env) {
+  const value = typeof env?.ADMIN_USERNAME === "string" ? env.ADMIN_USERNAME.trim() : "";
+  return value || ADMIN_DEFAULT_USERNAME;
+}
+
+function getAdminPassword(env) {
+  const value = typeof env?.ADMIN_PASSWORD === "string" ? env.ADMIN_PASSWORD.trim() : "";
+  if (value) {
+    return value;
+  }
+  const token = typeof env?.ADMIN_TOKEN === "string" ? env.ADMIN_TOKEN.trim() : "";
+  return token || ADMIN_DEFAULT_PASSWORD;
+}
+
+function buildAdminSessionKey(sessionId) {
+  return `admin-session:${sessionId}`;
+}
+
+function buildFeedbackKey(dateKey, createdAtMs, feedbackId) {
+  return `feedback:${dateKey}:${String(createdAtMs).padStart(13, "0")}:${feedbackId}`;
+}
+
+function buildAnalyticsIpKey(dateKey, ipHash) {
+  return `analytics:ip:${dateKey}:${ipHash}`;
+}
+
+function buildAdminSessionCookieHeader(sessionId, requestUrl) {
+  const url = new URL(requestUrl);
+  const parts = [
+    `${ADMIN_SESSION_COOKIE}=${sessionId}`,
+    "Path=/",
+    `Max-Age=${ADMIN_SESSION_MAX_AGE_SECONDS}`,
+    "HttpOnly",
+    "SameSite=Lax",
+  ];
+  if (url.protocol === "https:") {
+    parts.push("Secure");
+  }
+  return parts.join("; ");
+}
+
+function buildClearedAdminSessionCookieHeader() {
+  return [
+    `${ADMIN_SESSION_COOKIE}=`,
+    "Path=/",
+    "Max-Age=0",
+    "HttpOnly",
+    "SameSite=Lax",
+  ].join("; ");
+}
+
+function readRequestIpAddress(request) {
+  const ip = request.headers.get("cf-connecting-ip")
+    || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+    || request.headers.get("x-real-ip");
+  const normalized = typeof ip === "string" ? ip.trim() : "";
+  return normalized || null;
+}
+
+function normalizeStoredFeedback(feedback) {
+  if (!feedback || typeof feedback !== "object") {
+    return null;
+  }
+  if (typeof feedback.id !== "string" || typeof feedback.dateKey !== "string" || typeof feedback.message !== "string") {
+    return null;
+  }
+  return {
+    id: feedback.id,
+    dateKey: feedback.dateKey,
+    message: feedback.message,
+    screen: typeof feedback.screen === "string" && feedback.screen ? feedback.screen : null,
+    roomCode: typeof feedback.roomCode === "string" && feedback.roomCode ? feedback.roomCode : null,
+    referrerHost: typeof feedback.referrerHost === "string" && feedback.referrerHost ? feedback.referrerHost : null,
+    createdAt: Number.isFinite(feedback.createdAt) ? feedback.createdAt : 0,
+  };
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+async function hashStableText(value) {
+  const encoder = new TextEncoder();
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(value));
+  const bytes = new Uint8Array(digest);
+  let hex = "";
+  for (const byte of bytes) {
+    hex += byte.toString(16).padStart(2, "0");
+  }
+  return hex.slice(0, 32);
+}
+
+function normalizeStoredAdminSession(session) {
+  if (!session || typeof session !== "object") {
+    return null;
+  }
+  if (typeof session.id !== "string" || typeof session.username !== "string") {
+    return null;
+  }
+  const expiresAt = Number(session.expiresAt);
+  if (!Number.isFinite(expiresAt)) {
+    return null;
+  }
+  return {
+    id: session.id,
+    username: session.username,
+    createdAt: Number.isFinite(session.createdAt) ? session.createdAt : 0,
+    expiresAt,
+  };
 }
 
 function timingSafeEqual(left, right) {
@@ -2059,8 +3134,11 @@ function createReportWebhookPayload(report) {
   const text = [
     `BOMBA daily report for ${report.reportDate} (${ANALYTICS_TIME_ZONE})`,
     `Unique players: ${day.uniquePlayers}`,
+    `Unique IPs: ${day.uniqueIps}`,
     `Sessions: ${day.sessions}`,
     `Matches started: ${day.eventCounts.match_started || 0}`,
+    `Matches completed: ${day.completedMatches}`,
+    `Feedbacks: ${day.feedbackCount}`,
     `Avg session: ${day.averageSessionSeconds}s`,
     `D1 retention vs ${day.retentionD1.previousDay}: ${day.retentionD1.retainedPlayers}/${day.retentionD1.previousDayPlayers} (${day.retentionD1.rate}%)`,
     `Quick match -> match: ${report.highlights.quickMatchToMatchRate}%`,
@@ -2075,14 +3153,8 @@ function createReportWebhookPayload(report) {
   };
 }
 
-function renderAdminHtml(token) {
-  const safeToken = typeof token === "string"
-    ? token
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-    : "";
+function renderAdminHtml(env) {
+  const safeUsername = escapeHtml(getAdminUsername(env));
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -2145,6 +3217,25 @@ function renderAdminHtml(token) {
         gap: 16px;
       }
       .stack { display: grid; gap: 16px; }
+      .auth-shell {
+        display: grid;
+        grid-template-columns: minmax(280px, 420px) 1fr;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .auth-form {
+        display: grid;
+        gap: 10px;
+      }
+      .field {
+        width: 100%;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: var(--panel-alt);
+        color: var(--text);
+        padding: 12px;
+      }
+      .hidden { display: none !important; }
       table {
         width: 100%;
         border-collapse: collapse;
@@ -2172,7 +3263,23 @@ function renderAdminHtml(token) {
         color: #ffb4a2;
         margin-top: 12px;
       }
+      .success {
+        color: #8be9a8;
+        margin-top: 12px;
+      }
+      .feedback-item {
+        display: grid;
+        gap: 6px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .feedback-item:last-child { border-bottom: 0; }
+      .feedback-item__meta {
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
       @media (max-width: 860px) {
+        .auth-shell { grid-template-columns: 1fr; }
         .layout { grid-template-columns: 1fr; }
         .hero { align-items: start; flex-direction: column; }
       }
@@ -2188,17 +3295,33 @@ function renderAdminHtml(token) {
         <div class="muted" id="generated-at">Loading...</div>
       </section>
 
-      <section class="panel" style="margin-bottom:16px;">
-        <small>Admin access</small>
-        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-          <input id="token-input" type="password" placeholder="ADMIN_TOKEN" style="flex:1; min-width:240px; border-radius:12px; border:1px solid var(--border); background:var(--panel-alt); color:var(--text); padding:12px;" />
-          <button id="token-save" style="border:0; border-radius:12px; padding:12px 16px; background:var(--accent); color:white; font-weight:700; cursor:pointer;">Save token</button>
-        </div>
+      <section class="auth-shell">
+        <section class="panel" id="login-panel">
+          <small>Admin access</small>
+          <h2>Login</h2>
+          <p class="muted">Use the username/password pair configured for this Worker.</p>
+          <div class="auth-form" style="margin-top:12px;">
+            <input id="username-input" class="field" type="text" value="${safeUsername}" autocomplete="username" />
+            <input id="password-input" class="field" type="password" placeholder="Password" autocomplete="current-password" />
+            <button id="login-button" class="experience-button experience-button--primary" type="button">Entrar</button>
+          </div>
+          <p id="login-error" class="error"></p>
+        </section>
+
+        <section class="panel hidden" id="session-panel">
+          <small>Session</small>
+          <h2>Authenticated admin session</h2>
+          <p class="muted">The session is stored in an HttpOnly cookie and expires automatically.</p>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
+            <button id="logout-button" class="experience-button experience-button--ghost" type="button">Sair</button>
+          </div>
+          <p id="session-status" class="success"></p>
+        </section>
       </section>
 
-      <section class="grid" id="top-metrics"></section>
+      <section class="grid hidden" id="top-metrics"></section>
 
-      <section class="layout">
+      <section class="layout hidden" id="dashboard">
         <div class="stack">
           <div class="panel">
             <small>Today</small>
@@ -2213,10 +3336,14 @@ function renderAdminHtml(token) {
             <small>Last 7 days</small>
             <table>
               <thead>
-                <tr><th>Date</th><th>Unique</th><th>Sessions</th><th>Matches</th></tr>
+                <tr><th>Date</th><th>Unique</th><th>IPs</th><th>Sessions</th><th>Matches</th><th>Feedback</th></tr>
               </thead>
               <tbody id="recent-days"></tbody>
             </table>
+          </div>
+          <div class="panel">
+            <small>Recent feedback</small>
+            <div id="recent-feedbacks" class="list"></div>
           </div>
         </div>
 
@@ -2236,29 +3363,39 @@ function renderAdminHtml(token) {
         </div>
       </section>
 
-      <p id="error" class="error"></p>
+      <p id="error" class="error hidden"></p>
     </main>
     <script>
-      const params = new URLSearchParams(window.location.search);
-      const queryToken = params.get("token") || "${safeToken}";
-      const storedToken = window.sessionStorage.getItem("bomba-admin-token") || "";
-      const tokenInput = document.getElementById("token-input");
-      const tokenSave = document.getElementById("token-save");
-      let token = queryToken || storedToken;
+      const loginPanel = document.getElementById("login-panel");
+      const sessionPanel = document.getElementById("session-panel");
+      const dashboard = document.getElementById("dashboard");
+      const topMetrics = document.getElementById("top-metrics");
+      const errorNode = document.getElementById("error");
+      const loginError = document.getElementById("login-error");
+      const sessionStatus = document.getElementById("session-status");
+      const usernameInput = document.getElementById("username-input");
+      const passwordInput = document.getElementById("password-input");
+      const loginButton = document.getElementById("login-button");
+      const logoutButton = document.getElementById("logout-button");
+      const generatedAt = document.getElementById("generated-at");
 
-      if (queryToken) {
-        window.sessionStorage.setItem("bomba-admin-token", queryToken);
-        params.delete("token");
-        const nextQuery = params.toString();
-        window.history.replaceState({}, "", window.location.pathname + (nextQuery ? "?" + nextQuery : ""));
+      function showAuthedUI() {
+        loginPanel.classList.add("hidden");
+        sessionPanel.classList.remove("hidden");
+        dashboard.classList.remove("hidden");
+        topMetrics.classList.remove("hidden");
+        errorNode.classList.add("hidden");
       }
 
-      tokenInput.value = token;
-      tokenSave.addEventListener("click", () => {
-        token = tokenInput.value.trim();
-        window.sessionStorage.setItem("bomba-admin-token", token);
-        load();
-      });
+      function showLoginUI(message) {
+        loginPanel.classList.remove("hidden");
+        sessionPanel.classList.add("hidden");
+        dashboard.classList.add("hidden");
+        topMetrics.classList.add("hidden");
+        if (message) {
+          loginError.textContent = message;
+        }
+      }
 
       function renderPills(target, items, emptyMessage) {
         target.innerHTML = "";
@@ -2275,17 +3412,18 @@ function renderAdminHtml(token) {
       }
 
       function renderSummary(data) {
-        document.getElementById("generated-at").textContent = "Updated " + new Date(data.generatedAt).toLocaleString();
-
-        const topMetrics = document.getElementById("top-metrics");
+        generatedAt.textContent = "Updated " + new Date(data.generatedAt).toLocaleString();
         const today = data.today;
         topMetrics.innerHTML = "";
         [
           ["Online now", data.onlineNow],
           ["Unique today", today.uniquePlayers],
+          ["Unique IPs", today.uniqueIps],
           ["Sessions today", today.sessions],
-          ["Matches today", today.eventCounts.match_started || 0],
+          ["Matches started", today.eventCounts.match_started || 0],
+          ["Matches completed", today.completedMatches || 0],
           ["Quick match clicks", today.eventCounts.quick_match_clicked || 0],
+          ["Feedbacks today", today.feedbackCount || 0],
           ["Avg session", today.averageSessionSeconds + "s"],
           ["Open lobbies", data.rooms.open],
           ["Playing rooms", data.rooms.playing],
@@ -2313,8 +3451,10 @@ function renderAdminHtml(token) {
           row.innerHTML =
             "<td>" + day.date + "</td>" +
             "<td>" + day.uniquePlayers + "</td>" +
+            "<td>" + day.uniqueIps + "</td>" +
             "<td>" + day.sessions + "</td>" +
-            "<td>" + (day.eventCounts.match_started || 0) + "</td>";
+            "<td>" + (day.eventCounts.match_started || 0) + "</td>" +
+            "<td>" + (day.feedbackCount || 0) + "</td>";
           recentDays.appendChild(row);
         });
 
@@ -2333,33 +3473,110 @@ function renderAdminHtml(token) {
             openLobbies.appendChild(div);
           });
         }
+
+        const recentFeedbacks = document.getElementById("recent-feedbacks");
+        recentFeedbacks.innerHTML = "";
+        if (!data.recentFeedbacks || data.recentFeedbacks.length === 0) {
+          recentFeedbacks.textContent = "No feedback yet.";
+        } else {
+          data.recentFeedbacks.forEach((feedback) => {
+            const item = document.createElement("div");
+            item.className = "feedback-item";
+            const text = document.createElement("div");
+            text.textContent = feedback.message;
+            const meta = document.createElement("div");
+            meta.className = "feedback-item__meta";
+            meta.textContent = [
+              new Date(feedback.createdAt).toLocaleString(),
+              feedback.screen ? "screen: " + feedback.screen : null,
+              feedback.roomCode ? "room: " + feedback.roomCode : null,
+              feedback.referrerHost ? "ref: " + feedback.referrerHost : null,
+            ].filter(Boolean).join(" • ");
+            item.append(text, meta);
+            recentFeedbacks.appendChild(item);
+          });
+        }
       }
 
-      async function load() {
-        const errorNode = document.getElementById("error");
+      async function loadSummary() {
         errorNode.textContent = "";
         try {
-          if (!token) {
-            throw new Error("Enter ADMIN_TOKEN to load this dashboard.");
-          }
-          const response = await fetch("/api/admin/summary?token=" + encodeURIComponent(token), {
+          const response = await fetch("/api/admin/summary", {
             cache: "no-store",
-            headers: {
-              "x-admin-token": token,
-            },
+            credentials: "same-origin",
           });
+          if (response.status === 401) {
+            showLoginUI("");
+            return;
+          }
           if (!response.ok) {
             throw new Error("Request failed with status " + response.status);
           }
           const data = await response.json();
+          showAuthedUI();
           renderSummary(data);
         } catch (error) {
           errorNode.textContent = error.message;
+          errorNode.classList.remove("hidden");
         }
       }
 
-      load();
-      setInterval(load, 15000);
+      async function login() {
+        loginError.textContent = "";
+        try {
+          loginButton.disabled = true;
+          loginButton.textContent = "Entrando...";
+          const response = await fetch("/api/admin/login", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              username: usernameInput.value.trim(),
+              password: passwordInput.value,
+            }),
+          });
+          if (!response.ok) {
+            const payload = await response.json().catch(() => null);
+            throw new Error((payload && payload.error) || "Login failed with status " + response.status);
+          }
+          passwordInput.value = "";
+          sessionStatus.textContent = "Signed in as ${safeUsername}.";
+          await loadSummary();
+        } catch (error) {
+          loginError.textContent = error.message;
+        } finally {
+          loginButton.disabled = false;
+          loginButton.textContent = "Entrar";
+        }
+      }
+
+      async function logout() {
+        logoutButton.disabled = true;
+        try {
+          await fetch("/api/admin/logout", {
+            method: "POST",
+            credentials: "same-origin",
+          });
+        } finally {
+          logoutButton.disabled = false;
+          sessionStatus.textContent = "Signed out.";
+          showLoginUI("");
+        }
+      }
+
+      loginButton.addEventListener("click", login);
+      logoutButton.addEventListener("click", logout);
+      passwordInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          void login();
+        }
+      });
+
+      loadSummary();
+      setInterval(loadSummary, 15000);
     </script>
   </body>
 </html>`;

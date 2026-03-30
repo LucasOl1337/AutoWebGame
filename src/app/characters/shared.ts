@@ -42,7 +42,7 @@ export interface SkillContext {
   resolveMovementDirection: (player: PlayerState, direction: Direction, deltaMs: number) => Direction;
   movePlayerSimulated: (player: PlayerState, direction: Direction, deltaMs: number) => void;
   clonePlayerState: (player: PlayerState) => PlayerState;
-  tryAbsorbInstantHit: (player: PlayerState) => void;
+  tryAbsorbInstantHit: (player: PlayerState, attackerId?: PlayerId | null) => void;
   breakCrateAtKey: (key: string) => boolean;
   addFlame: (tile: TileCoord, durationMs?: number, style?: FlameStyle) => void;
   soundManager: { playOneShot: (name: string) => void };

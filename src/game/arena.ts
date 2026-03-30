@@ -1,6 +1,8 @@
 import { GRID_HEIGHT, GRID_WIDTH } from "../core/config";
 import type { ArenaState, PowerUpState, PowerUpType, TileCoord } from "../core/types";
 
+const BREAKABLE_POWERUP_DROP_RATE = 0.9;
+
 export function tileKey(x: number, y: number): string {
   return `${x},${y}`;
 }
@@ -201,8 +203,8 @@ function createPowerUpsFromBreakables(breakable: Set<string>): PowerUpState[] {
     }))
     .sort((a, b) => (a.order - b.order) || a.pairKey.localeCompare(b.pairKey));
 
-  // Enforce deterministic 50% drop rate on breakable pairs.
-  const dropPairCount = Math.floor(pairEntries.length * 0.5);
+  // Enforce deterministic 90% drop rate on breakable pairs.
+  const dropPairCount = Math.floor(pairEntries.length * BREAKABLE_POWERUP_DROP_RATE);
   for (let index = 0; index < dropPairCount; index += 1) {
     const { pairKey, pair } = pairEntries[index];
     const typeIndex = Math.floor(hashToUnit(`${pairKey}|type`) * dropPool.length);

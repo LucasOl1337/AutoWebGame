@@ -53,10 +53,6 @@ export const CHARACTER_ROSTER_MANIFEST: CharacterRosterManifestEntry[] = [
     "name": "Charizard, rugged armor straps over scale-like textures with ..."
   },
   {
-    "id": "d083c3dc-7162-4391-8628-6adde0b8d8d6",
-    "name": "Crocodilo Arcano"
-  },
-  {
     "id": "4dfebb11-5982-45ec-bcde-ab3e7cc91ab1",
     "name": "Create a 2D full-body game character inspired by Batman. Visu..."
   },
@@ -95,6 +91,10 @@ export const CHARACTER_ROSTER_MANIFEST: CharacterRosterManifestEntry[] = [
   {
     "id": "3e66bd4e-5a7b-4e1f-917e-047283d4b56b",
     "name": "Create an original 2D full-body game character for a commerci..."
+  },
+  {
+    "id": "d083c3dc-7162-4391-8628-6adde0b8d8d6",
+    "name": "Crocodilo Arcano"
   },
   {
     "id": "66bd2288-1e0e-4e19-8cb0-8566fe95bea2",

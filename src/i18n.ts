@@ -506,6 +506,17 @@ export function getStoredSiteLanguage(): SiteLanguage | null {
   return normalizeSiteLanguage(stored);
 }
 
+export function getPathSiteLanguage(pathname?: string): SiteLanguage | null {
+  const rawPathname =
+    pathname
+    ?? (typeof window !== "undefined" ? window.location.pathname : "/");
+  const [firstSegment] = rawPathname
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  return normalizeSiteLanguage(firstSegment);
+}
+
 export function detectSiteLanguage(): SiteLanguage {
   if (typeof navigator === "undefined") {
     return "pt";
@@ -515,7 +526,7 @@ export function detectSiteLanguage(): SiteLanguage {
 }
 
 export function getInitialSiteLanguage(): SiteLanguage {
-  return getStoredSiteLanguage() ?? detectSiteLanguage();
+  return getPathSiteLanguage() ?? getStoredSiteLanguage() ?? detectSiteLanguage();
 }
 
 export function persistSiteLanguage(language: SiteLanguage): void {
@@ -537,6 +548,32 @@ export function normalizeSiteLanguage(value: string | null | undefined): SiteLan
     return "en";
   }
   return null;
+}
+
+export function getLocalizedPathname(language: SiteLanguage, pathname?: string): string {
+  const rawPathname =
+    pathname
+    ?? (typeof window !== "undefined" ? window.location.pathname : "/");
+  const segments = rawPathname
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  if (segments.length > 0 && normalizeSiteLanguage(segments[0])) {
+    segments.shift();
+  }
+  if (language === "en") {
+    segments.unshift("en");
+  }
+  return segments.length > 0 ? `/${segments.join("/")}` : "/";
+}
+
+export function buildLocalizedUrl(language: SiteLanguage, href?: string): URL {
+  const baseHref =
+    href
+    ?? (typeof window !== "undefined" ? window.location.href : "https://example.com/");
+  const url = new URL(baseHref);
+  url.pathname = getLocalizedPathname(language, url.pathname);
+  return url;
 }
 
 export function applyDocumentLanguage(language: SiteLanguage): void {

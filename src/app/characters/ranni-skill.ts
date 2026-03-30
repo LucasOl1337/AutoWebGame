@@ -3,11 +3,15 @@ import type {
   PlayerState,
 } from "../../core/types";
 import type { SkillContext } from "./shared";
+import { RANNI_SKILL_COOLDOWN_MS } from "./skill-registry";
 import { simulateProjectedMovement } from "./shared";
 
-export const RANNI_CHARACTER_ID = "03a976fb-7313-4064-a477-5bb9b0760034";
+export {
+  RANNI_CHARACTER_ID,
+  RANNI_SKILL_COOLDOWN_MS,
+} from "./skill-registry";
+
 export const RANNI_SKILL_CHANNEL_MS = 1_500;
-export const RANNI_SKILL_COOLDOWN_MS = 10_000;
 
 export function startRanniIceBlink(player: PlayerState): void {
   player.skill.phase = "channeling";

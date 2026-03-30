@@ -5,6 +5,7 @@ import type {
 } from "../../core/types";
 import { TILE_SIZE } from "../../core/config";
 import type { SkillContext } from "./shared";
+import { KILLER_BEE_SKILL_COOLDOWN_MS } from "./skill-registry";
 import {
   ARENA_PIXEL_HEIGHT,
   ARENA_PIXEL_WIDTH,
@@ -13,12 +14,15 @@ import {
   hasReachedSkillTarget,
 } from "./shared";
 
-export const KILLER_BEE_CHARACTER_ID = "6ee8baa5-3277-413b-ae0e-2659b9cc52e9";
+export {
+  KILLER_BEE_CHARACTER_ID,
+  KILLER_BEE_SKILL_COOLDOWN_MS,
+} from "./skill-registry";
+
 export const KILLER_BEE_DASH_DISTANCE_PX = TILE_SIZE * 3;
 export const KILLER_BEE_DASH_DURATION_MS = 240;
 export const KILLER_BEE_DASH_MIN_DURATION_MS = 90;
 export const KILLER_BEE_DASH_FRAME_MS = 60;
-export const KILLER_BEE_SKILL_COOLDOWN_MS = 10_000;
 
 export function startKillerBeeDash(
   player: PlayerState,

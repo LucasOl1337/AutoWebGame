@@ -7,6 +7,7 @@ import type {
 import type { SkillContext } from "./characters/shared";
 import { createDefaultPlayerSkillState } from "./characters/shared";
 import {
+  isCrocodiloImmuneDuringChannel,
   startCrocodiloEmeraldSurge,
   updateCrocodiloEmeraldSurgeChannel,
 } from "./characters/crocodilo-skill";
@@ -33,24 +34,36 @@ export {
   simulateProjectedMovement,
 } from "./characters/shared";
 export {
+  CHARACTER_SKILL_DEFINITIONS,
+  getCharacterSkillDefinition,
+  getCharacterSkillId,
   CROCODILO_CHARACTER_ID,
-  CROCODILO_SKILL_CHANNEL_MS,
   CROCODILO_SKILL_COOLDOWN_MS,
+  KILLER_BEE_CHARACTER_ID,
+  KILLER_BEE_SKILL_COOLDOWN_MS,
+  NICO_CHARACTER_ID,
+  NICO_SKILL_COOLDOWN_MS,
+  RANNI_CHARACTER_ID,
+  RANNI_SKILL_COOLDOWN_MS,
+} from "./characters/skill-registry";
+export {
+  CROCODILO_SKILL_CHANNEL_MS,
+  CROCODILO_SKILL_RELEASE_MS,
   CROCODILO_SURGE_DURATION_MS,
   CROCODILO_SURGE_RANGE,
   cancelCrocodiloEmeraldSurge,
   computeCrocodiloSurgeTiles,
   fireCrocodiloEmeraldSurge,
+  finishCrocodiloEmeraldSurgeRelease,
+  isCrocodiloImmuneDuringChannel,
   startCrocodiloEmeraldSurge,
   updateCrocodiloEmeraldSurgeChannel,
 } from "./characters/crocodilo-skill";
 export {
-  KILLER_BEE_CHARACTER_ID,
   KILLER_BEE_DASH_DISTANCE_PX,
   KILLER_BEE_DASH_DURATION_MS,
   KILLER_BEE_DASH_FRAME_MS,
   KILLER_BEE_DASH_MIN_DURATION_MS,
-  KILLER_BEE_SKILL_COOLDOWN_MS,
   computeKillerBeeDashTarget,
   finishKillerBeeDash,
   startKillerBeeDash,
@@ -60,21 +73,19 @@ export {
   NICO_BEAM_CORE_WIDTH_PX,
   NICO_BEAM_DURATION_MS,
   NICO_BEAM_GLOW_WIDTH_PX,
-  NICO_CHARACTER_ID,
   NICO_SKILL_CHANNEL_MS,
-  NICO_SKILL_COOLDOWN_MS,
+  NICO_SKILL_RELEASE_MS,
   cancelNicoArcaneBeam,
   collectNicoBeamTiles,
   computeNicoBeam,
+  finishNicoArcaneBeamRelease,
   fireNicoArcaneBeam,
   resolveNicoBeamImpact,
   startNicoArcaneBeam,
   updateNicoArcaneBeamChannel,
 } from "./characters/nico-skill";
 export {
-  RANNI_CHARACTER_ID,
   RANNI_SKILL_CHANNEL_MS,
-  RANNI_SKILL_COOLDOWN_MS,
   finishRanniBlink,
   isRanniImmuneDuringChannel,
   startRanniIceBlink,
@@ -138,7 +149,7 @@ export function updatePlayerSkillChannel(
   deltaMs: number,
   context: SkillContext,
 ): boolean {
-  if (player.skill.phase !== "channeling") {
+  if (player.skill.phase !== "channeling" && player.skill.phase !== "releasing") {
     return false;
   }
   switch (player.skill.id) {
@@ -159,6 +170,8 @@ export function isPlayerImmuneDuringSkillChannel(player: PlayerState): boolean {
   switch (player.skill.id) {
     case "ranni-ice-blink":
       return isRanniImmuneDuringChannel(player);
+    case "crocodilo-emerald-surge":
+      return isCrocodiloImmuneDuringChannel(player);
     default:
       return false;
   }

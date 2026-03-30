@@ -10,7 +10,7 @@ export type CharacterSkillId =
   | "killer-bee-wing-dash"
   | "nico-arcane-beam"
   | "crocodilo-emerald-surge";
-export type SkillPhase = "idle" | "channeling" | "cooldown";
+export type SkillPhase = "idle" | "channeling" | "releasing" | "cooldown";
 export type PowerUpType =
   | "bomb-up"
   | "flame-up"

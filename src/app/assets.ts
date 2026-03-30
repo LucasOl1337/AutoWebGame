@@ -1,5 +1,7 @@
 import type { Direction, PlayerId, PowerUpType } from "../core/types";
 import { assetUrl } from "./asset-url";
+import type { ArenaThemeDefinition } from "./arena-theme-library";
+import { resolveArenaTheme } from "./arena-theme-library";
 
 export interface DirectionalSprites {
   up: HTMLImageElement | null;
@@ -18,6 +20,8 @@ export interface CharacterRosterEntry {
   id: string;
   name: string;
   size: { width: number; height: number } | null;
+  selectionIndex?: number;
+  assetVersion?: string;
   sprites: DirectionalSprites;
   animations?: {
     idle?: boolean;
@@ -35,6 +39,7 @@ export interface CharacterRosterEntry {
 export interface GameAssets {
   players: Partial<Record<PlayerId, DirectionalSprites>>;
   characterRoster?: CharacterRosterEntry[];
+  arenaTheme: ArenaThemeDefinition;
   floor: {
     base: HTMLImageElement | null;
     lane: HTMLImageElement | null;
@@ -68,7 +73,16 @@ interface CharacterManifestEntry {
 }
 
 interface CharacterManifestPayload {
+  generatedAt?: string;
   characters?: CharacterManifestEntry[];
+}
+
+function appendAssetVersion(path: string, assetVersion?: string): string {
+  if (!assetVersion) {
+    return path;
+  }
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}v=${encodeURIComponent(assetVersion)}`;
 }
 
 async function loadImage(src: string): Promise<HTMLImageElement | null> {
@@ -133,19 +147,20 @@ async function loadStaticDirectionalSprites(
     attack?: boolean;
     death?: boolean;
   },
+  assetVersion?: string,
 ): Promise<DirectionalSprites> {
   const [down, right, up, left] = await Promise.all([
-    loadImage(`${basePath}/south.png`),
-    loadImage(`${basePath}/east.png`),
-    loadImage(`${basePath}/north.png`),
-    loadImage(`${basePath}/west.png`),
+    loadImage(appendAssetVersion(`${basePath}/south.png`, assetVersion)),
+    loadImage(appendAssetVersion(`${basePath}/east.png`, assetVersion)),
+    loadImage(appendAssetVersion(`${basePath}/north.png`, assetVersion)),
+    loadImage(appendAssetVersion(`${basePath}/west.png`, assetVersion)),
   ]);
-  const idleFrames = animations?.idle ? await loadCharacterCycle(basePath, "idle") : { up: [], down: [], left: [], right: [] };
-  const walkFrames = animations?.walk ? await loadCharacterCycle(basePath, "walk") : { up: [], down: [], left: [], right: [] };
-  const runFrames = animations?.run ? await loadCharacterCycle(basePath, "run") : { up: [], down: [], left: [], right: [] };
-  const castFrames = animations?.cast ? await loadCharacterCycle(basePath, "cast") : { up: [], down: [], left: [], right: [] };
-  const attackFrames = animations?.attack ? await loadCharacterCycle(basePath, "attack") : { up: [], down: [], left: [], right: [] };
-  const deathFrames = animations?.death ? await loadCharacterCycle(basePath, "death") : { up: [], down: [], left: [], right: [] };
+  const idleFrames = animations?.idle ? await loadCharacterCycle(basePath, "idle", assetVersion) : { up: [], down: [], left: [], right: [] };
+  const walkFrames = animations?.walk ? await loadCharacterCycle(basePath, "walk", assetVersion) : { up: [], down: [], left: [], right: [] };
+  const runFrames = animations?.run ? await loadCharacterCycle(basePath, "run", assetVersion) : { up: [], down: [], left: [], right: [] };
+  const castFrames = animations?.cast ? await loadCharacterCycle(basePath, "cast", assetVersion) : { up: [], down: [], left: [], right: [] };
+  const attackFrames = animations?.attack ? await loadCharacterCycle(basePath, "attack", assetVersion) : { up: [], down: [], left: [], right: [] };
+  const deathFrames = animations?.death ? await loadCharacterCycle(basePath, "death", assetVersion) : { up: [], down: [], left: [], right: [] };
   return {
     up,
     down,
@@ -172,8 +187,9 @@ async function loadWalkCycle(prefix: string): Promise<Record<Direction, HTMLImag
 async function loadCharacterCycle(
   basePath: string,
   animationName: "idle" | "walk" | "run" | "cast" | "attack" | "death",
+  assetVersion?: string,
 ): Promise<Record<Direction, HTMLImageElement[]>> {
-  return loadCycleFromTemplate((suffix, index) => `${basePath}/${animationName}-${suffix}-${index}.png`);
+  return loadCycleFromTemplate((suffix, index) => appendAssetVersion(`${basePath}/${animationName}-${suffix}-${index}.png`, assetVersion));
 }
 
 async function loadCycleFromTemplate(
@@ -204,35 +220,38 @@ async function loadCycleFromTemplate(
   return walk;
 }
 
-async function loadCharacterManifest(): Promise<CharacterManifestEntry[]> {
+async function loadCharacterManifest(): Promise<CharacterManifestPayload> {
   try {
     const response = await fetch(assetUrl("/assets/characters/manifest.json"), { cache: "no-store" });
     if (!response.ok) {
-      return [];
+      return {};
     }
-    const payload = await response.json() as CharacterManifestPayload;
-    return Array.isArray(payload.characters) ? payload.characters : [];
+    return await response.json() as CharacterManifestPayload;
   } catch {
-    return [];
+    return {};
   }
 }
 
 async function loadCharacterRoster(): Promise<CharacterRosterEntry[]> {
-  const manifestEntries = await loadCharacterManifest();
-  const sortedEntries = [...manifestEntries].sort((a, b) => {
-    const orderA = typeof a.order === "number" ? a.order : Number.MAX_SAFE_INTEGER;
-    const orderB = typeof b.order === "number" ? b.order : Number.MAX_SAFE_INTEGER;
-    if (orderA !== orderB) {
-      return orderA - orderB;
-    }
-    return a.name.localeCompare(b.name);
-  });
+  const manifestPayload = await loadCharacterManifest();
+  const manifestEntries = Array.isArray(manifestPayload.characters) ? manifestPayload.characters : [];
+  const assetVersion = manifestPayload.generatedAt ?? undefined;
+  const sortedEntries = manifestEntries
+    .map((entry, selectionIndex) => ({ entry, selectionIndex }))
+    .sort((left, right) => {
+      const orderA = typeof left.entry.order === "number" ? left.entry.order : Number.MAX_SAFE_INTEGER;
+      const orderB = typeof right.entry.order === "number" ? right.entry.order : Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      return left.entry.name.localeCompare(right.entry.name);
+    });
 
-  const rosterEntries: Array<CharacterRosterEntry | null> = await Promise.all(sortedEntries.map(async (entry) => {
+  const rosterEntries: Array<CharacterRosterEntry | null> = await Promise.all(sortedEntries.map(async ({ entry, selectionIndex }) => {
     if (!entry.id) {
       return null;
     }
-    const sprites = await loadStaticDirectionalSprites(assetUrl(`/assets/characters/${entry.id}`), entry.animations);
+    const sprites = await loadStaticDirectionalSprites(assetUrl(`/assets/characters/${entry.id}`), entry.animations, assetVersion);
     if (!sprites.down && !sprites.up && !sprites.left && !sprites.right) {
       return null;
     }
@@ -240,6 +259,8 @@ async function loadCharacterRoster(): Promise<CharacterRosterEntry[]> {
       id: entry.id,
       name: entry.name || entry.id.slice(0, 8),
       size: entry.size ?? null,
+      selectionIndex,
+      assetVersion,
       sprites,
       animations: entry.animations,
       pinned: entry.pinned === true,
@@ -252,6 +273,8 @@ async function loadCharacterRoster(): Promise<CharacterRosterEntry[]> {
 }
 
 export async function loadGameAssets(): Promise<GameAssets> {
+  const arenaTheme = resolveArenaTheme(typeof window !== "undefined" ? window.location.search : "");
+  const arenaTilePaths = arenaTheme.renderMode === "sprite" ? arenaTheme.tilePaths ?? null : null;
   const [
     playerOne,
     playerTwo,
@@ -275,11 +298,21 @@ export async function loadGameAssets(): Promise<GameAssets> {
     loadDirectionalSprites(assetUrl("/assets/sprites/player1"), ["hires", ""]),
     loadDirectionalSprites(assetUrl("/assets/sprites/player2")),
     loadCharacterRoster(),
-    loadImage(assetUrl("/assets/tiles/floor-base.png")),
-    loadImage(assetUrl("/assets/tiles/floor-alt.png")),
-    loadImage(assetUrl("/assets/tiles/floor-spawn.png")),
-    loadImage(assetUrl("/assets/tiles/wall.png")),
-    loadImage(assetUrl("/assets/tiles/crate.png")),
+    arenaTilePaths
+      ? loadFirstAvailableImage([assetUrl(arenaTilePaths.base), assetUrl("/assets/tiles/floor-base.png")])
+      : Promise.resolve(null),
+    arenaTilePaths
+      ? loadFirstAvailableImage([assetUrl(arenaTilePaths.lane), assetUrl("/assets/tiles/floor-alt.png")])
+      : Promise.resolve(null),
+    arenaTilePaths
+      ? loadFirstAvailableImage([assetUrl(arenaTilePaths.spawn), assetUrl("/assets/tiles/floor-spawn.png")])
+      : Promise.resolve(null),
+    arenaTilePaths
+      ? loadFirstAvailableImage([assetUrl(arenaTilePaths.wall), assetUrl("/assets/tiles/wall.png")])
+      : Promise.resolve(null),
+    arenaTilePaths
+      ? loadFirstAvailableImage([assetUrl(arenaTilePaths.crate), assetUrl("/assets/tiles/crate.png")])
+      : Promise.resolve(null),
     loadImage(assetUrl("/assets/tiles/crate-break-0.png")),
     loadImage(assetUrl("/assets/tiles/crate-break-1.png")),
     loadImage(assetUrl("/assets/tiles/crate-break-2.png")),
@@ -313,13 +346,14 @@ export async function loadGameAssets(): Promise<GameAssets> {
     },
   ];
 
-    return {
-      players: {
-        1: playerOne,
-        2: playerTwo,
-        3: playerOne,
-        4: playerTwo,
-      },
+  return {
+    players: {
+      1: playerOne,
+      2: playerTwo,
+      3: playerOne,
+      4: playerTwo,
+    },
+    arenaTheme,
     characterRoster: characterRosterFromManifest.length > 0
       ? characterRosterFromManifest
       : fallbackRoster,

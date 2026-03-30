@@ -25,6 +25,10 @@ output/
 *.pyc
 __pycache__/
 claude.md
+tmp-*.png
+.tmp-*.png
+remote-*.html
+commit-msg.txt
 
 # IDE
 .vscode/
