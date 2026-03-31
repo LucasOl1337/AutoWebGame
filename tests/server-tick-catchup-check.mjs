@@ -1,4 +1,4 @@
-const { consumeFixedRatePumpSteps, createFixedRatePumpState } = await import("../output/esm/online/server-tick.js");
+const { consumeFixedRatePumpSteps, createFixedRatePumpState } = await import("../output/esm/NetCode/server-tick.js");
 
 const stepMs = 1000 / 60;
 const maxSteps = 5;

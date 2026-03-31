@@ -90,7 +90,7 @@
             "data.urls.tile_0",
             "data.result.b2_urls.tile_0"
           ],
-          "targetPath": "public/assets/tiles/floor-base.png"
+          "targetPath": "public/Assets/TileMaps/floor-base.png"
         },
         {
           "key": "floor-lane",
@@ -104,7 +104,7 @@
             "data.urls.tile_1",
             "data.result.b2_urls.tile_1"
           ],
-          "targetPath": "public/assets/tiles/floor-alt.png"
+          "targetPath": "public/Assets/TileMaps/floor-alt.png"
         },
         {
           "key": "floor-spawn",
@@ -118,7 +118,7 @@
             "data.urls.tile_2",
             "data.result.b2_urls.tile_2"
           ],
-          "targetPath": "public/assets/tiles/floor-spawn.png"
+          "targetPath": "public/Assets/TileMaps/floor-spawn.png"
         },
         {
           "key": "wall",
@@ -132,7 +132,7 @@
             "data.urls.tile_3",
             "data.result.b2_urls.tile_3"
           ],
-          "targetPath": "public/assets/tiles/wall.png"
+          "targetPath": "public/Assets/TileMaps/wall.png"
         },
         {
           "key": "crate",
@@ -146,7 +146,7 @@
             "data.urls.tile_4",
             "data.result.b2_urls.tile_4"
           ],
-          "targetPath": "public/assets/tiles/crate.png"
+          "targetPath": "public/Assets/TileMaps/crate.png"
         }
       ]
     },
@@ -195,7 +195,7 @@
             "data.download_url",
             "data.image_url"
           ],
-          "targetPath": "public/assets/sprites/bomb.png"
+          "targetPath": "public/Assets/VisualEffects/bomb.png"
         }
       ]
     },
@@ -244,7 +244,7 @@
             "data.download_url",
             "data.image_url"
           ],
-          "targetPath": "public/assets/sprites/bomb-ruins.png"
+          "targetPath": "public/Assets/VisualEffects/bomb-ruins.png"
         }
       ]
     },
@@ -293,7 +293,7 @@
             "data.download_url",
             "data.image_url"
           ],
-          "targetPath": "public/assets/sprites/flame.png"
+          "targetPath": "public/Assets/VisualEffects/flame.png"
         }
       ]
     },
@@ -342,7 +342,7 @@
             "data.download_url",
             "data.image_url"
           ],
-          "targetPath": "public/assets/sprites/flame-ruins.png"
+          "targetPath": "public/Assets/VisualEffects/flame-ruins.png"
         }
       ]
     },
@@ -391,7 +391,7 @@
             "data.download_url",
             "data.image_url"
           ],
-          "targetPath": "public/assets/ui/power-bomb.png"
+          "targetPath": "public/Assets/UiLayouts/power-bomb.png"
         }
       ]
     },
@@ -440,7 +440,7 @@
             "data.download_url",
             "data.image_url"
           ],
-          "targetPath": "public/assets/ui/power-flame.png"
+          "targetPath": "public/Assets/UiLayouts/power-flame.png"
         }
       ]
     },
@@ -489,7 +489,7 @@
             "data.download_url",
             "data.image_url"
           ],
-          "targetPath": "public/assets/ui/power-speed.png"
+          "targetPath": "public/Assets/UiLayouts/power-speed.png"
         }
       ]
     },
@@ -538,7 +538,7 @@
             "data.download_url",
             "data.image_url"
           ],
-          "targetPath": "public/assets/ui/power-remote.png"
+          "targetPath": "public/Assets/UiLayouts/power-remote.png"
         }
       ]
     },

@@ -45,7 +45,7 @@ globalThis.window = {
   requestAnimationFrame: noop,
 };
 
-const { GameApp } = await import("../output/esm/app/game-app.js");
+const { GameApp } = await import("../output/esm/Engine/game-app.js");
 
 const emptySprites = {
   up: null,

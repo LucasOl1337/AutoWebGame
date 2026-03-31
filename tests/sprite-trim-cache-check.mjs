@@ -34,7 +34,7 @@ globalThis.document = {
   createElement: () => fakeCanvas,
 };
 
-const { SpriteTrimCache } = await import("../output/esm/app/sprite-trim-cache.js");
+const { SpriteTrimCache } = await import("../output/esm/Engine/sprite-trim-cache.js");
 
 const cache = new SpriteTrimCache();
 const sprite = { naturalWidth: 4, naturalHeight: 4, width: 4, height: 4 };

@@ -8,6 +8,10 @@
     {
       "pattern": "bombapvp.com",
       "custom_domain": true
+    },
+    {
+      "pattern": "bombpvp.com",
+      "custom_domain": true
     }
   ],
   "assets": {

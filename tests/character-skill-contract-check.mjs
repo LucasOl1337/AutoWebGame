@@ -10,7 +10,7 @@ const {
   RANNI_SKILL_COOLDOWN_MS,
   getCharacterSkillDefinition,
   getCharacterSkillId,
-} = await import("../output/esm/app/skill-system.js");
+} = await import("../output/esm/ultimate/skill-system.js");
 
 const expected = [
   {

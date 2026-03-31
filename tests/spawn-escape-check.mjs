@@ -1,5 +1,5 @@
-import { GRID_HEIGHT, GRID_WIDTH } from "../output/esm/core/config.js";
-import { createArena, tileKey } from "../output/esm/game/arena.js";
+import { GRID_HEIGHT, GRID_WIDTH } from "../output/esm/PersonalConfig/config.js";
+import { createArena, tileKey } from "../output/esm/Arenas/arena.js";
 
 const arena = createArena();
 const spawns = [

@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 
-const { CHARACTER_ROSTER_MANIFEST } = await import("../output/esm/core/character-roster-manifest.js");
+const { CHARACTER_ROSTER_MANIFEST } = await import("../output/esm/Characters/Animations/character-roster-manifest.js");
 
 const publicManifest = JSON.parse(
-  readFileSync(new URL("../public/assets/characters/manifest.json", import.meta.url), "utf8"),
+  readFileSync(new URL("../public/Assets/Characters/Animations/manifest.json", import.meta.url), "utf8"),
 ).characters;
 
 const report = {

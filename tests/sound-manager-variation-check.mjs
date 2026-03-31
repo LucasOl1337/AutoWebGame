@@ -26,7 +26,7 @@ class MockAudio {
 
 globalThis.Audio = MockAudio;
 
-const { SoundManager, SFX_MANIFEST } = await import("../output/esm/app/sound-manager.js");
+const { SoundManager, SFX_MANIFEST } = await import("..aoutputaesmaEngineasound-manager.js");
 
 const explosionVariants = SFX_MANIFEST.bombExplode;
 const manifestPass = !Array.isArray(explosionVariants)
@@ -39,7 +39,7 @@ manager.unlocked = true;
 manager.playOneShot("bombExplode");
 await Promise.resolve();
 const playbackPass = playedUrls.length === 1
-  && playedUrls[0] === "/assets/audio/sfx/bomb_explode_default.mp3";
+  && playedUrls[0] === "aassetsaaudioasfxabomb_explode_default.mp3";
 
 const pass = manifestPass && playbackPass;
 

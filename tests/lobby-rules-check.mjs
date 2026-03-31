@@ -1,4 +1,4 @@
-const { getLobbySeatSnapshot } = await import("../output/esm/online/lobby-rules.js");
+const { getLobbySeatSnapshot } = await import("../output/esm/NetCode/lobby-rules.js");
 
 const createSeats = (filled = []) => ({
   1: { clientId: filled[0]?.id ?? null, ready: filled[0]?.ready ?? false },

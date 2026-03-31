@@ -2,8 +2,8 @@ Object.defineProperty(globalThis, "navigator", { value: { webdriver: true }, con
 
 const noop = () => {};
 
-const { GameApp } = await import("../output/esm/app/game-app.js");
-const { TILE_SIZE } = await import("../output/esm/core/config.js");
+const { GameApp } = await import("../output/esm/Engine/game-app.js");
+const { TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
 
 const NICO_ID = "5474c45c-2987-43e0-af2c-a6500c836881";
 const emptyDirectionalSprites = {

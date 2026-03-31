@@ -1,4 +1,4 @@
-const { pickAnimationFrame } = await import("../output/esm/app/animation-frame.js");
+const { pickAnimationFrame } = await import("../output/esm/Engine/animation-frame.js");
 
 const frames = ["transform-0", "transform-1", "transform-2", "ice-block"];
 

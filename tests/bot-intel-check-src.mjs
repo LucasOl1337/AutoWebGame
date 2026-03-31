@@ -46,9 +46,9 @@ globalThis.window = {
   requestAnimationFrame: noop,
 };
 
-const { GameApp } = await import("../output/esm/app/game-app.js");
-const { tileKey } = await import("../output/esm/game/arena.js");
-const { TILE_SIZE } = await import("../output/esm/core/config.js");
+const { GameApp } = await import("../output/esm/Engine/game-app.js");
+const { tileKey } = await import("../output/esm/Arenas/arena.js");
+const { TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
 
 const root = { appendChild: noop };
 const assets = {

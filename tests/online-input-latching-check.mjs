@@ -1,4 +1,4 @@
-const { mergeSequencedOnlineInputState } = await import("../output/esm/online/input-latch.js");
+const { mergeSequencedOnlineInputState } = await import("../output/esm/NetCode/input-latch.js");
 
 const neutral = {
   direction: null,

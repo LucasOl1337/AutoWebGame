@@ -65,9 +65,9 @@ function keyEvent(code) {
   return { code, preventDefault: noop };
 }
 
-const { GameApp } = await import("../output/esm/app/game-app.js");
-const { TILE_SIZE } = await import("../output/esm/core/config.js");
-const { tileKey } = await import("../output/esm/game/arena.js");
+const { GameApp } = await import("../output/esm/Engine/game-app.js");
+const { TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
+const { tileKey } = await import("../output/esm/Arenas/arena.js");
 
 const root = { appendChild: noop };
 const assets = {

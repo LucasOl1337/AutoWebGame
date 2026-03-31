@@ -6,19 +6,19 @@ const specPath = path.join(projectRoot, "configs", "pixellab-pack.v1.json");
 const spec = JSON.parse(await readFile(specPath, "utf8"));
 
 const requiredTargets = [
-  "public/assets/tiles/floor-base.png",
-  "public/assets/tiles/floor-alt.png",
-  "public/assets/tiles/floor-spawn.png",
-  "public/assets/tiles/wall.png",
-  "public/assets/tiles/crate.png",
-  "public/assets/sprites/bomb.png",
-  "public/assets/sprites/bomb-ruins.png",
-  "public/assets/sprites/flame.png",
-  "public/assets/sprites/flame-ruins.png",
-  "public/assets/ui/power-bomb.png",
-  "public/assets/ui/power-flame.png",
-  "public/assets/ui/power-speed.png",
-  "public/assets/ui/power-remote.png",
+  "public/Assets/TileMaps/floor-base.png",
+  "public/Assets/TileMaps/floor-alt.png",
+  "public/Assets/TileMaps/floor-spawn.png",
+  "public/Assets/TileMaps/wall.png",
+  "public/Assets/TileMaps/crate.png",
+  "public/Assets/VisualEffects/bomb.png",
+  "public/Assets/VisualEffects/bomb-ruins.png",
+  "public/Assets/VisualEffects/flame.png",
+  "public/Assets/VisualEffects/flame-ruins.png",
+  "public/Assets/UiLayouts/power-bomb.png",
+  "public/Assets/UiLayouts/power-flame.png",
+  "public/Assets/UiLayouts/power-speed.png",
+  "public/Assets/UiLayouts/power-remote.png",
 ];
 
 const targetPaths = spec.assets.flatMap((asset) => (asset.outputs ?? []).map((output) => output.targetPath));

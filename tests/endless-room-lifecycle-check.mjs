@@ -1,4 +1,4 @@
-const { shouldResetPlayingRoom } = await import("../output/esm/online/matchmaking.js");
+const { shouldResetPlayingRoom } = await import("../output/esm/NetCode/matchmaking.js");
 
 const classicRoom = {
   roomCode: "CLASSIC1",

@@ -4,7 +4,7 @@ const {
   isManualLobbyVisible,
   isQuickMatchCandidate,
   canReuseCurrentRoomForQuickMatch,
-} = await import("../output/esm/online/matchmaking.js");
+} = await import("../output/esm/NetCode/matchmaking.js");
 
 const manualRoom = {
   roomCode: "MANUAL",

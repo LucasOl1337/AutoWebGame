@@ -13,8 +13,8 @@ const fire = (event, payload) => {
   }
 };
 
-const { InputManager } = await import("../output/esm/engine/input.js");
-const { LOCAL_PLAYER_MOVEMENT_BINDINGS } = await import("../output/esm/core/config.js");
+const { InputManager } = await import("../output/esm/Engine/input.js");
+const { LOCAL_PLAYER_MOVEMENT_BINDINGS } = await import("../output/esm/PersonalConfig/config.js");
 
 const input = new InputManager(fakeWindow);
 

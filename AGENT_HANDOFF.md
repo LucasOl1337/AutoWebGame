@@ -1,81 +1,194 @@
 # Agent Handoff
 
-Resumo curto para futuros agentes trabalharem neste projeto sem repetir erro antigo.
+Technical brief for future agents working on layout and arena visuals.
 
-## Stack e fluxo local
+## Scope
 
-- Frontend: Vite + TypeScript.
-- Backend online: Cloudflare Worker + Durable Object em `worker/index.js`.
-- Comando principal de dev: `npm run dev`
-  - sobe frontend em `http://127.0.0.1:5173`
-  - sobe worker local em `http://127.0.0.1:8787`
-- Build de produção: `npm run build`
-- Deploy live: `npm run deploy:cloudflare`
+This repo already has a playable baseline. The current work is not "make it prettier" in the abstract.
+The real problem splits into two separate systems:
 
-## Arquivos centrais
+1. Match shell layout and chrome density.
+2. Arena readability and theme discipline.
 
-- UI online e navegação: `C:\Users\user\Desktop\AutoWebGame\src\online\session-client.ts`
-- Protocolo online: `C:\Users\user\Desktop\AutoWebGame\src\online\protocol.ts`
-- Matchmaking helpers: `C:\Users\user\Desktop\AutoWebGame\src\online\matchmaking.ts`
-- Worker e regras de sala: `C:\Users\user\Desktop\AutoWebGame\worker\index.js`
-- UI/responsividade global: `C:\Users\user\Desktop\AutoWebGame\src\styles\main.css`
-- I18n e boot de idioma: `C:\Users\user\Desktop\AutoWebGame\src\i18n.ts`
-- Runtime do jogo: `C:\Users\user\Desktop\AutoWebGame\src\app\game-app.ts`
+Do not mix those into one vague "visual polish" task. They have different owners and different fixes.
 
-## Regras de arquitetura que nao devem ser quebradas
+## Runtime Ownership
 
-- `partida rapida`, `lobby manual` e `partida infinita` precisam continuar separados.
-- Use `roomKind` e `sessionState` do servidor; nao volte a inferir tudo por flags locais soltas.
-- `endless` nao deve reaproveitar lifecycle de lobby classico.
-- Saida de jogador no meio da partida nao deve derrubar a sala inteira.
-- Offline contra bots nao pode depender do websocket online continuar conectado.
+- Match shell DOM and responsive layout live in [src/online/session-client.ts](C:\Users\user\Desktop\AutoWebGame\src\online\session-client.ts) and [src/styles/main.css](C:\Users\user\Desktop\AutoWebGame\src\styles\main.css).
+- The game canvas, HUD, arena floor, walls, crates, danger overlays, bomb previews, and theme rendering live in [src/app/game-app.ts](C:\Users\user\Desktop\AutoWebGame\src\app\game-app.ts).
+- Arena topology and crate placement live in [src/game/arena.ts](C:\Users\user\Desktop\AutoWebGame\src\game\arena.ts).
+- Theme definitions live in [src/app/arena-theme-library.ts](C:\Users\user\Desktop\AutoWebGame\src\app\arena-theme-library.ts) and [configs/arena-theme-library.json](C:\Users\user\Desktop\AutoWebGame\configs\arena-theme-library.json).
+- Existing visual planning notes live in [docs/next-map-creation-guide.md](C:\Users\user\Desktop\AutoWebGame\docs\next-map-creation-guide.md).
 
-## Responsividade
+## Match Layout Facts
 
-- O shell usa `height: 100dvh` e `overflow: hidden`; por isso o layout precisa caber sem scroll global em desktop.
-- Para viewports baixos, a estrategia correta e:
-  - comprimir paddings, gaps, tipografia e botoes por `max-height`
-  - mover overflow para listas internas
-  - nunca deixar a pagina inteira crescer alem do viewport
-- As regras mais sensiveis ficam em `main.css`:
-  - `@media (max-height: 820px) and (min-width: 1081px)`
-  - `@media (max-height: 690px) and (min-width: 1081px)`
-  - `@media (max-height: 620px) and (min-width: 1081px)`
+- The match screen is always rendered as `left rail + center viewport + right rail`.
+- The DOM structure is built in [src/online/session-client.ts:1128](C:\Users\user\Desktop\AutoWebGame\src\online\session-client.ts:1128), [src/online/session-client.ts:1143](C:\Users\user\Desktop\AutoWebGame\src\online\session-client.ts:1143), and [src/online/session-client.ts:1146](C:\Users\user\Desktop\AutoWebGame\src\online\session-client.ts:1146).
+- The shell styling is defined in [src/styles/main.css:965](C:\Users\user\Desktop\AutoWebGame\src\styles\main.css:965), [src/styles/main.css:974](C:\Users\user\Desktop\AutoWebGame\src\styles\main.css:974), and [src/styles/main.css:981](C:\Users\user\Desktop\AutoWebGame\src\styles\main.css:981).
+- Low-height desktop behavior is handled mostly by breakpoint compression, not by changing the information architecture:
+  - [src/styles/main.css:1517](C:\Users\user\Desktop\AutoWebGame\src\styles\main.css:1517)
+  - [src/styles/main.css:1783](C:\Users\user\Desktop\AutoWebGame\src\styles\main.css:1783)
+  - [src/styles/main.css:2071](C:\Users\user\Desktop\AutoWebGame\src\styles\main.css:2071)
+- The canvas itself is fixed-resolution and only scales to fit the remaining viewport space in [src/app/game-app.ts:946](C:\Users\user\Desktop\AutoWebGame\src\app\game-app.ts:946).
 
-## Idioma
+### What This Means
 
-- `/en` precisa continuar funcionando como entrypoint real.
-- O switcher de idioma fica no topo e usa navegação por URL.
-- Para usuarios nao-BR, o site tende a cair em ingles automaticamente.
-- HTML do worker esta com `cache-control: no-store` para evitar bundle antigo preso no custom domain.
+- If the match screen feels cramped, the first suspect is not the canvas.
+- The likely issue is that always-visible side rails are competing with the playfield for width and height.
+- Breakpoint-only shrinking is already heavily used. More shrinking is the weakest next move.
 
-## URLs de room
+## Arena Visual Facts
 
-- Ha trabalho em andamento para remover `?room=CODE` da URL publica e manter a navegacao por dentro da UI.
-- Mudancas relacionadas foram feitas em:
-  - `C:\Users\user\Desktop\AutoWebGame\src\online\session-client.ts`
-  - `C:\Users\user\Desktop\AutoWebGame\src\online\growth-telemetry.ts`
-- Antes de mexer nisso de novo, confira o comportamento de convite/copiar codigo e o fluxo de entrar em lobby.
+- Arena rendering is cached into an offscreen static layer in [src/app/game-app.ts:3245](C:\Users\user\Desktop\AutoWebGame\src\app\game-app.ts:3245).
+- Dynamic hazards and actors are then drawn on top in [src/app/game-app.ts:3330](C:\Users\user\Desktop\AutoWebGame\src\app\game-app.ts:3330).
+- Procedural floor language is implemented in [src/app/game-app.ts:3402](C:\Users\user\Desktop\AutoWebGame\src\app\game-app.ts:3402).
+- Procedural wall language is implemented in [src/app/game-app.ts:3626](C:\Users\user\Desktop\AutoWebGame\src\app\game-app.ts:3626).
+- Procedural crate language is implemented in [src/app/game-app.ts:3715](C:\Users\user\Desktop\AutoWebGame\src\app\game-app.ts:3715).
+- Arena topology is deterministic and symmetry-driven in [src/game/arena.ts](C:\Users\user\Desktop\AutoWebGame\src\game\arena.ts).
 
-## Validacao recomendada
+### Important Separation
 
-- Sempre rode `npm run build` antes de concluir.
-- Para matchmaking, rode pelo menos:
-  - `npm run test:matchmaking-state`
-- Para bug visual, faca smoke real com viewport curta.
-  - alvo minimo seguro: `1365x620`
-  - alvo mais agressivo: `1365x580`
-- Em bugs de shell/UI, medir no browser e melhor que confiar so no CSS.
+- Topology problems belong in `arena.ts`.
+- Readability, value grouping, and material language belong in `game-app.ts` and the theme library.
+- Do not "fix visuals" by changing arena topology unless the real complaint is route fairness or combat pacing.
 
-## Armadilhas conhecidas
+## Observed State From Inspection
 
-- O worktree costuma estar sujo. Nao reverta mudancas grandes sem entender contexto.
-- `git diff --stat` pode parecer enorme porque ha muitos arquivos grandes e alteracoes paralelas.
-- Se o build quebrar por TypeScript, verifique primeiro se e um erro antigo nao relacionado antes de culpar a mudanca atual.
-- O MCP do browser pode falhar se houver uma sessao do Chrome aberta; usar Playwright via `node` e um fallback util.
+Inspection date: `2026-03-31`
 
-## Ultimo contexto util
+### Layout
 
-- O lobby/setup para resolucoes baixas recebeu compressao adaptativa e overflow interno no CSS.
-- O setup segurou localmente em `1365x620` e `1365x580` sem overflow do documento.
-- Essa ultima rodada foi validada localmente com `npm run build`, mas pode ainda precisar deploy dependendo de quando este arquivo estiver sendo lido.
+- Landing and setup screens hold up reasonably well at `1365x620`.
+- Match mode fits at `1365x620` and `1365x580`, but the shell is dense and fragile.
+- The current design spends a lot of space on two persistent side rails even in bot matches where chat has almost no value.
+- The viewport survives because the shell keeps compressing text, padding, and controls around it.
+
+### Arena Visuals
+
+- `tournament-clean` is the clearest board in the repo.
+- `royal-marble` is also strong because it keeps the same category discipline while adding personality.
+- Sprite themes like `verdant-ruins` and `skyfoundry-bastion` are visibly noisier during live play.
+- In the noisy themes, floor detail and decorative contrast compete with:
+  - bombs
+  - flames
+  - powerups
+  - player silhouettes
+- The visual debt is strongest in tile centers, not on tile edges.
+
+## High-Value Fix Directions
+
+Use one of these tracks. Do not attempt all of them blindly in one pass.
+
+### Track 1: Make Match Layout Gameplay-First
+
+Best option when the complaint is "layout feels crowded" or "arena is too small".
+
+Recommended approach:
+
+- Treat the center playfield as the primary surface.
+- Collapse or demote one side rail on shorter desktops.
+- Make chat optional, hidden by default, or overlay-based during active gameplay.
+- Keep room metadata and leave/invite actions in the top bar, not in a full-time heavy side column.
+- Preserve the full rails for pre-match/setup, not necessarily for live match mode.
+
+Avoid:
+
+- another round of tiny-font breakpoint squeezing
+- shrinking the canvas below the current comfort range unless absolutely necessary
+- keeping chat equally prominent in offline bot matches
+
+### Track 2: Move To Hybrid Arena Rendering
+
+Best option when the complaint is "themes feel inconsistent" or "some maps are muddy".
+
+Recommended approach:
+
+- Keep procedural floor logic for category control.
+- Allow sprite walls and crates only when they pass readability checks.
+- Consider hybrid themes:
+  - procedural floor
+  - sprite wall
+  - sprite crate
+- This keeps lane/spawn/portal semantics stable while still allowing theme flavor on the props.
+
+Avoid:
+
+- importing full sprite floors just because the art looks richer in isolation
+- treating all five tile types as equally decorative surfaces
+
+### Track 3: Keep Sprite Themes But Enforce Hard Art Rules
+
+Best option when the team wants authored tile art for all themes.
+
+Rules that should be enforced:
+
+- floor center must stay calm
+- lane tiles must read brighter or simpler than neutral floor
+- crate family must remain the warmest destructible category
+- wall family must remain the heaviest structural category
+- accent color must stay reserved for landmarks and VFX support
+- moss, rivets, cracks, and trims should be edge-biased, not center-biased
+
+If a theme only looks good in a still image and gets worse once bombs/flames spawn, reject it.
+
+## Concrete Brainstorm Directions
+
+If you need practical solution ideas instead of theory, start here:
+
+1. Create a `compact match mode` CSS path that hides the right chat rail below a height threshold and replaces it with a small toggle button.
+2. Keep the left info rail, but reduce it to score/room state/players only during gameplay.
+3. Add a shell mode flag for offline bot matches so the match screen uses a simpler chrome profile than online rooms.
+4. Promote `tournament-clean` and `royal-marble` as the visual baseline for category separation.
+5. Convert `verdant-ruins` and `skyfoundry-bastion` into hybrid or procedural-first themes before trying to polish them with more texture.
+6. Build a theme QA rubric around live-action screenshots, not just static tile previews.
+7. If a sprite theme stays noisy, reduce floor contrast first. Do not start by dimming bombs, flames, or pickups.
+
+## Fastest Repro Path
+
+Use this when you need to inspect layout or arena visuals quickly.
+
+1. Run `npm run dev`
+2. Open `http://127.0.0.1:5173`
+3. Click `Partida contra bots`
+4. Use `?arenaTheme=<theme-id>` to compare themes quickly
+
+Useful themes:
+
+- `tournament-clean`
+- `royal-marble`
+- `arcane-citadel`
+- `verdant-ruins`
+- `skyfoundry-bastion`
+
+## QA Baseline
+
+Minimum desktop checks:
+
+- `1365x620`
+- `1365x580`
+
+For each candidate fix, verify:
+
+- the center canvas still feels primary
+- bombs and flames dominate the board when active
+- players are readable at a glance
+- wall vs crate separation is obvious without staring
+- no important match action is hidden behind unnecessary chrome
+
+## Working Rule For Future Agents
+
+If the complaint is about the shell, work in:
+
+- [src/online/session-client.ts](C:\Users\user\Desktop\AutoWebGame\src\online\session-client.ts)
+- [src/styles/main.css](C:\Users\user\Desktop\AutoWebGame\src\styles\main.css)
+
+If the complaint is about board readability, work in:
+
+- [src/app/game-app.ts](C:\Users\user\Desktop\AutoWebGame\src\app\game-app.ts)
+- [src/app/arena-theme-library.ts](C:\Users\user\Desktop\AutoWebGame\src\app\arena-theme-library.ts)
+
+If the complaint is about fairness, route control, or spawn flow, work in:
+
+- [src/game/arena.ts](C:\Users\user\Desktop\AutoWebGame\src\game\arena.ts)
+
+Do not patch all three subsystems at once unless the evidence clearly requires it.

@@ -2,8 +2,8 @@ Object.defineProperty(globalThis, "navigator", { value: { webdriver: true }, con
 
 const noop = () => {};
 
-const { GameApp } = await import("../output/esm/app/game-app.js");
-const { TILE_SIZE } = await import("../output/esm/core/config.js");
+const { GameApp } = await import("../output/esm/Engine/game-app.js");
+const { TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
 
 const NICO_CHANNEL_MS = 2_000;
 const NICO_RELEASE_MS = 260;

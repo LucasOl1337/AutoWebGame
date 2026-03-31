@@ -4,16 +4,16 @@ import { readFileSync } from "node:fs";
 
 const noop = () => {};
 
-const { GameApp } = await import("../output/esm/app/game-app.js");
-const { CHARACTER_ROSTER_MANIFEST } = await import("../output/esm/core/character-roster-manifest.js");
-const { TILE_SIZE } = await import("../output/esm/core/config.js");
+const { GameApp } = await import("../output/esm/Engine/game-app.js");
+const { CHARACTER_ROSTER_MANIFEST } = await import("../output/esm/Characters/Animations/character-roster-manifest.js");
+const { TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
 
 const RANNI_ID = "03a976fb-7313-4064-a477-5bb9b0760034";
 const KILLER_BEE_ID = "6ee8baa5-3277-413b-ae0e-2659b9cc52e9";
 const NICO_ID = "5474c45c-2987-43e0-af2c-a6500c836881";
 const CROCODILO_ID = "d083c3dc-7162-4391-8628-6adde0b8d8d6";
 const PUBLIC_CHARACTER_MANIFEST = JSON.parse(
-  readFileSync(new URL("../public/assets/characters/manifest.json", import.meta.url), "utf8"),
+  readFileSync(new URL("../public/Assets/Characters/Animations/manifest.json", import.meta.url), "utf8"),
 ).characters;
 
 const emptyDirectionalSprites = {

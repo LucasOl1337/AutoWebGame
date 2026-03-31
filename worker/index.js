@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
-import { GameApp } from "../src/app/game-app";
-import { CHARACTER_ROSTER_MANIFEST } from "../src/core/character-roster-manifest";
+import { GameApp } from "../src/Engine/game-app";
+import { CHARACTER_ROSTER_MANIFEST } from "../src/Characters/Animations/character-roster-manifest";
 import {
   canReuseCurrentRoomForQuickMatch,
   createIdleSessionState,
@@ -8,10 +8,10 @@ import {
   isQuickMatchCandidate,
   resolveOnlineSessionState,
   shouldResetPlayingRoom,
-} from "../src/online/matchmaking";
-import { validateUsername } from "../src/online/account";
-import { mergeSequencedOnlineInputState } from "../src/online/input-latch";
-import { createFixedRatePumpState, consumeFixedRatePumpSteps } from "../src/online/server-tick";
+} from "../src/NetCode/matchmaking";
+import { validateUsername } from "../src/NetCode/account";
+import { mergeSequencedOnlineInputState } from "../src/NetCode/input-latch";
+import { createFixedRatePumpState, consumeFixedRatePumpSteps } from "../src/NetCode/server-tick";
 
 const STATE_VERSION = 3;
 const MATCH_TICK_MS = 1000 / 60;
@@ -51,15 +51,7 @@ const TELEMETRY_EVENT_NAMES = new Set([
   "match_ended",
   "lobby_left",
 ]);
-const LEGACY_AUDIO_PATHS = new Set([
-  "/assets/audio/sfx/bomb_explode.mp3",
-  "/assets/audio/sfx/crate_break.mp3",
-  "/assets/audio/sfx/flame_ignite.mp3",
-  "/assets/audio/sfx/player_death.mp3",
-  "/assets/audio/sfx/round_win.mp3",
-  "/assets/audio/sfx/shield_block.mp3",
-  "/assets/audio/sfx/sudden_death.mp3",
-]);
+const LEGACY_ASSET_PREFIX = "/assets/";
 
 /**
  * @typedef {{
@@ -176,14 +168,29 @@ export default {
       return globalLobby.fetch(request);
     }
 
-    if (LEGACY_AUDIO_PATHS.has(url.pathname)) {
+    if (url.pathname.startsWith(LEGACY_ASSET_PREFIX)) {
       return new Response("Not found", { status: 404 });
     }
 
     const assetResponse = await env.ASSETS.fetch(request);
     const contentType = assetResponse.headers.get("content-type") || "";
+    if (url.pathname === "/Assets/Characters/Animations/manifest.json") {
+      const headers = new Headers(assetResponse.headers);
+      headers.set("cache-control", "no-store");
+      return new Response(assetResponse.body, {
+        status: assetResponse.status,
+        statusText: assetResponse.statusText,
+        headers,
+      });
+    }
     if (!contentType.includes("text/html")) {
-      return assetResponse;
+      const headers = new Headers(assetResponse.headers);
+      headers.set("cache-control", "public, max-age=86400, stale-while-revalidate=604800");
+      return new Response(assetResponse.body, {
+        status: assetResponse.status,
+        statusText: assetResponse.statusText,
+        headers,
+      });
     }
     const headers = new Headers(assetResponse.headers);
     headers.set("cache-control", "no-store");
@@ -219,15 +226,15 @@ export class GlobalLobby extends DurableObject {
   rooms = new Map();
   /** @type {Map<string, WebSocket>} */
   sockets = new Map();
-  /** @type {Map<string, import("../src/online/account").PlayerAccount | null>} */
+  /** @type {Map<string, import("../src/NetCode/account").PlayerAccount | null>} */
   clientAccounts = new Map();
-  /** @type {Map<string, import("../src/online/matchmaking").OnlineClientIntent>} */
+  /** @type {Map<string, import("../src/NetCode/matchmaking").OnlineClientIntent>} */
   clientIntents = new Map();
   /** @type {Set<string>} */
   quickMatchPendingClients = new Set();
   /** @type {Map<string, number>} */
   preferredCharacterSelections = new Map();
-  /** @type {Map<string, { game: GameApp, inputs: Record<1 | 2 | 3 | 4, import("../src/online/protocol").OnlineInputState & { inputSeq?: number, sentAtMs?: number }>, ackedInputSeq: Record<1 | 2 | 3 | 4, number>, timer: ReturnType<typeof setInterval> | null, tick: number, activePlayerIds: Array<1 | 2 | 3 | 4>, botPlayerIds: Array<1 | 2 | 3 | 4>, characterSelections: Record<1 | 2 | 3 | 4, number>, matchResultChoices: Record<1 | 2 | 3 | 4, "rematch" | "lobby" | null>, clock: import("../src/online/server-tick").FixedRatePumpState, resultRestartAtMs: number | null, roomMode: "classic" | "endless" }>} */
+  /** @type {Map<string, { game: GameApp, inputs: Record<1 | 2 | 3 | 4, import("../src/NetCode/protocol").OnlineInputState & { inputSeq?: number, sentAtMs?: number }>, ackedInputSeq: Record<1 | 2 | 3 | 4, number>, timer: ReturnType<typeof setInterval> | null, tick: number, activePlayerIds: Array<1 | 2 | 3 | 4>, botPlayerIds: Array<1 | 2 | 3 | 4>, characterSelections: Record<1 | 2 | 3 | 4, number>, matchResultChoices: Record<1 | 2 | 3 | 4, "rematch" | "lobby" | null>, clock: import("../src/NetCode/server-tick").FixedRatePumpState, resultRestartAtMs: number | null, roomMode: "classic" | "endless" }>} */
   matches = new Map();
   /** @type {Promise<void>} */
   ready;
@@ -583,7 +590,7 @@ export class GlobalLobby extends DurableObject {
 
   /**
    * @param {Request} request
-   * @returns {Promise<import("../src/online/account").PlayerAccount | null>}
+   * @returns {Promise<import("../src/NetCode/account").PlayerAccount | null>}
    */
   async readCurrentAccountFromRequest(request) {
     const sessionId = readCookieValue(request.headers.get("cookie"), ACCOUNT_SESSION_COOKIE);
@@ -607,7 +614,7 @@ export class GlobalLobby extends DurableObject {
 
   /**
    * @param {string} clientId
-   * @param {import("../src/online/matchmaking").OnlineClientIntent} intent
+   * @param {import("../src/NetCode/matchmaking").OnlineClientIntent} intent
    */
   setClientIntent(clientId, intent) {
     if (intent === "idle") {
