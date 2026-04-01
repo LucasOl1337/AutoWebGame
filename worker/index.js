@@ -1,5 +1,13 @@
 import { DurableObject } from "cloudflare:workers";
 import { GameApp } from "../src/Engine/game-app";
+import {
+  buildArenaRuntimeConfig,
+  cloneArenaDefinition,
+  createDefaultArenaDefinition,
+  normalizeArenaDefinition,
+  validateArenaDefinition,
+} from "../src/Arenas/arena";
+import { ARENA_THEME_LIBRARY } from "../src/Arenas/arena-theme-library";
 import { CHARACTER_ROSTER_MANIFEST } from "../src/Characters/Animations/character-roster-manifest";
 import {
   canReuseCurrentRoomForQuickMatch,
@@ -52,6 +60,8 @@ const TELEMETRY_EVENT_NAMES = new Set([
   "lobby_left",
 ]);
 const LEGACY_ASSET_PREFIX = "/assets/";
+const ACTIVE_ARENA_ID_KEY = "arena:active-id";
+const ARENA_KEY_PREFIX = "arena:def:";
 
 /**
  * @typedef {{
@@ -108,6 +118,34 @@ export default {
 
     if (url.pathname === "/api/admin/summary") {
       return globalLobby.fetch(rewriteRequestPath(request, "/internal/admin/summary"));
+    }
+
+    if (url.pathname === "/api/arena/active") {
+      if (request.method !== "GET") {
+        return new Response("Method not allowed", { status: 405 });
+      }
+      return globalLobby.fetch(rewriteRequestPath(request, "/internal/arena/active"));
+    }
+
+    if (url.pathname === "/api/admin/arenas") {
+      if (request.method === "GET") {
+        return globalLobby.fetch(rewriteRequestPath(request, "/internal/admin/arenas"));
+      }
+      if (request.method === "POST") {
+        return globalLobby.fetch(rewriteRequestPath(request, "/internal/admin/arenas"));
+      }
+      return new Response("Method not allowed", { status: 405 });
+    }
+
+    const arenaAdminMatch = url.pathname.match(/^\/api\/admin\/arenas\/([^/]+)(?:\/(activate|validate))?$/);
+    if (arenaAdminMatch) {
+      const arenaId = encodeURIComponent(arenaAdminMatch[1]);
+      const suffix = arenaAdminMatch[2] ? `/${arenaAdminMatch[2]}` : "";
+      const targetPath = `/internal/admin/arenas/${arenaId}${suffix}`;
+      if (request.method === "GET" || request.method === "PUT" || request.method === "POST") {
+        return globalLobby.fetch(rewriteRequestPath(request, targetPath));
+      }
+      return new Response("Method not allowed", { status: 405 });
     }
 
     if (url.pathname === "/api/admin/login") {
@@ -234,8 +272,10 @@ export class GlobalLobby extends DurableObject {
   quickMatchPendingClients = new Set();
   /** @type {Map<string, number>} */
   preferredCharacterSelections = new Map();
-  /** @type {Map<string, { game: GameApp, inputs: Record<1 | 2 | 3 | 4, import("../src/NetCode/protocol").OnlineInputState & { inputSeq?: number, sentAtMs?: number }>, ackedInputSeq: Record<1 | 2 | 3 | 4, number>, timer: ReturnType<typeof setInterval> | null, tick: number, activePlayerIds: Array<1 | 2 | 3 | 4>, botPlayerIds: Array<1 | 2 | 3 | 4>, characterSelections: Record<1 | 2 | 3 | 4, number>, matchResultChoices: Record<1 | 2 | 3 | 4, "rematch" | "lobby" | null>, clock: import("../src/NetCode/server-tick").FixedRatePumpState, resultRestartAtMs: number | null, roomMode: "classic" | "endless" }>} */
+  /** @type {Map<string, { game: GameApp, inputs: Record<1 | 2 | 3 | 4, import("../src/NetCode/protocol").OnlineInputState & { inputSeq?: number, sentAtMs?: number }>, ackedInputSeq: Record<1 | 2 | 3 | 4, number>, timer: ReturnType<typeof setInterval> | null, tick: number, activePlayerIds: Array<1 | 2 | 3 | 4>, botPlayerIds: Array<1 | 2 | 3 | 4>, characterSelections: Record<1 | 2 | 3 | 4, number>, matchResultChoices: Record<1 | 2 | 3 | 4, "rematch" | "lobby" | null>, clock: import("../src/NetCode/server-tick").FixedRatePumpState, resultRestartAtMs: number | null, roomMode: "classic" | "endless", arenaDefinition: import("../src/Gameplay/types").ArenaDefinition }>} */
   matches = new Map();
+  /** @type {import("../src/Gameplay/types").ArenaDefinition} */
+  activeArenaDefinition = createDefaultArenaDefinition();
   /** @type {Promise<void>} */
   ready;
 
@@ -282,6 +322,7 @@ export class GlobalLobby extends DurableObject {
         }
       }
 
+      this.activeArenaDefinition = await this.readActiveArenaDefinition();
       this.reconcileRoomsWithActiveSockets();
       await this.persistState();
     });
@@ -319,6 +360,56 @@ export class GlobalLobby extends DurableObject {
       return this.handleAdminSummary();
     }
 
+    if (url.pathname === "/internal/arena/active") {
+      if (request.method !== "GET") {
+        return new Response("Method not allowed", { status: 405 });
+      }
+      return this.handleActiveArena();
+    }
+
+    if (url.pathname === "/internal/admin/arenas") {
+      const auth = await authorizeAdminRequest(request, this.env, this.ctx.storage);
+      if (!auth.ok) {
+        return auth.response;
+      }
+      if (request.method === "GET") {
+        return this.handleAdminArenaList();
+      }
+      if (request.method === "POST") {
+        return this.handleAdminArenaCreate(request);
+      }
+      return new Response("Method not allowed", { status: 405 });
+    }
+
+    const arenaAdminMatch = url.pathname.match(/^\/internal\/admin\/arenas\/([^/]+)(?:\/(activate|validate))?$/);
+    if (arenaAdminMatch) {
+      const auth = await authorizeAdminRequest(request, this.env, this.ctx.storage);
+      if (!auth.ok) {
+        return auth.response;
+      }
+      const arenaId = decodeURIComponent(arenaAdminMatch[1]);
+      const action = arenaAdminMatch[2] || null;
+      if (action === "activate") {
+        if (request.method !== "POST") {
+          return new Response("Method not allowed", { status: 405 });
+        }
+        return this.handleAdminArenaActivate(arenaId);
+      }
+      if (action === "validate") {
+        if (request.method !== "POST") {
+          return new Response("Method not allowed", { status: 405 });
+        }
+        return this.handleAdminArenaValidate(request, arenaId);
+      }
+      if (request.method === "GET") {
+        return this.handleAdminArenaGet(arenaId);
+      }
+      if (request.method === "PUT") {
+        return this.handleAdminArenaUpdate(request, arenaId);
+      }
+      return new Response("Method not allowed", { status: 405 });
+    }
+
     if (url.pathname === "/internal/account/me") {
       return this.handleAccountMe(request);
     }
@@ -329,10 +420,6 @@ export class GlobalLobby extends DurableObject {
 
     if (url.pathname === "/internal/account/logout") {
       return this.handleAccountLogout(request);
-    }
-
-    if (url.pathname === "/internal/admin/summary") {
-      return this.handleAdminSummary();
     }
 
     if (url.pathname === "/internal/admin/daily-report") {
@@ -1156,8 +1243,8 @@ export class GlobalLobby extends DurableObject {
 
     await this.persistState();
 
-    this.sendMatchStarted(room, activePlayerIds, characterSelections);
     this.startRoomMatch(room, activePlayerIds, characterSelections);
+    this.sendMatchStarted(room, activePlayerIds, characterSelections);
     this.appendRoomSystemMessage(room, "Match started. Good luck.");
     await this.persistState();
 
@@ -1453,6 +1540,351 @@ export class GlobalLobby extends DurableObject {
         "cache-control": "no-store",
       },
     });
+  }
+
+  /**
+   * @returns {Promise<Response>}
+   */
+  async handleActiveArena() {
+    const arena = cloneArenaDefinition(await this.readActiveArenaDefinition());
+    return Response.json(
+      { arena },
+      {
+        headers: {
+          "cache-control": "no-store",
+        },
+      },
+    );
+  }
+
+  /**
+   * @returns {Promise<Response>}
+   */
+  async handleAdminArenaList() {
+    const arenas = await this.listArenaDefinitions();
+    return Response.json(
+      {
+        activeArenaId: this.activeArenaDefinition.id,
+        arenas,
+      },
+      {
+        headers: {
+          "cache-control": "no-store",
+        },
+      },
+    );
+  }
+
+  /**
+   * @param {Request} request
+   * @returns {Promise<Response>}
+   */
+  async handleAdminArenaCreate(request) {
+    /** @type {unknown} */
+    let payload = null;
+    try {
+      payload = await request.json();
+    } catch {
+      payload = null;
+    }
+
+    const sourceArenaId = typeof payload?.sourceArenaId === "string" ? payload.sourceArenaId.trim() : "";
+    const sourceArena = sourceArenaId ? await this.readArenaDefinitionById(sourceArenaId) : null;
+    const nowIso = new Date().toISOString();
+    const arena = normalizeArenaDefinition({
+      ...(sourceArena ? cloneArenaDefinition(sourceArena) : createDefaultArenaDefinition("draft")),
+      id: createId("arena"),
+      name: typeof payload?.name === "string" && payload.name.trim()
+        ? payload.name.trim()
+        : sourceArena
+          ? `${sourceArena.name} Copy`
+          : `Arena ${nowIso.slice(0, 10)}`,
+      status: "draft",
+      version: `arena-${Date.now()}`,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    });
+
+    await this.saveArenaDefinition(arena);
+    return Response.json(
+      {
+        arena,
+        validation: validateArenaDefinition(arena),
+        activeArenaId: this.activeArenaDefinition.id,
+      },
+      {
+        status: 201,
+        headers: {
+          "cache-control": "no-store",
+        },
+      },
+    );
+  }
+
+  /**
+   * @param {string} arenaId
+   * @returns {Promise<Response>}
+   */
+  async handleAdminArenaGet(arenaId) {
+    const arena = await this.readArenaDefinitionById(arenaId);
+    if (!arena) {
+      return Response.json({ ok: false, error: "Arena not found." }, { status: 404 });
+    }
+    return Response.json(
+      {
+        arena,
+        validation: validateArenaDefinition(arena),
+        activeArenaId: this.activeArenaDefinition.id,
+      },
+      {
+        headers: {
+          "cache-control": "no-store",
+        },
+      },
+    );
+  }
+
+  /**
+   * @param {Request} request
+   * @param {string} arenaId
+   * @returns {Promise<Response>}
+   */
+  async handleAdminArenaUpdate(request, arenaId) {
+    /** @type {unknown} */
+    let payload;
+    try {
+      payload = await request.json();
+    } catch {
+      return Response.json({ ok: false, error: "Invalid JSON body." }, { status: 400 });
+    }
+
+    const existing = await this.readArenaDefinitionById(arenaId);
+    if (!existing) {
+      return Response.json({ ok: false, error: "Arena not found." }, { status: 404 });
+    }
+
+    const arenaPayload = payload && typeof payload === "object" && payload.arena && typeof payload.arena === "object"
+      ? payload.arena
+      : payload;
+    const nowIso = new Date().toISOString();
+    const nextArena = normalizeArenaDefinition({
+      ...cloneArenaDefinition(existing),
+      ...(arenaPayload && typeof arenaPayload === "object" ? arenaPayload : {}),
+      id: existing.id,
+      createdAt: existing.createdAt,
+      updatedAt: nowIso,
+      status: existing.id === this.activeArenaDefinition.id ? "active" : "draft",
+      version: typeof arenaPayload?.version === "string" && arenaPayload.version.trim()
+        ? arenaPayload.version.trim()
+        : `${existing.id}-${Date.now()}`,
+    });
+
+    await this.saveArenaDefinition(nextArena);
+    if (nextArena.id === this.activeArenaDefinition.id) {
+      this.activeArenaDefinition = cloneArenaDefinition(nextArena);
+    }
+
+    return Response.json(
+      {
+        arena: nextArena,
+        validation: validateArenaDefinition(nextArena),
+        activeArenaId: this.activeArenaDefinition.id,
+      },
+      {
+        headers: {
+          "cache-control": "no-store",
+        },
+      },
+    );
+  }
+
+  /**
+   * @param {Request} request
+   * @param {string} arenaId
+   * @returns {Promise<Response>}
+   */
+  async handleAdminArenaValidate(request, arenaId) {
+    const existing = await this.readArenaDefinitionById(arenaId);
+    /** @type {unknown} */
+    let payload = null;
+    try {
+      payload = await request.json();
+    } catch {
+      payload = null;
+    }
+    const candidate = payload && typeof payload === "object" && payload.arena && typeof payload.arena === "object"
+      ? payload.arena
+      : payload;
+    const arena = normalizeArenaDefinition({
+      ...(existing ? cloneArenaDefinition(existing) : createDefaultArenaDefinition("draft")),
+      ...(candidate && typeof candidate === "object" ? candidate : {}),
+      id: existing?.id ?? arenaId,
+      status: existing?.id === this.activeArenaDefinition.id ? "active" : "draft",
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      version: typeof candidate?.version === "string" && candidate.version.trim()
+        ? candidate.version.trim()
+        : existing?.version ?? `${arenaId}-${Date.now()}`,
+    });
+    const validation = validateArenaDefinition(arena);
+    return Response.json(
+      {
+        arena,
+        validation,
+        activeArenaId: this.activeArenaDefinition.id,
+      },
+      {
+        headers: {
+          "cache-control": "no-store",
+        },
+      },
+    );
+  }
+
+  /**
+   * @param {string} arenaId
+   * @returns {Promise<Response>}
+   */
+  async handleAdminArenaActivate(arenaId) {
+    const arena = await this.readArenaDefinitionById(arenaId);
+    if (!arena) {
+      return Response.json({ ok: false, error: "Arena not found." }, { status: 404 });
+    }
+    const validation = validateArenaDefinition(arena);
+    if (!validation.ok) {
+      return Response.json(
+        {
+          ok: false,
+          error: "Arena validation failed.",
+          validation,
+        },
+        { status: 409 },
+      );
+    }
+
+    const activeArena = await this.activateArenaDefinition(arenaId);
+    return Response.json(
+      {
+        ok: true,
+        arena: activeArena,
+        validation: validateArenaDefinition(activeArena),
+        activeArenaId: activeArena.id,
+      },
+      {
+        headers: {
+          "cache-control": "no-store",
+        },
+      },
+    );
+  }
+
+  /**
+   * @returns {Promise<import("../src/Gameplay/types").ArenaDefinition>}
+   */
+  async readActiveArenaDefinition() {
+    const activeArenaId = await this.ctx.storage.get(ACTIVE_ARENA_ID_KEY);
+    if (typeof activeArenaId === "string" && activeArenaId) {
+      const storedActiveArena = await this.readArenaDefinitionById(activeArenaId);
+      if (storedActiveArena) {
+        return cloneArenaDefinition(storedActiveArena);
+      }
+    }
+
+    const existingArenas = await this.listArenaDefinitions();
+    const fallbackArena = existingArenas.find((arena) => arena.status === "active") ?? existingArenas[0] ?? null;
+    if (fallbackArena) {
+      const normalizedFallback = normalizeArenaDefinition({
+        ...cloneArenaDefinition(fallbackArena),
+        status: "active",
+      });
+      await this.ctx.storage.put(ACTIVE_ARENA_ID_KEY, normalizedFallback.id);
+      await this.saveArenaDefinition(normalizedFallback);
+      return cloneArenaDefinition(normalizedFallback);
+    }
+
+    const defaultArena = normalizeArenaDefinition(createDefaultArenaDefinition("active"));
+    await this.ctx.storage.put(ACTIVE_ARENA_ID_KEY, defaultArena.id);
+    await this.saveArenaDefinition(defaultArena);
+    return cloneArenaDefinition(defaultArena);
+  }
+
+  /**
+   * @returns {Promise<import("../src/Gameplay/types").ArenaDefinition[]>}
+   */
+  async listArenaDefinitions() {
+    const records = await this.ctx.storage.list({ prefix: ARENA_KEY_PREFIX });
+    const arenas = [];
+    for (const arena of records.values()) {
+      if (!arena || typeof arena !== "object") {
+        continue;
+      }
+      arenas.push(normalizeArenaDefinition(arena));
+    }
+    return arenas.sort((left, right) => {
+      const leftUpdatedAt = Date.parse(left.updatedAt) || 0;
+      const rightUpdatedAt = Date.parse(right.updatedAt) || 0;
+      if (rightUpdatedAt !== leftUpdatedAt) {
+        return rightUpdatedAt - leftUpdatedAt;
+      }
+      return left.name.localeCompare(right.name);
+    });
+  }
+
+  /**
+   * @param {string} arenaId
+   * @returns {Promise<import("../src/Gameplay/types").ArenaDefinition | null>}
+   */
+  async readArenaDefinitionById(arenaId) {
+    if (!arenaId) {
+      return null;
+    }
+    const stored = await this.ctx.storage.get(buildArenaDefinitionKey(arenaId));
+    if (!stored || typeof stored !== "object") {
+      return null;
+    }
+    return normalizeArenaDefinition(stored);
+  }
+
+  /**
+   * @param {import("../src/Gameplay/types").ArenaDefinition} arena
+   * @returns {Promise<void>}
+   */
+  async saveArenaDefinition(arena) {
+    const normalized = normalizeArenaDefinition(arena);
+    await this.ctx.storage.put(buildArenaDefinitionKey(normalized.id), normalized);
+  }
+
+  /**
+   * @param {string} arenaId
+   * @returns {Promise<import("../src/Gameplay/types").ArenaDefinition>}
+   */
+  async activateArenaDefinition(arenaId) {
+    const targetArena = await this.readArenaDefinitionById(arenaId);
+    if (!targetArena) {
+      throw new Error(`Arena not found: ${arenaId}`);
+    }
+
+    const previousActiveId = this.activeArenaDefinition.id;
+    if (previousActiveId && previousActiveId !== targetArena.id) {
+      const previousActiveArena = await this.readArenaDefinitionById(previousActiveId);
+      if (previousActiveArena) {
+        await this.saveArenaDefinition({
+          ...cloneArenaDefinition(previousActiveArena),
+          status: "draft",
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    }
+
+    const activeArena = normalizeArenaDefinition({
+      ...cloneArenaDefinition(targetArena),
+      status: "active",
+      updatedAt: new Date().toISOString(),
+    });
+    await this.ctx.storage.put(ACTIVE_ARENA_ID_KEY, activeArena.id);
+    await this.saveArenaDefinition(activeArena);
+    this.activeArenaDefinition = cloneArenaDefinition(activeArena);
+    return cloneArenaDefinition(activeArena);
   }
 
   /**
@@ -2117,11 +2549,13 @@ export class GlobalLobby extends DurableObject {
    */
   startRoomMatch(room, activePlayerIds, characterSelections, options = {}) {
     this.stopRoomMatch(room.roomCode);
-    const game = createServerGame();
+    const arenaDefinition = cloneArenaDefinition(normalizeArenaDefinition(options.arenaDefinition ?? this.activeArenaDefinition));
+    const game = createServerGame(arenaDefinition);
     const roomMode = options.roomMode === "endless" ? "endless" : room.roomMode === "endless" ? "endless" : "classic";
     const botPlayerIds = Array.isArray(options.botPlayerIds) ? options.botPlayerIds.filter((seatId) => PLAYER_IDS.includes(seatId)) : [];
     const playerLabels = options.playerLabels ?? this.buildRoomPlayerLabels(room);
     game.startServerAuthoritativeMatch(activePlayerIds, characterSelections, {
+      arena: arenaDefinition,
       roomMode,
       botPlayerIds,
       endlessStats: options.endlessStats ?? null,
@@ -2140,6 +2574,7 @@ export class GlobalLobby extends DurableObject {
       clock: createFixedRatePumpState(Date.now()),
       resultRestartAtMs: null,
       roomMode,
+      arenaDefinition,
     };
     match.timer = setInterval(() => {
       this.pumpRoomMatch(room.roomCode);
@@ -2468,8 +2903,8 @@ export class GlobalLobby extends DurableObject {
     this.refreshSeatLabels(room);
     await this.persistState();
 
-    this.sendMatchStarted(room, activePlayerIds, characterSelections);
     this.startRoomMatch(room, activePlayerIds, characterSelections);
+    this.sendMatchStarted(room, activePlayerIds, characterSelections);
     this.appendRoomSystemMessage(room, "Champion declared. Next match started automatically.");
     await this.persistState();
     this.broadcastLobbyToMembers(room);
@@ -2514,6 +2949,7 @@ export class GlobalLobby extends DurableObject {
         botPlayerIds,
         characterSelections,
         playerLabels: this.buildRoomPlayerLabels(room),
+        arena: buildArenaRuntimeConfig(match?.arenaDefinition ?? this.activeArenaDefinition),
       },
       sessionState: this.buildClientSessionState(seat.clientId, {
         room,
@@ -2822,6 +3258,10 @@ function getAdminPassword(env) {
 
 function buildAdminSessionKey(sessionId) {
   return `admin-session:${sessionId}`;
+}
+
+function buildArenaDefinitionKey(arenaId) {
+  return `${ARENA_KEY_PREFIX}${arenaId}`;
 }
 
 function buildFeedbackKey(dateKey, createdAtMs, feedbackId) {
@@ -3162,6 +3602,14 @@ function createReportWebhookPayload(report) {
 
 function renderAdminHtml(env) {
   const safeUsername = escapeHtml(getAdminUsername(env));
+  const arenaThemes = JSON.stringify(
+    ARENA_THEME_LIBRARY.map((theme) => ({
+      id: theme.id,
+      name: theme.name,
+      summary: theme.summary,
+      palette: theme.palette,
+    })),
+  );
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -3285,10 +3733,163 @@ function renderAdminHtml(env) {
         color: var(--muted);
         font-size: 0.88rem;
       }
+      .arena-shell {
+        display: grid;
+        grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+        gap: 16px;
+        margin-top: 24px;
+      }
+      .inline-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+      }
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 12px;
+      }
+      .field-group {
+        display: grid;
+        gap: 6px;
+      }
+      .field-group--full {
+        grid-column: 1 / -1;
+      }
+      .field-label {
+        color: var(--muted);
+        font-size: 0.84rem;
+      }
+      .toolbar {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+      .tool-button {
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--panel-alt);
+        color: var(--text);
+        padding: 10px 12px;
+        cursor: pointer;
+      }
+      .tool-button.is-active {
+        border-color: rgba(255, 107, 53, 0.7);
+        background: rgba(255, 107, 53, 0.16);
+      }
+      .arena-grid-wrap {
+        overflow: auto;
+        padding: 12px;
+        border-radius: 16px;
+        background: rgba(0,0,0,0.18);
+        border: 1px solid var(--border);
+        margin-top: 12px;
+      }
+      .arena-editor-grid {
+        display: grid;
+        gap: 3px;
+        justify-content: start;
+        touch-action: none;
+      }
+      .arena-cell {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        border: 1px solid rgba(0,0,0,0.24);
+        position: relative;
+        cursor: crosshair;
+        user-select: none;
+      }
+      .arena-cell__label {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #fff;
+        text-shadow: 0 1px 1px rgba(0,0,0,0.5);
+      }
+      .arena-help {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin-top: 10px;
+      }
+      .arena-list-item {
+        display: grid;
+        gap: 8px;
+        padding: 14px;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,0.02);
+        cursor: pointer;
+      }
+      .arena-list-item.is-selected {
+        border-color: rgba(255, 107, 53, 0.7);
+        box-shadow: 0 0 0 1px rgba(255, 107, 53, 0.18);
+      }
+      .arena-list-item__meta {
+        color: var(--muted);
+        font-size: 0.86rem;
+      }
+      .arena-badges {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 0.78rem;
+        background: var(--panel-alt);
+        border: 1px solid var(--border);
+      }
+      .badge--active {
+        background: rgba(139, 233, 168, 0.12);
+        color: #8be9a8;
+        border-color: rgba(139, 233, 168, 0.28);
+      }
+      .badge--draft {
+        background: rgba(255, 180, 162, 0.08);
+        color: #ffb4a2;
+        border-color: rgba(255, 180, 162, 0.2);
+      }
+      .validation-item {
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,0.02);
+      }
+      .validation-item--error {
+        border-color: rgba(255, 180, 162, 0.28);
+        background: rgba(255, 180, 162, 0.08);
+      }
+      .validation-item--success {
+        border-color: rgba(139, 233, 168, 0.28);
+        background: rgba(139, 233, 168, 0.08);
+      }
+      .theme-summary {
+        color: var(--muted);
+        margin-top: 8px;
+        min-height: 36px;
+      }
+      .arena-section-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+      }
       @media (max-width: 860px) {
         .auth-shell { grid-template-columns: 1fr; }
         .layout { grid-template-columns: 1fr; }
         .hero { align-items: start; flex-direction: column; }
+        .arena-shell { grid-template-columns: 1fr; }
+        .form-grid { grid-template-columns: 1fr; }
       }
     </style>
   </head>
@@ -3370,12 +3971,95 @@ function renderAdminHtml(env) {
         </div>
       </section>
 
+      <section class="arena-shell hidden" id="arena-builder">
+        <div class="stack">
+          <div class="panel">
+            <small>Live arena</small>
+            <h2>Arena Builder</h2>
+            <p class="muted">Create drafts, validate them, and activate one arena live. Active changes only affect newly started matches.</p>
+            <div class="inline-actions">
+              <button id="new-arena-button" class="experience-button experience-button--primary" type="button">New Draft</button>
+              <button id="duplicate-arena-button" class="experience-button experience-button--ghost" type="button">Duplicate Selected</button>
+            </div>
+            <p id="arena-status" class="success"></p>
+            <p id="arena-error" class="error"></p>
+          </div>
+          <div class="panel">
+            <div class="arena-section-title">
+              <div>
+                <small>Library</small>
+                <h3>Saved arenas</h3>
+              </div>
+              <div class="muted" id="arena-active-label"></div>
+            </div>
+            <div id="arena-list" class="list" style="margin-top:12px;"></div>
+          </div>
+        </div>
+
+        <div class="stack">
+          <div class="panel">
+            <small>Draft</small>
+            <div class="form-grid">
+              <label class="field-group field-group--full">
+                <span class="field-label">Arena name</span>
+                <input id="arena-name-input" class="field" type="text" maxlength="80" />
+              </label>
+              <label class="field-group">
+                <span class="field-label">Width</span>
+                      <input id="arena-width-input" class="field" type="number" min="7" max="23" step="2" />
+              </label>
+              <label class="field-group">
+                <span class="field-label">Height</span>
+                <input id="arena-height-input" class="field" type="number" min="7" max="15" step="2" />
+              </label>
+              <label class="field-group field-group--full">
+                <span class="field-label">Theme</span>
+                <select id="arena-theme-select" class="field"></select>
+              </label>
+            </div>
+            <p id="arena-theme-summary" class="theme-summary"></p>
+            <div class="inline-actions">
+              <button id="save-arena-button" class="experience-button experience-button--primary" type="button">Save Draft</button>
+              <button id="validate-arena-button" class="experience-button experience-button--ghost" type="button">Validate</button>
+              <button id="activate-arena-button" class="experience-button experience-button--ghost" type="button">Activate Live</button>
+              <button id="reset-arena-button" class="experience-button experience-button--ghost" type="button">Reset</button>
+              <button id="clear-arena-button" class="experience-button experience-button--ghost" type="button">Clear Tiles</button>
+            </div>
+          </div>
+
+          <div class="panel">
+            <small>Tools</small>
+            <div class="toolbar" id="arena-tool-buttons">
+              <button class="tool-button is-active" type="button" data-tool="empty">Empty</button>
+              <button class="tool-button" type="button" data-tool="solid">Solid</button>
+              <button class="tool-button" type="button" data-tool="breakable">Breakable</button>
+              <button class="tool-button" type="button" data-tool="spawn-1">Spawn 1</button>
+              <button class="tool-button" type="button" data-tool="spawn-2">Spawn 2</button>
+              <button class="tool-button" type="button" data-tool="spawn-3">Spawn 3</button>
+              <button class="tool-button" type="button" data-tool="spawn-4">Spawn 4</button>
+            </div>
+            <p class="arena-help">Click to paint. Drag works for empty, solid, and breakable. Spawn tools relocate individual spawns.</p>
+            <div class="arena-grid-wrap">
+              <div id="arena-grid" class="arena-editor-grid"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <small>Validation</small>
+            <div id="arena-validation" class="list" style="margin-top:12px;"></div>
+          </div>
+        </div>
+      </section>
+
       <p id="error" class="error hidden"></p>
     </main>
     <script>
+      const ARENA_THEMES = ${arenaThemes};
+                const ARENA_LIMITS = { minWidth: 7, maxWidth: 23, minHeight: 7, maxHeight: 15 };
       const loginPanel = document.getElementById("login-panel");
       const sessionPanel = document.getElementById("session-panel");
       const dashboard = document.getElementById("dashboard");
+      const arenaBuilder = document.getElementById("arena-builder");
       const topMetrics = document.getElementById("top-metrics");
       const errorNode = document.getElementById("error");
       const loginError = document.getElementById("login-error");
@@ -3385,11 +4069,41 @@ function renderAdminHtml(env) {
       const loginButton = document.getElementById("login-button");
       const logoutButton = document.getElementById("logout-button");
       const generatedAt = document.getElementById("generated-at");
+      const arenaListNode = document.getElementById("arena-list");
+      const arenaActiveLabel = document.getElementById("arena-active-label");
+      const arenaStatus = document.getElementById("arena-status");
+      const arenaError = document.getElementById("arena-error");
+      const arenaNameInput = document.getElementById("arena-name-input");
+      const arenaWidthInput = document.getElementById("arena-width-input");
+      const arenaHeightInput = document.getElementById("arena-height-input");
+      const arenaThemeSelect = document.getElementById("arena-theme-select");
+      const arenaThemeSummary = document.getElementById("arena-theme-summary");
+      const arenaGrid = document.getElementById("arena-grid");
+      const arenaValidation = document.getElementById("arena-validation");
+      const newArenaButton = document.getElementById("new-arena-button");
+      const duplicateArenaButton = document.getElementById("duplicate-arena-button");
+      const saveArenaButton = document.getElementById("save-arena-button");
+      const validateArenaButton = document.getElementById("validate-arena-button");
+      const activateArenaButton = document.getElementById("activate-arena-button");
+      const resetArenaButton = document.getElementById("reset-arena-button");
+      const clearArenaButton = document.getElementById("clear-arena-button");
+      const toolButtons = Array.from(document.querySelectorAll("#arena-tool-buttons [data-tool]"));
+      const arenaState = {
+        list: [],
+        activeArenaId: null,
+        selectedArenaId: null,
+        editor: null,
+        savedArena: null,
+        validation: null,
+        tool: "empty",
+        pointerDown: false,
+      };
 
       function showAuthedUI() {
         loginPanel.classList.add("hidden");
         sessionPanel.classList.remove("hidden");
         dashboard.classList.remove("hidden");
+        arenaBuilder.classList.remove("hidden");
         topMetrics.classList.remove("hidden");
         errorNode.classList.add("hidden");
       }
@@ -3398,10 +4112,124 @@ function renderAdminHtml(env) {
         loginPanel.classList.remove("hidden");
         sessionPanel.classList.add("hidden");
         dashboard.classList.add("hidden");
+        arenaBuilder.classList.add("hidden");
         topMetrics.classList.add("hidden");
         if (message) {
           loginError.textContent = message;
         }
+      }
+
+      function clone(value) {
+        return JSON.parse(JSON.stringify(value));
+      }
+
+      function tileKey(x, y) {
+        return x + "," + y;
+      }
+
+      function parseTileKey(key) {
+        const parts = String(key).split(",");
+        return { x: Number(parts[0]), y: Number(parts[1]) };
+      }
+
+      function clampOdd(value, min, max) {
+        const next = Number.isFinite(Number(value)) ? Math.floor(Number(value)) : max;
+        const clamped = Math.max(min, Math.min(max, next));
+        return clamped % 2 === 0 ? Math.max(min, clamped - 1) : clamped;
+      }
+
+      function createDefaultSpawns(width, height) {
+        return [
+          { playerId: 1, tile: { x: 1, y: 1 }, direction: "down" },
+          { playerId: 2, tile: { x: width - 2, y: 1 }, direction: "down" },
+          { playerId: 3, tile: { x: 1, y: height - 2 }, direction: "up" },
+          { playerId: 4, tile: { x: width - 2, y: height - 2 }, direction: "up" },
+        ];
+      }
+
+      function normalizeEditorArena(arena) {
+        const width = clampOdd(arena?.grid?.width, ARENA_LIMITS.minWidth, ARENA_LIMITS.maxWidth);
+        const height = clampOdd(arena?.grid?.height, ARENA_LIMITS.minHeight, ARENA_LIMITS.maxHeight);
+        const solidSeen = new Set();
+        const breakableSeen = new Set();
+        const solid = [];
+        const breakable = [];
+        (Array.isArray(arena?.tiles?.solid) ? arena.tiles.solid : []).forEach((key) => {
+          const tile = parseTileKey(key);
+          const nextKey = tileKey(tile.x, tile.y);
+          if (!Number.isFinite(tile.x) || !Number.isFinite(tile.y)) {
+            return;
+          }
+          if (tile.x < 0 || tile.y < 0 || tile.x >= width || tile.y >= height || solidSeen.has(nextKey)) {
+            return;
+          }
+          solidSeen.add(nextKey);
+          solid.push(nextKey);
+        });
+        (Array.isArray(arena?.tiles?.breakable) ? arena.tiles.breakable : []).forEach((key) => {
+          const tile = parseTileKey(key);
+          const nextKey = tileKey(tile.x, tile.y);
+          if (!Number.isFinite(tile.x) || !Number.isFinite(tile.y)) {
+            return;
+          }
+          if (tile.x < 0 || tile.y < 0 || tile.x >= width || tile.y >= height || solidSeen.has(nextKey) || breakableSeen.has(nextKey)) {
+            return;
+          }
+          breakableSeen.add(nextKey);
+          breakable.push(nextKey);
+        });
+        const defaults = createDefaultSpawns(width, height);
+        const sourceSpawns = Array.isArray(arena?.spawns) ? arena.spawns : [];
+        const spawns = [1, 2, 3, 4].map((playerId, index) => {
+          const found = sourceSpawns.find((spawn) => spawn?.playerId === playerId) ?? defaults[index];
+          return {
+            playerId,
+            direction: found.direction === "up" || found.direction === "left" || found.direction === "right"
+              ? found.direction
+              : (playerId <= 2 ? "down" : "up"),
+            tile: {
+              x: Math.max(1, Math.min(width - 2, Math.floor(Number(found?.tile?.x) || defaults[index].tile.x))),
+              y: Math.max(1, Math.min(height - 2, Math.floor(Number(found?.tile?.y) || defaults[index].tile.y))),
+            },
+          };
+        });
+        return {
+          id: typeof arena?.id === "string" ? arena.id : "",
+          name: typeof arena?.name === "string" && arena.name.trim() ? arena.name.trim() : "Untitled Arena",
+          status: arena?.status === "active" ? "active" : "draft",
+          themeId: typeof arena?.themeId === "string" && arena.themeId.trim() ? arena.themeId.trim() : ARENA_THEMES[0].id,
+          grid: { width, height },
+          tiles: { solid, breakable },
+          spawns,
+          version: typeof arena?.version === "string" ? arena.version : "",
+          createdAt: typeof arena?.createdAt === "string" ? arena.createdAt : new Date().toISOString(),
+          updatedAt: typeof arena?.updatedAt === "string" ? arena.updatedAt : new Date().toISOString(),
+        };
+      }
+
+      function getTheme(themeId) {
+        return ARENA_THEMES.find((theme) => theme.id === themeId) ?? ARENA_THEMES[0];
+      }
+
+      function setArenaMessage(kind, message) {
+        arenaStatus.textContent = kind === "success" ? message : "";
+        arenaError.textContent = kind === "error" ? message : "";
+      }
+
+      async function apiJson(path, options) {
+        const response = await fetch(path, Object.assign({
+          cache: "no-store",
+          credentials: "same-origin",
+        }, options ?? {}));
+        if (response.status === 401) {
+          showLoginUI("");
+          throw new Error("Unauthorized.");
+        }
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error((payload && payload.error) || "Request failed with status " + response.status);
+        }
+        return payload;
       }
 
       function renderPills(target, items, emptyMessage) {
@@ -3416,6 +4244,159 @@ function renderAdminHtml(env) {
           div.textContent = item.key + " - " + item.count;
           target.appendChild(div);
         }
+      }
+
+      function renderArenaList() {
+        arenaListNode.innerHTML = "";
+        arenaActiveLabel.textContent = arenaState.activeArenaId ? "Live: " + arenaState.activeArenaId : "";
+        if (!arenaState.list.length) {
+          arenaListNode.textContent = "No arenas saved yet.";
+          return;
+        }
+        arenaState.list.forEach((arena) => {
+          const item = document.createElement("button");
+          item.type = "button";
+          item.className = "arena-list-item" + (arena.id === arenaState.selectedArenaId ? " is-selected" : "");
+          const isActive = arena.id === arenaState.activeArenaId;
+          item.innerHTML =
+            "<div><strong>" + arena.name + "</strong></div>" +
+            "<div class='arena-badges'>" +
+              "<span class='badge " + (isActive ? "badge--active" : "badge--draft") + "'>" + (isActive ? "Live" : "Draft") + "</span>" +
+              "<span class='badge'>" + arena.grid.width + "x" + arena.grid.height + "</span>" +
+            "</div>" +
+            "<div class='arena-list-item__meta'>" + arena.themeId + " • " + new Date(arena.updatedAt).toLocaleString() + "</div>";
+          item.addEventListener("click", () => {
+            void loadArenaDetails(arena.id).catch((error) => setArenaMessage("error", error.message));
+          });
+          arenaListNode.appendChild(item);
+        });
+      }
+
+      function renderValidation() {
+        arenaValidation.innerHTML = "";
+        if (!arenaState.validation) {
+          arenaValidation.textContent = "Run validation to inspect the current draft.";
+          return;
+        }
+        const issues = Array.isArray(arenaState.validation.issues) ? arenaState.validation.issues : [];
+        if (issues.length === 0) {
+          const item = document.createElement("div");
+          item.className = "validation-item validation-item--success";
+          item.textContent = "Validation passed. This arena is ready to activate.";
+          arenaValidation.appendChild(item);
+          return;
+        }
+        issues.forEach((issue) => {
+          const item = document.createElement("div");
+          item.className = "validation-item" + (issue.severity === "error" ? " validation-item--error" : "");
+          item.innerHTML = "<strong>" + issue.code + "</strong><div>" + issue.message + "</div>";
+          arenaValidation.appendChild(item);
+        });
+      }
+
+      function getSpawnAt(editor, x, y) {
+        return editor.spawns.find((spawn) => spawn.tile.x === x && spawn.tile.y === y) ?? null;
+      }
+
+      function getCellVisual(editor, x, y) {
+        const theme = getTheme(editor.themeId);
+        const key = tileKey(x, y);
+        const spawn = getSpawnAt(editor, x, y);
+        const isBorder = x === 0 || y === 0 || x === editor.grid.width - 1 || y === editor.grid.height - 1;
+        if (spawn) {
+          return { background: theme.palette.floorSpawn, border: theme.palette.spawnRing, label: String(spawn.playerId) };
+        }
+        if (editor.tiles.solid.includes(key)) {
+          return { background: theme.palette.wallInner, border: theme.palette.wallBorder, label: "" };
+        }
+        if (editor.tiles.breakable.includes(key)) {
+          return { background: theme.palette.crateInner, border: theme.palette.crateBand, label: "" };
+        }
+        if (isBorder) {
+          return { background: theme.palette.floorLaneAlt, border: theme.palette.floorBorder, label: "" };
+        }
+        return {
+          background: (x + y) % 2 === 0 ? theme.palette.floorBase : theme.palette.floorBaseAlt,
+          border: theme.palette.floorBorder,
+          label: "",
+        };
+      }
+
+      function renderEditor() {
+        const editor = arenaState.editor;
+        if (!editor) {
+          arenaNameInput.value = "";
+          arenaWidthInput.value = "";
+          arenaHeightInput.value = "";
+          arenaGrid.innerHTML = "";
+          arenaValidation.textContent = "Select or create an arena to start editing.";
+          return;
+        }
+        arenaNameInput.value = editor.name;
+        arenaWidthInput.value = String(editor.grid.width);
+        arenaHeightInput.value = String(editor.grid.height);
+        arenaThemeSelect.value = editor.themeId;
+        arenaThemeSummary.textContent = getTheme(editor.themeId).summary;
+        toolButtons.forEach((button) => {
+          button.classList.toggle("is-active", button.dataset.tool === arenaState.tool);
+        });
+        arenaGrid.style.gridTemplateColumns = "repeat(" + editor.grid.width + ", 34px)";
+        arenaGrid.innerHTML = "";
+        for (let y = 0; y < editor.grid.height; y += 1) {
+          for (let x = 0; x < editor.grid.width; x += 1) {
+            const visual = getCellVisual(editor, x, y);
+            const cell = document.createElement("div");
+            cell.className = "arena-cell";
+            cell.style.background = visual.background;
+            cell.style.borderColor = visual.border;
+            cell.title = x + "," + y;
+            if (visual.label) {
+              const label = document.createElement("div");
+              label.className = "arena-cell__label";
+              label.textContent = visual.label;
+              cell.appendChild(label);
+            }
+            cell.addEventListener("pointerdown", (event) => {
+              event.preventDefault();
+              arenaState.pointerDown = true;
+              paintCell(x, y);
+            });
+            cell.addEventListener("pointerenter", () => {
+              if (arenaState.pointerDown && (arenaState.tool === "empty" || arenaState.tool === "solid" || arenaState.tool === "breakable")) {
+                paintCell(x, y);
+              }
+            });
+            arenaGrid.appendChild(cell);
+          }
+        }
+        renderValidation();
+      }
+
+      function markEditorDirty() {
+        arenaState.validation = null;
+        renderEditor();
+      }
+
+      function paintCell(x, y) {
+        if (!arenaState.editor) {
+          return;
+        }
+        const editor = normalizeEditorArena(arenaState.editor);
+        const key = tileKey(x, y);
+        editor.tiles.solid = editor.tiles.solid.filter((item) => item !== key);
+        editor.tiles.breakable = editor.tiles.breakable.filter((item) => item !== key);
+        if (arenaState.tool === "solid") {
+          editor.tiles.solid.push(key);
+        } else if (arenaState.tool === "breakable") {
+          editor.tiles.breakable.push(key);
+        } else if (arenaState.tool.startsWith("spawn-")) {
+          const playerId = Number(arenaState.tool.split("-")[1]);
+          editor.spawns = editor.spawns.map((spawn) => spawn.playerId === playerId
+            ? { playerId, direction: playerId <= 2 ? "down" : "up", tile: { x, y } }
+            : spawn);
+        }
+        arenaState.editor = normalizeEditorArena(editor);
+        markEditorDirty();
       }
 
       function renderSummary(data) {
@@ -3505,6 +4486,108 @@ function renderAdminHtml(env) {
         }
       }
 
+      async function loadArenaList(preferredArenaId) {
+        const payload = await apiJson("/api/admin/arenas");
+        arenaState.list = payload.arenas || [];
+        arenaState.activeArenaId = payload.activeArenaId || null;
+        renderArenaList();
+        const targetArenaId = preferredArenaId
+          || arenaState.selectedArenaId
+          || arenaState.activeArenaId
+          || (arenaState.list[0] && arenaState.list[0].id);
+        if (targetArenaId) {
+          await loadArenaDetails(targetArenaId);
+        }
+      }
+
+      async function loadArenaDetails(arenaId) {
+        const payload = await apiJson("/api/admin/arenas/" + encodeURIComponent(arenaId));
+        arenaState.selectedArenaId = payload.arena.id;
+        arenaState.editor = normalizeEditorArena(payload.arena);
+        arenaState.savedArena = clone(payload.arena);
+        arenaState.validation = payload.validation || null;
+        arenaState.activeArenaId = payload.activeArenaId || arenaState.activeArenaId;
+        renderArenaList();
+        renderEditor();
+        setArenaMessage("success", "");
+      }
+
+      async function createArenaDraft(sourceArenaId) {
+        const payload = await apiJson("/api/admin/arenas", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(sourceArenaId ? { sourceArenaId } : {}),
+        });
+        await loadArenaList(payload.arena.id);
+        setArenaMessage("success", "Draft created.");
+      }
+
+      async function saveArenaDraft() {
+        if (!arenaState.editor || !arenaState.selectedArenaId) {
+          return;
+        }
+        const payload = await apiJson("/api/admin/arenas/" + encodeURIComponent(arenaState.selectedArenaId), {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ arena: normalizeEditorArena(arenaState.editor) }),
+        });
+        arenaState.editor = normalizeEditorArena(payload.arena);
+        arenaState.savedArena = clone(payload.arena);
+        arenaState.validation = payload.validation || null;
+        await loadArenaList(payload.arena.id);
+        setArenaMessage("success", "Draft saved.");
+      }
+
+      async function validateArenaDraft() {
+        if (!arenaState.editor || !arenaState.selectedArenaId) {
+          return;
+        }
+        const payload = await apiJson("/api/admin/arenas/" + encodeURIComponent(arenaState.selectedArenaId) + "/validate", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ arena: normalizeEditorArena(arenaState.editor) }),
+        });
+        arenaState.validation = payload.validation || null;
+        renderValidation();
+        setArenaMessage(payload.validation && payload.validation.ok ? "success" : "error", payload.validation && payload.validation.ok ? "Validation passed." : "Validation found blocking issues.");
+      }
+
+      async function activateArenaDraft() {
+        if (!arenaState.selectedArenaId) {
+          return;
+        }
+        if (arenaState.editor) {
+          await saveArenaDraft();
+        }
+        const payload = await apiJson("/api/admin/arenas/" + encodeURIComponent(arenaState.selectedArenaId) + "/activate", {
+          method: "POST",
+        });
+        arenaState.activeArenaId = payload.activeArenaId || arenaState.selectedArenaId;
+        arenaState.validation = payload.validation || null;
+        await loadArenaList(arenaState.selectedArenaId);
+        setArenaMessage("success", "Arena activated live.");
+      }
+
+      function resetArenaDraft() {
+        if (!arenaState.savedArena) {
+          return;
+        }
+        arenaState.editor = normalizeEditorArena(arenaState.savedArena);
+        arenaState.validation = null;
+        renderEditor();
+        setArenaMessage("success", "Draft reset to last saved version.");
+      }
+
+      function clearArenaTiles() {
+        if (!arenaState.editor) {
+          return;
+        }
+        arenaState.editor.tiles.solid = [];
+        arenaState.editor.tiles.breakable = [];
+        markEditorDirty();
+        setArenaMessage("success", "Arena tiles cleared.");
+      }
+
       async function loadSummary() {
         errorNode.textContent = "";
         try {
@@ -3522,10 +4605,76 @@ function renderAdminHtml(env) {
           const data = await response.json();
           showAuthedUI();
           renderSummary(data);
+          if (!arenaState.selectedArenaId) {
+            await loadArenaList().catch(() => {});
+          }
         } catch (error) {
           errorNode.textContent = error.message;
           errorNode.classList.remove("hidden");
         }
+      }
+
+      function bindEditor() {
+        arenaThemeSelect.innerHTML = ARENA_THEMES.map((theme) => "<option value='" + theme.id + "'>" + theme.name + "</option>").join("");
+        arenaNameInput.addEventListener("input", () => {
+          if (!arenaState.editor) {
+            return;
+          }
+          arenaState.editor.name = arenaNameInput.value;
+          markEditorDirty();
+        });
+        arenaWidthInput.addEventListener("change", () => {
+          if (!arenaState.editor) {
+            return;
+          }
+          arenaState.editor.grid.width = clampOdd(arenaWidthInput.value, ARENA_LIMITS.minWidth, ARENA_LIMITS.maxWidth);
+          arenaState.editor = normalizeEditorArena(arenaState.editor);
+          markEditorDirty();
+        });
+        arenaHeightInput.addEventListener("change", () => {
+          if (!arenaState.editor) {
+            return;
+          }
+          arenaState.editor.grid.height = clampOdd(arenaHeightInput.value, ARENA_LIMITS.minHeight, ARENA_LIMITS.maxHeight);
+          arenaState.editor = normalizeEditorArena(arenaState.editor);
+          markEditorDirty();
+        });
+        arenaThemeSelect.addEventListener("change", () => {
+          if (!arenaState.editor) {
+            return;
+          }
+          arenaState.editor.themeId = arenaThemeSelect.value;
+          markEditorDirty();
+        });
+        toolButtons.forEach((button) => {
+          button.addEventListener("click", () => {
+            arenaState.tool = button.dataset.tool || "empty";
+            renderEditor();
+          });
+        });
+        newArenaButton.addEventListener("click", () => {
+          void createArenaDraft("").catch((error) => setArenaMessage("error", error.message));
+        });
+        duplicateArenaButton.addEventListener("click", () => {
+          if (!arenaState.selectedArenaId) {
+            return;
+          }
+          void createArenaDraft(arenaState.selectedArenaId).catch((error) => setArenaMessage("error", error.message));
+        });
+        saveArenaButton.addEventListener("click", () => {
+          void saveArenaDraft().catch((error) => setArenaMessage("error", error.message));
+        });
+        validateArenaButton.addEventListener("click", () => {
+          void validateArenaDraft().catch((error) => setArenaMessage("error", error.message));
+        });
+        activateArenaButton.addEventListener("click", () => {
+          void activateArenaDraft().catch((error) => setArenaMessage("error", error.message));
+        });
+        resetArenaButton.addEventListener("click", resetArenaDraft);
+        clearArenaButton.addEventListener("click", clearArenaTiles);
+        window.addEventListener("pointerup", () => {
+          arenaState.pointerDown = false;
+        });
       }
 
       async function login() {
@@ -3550,7 +4699,7 @@ function renderAdminHtml(env) {
           }
           passwordInput.value = "";
           sessionStatus.textContent = "Signed in as ${safeUsername}.";
-          await loadSummary();
+          await Promise.all([loadSummary(), loadArenaList()]);
         } catch (error) {
           loginError.textContent = error.message;
         } finally {
@@ -3582,6 +4731,7 @@ function renderAdminHtml(env) {
         }
       });
 
+      bindEditor();
       loadSummary();
       setInterval(loadSummary, 15000);
     </script>
@@ -3612,7 +4762,7 @@ function createServerCharacterRoster() {
   }));
 }
 
-function createServerGame() {
+function createServerGame(arenaDefinition = createDefaultArenaDefinition()) {
   return new GameApp(
     /** @type {HTMLElement} */ ({ appendChild() {} }),
     {
@@ -3641,5 +4791,6 @@ function createServerGame() {
       },
       characterRoster: createServerCharacterRoster(),
     },
+    arenaDefinition,
   );
 }

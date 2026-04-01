@@ -1,14 +1,10 @@
 import {
-  ARENA_OFFSET_X,
-  ARENA_OFFSET_Y,
   BASE_MOVE_MS,
   BOMB_FUSE_MS,
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
   FIXED_STEP_MS,
   FLAME_DURATION_MS,
-  GRID_HEIGHT,
-  GRID_WIDTH,
   HUD_HEIGHT,
   KEY_BINDINGS,
   LOCAL_PLAYER_MOVEMENT_BINDINGS,
@@ -39,6 +35,7 @@ import {
   MENU_PLAYER_IDS,
 } from "../Gameplay/types";
 import type {
+  ArenaDefinition,
   ArenaState,
   BombState,
   CharacterSkillId,
@@ -57,7 +54,13 @@ import type {
   TileCoord,
 } from "../Gameplay/types";
 import { InputManager, NoopInputManager, type InputController } from "./input";
-import { createArena, isWrapPortalTile, tileKey } from "../Arenas/arena";
+import {
+  buildArenaRuntimeConfig,
+  createArena,
+  createDefaultArenaDefinition,
+  isWrapPortalTile,
+  tileKey,
+} from "../Arenas/arena";
 import {
   applyPowerUpToPlayer,
   formatControlKey,
@@ -161,14 +164,6 @@ const CANVAS_BACKBUFFER_SCALE = 2;
 const CANVAS_VIEWPORT_PADDING = 32;
 const PLAYER_SPRITE_HEIGHT_SCALE = 1.45;
 const PLAYER_SPRITE_MAX_WIDTH_SCALE = 1.2;
-const ARENA_PIXEL_WIDTH = GRID_WIDTH * TILE_SIZE;
-const ARENA_PIXEL_HEIGHT = GRID_HEIGHT * TILE_SIZE;
-const PLAYER_SPAWNS: Record<PlayerId, { tile: TileCoord; direction: Direction }> = {
-  1: { tile: { x: 2, y: 1 }, direction: "down" },
-  2: { tile: { x: GRID_WIDTH - 3, y: 1 }, direction: "down" },
-  3: { tile: { x: 2, y: GRID_HEIGHT - 2 }, direction: "up" },
-  4: { tile: { x: GRID_WIDTH - 3, y: GRID_HEIGHT - 2 }, direction: "up" },
-};
 
 function createEmptyDirectionalSprites(): DirectionalSprites {
   return {
@@ -290,6 +285,15 @@ interface PlayerDeathAnimationState {
 
 interface SuddenDeathClosureEffect extends SuddenDeathClosingTileState {}
 
+interface ArenaRenderMetrics {
+  scale: number;
+  tileSize: number;
+  arenaX: number;
+  arenaY: number;
+  arenaPixelWidth: number;
+  arenaPixelHeight: number;
+}
+
 export class GameApp {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -313,6 +317,7 @@ export class GameApp {
   private lastTimestamp = 0;
   private accumulatorMs = 0;
 
+  private baseArenaDefinition: ArenaDefinition = createDefaultArenaDefinition();
   private mode: Mode = "boot";
   private selectedCharacterIndex: Record<PlayerId, number> = createNumberPlayerRecord(0);
   private pendingCharacterIndex: Record<PlayerId, number> = createNumberPlayerRecord(0);
@@ -371,9 +376,11 @@ export class GameApp {
   private cachedDangerMap: Map<string, number> | null = null;
   private arenaStaticMistGradient: CanvasGradient | null = null;
 
-  constructor(root: HTMLElement, assets: GameAssets) {
+  constructor(root: HTMLElement, assets: GameAssets, arenaDefinition: ArenaDefinition = createDefaultArenaDefinition()) {
     this.root = root;
     this.assets = assets;
+    this.baseArenaDefinition = arenaDefinition;
+    this.arena = createArena(this.baseArenaDefinition);
     this.headless = typeof document === "undefined" || typeof window === "undefined";
 
     if (this.headless) {
@@ -416,6 +423,59 @@ export class GameApp {
     this.pendingCharacterIndex = { ...this.selectedCharacterIndex };
     this.applyOfflineBotFill(this.automationMode ? 1 : 0, false);
     this.primeCharacterSprites();
+  }
+
+  private getArenaGridWidth(): number {
+    return this.arena.config.grid.width;
+  }
+
+  private getArenaGridHeight(): number {
+    return this.arena.config.grid.height;
+  }
+
+  private getArenaPixelWidth(): number {
+    return this.getArenaGridWidth() * TILE_SIZE;
+  }
+
+  private getArenaPixelHeight(): number {
+    return this.getArenaGridHeight() * TILE_SIZE;
+  }
+
+  private getArenaRenderMetrics(): ArenaRenderMetrics {
+    const logicalArenaWidth = this.getArenaPixelWidth();
+    const logicalArenaHeight = this.getArenaPixelHeight();
+    const playfieldPaddingX = 4;
+    const playfieldTop = HUD_HEIGHT + 4;
+    const playfieldBottom = CANVAS_HEIGHT - 4;
+    const availableWidth = Math.max(120, CANVAS_WIDTH - playfieldPaddingX * 2);
+    const availableHeight = Math.max(120, playfieldBottom - playfieldTop);
+    const widthScale = availableWidth / logicalArenaWidth;
+    const heightScale = availableHeight / logicalArenaHeight;
+    const scale = Math.max(0.82, Math.min(1.62, Math.min(widthScale, heightScale)));
+    const arenaPixelWidth = logicalArenaWidth * scale;
+    const arenaPixelHeight = logicalArenaHeight * scale;
+    const arenaX = Math.round((CANVAS_WIDTH - arenaPixelWidth) / 2);
+    const arenaY = Math.round(playfieldTop + 2);
+    return {
+      scale,
+      tileSize: TILE_SIZE * scale,
+      arenaX,
+      arenaY,
+      arenaPixelWidth,
+      arenaPixelHeight,
+    };
+  }
+
+  private getArenaOffsetX(): number {
+    return this.getArenaRenderMetrics().arenaX;
+  }
+
+  private getArenaOffsetY(): number {
+    return this.getArenaRenderMetrics().arenaY;
+  }
+
+  private getPlayerSpawn(playerId: PlayerId) {
+    return this.arena.config.spawnMap[playerId];
   }
 
   private createBotContext(): BotContext {
@@ -490,6 +550,8 @@ export class GameApp {
 
   public startOnlineMatch(config: MatchStartConfig): void {
     this.onlineRoomMode = config.roomMode ?? "classic";
+    this.baseArenaDefinition = config.arena;
+    this.arena = createArena(this.baseArenaDefinition);
     this.activePlayerIds = normalizeActivePlayerIds(config.activePlayerIds);
     this.onlineLocalPlayerId = config.localPlayerId;
     this.customPlayerLabels = createPlayerRecord((playerId) => config.playerLabels?.[playerId] ?? null);
@@ -526,6 +588,7 @@ export class GameApp {
   public applyOnlineSnapshot(snapshot: OnlineGameSnapshot): void {
     const previousMode = this.mode;
     this.onlineRoomMode = snapshot.roomMode ?? "classic";
+    this.baseArenaDefinition = snapshot.arena;
     this.playOnlineAudioTransition({
       bombs: snapshot.bombs,
       flames: snapshot.flames,
@@ -539,7 +602,7 @@ export class GameApp {
     if (this.onlineSession?.role === "guest" && this.onlineAudioPrimed) {
       this.spawnCrateBreakAnimationsFromDiff(snapshot.breakableTiles);
     }
-    const baseArena = createArena();
+    const baseArena = createArena(this.baseArenaDefinition);
     this.mode = snapshot.mode;
     this.suddenDeathClosedTiles = new Set(snapshot.suddenDeathClosedTiles ?? []);
     this.suddenDeathClosureEffects = (snapshot.suddenDeathClosingTiles ?? []).map((effect) => ({
@@ -548,6 +611,7 @@ export class GameApp {
       impacted: effect.impacted,
     }));
     this.arena = {
+      config: baseArena.config,
       solid: new Set([...baseArena.solid, ...this.suddenDeathClosedTiles]),
       breakable: new Set(snapshot.breakableTiles),
       powerUps: snapshot.powerUps.map((powerUp) => ({
@@ -651,7 +715,7 @@ export class GameApp {
       elapsedMs: effect.elapsedMs,
       impacted: effect.impacted,
     }));
-    this.arena.solid = new Set([...createArena().solid, ...this.suddenDeathClosedTiles]);
+    this.arena.solid = new Set([...this.arena.config.tiles.solid, ...this.suddenDeathClosedTiles]);
     this.selectedCharacterIndex = { ...frame.selectedCharacterIndex };
     this.pendingCharacterIndex = { ...frame.selectedCharacterIndex };
     this.activePlayerIds = normalizeActivePlayerIds(frame.activePlayerIds);
@@ -962,15 +1026,19 @@ export class GameApp {
       ?? (typeof window.innerWidth === "number" ? window.innerWidth : CANVAS_WIDTH + CANVAS_VIEWPORT_PADDING);
     const viewportHeight = viewport?.clientHeight
       ?? (typeof window.innerHeight === "number" ? window.innerHeight : CANVAS_HEIGHT + CANVAS_VIEWPORT_PADDING);
+    const metrics = this.getArenaRenderMetrics();
     const viewportPadding = viewport ? 6 : CANVAS_VIEWPORT_PADDING;
     const availableWidth = Math.max(160, viewportWidth - viewportPadding);
     const availableHeight = Math.max(160, viewportHeight - viewportPadding);
-    const fitScale = Math.min(availableWidth / CANVAS_WIDTH, availableHeight / CANVAS_HEIGHT);
+    const contentHeight = Math.max(HUD_HEIGHT + 12, metrics.arenaY + metrics.arenaPixelHeight + 8);
+    const fitScale = Math.min(availableWidth / CANVAS_WIDTH, availableHeight / contentHeight);
     const displayScale = Math.max(0.5, fitScale);
     const displayWidth = Math.max(1, Math.round(CANVAS_WIDTH * displayScale));
     const displayHeight = Math.max(1, Math.round(CANVAS_HEIGHT * displayScale));
     this.canvas.style.width = `${displayWidth}px`;
     this.canvas.style.height = `${displayHeight}px`;
+    this.canvas.style.justifySelf = "center";
+    this.canvas.style.alignSelf = "start";
   };
 
   private captureOnlineLocalInput(): void {
@@ -1020,6 +1088,7 @@ export class GameApp {
     return {
       mode: this.mode,
       roomMode: this.onlineRoomMode,
+      arena: buildArenaRuntimeConfig(this.baseArenaDefinition),
       serverTimeMs: 0,
       serverTick: 0,
       frameId: 0,
@@ -1132,6 +1201,7 @@ export class GameApp {
     activePlayerIds: PlayerId[],
     characterSelections: Record<PlayerId, number>,
     options: {
+      arena?: ArenaDefinition;
       roomMode?: LobbyMode;
       botPlayerIds?: PlayerId[];
       endlessStats?: OnlineEndlessStats | null;
@@ -1146,6 +1216,8 @@ export class GameApp {
       sendMatchResultChoice: () => false,
     };
     this.onlineRoomMode = options.roomMode ?? "classic";
+    this.baseArenaDefinition = options.arena ?? this.baseArenaDefinition;
+    this.arena = createArena(this.baseArenaDefinition);
     this.activePlayerIds = normalizeActivePlayerIds(activePlayerIds);
     this.onlineLocalPlayerId = 1;
     this.onlineInputs = createPlayerRecord(() => createNeutralOnlineInput());
@@ -1572,7 +1644,7 @@ export class GameApp {
   }
 
   private resetRound(): void {
-    this.arena = createArena();
+    this.arena = createArena(this.baseArenaDefinition);
     this.invalidateArenaCache();
     this.players = this.createPlayers();
     this.bombs = [];
@@ -1599,7 +1671,7 @@ export class GameApp {
 
   private createPlayers(): Record<PlayerId, PlayerState> {
     const players = createPlayerRecord((playerId) => {
-      const spawn = PLAYER_SPAWNS[playerId];
+      const spawn = this.getPlayerSpawn(playerId);
       const name = this.isBotControlled(playerId) ? "BOT" : `P${playerId}`;
       return this.createPlayer(playerId, name, spawn.tile, spawn.direction, this.activePlayerIds.includes(playerId));
     });
@@ -1966,7 +2038,7 @@ export class GameApp {
       for (let step = 1; step <= range; step += 1) {
         const x = origin.x + delta.x * step;
         const y = origin.y + delta.y * step;
-        if (x < 0 || y < 0 || x >= GRID_WIDTH || y >= GRID_HEIGHT) {
+        if (x < 0 || y < 0 || x >= this.getArenaGridWidth() || y >= this.getArenaGridHeight()) {
           break;
         }
         const key = tileKey(x, y);
@@ -2012,8 +2084,8 @@ export class GameApp {
 
   private normalizeTile(tile: TileCoord): TileCoord {
     return {
-      x: this.normalizeTileAxis(tile.x, GRID_WIDTH),
-      y: this.normalizeTileAxis(tile.y, GRID_HEIGHT),
+      x: this.normalizeTileAxis(tile.x, this.getArenaGridWidth()),
+      y: this.normalizeTileAxis(tile.y, this.getArenaGridHeight()),
     };
   }
 
@@ -2024,8 +2096,8 @@ export class GameApp {
 
   private normalizeArenaPosition(position: PixelCoord): PixelCoord {
     return {
-      x: this.normalizeAxisPosition(position.x, ARENA_PIXEL_WIDTH),
-      y: this.normalizeAxisPosition(position.y, ARENA_PIXEL_HEIGHT),
+      x: this.normalizeAxisPosition(position.x, this.getArenaPixelWidth()),
+      y: this.normalizeAxisPosition(position.y, this.getArenaPixelHeight()),
     };
   }
 
@@ -2041,8 +2113,8 @@ export class GameApp {
 
   private positionChanged(from: PixelCoord, to: PixelCoord): boolean {
     return (
-      Math.abs(this.getWrappedDelta(to.x, from.x, ARENA_PIXEL_WIDTH)) > 0.01
-      || Math.abs(this.getWrappedDelta(to.y, from.y, ARENA_PIXEL_HEIGHT)) > 0.01
+      Math.abs(this.getWrappedDelta(to.x, from.x, this.getArenaPixelWidth())) > 0.01
+      || Math.abs(this.getWrappedDelta(to.y, from.y, this.getArenaPixelHeight())) > 0.01
     );
   }
 
@@ -2148,8 +2220,8 @@ export class GameApp {
     if (option.combinedFree && this.positionChanged(start, option.combinedMove)) {
       player.position = this.normalizeArenaPosition(option.combinedMove);
       player.velocity = {
-        x: this.getWrappedDelta(player.position.x, start.x, ARENA_PIXEL_WIDTH) / (deltaMs / 1000),
-        y: this.getWrappedDelta(player.position.y, start.y, ARENA_PIXEL_HEIGHT) / (deltaMs / 1000),
+        x: this.getWrappedDelta(player.position.x, start.x, this.getArenaPixelWidth()) / (deltaMs / 1000),
+        y: this.getWrappedDelta(player.position.y, start.y, this.getArenaPixelHeight()) / (deltaMs / 1000),
       };
       if (
         Math.abs(player.position.x - start.x) > 0.01 ||
@@ -2172,8 +2244,8 @@ export class GameApp {
 
     player.velocity = moved
       ? {
-          x: this.getWrappedDelta(player.position.x, start.x, ARENA_PIXEL_WIDTH) / (deltaMs / 1000),
-          y: this.getWrappedDelta(player.position.y, start.y, ARENA_PIXEL_HEIGHT) / (deltaMs / 1000),
+          x: this.getWrappedDelta(player.position.x, start.x, this.getArenaPixelWidth()) / (deltaMs / 1000),
+          y: this.getWrappedDelta(player.position.y, start.y, this.getArenaPixelHeight()) / (deltaMs / 1000),
         }
       : { x: 0, y: 0 };
 
@@ -2319,8 +2391,8 @@ export class GameApp {
   private getTileFromPosition(position: PixelCoord): TileCoord {
     const wrapped = this.normalizeArenaPosition(position);
     return {
-      x: this.normalizeTileAxis(Math.floor(wrapped.x / TILE_SIZE), GRID_WIDTH),
-      y: this.normalizeTileAxis(Math.floor(wrapped.y / TILE_SIZE), GRID_HEIGHT),
+      x: this.normalizeTileAxis(Math.floor(wrapped.x / TILE_SIZE), this.getArenaGridWidth()),
+      y: this.normalizeTileAxis(Math.floor(wrapped.y / TILE_SIZE), this.getArenaGridHeight()),
     };
   }
 
@@ -2430,7 +2502,7 @@ export class GameApp {
       for (let step = 1; step <= range; step += 1) {
         const x = bomb.tile.x + direction.x * step;
         const y = bomb.tile.y + direction.y * step;
-        if (x < 0 || y < 0 || x >= GRID_WIDTH || y >= GRID_HEIGHT) {
+        if (x < 0 || y < 0 || x >= this.getArenaGridWidth() || y >= this.getArenaGridHeight()) {
           break;
         }
         const key = tileKey(x, y);
@@ -2639,36 +2711,9 @@ export class GameApp {
   }
 
   private buildSuddenDeathPath(): TileCoord[] {
-    const spiral: TileCoord[] = [];
-    let left = 0;
-    let right = GRID_WIDTH - 1;
-    let top = 0;
-    let bottom = GRID_HEIGHT - 1;
-
-    while (left <= right && top <= bottom) {
-      for (let x = left; x <= right; x += 1) {
-        spiral.push({ x, y: top });
-      }
-      for (let y = top + 1; y <= bottom; y += 1) {
-        spiral.push({ x: right, y });
-      }
-      if (bottom > top) {
-        for (let x = right - 1; x >= left; x -= 1) {
-          spiral.push({ x, y: bottom });
-        }
-      }
-      if (right > left) {
-        for (let y = bottom - 1; y > top; y -= 1) {
-          spiral.push({ x: left, y });
-        }
-      }
-      left += 1;
-      right -= 1;
-      top += 1;
-      bottom -= 1;
-    }
-
-    return spiral.filter((tile) => !this.arena.solid.has(tileKey(tile.x, tile.y)));
+    return this.arena.config.suddenDeathPath
+      .filter((tile) => !this.arena.solid.has(tileKey(tile.x, tile.y)))
+      .map((tile) => ({ ...tile }));
   }
 
   private updateFlames(deltaMs: number): void {
@@ -2822,8 +2867,8 @@ export class GameApp {
 
   private getPlayerPixelPositionFromState(player: PlayerState): PixelCoord {
     return {
-      x: ARENA_OFFSET_X + player.position.x - TILE_SIZE * 0.5,
-      y: ARENA_OFFSET_Y + player.position.y - TILE_SIZE * 0.5,
+      x: player.position.x - TILE_SIZE * 0.5,
+      y: player.position.y - TILE_SIZE * 0.5,
     };
   }
 
@@ -2867,10 +2912,11 @@ export class GameApp {
     const c = offscreen.getContext("2d")!;
     c.setTransform(CANVAS_BACKBUFFER_SCALE, 0, 0, CANVAS_BACKBUFFER_SCALE, 0, 0);
 
-    const arenaWidth = GRID_WIDTH * TILE_SIZE;
-    const arenaHeight = GRID_HEIGHT * TILE_SIZE;
-    const arenaX = ARENA_OFFSET_X;
-    const arenaY = ARENA_OFFSET_Y;
+    const metrics = this.getArenaRenderMetrics();
+    const arenaWidth = metrics.arenaPixelWidth;
+    const arenaHeight = metrics.arenaPixelHeight;
+    const arenaX = metrics.arenaX;
+    const arenaY = metrics.arenaY;
     const arenaRight = arenaX + arenaWidth;
     const arenaBottom = arenaY + arenaHeight;
     const frameX = arenaX - 10;
@@ -3082,7 +3128,7 @@ export class GameApp {
 
     const playerCount = Math.max(1, this.activePlayerIds.length);
     const twoPlayerLayout = playerCount === 2;
-    const hudPanelY = 20;
+    const hudPanelY = 14;
 
     if (twoPlayerLayout) {
       const panelWidth = 168;
@@ -3095,9 +3141,9 @@ export class GameApp {
         this.renderPlayerHud(rightPlayerId, CANVAS_WIDTH - panelWidth - 8, hudPanelY, panelWidth);
       }
     } else {
-      const slotWidth = (CANVAS_WIDTH - 10) / playerCount;
+      const slotWidth = (CANVAS_WIDTH - 12) / playerCount;
       this.activePlayerIds.forEach((playerId, index) => {
-        this.renderPlayerHud(playerId, 5 + index * slotWidth, hudPanelY, slotWidth - 5);
+        this.renderPlayerHud(playerId, 6 + index * slotWidth, hudPanelY, slotWidth - 6);
       });
     }
 
@@ -3108,17 +3154,17 @@ export class GameApp {
         ? `R${this.roundNumber} | ENDLESS`
         : `R${this.roundNumber} | FIRST TO ${TARGET_WINS}`,
       CANVAS_WIDTH / 2,
-      8,
+      6,
       "#d8eaf8",
       "rgba(4, 10, 19, 0.9)",
     );
     this.ctx.font = "bold 8px monospace";
-    this.drawHudText("TIME", CANVAS_WIDTH / 2, 17, "#b8cde2", "rgba(4, 10, 19, 0.9)");
+    this.drawHudText("TIME", CANVAS_WIDTH / 2, 14, "#b8cde2", "rgba(4, 10, 19, 0.9)");
     this.ctx.font = "bold 16px monospace";
     this.drawHudText(
       Math.ceil(this.roundTimeMs / 1000).toString().padStart(2, "0"),
       CANVAS_WIDTH / 2,
-      30,
+      27,
       "#f7fbff",
       "rgba(4, 10, 19, 0.9)",
     );
@@ -3126,13 +3172,13 @@ export class GameApp {
       this.ctx.textAlign = "center";
       this.ctx.font = "bold 8px monospace";
       if (this.suddenDeathActive) {
-        this.drawHudText("SUDDEN DEATH", 240, HUD_HEIGHT - 22, "#ffb58f", "rgba(4, 10, 19, 0.9)");
+        this.drawHudText("SUDDEN DEATH", 240, HUD_HEIGHT - 18, "#ffb58f", "rgba(4, 10, 19, 0.9)");
       } else {
         const untilSuddenDeath = Math.max(0, this.roundTimeMs - SUDDEN_DEATH_START_MS);
         this.drawHudText(
           `SD ${Math.ceil(untilSuddenDeath / 1000)}s`,
           240,
-          HUD_HEIGHT - 22,
+          HUD_HEIGHT - 18,
           "rgba(203, 222, 238, 0.82)",
           "rgba(4, 10, 19, 0.9)",
         );
@@ -3152,7 +3198,16 @@ export class GameApp {
         : player.flameGuardMs > 0
           ? "GUARD"
           : "LIVE";
-    const skillSlots = this.getHudSkillSlots(playerId);
+    const compact = width < 230;
+    const allSkillSlots = this.getHudSkillSlots(playerId);
+    const skillSlots = compact
+      ? allSkillSlots.filter((slot) => (
+        slot.type === "bomb-up"
+        || slot.type === "flame-up"
+        || slot.type === "speed-up"
+        || slot.type === "remote-up"
+      ))
+      : allSkillSlots;
 
     this.drawHudPanel(x, y, width, 42, palette.glow);
     this.ctx.textAlign = "left";
@@ -3160,15 +3215,27 @@ export class GameApp {
     this.drawHudText(title, x + 6, y + 10, palette.primary, "rgba(4, 10, 19, 0.9)");
     this.ctx.font = "6px monospace";
     this.drawHudText(
-      this.shortenCharacterName(this.getCharacterLabel(playerId, 12), 12),
+      this.shortenCharacterName(this.getCharacterLabel(playerId, compact ? 8 : 12), compact ? 8 : 12),
       x + 6,
       y + 18,
       "#dbefff",
       "rgba(4, 10, 19, 0.9)",
     );
     this.ctx.textAlign = "right";
-    this.drawHudText(status, x + width - 6, y + 10, player.alive ? "#e5fff7" : "rgba(210, 220, 231, 0.55)", "rgba(4, 10, 19, 0.85)");
-    this.drawHudText(statLine, x + width - 6, y + 18, "#dbefff", "rgba(4, 10, 19, 0.85)");
+    this.drawHudText(
+      compact ? statLine : status,
+      x + width - 6,
+      y + 10,
+      player.alive ? "#e5fff7" : "rgba(210, 220, 231, 0.55)",
+      "rgba(4, 10, 19, 0.85)",
+    );
+    this.drawHudText(
+      compact ? status : statLine,
+      x + width - 6,
+      y + 18,
+      "#dbefff",
+      "rgba(4, 10, 19, 0.85)",
+    );
     if (this.onlineRoomMode === "endless") {
       this.drawEndlessHudStats(x + 6, y + 28, playerId, palette);
     } else {
@@ -3176,7 +3243,9 @@ export class GameApp {
     }
 
     const insetX = x + 4;
-    const insetY = this.onlineRoomMode === "endless" ? y + 32 : y + 30;
+    const insetY = compact
+      ? y + 29
+      : (this.onlineRoomMode === "endless" ? y + 32 : y + 30);
     const insetWidth = Math.max(12, width - 8);
     const gap = 2;
     const slotCount = skillSlots.length;
@@ -3298,37 +3367,41 @@ export class GameApp {
   }
 
   private rebuildArenaStaticCache(): void {
+    const logicalArenaWidth = this.getArenaPixelWidth();
+    const logicalArenaHeight = this.getArenaPixelHeight();
     if (!this.arenaStaticCache) {
       this.arenaStaticCache = document.createElement("canvas");
-      this.arenaStaticCache.width = CANVAS_WIDTH * CANVAS_BACKBUFFER_SCALE;
-      this.arenaStaticCache.height = CANVAS_HEIGHT * CANVAS_BACKBUFFER_SCALE;
     }
+    this.arenaStaticCache.width = Math.max(1, Math.ceil(logicalArenaWidth * CANVAS_BACKBUFFER_SCALE));
+    this.arenaStaticCache.height = Math.max(1, Math.ceil(logicalArenaHeight * CANVAS_BACKBUFFER_SCALE));
     const c = this.arenaStaticCache.getContext("2d")!;
     c.setTransform(CANVAS_BACKBUFFER_SCALE, 0, 0, CANVAS_BACKBUFFER_SCALE, 0, 0);
-    c.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    c.clearRect(0, 0, logicalArenaWidth, logicalArenaHeight);
 
     const savedCtx = this.ctx;
     // Temporarily redirect draw calls to the offscreen canvas
     (this as unknown as { ctx: CanvasRenderingContext2D }).ctx = c;
 
-    const centerX = Math.floor(GRID_WIDTH / 2);
-    const centerY = Math.floor(GRID_HEIGHT / 2);
-    const sideColumn = Math.min(2, GRID_WIDTH - 3);
-    const farSideColumn = Math.max(GRID_WIDTH - 3, sideColumn + 1);
-    const sideRow = Math.min(2, GRID_HEIGHT - 3);
-    const farSideRow = Math.max(GRID_HEIGHT - 3, sideRow + 1);
-    for (let y = 0; y < GRID_HEIGHT; y += 1) {
-      for (let x = 0; x < GRID_WIDTH; x += 1) {
-        const screenX = ARENA_OFFSET_X + x * TILE_SIZE;
-        const screenY = ARENA_OFFSET_Y + y * TILE_SIZE;
+    const arenaWidth = this.getArenaGridWidth();
+    const arenaHeight = this.getArenaGridHeight();
+    const centerX = Math.floor(arenaWidth / 2);
+    const centerY = Math.floor(arenaHeight / 2);
+    const sideColumn = Math.min(2, arenaWidth - 3);
+    const farSideColumn = Math.max(arenaWidth - 3, sideColumn + 1);
+    const sideRow = Math.min(2, arenaHeight - 3);
+    const farSideRow = Math.max(arenaHeight - 3, sideRow + 1);
+    for (let y = 0; y < arenaHeight; y += 1) {
+      for (let x = 0; x < arenaWidth; x += 1) {
+        const screenX = x * TILE_SIZE;
+        const screenY = y * TILE_SIZE;
         const key = tileKey(x, y);
-        const isWrapPortal = isWrapPortalTile(x, y);
+        const isWrapPortal = isWrapPortalTile(x, y, this.arena.config);
         const isCenterLane = x === centerX || y === centerY;
         const isSideLane = x === sideColumn || x === farSideColumn || y === sideRow || y === farSideRow;
         const isSpawnBay = (x <= 2 && y <= 2)
-          || (x >= GRID_WIDTH - 3 && y <= 2)
-          || (x <= 2 && y >= GRID_HEIGHT - 3)
-          || (x >= GRID_WIDTH - 3 && y >= GRID_HEIGHT - 3);
+          || (x >= arenaWidth - 3 && y <= 2)
+          || (x <= 2 && y >= arenaHeight - 3)
+          || (x >= arenaWidth - 3 && y >= arenaHeight - 3);
         const floorVariant = isSpawnBay
           ? "spawn"
           : isWrapPortal
@@ -3364,14 +3437,14 @@ export class GameApp {
 
     c.strokeStyle = this.getArenaPalette().arenaFrame;
     c.strokeRect(
-      ARENA_OFFSET_X - 0.5,
-      ARENA_OFFSET_Y - 0.5,
-      GRID_WIDTH * TILE_SIZE + 1,
-      GRID_HEIGHT * TILE_SIZE + 1,
+      -0.5,
+      -0.5,
+      arenaWidth * TILE_SIZE + 1,
+      arenaHeight * TILE_SIZE + 1,
     );
 
     c.fillStyle = this.getArenaPalette().arenaGlow;
-    c.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, GRID_WIDTH * TILE_SIZE, GRID_HEIGHT * TILE_SIZE);
+    c.fillRect(0, 0, arenaWidth * TILE_SIZE, arenaHeight * TILE_SIZE);
 
     // Restore the real context
     (this as unknown as { ctx: CanvasRenderingContext2D }).ctx = savedCtx;
@@ -3380,6 +3453,8 @@ export class GameApp {
 
   private invalidateArenaCache(): void {
     this.arenaStaticDirty = true;
+    this.backdropCache = null;
+    this.arenaStaticMistGradient = null;
   }
 
   private renderArena(): void {
@@ -3387,10 +3462,13 @@ export class GameApp {
     if (this.arenaStaticDirty || !this.arenaStaticCache) {
       this.rebuildArenaStaticCache();
     }
+    const metrics = this.getArenaRenderMetrics();
+    const logicalArenaWidth = this.getArenaPixelWidth();
+    const logicalArenaHeight = this.getArenaPixelHeight();
     this.ctx.save();
-    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.ctx.drawImage(this.arenaStaticCache!, 0, 0);
-    this.ctx.restore();
+    this.ctx.translate(metrics.arenaX, metrics.arenaY);
+    this.ctx.scale(metrics.scale, metrics.scale);
+    this.ctx.drawImage(this.arenaStaticCache!, 0, 0, logicalArenaWidth, logicalArenaHeight);
 
     // Dynamic elements drawn on top every frame
     for (const effect of this.crateBreakAnimations) {
@@ -3433,23 +3511,25 @@ export class GameApp {
     // Arena mist overlay (single pre-cached gradient)
     if (!this.arenaStaticMistGradient) {
       const palette = this.getArenaPalette();
-      this.arenaStaticMistGradient = this.ctx.createLinearGradient(0, ARENA_OFFSET_Y, 0, CANVAS_HEIGHT);
+      this.arenaStaticMistGradient = this.ctx.createLinearGradient(0, 0, 0, logicalArenaHeight);
       this.arenaStaticMistGradient.addColorStop(0, palette.arenaMistTop);
       this.arenaStaticMistGradient.addColorStop(0.35, "rgba(74, 108, 153, 0)");
       this.arenaStaticMistGradient.addColorStop(1, palette.arenaMistBottom);
     }
     this.ctx.fillStyle = this.arenaStaticMistGradient;
-    this.ctx.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, GRID_WIDTH * TILE_SIZE, GRID_HEIGHT * TILE_SIZE);
+    this.ctx.fillRect(0, 0, logicalArenaWidth, logicalArenaHeight);
+    this.ctx.restore();
   }
 
   private getArenaPalette(): ArenaThemePalette {
-    return this.assets.arenaTheme?.palette
+    return this.getArenaThemeDefinition()?.palette
       ?? getArenaThemeById(DEFAULT_ARENA_THEME_ID)?.palette
       ?? getArenaThemeById("arcane-citadel")!.palette;
   }
 
   private getArenaThemeDefinition() {
-    return this.assets.arenaTheme
+    return getArenaThemeById(this.arena.config.themeId)
+      ?? this.assets.arenaTheme
       ?? getArenaThemeById(DEFAULT_ARENA_THEME_ID)
       ?? getArenaThemeById("arcane-citadel")!;
   }
@@ -3580,7 +3660,7 @@ export class GameApp {
       if (Number.isNaN(x) || Number.isNaN(y)) {
         continue;
       }
-      if (x < 0 || y < 0 || x >= GRID_WIDTH || y >= GRID_HEIGHT) {
+      if (x < 0 || y < 0 || x >= this.getArenaGridWidth() || y >= this.getArenaGridHeight()) {
         continue;
       }
       if (this.arena.solid.has(key)) {
@@ -3598,8 +3678,6 @@ export class GameApp {
     }
     const dangerTiles = this.getDangerOverlayTiles();
     for (const tile of dangerTiles) {
-      const screenX = ARENA_OFFSET_X + tile.x * TILE_SIZE;
-      const screenY = ARENA_OFFSET_Y + tile.y * TILE_SIZE;
       let fill = "rgba(104, 188, 255, 0.16)";
       let stroke = "rgba(184, 230, 255, 0.35)";
       if (tile.etaMs <= 0) {
@@ -3612,6 +3690,8 @@ export class GameApp {
         fill = "rgba(255, 195, 92, 0.24)";
         stroke = "rgba(255, 236, 173, 0.52)";
       }
+      const screenX = tile.x * TILE_SIZE;
+      const screenY = tile.y * TILE_SIZE;
       this.ctx.fillStyle = fill;
       this.ctx.fillRect(screenX + 5, screenY + 5, TILE_SIZE - 10, TILE_SIZE - 10);
       this.ctx.strokeStyle = stroke;
@@ -3648,7 +3728,14 @@ export class GameApp {
       const [xText, yText] = key.split(",");
       const x = Number(xText);
       const y = Number(yText);
-      if (Number.isNaN(x) || Number.isNaN(y) || x < 0 || y < 0 || x >= GRID_WIDTH || y >= GRID_HEIGHT) {
+      if (
+        Number.isNaN(x)
+        || Number.isNaN(y)
+        || x < 0
+        || y < 0
+        || x >= this.getArenaGridWidth()
+        || y >= this.getArenaGridHeight()
+      ) {
         continue;
       }
       tiles.push({ x, y });
@@ -3668,8 +3755,8 @@ export class GameApp {
     }
     const origin = this.getTileFromPosition(this.players[previewPlayerId].position);
     for (const tile of previewTiles) {
-      const screenX = ARENA_OFFSET_X + tile.x * TILE_SIZE;
-      const screenY = ARENA_OFFSET_Y + tile.y * TILE_SIZE;
+      const screenX = tile.x * TILE_SIZE;
+      const screenY = tile.y * TILE_SIZE;
       const isOrigin = tile.x === origin.x && tile.y === origin.y;
       this.ctx.fillStyle = isOrigin ? "rgba(115, 255, 226, 0.34)" : "rgba(109, 228, 255, 0.22)";
       this.ctx.fillRect(screenX + 6, screenY + 6, TILE_SIZE - 12, TILE_SIZE - 12);
@@ -3729,8 +3816,8 @@ export class GameApp {
   }
 
   private drawSuddenDeathClosureEffect(effect: SuddenDeathClosureEffect): void {
-    const x = ARENA_OFFSET_X + effect.tile.x * TILE_SIZE;
-    const y = ARENA_OFFSET_Y + effect.tile.y * TILE_SIZE;
+    const x = effect.tile.x * TILE_SIZE;
+    const y = effect.tile.y * TILE_SIZE;
     const fallProgress = Math.min(1, effect.elapsedMs / SUDDEN_DEATH_FALL_MS);
     const dropOffset = effect.impacted
       ? 0
@@ -3810,8 +3897,8 @@ export class GameApp {
   }
 
   private drawCrateBreakAnimation(effect: CrateBreakAnimation): void {
-    const x = ARENA_OFFSET_X + effect.tile.x * TILE_SIZE;
-    const y = ARENA_OFFSET_Y + effect.tile.y * TILE_SIZE;
+    const x = effect.tile.x * TILE_SIZE;
+    const y = effect.tile.y * TILE_SIZE;
     const frames = this.assets.props.crateBreakFrames ?? [];
     if (frames.length > 0) {
       const frameMs = Math.max(1, Math.floor(CRATE_BREAK_DURATION_MS / frames.length));
@@ -3835,8 +3922,8 @@ export class GameApp {
   }
 
   private drawPowerUp(powerUp: PowerUpState): void {
-    const x = ARENA_OFFSET_X + powerUp.tile.x * TILE_SIZE;
-    const y = ARENA_OFFSET_Y + powerUp.tile.y * TILE_SIZE;
+    const x = powerUp.tile.x * TILE_SIZE;
+    const y = powerUp.tile.y * TILE_SIZE;
     const sprite = this.assets.powerUps[powerUp.type];
     if (sprite) {
       this.ctx.drawImage(sprite, x, y, TILE_SIZE, TILE_SIZE);
@@ -3856,8 +3943,8 @@ export class GameApp {
 
   private drawBomb(bomb: BombState): void {
     const pulse = 0.6 + 0.4 * Math.sin((bomb.fuseMs / 80) * Math.PI);
-    const x = ARENA_OFFSET_X + bomb.tile.x * TILE_SIZE;
-    const y = ARENA_OFFSET_Y + bomb.tile.y * TILE_SIZE;
+    const x = bomb.tile.x * TILE_SIZE;
+    const y = bomb.tile.y * TILE_SIZE;
     if (this.assets.props.bomb) {
       this.ctx.save();
       this.ctx.globalAlpha = Math.max(0.7, pulse);
@@ -3878,8 +3965,8 @@ export class GameApp {
   }
 
   private drawFlame(flame: FlameState): void {
-    const x = ARENA_OFFSET_X + flame.tile.x * TILE_SIZE;
-    const y = ARENA_OFFSET_Y + flame.tile.y * TILE_SIZE;
+    const x = flame.tile.x * TILE_SIZE;
+    const y = flame.tile.y * TILE_SIZE;
     const alpha = Math.max(0.35, flame.remainingMs / FLAME_DURATION_MS);
     if (this.assets.props.flame && (!flame.style || flame.style === "normal")) {
       this.ctx.save();
@@ -3913,13 +4000,13 @@ export class GameApp {
 
   private drawMagicBeam(beam: MagicBeamState): void {
     const originCenter = {
-      x: ARENA_OFFSET_X + beam.origin.x * TILE_SIZE + TILE_SIZE * 0.5,
-      y: ARENA_OFFSET_Y + beam.origin.y * TILE_SIZE + TILE_SIZE * 0.5,
+      x: beam.origin.x * TILE_SIZE + TILE_SIZE * 0.5,
+      y: beam.origin.y * TILE_SIZE + TILE_SIZE * 0.5,
     };
     const lastTile = beam.tiles[beam.tiles.length - 1] ?? beam.origin;
     const endCenter = {
-      x: ARENA_OFFSET_X + lastTile.x * TILE_SIZE + TILE_SIZE * 0.5,
-      y: ARENA_OFFSET_Y + lastTile.y * TILE_SIZE + TILE_SIZE * 0.5,
+      x: lastTile.x * TILE_SIZE + TILE_SIZE * 0.5,
+      y: lastTile.y * TILE_SIZE + TILE_SIZE * 0.5,
     };
     const progress = Math.max(0, Math.min(1, beam.remainingMs / NICO_BEAM_DURATION_MS));
     const glowAlpha = 0.24 + progress * 0.32;
@@ -3957,8 +4044,8 @@ export class GameApp {
     this.ctx.stroke();
 
     for (const tile of beam.tiles) {
-      const x = ARENA_OFFSET_X + tile.x * TILE_SIZE;
-      const y = ARENA_OFFSET_Y + tile.y * TILE_SIZE;
+      const x = tile.x * TILE_SIZE;
+      const y = tile.y * TILE_SIZE;
       this.ctx.fillStyle = `rgba(153, 58, 255, ${0.12 + progress * 0.14})`;
       this.ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
       this.ctx.strokeStyle = `rgba(245, 219, 255, ${0.18 + progress * 0.2})`;
@@ -4000,12 +4087,12 @@ export class GameApp {
     }
     const lastTile = tiles[tiles.length - 1];
     const originCenter = {
-      x: ARENA_OFFSET_X + origin.x * TILE_SIZE + TILE_SIZE * 0.5,
-      y: ARENA_OFFSET_Y + origin.y * TILE_SIZE + TILE_SIZE * 0.5,
+      x: origin.x * TILE_SIZE + TILE_SIZE * 0.5,
+      y: origin.y * TILE_SIZE + TILE_SIZE * 0.5,
     };
     const endCenter = {
-      x: ARENA_OFFSET_X + lastTile.x * TILE_SIZE + TILE_SIZE * 0.5,
-      y: ARENA_OFFSET_Y + lastTile.y * TILE_SIZE + TILE_SIZE * 0.5,
+      x: lastTile.x * TILE_SIZE + TILE_SIZE * 0.5,
+      y: lastTile.y * TILE_SIZE + TILE_SIZE * 0.5,
     };
     const chargeProgress = Math.max(0, Math.min(1, player.skill.castElapsedMs / NICO_SKILL_CHANNEL_MS));
     const pulse = 0.55 + Math.sin(this.animationClockMs / 90) * 0.18;
@@ -4026,8 +4113,8 @@ export class GameApp {
     this.ctx.setLineDash([]);
 
     for (const tile of tiles) {
-      const x = ARENA_OFFSET_X + tile.x * TILE_SIZE;
-      const y = ARENA_OFFSET_Y + tile.y * TILE_SIZE;
+      const x = tile.x * TILE_SIZE;
+      const y = tile.y * TILE_SIZE;
       this.ctx.fillStyle = `rgba(145, 52, 255, ${tileAlpha})`;
       this.ctx.fillRect(x + 5, y + 5, TILE_SIZE - 10, TILE_SIZE - 10);
       this.ctx.strokeStyle = `rgba(245, 226, 255, ${lineAlpha * 0.85})`;
@@ -4050,8 +4137,8 @@ export class GameApp {
     }
     const chargeProgress = Math.max(0, Math.min(1, player.skill.castElapsedMs / CROCODILO_SKILL_CHANNEL_MS));
     const pulse = 0.52 + Math.sin(this.animationClockMs / 100) * 0.16;
-    const centerX = ARENA_OFFSET_X + origin.x * TILE_SIZE + TILE_SIZE * 0.5;
-    const centerY = ARENA_OFFSET_Y + origin.y * TILE_SIZE + TILE_SIZE * 0.5;
+    const centerX = origin.x * TILE_SIZE + TILE_SIZE * 0.5;
+    const centerY = origin.y * TILE_SIZE + TILE_SIZE * 0.5;
 
     this.ctx.save();
     this.ctx.globalCompositeOperation = "lighter";
@@ -4059,8 +4146,8 @@ export class GameApp {
     this.ctx.lineWidth = 2;
 
     for (const tile of tiles) {
-      const x = ARENA_OFFSET_X + tile.x * TILE_SIZE;
-      const y = ARENA_OFFSET_Y + tile.y * TILE_SIZE;
+      const x = tile.x * TILE_SIZE;
+      const y = tile.y * TILE_SIZE;
       const tileCenterX = x + TILE_SIZE * 0.5;
       const tileCenterY = y + TILE_SIZE * 0.5;
       this.ctx.fillStyle = `rgba(86, 214, 95, ${0.07 + chargeProgress * 0.1 + pulse * 0.03})`;
@@ -4519,10 +4606,10 @@ export class GameApp {
         } : null,
       },
       arena: {
-        width: GRID_WIDTH,
-        height: GRID_HEIGHT,
+        width: this.getArenaGridWidth(),
+        height: this.getArenaGridHeight(),
         tileSize: TILE_SIZE,
-        origin: { x: ARENA_OFFSET_X, y: ARENA_OFFSET_Y },
+        origin: { x: this.getArenaOffsetX(), y: this.getArenaOffsetY() },
         coordinates: "origin top-left, x to right, y to bottom",
       },
       activePlayerIds: [...this.activePlayerIds],
@@ -4610,3 +4697,4 @@ export class GameApp {
     return JSON.stringify(payload);
   }
 }
+

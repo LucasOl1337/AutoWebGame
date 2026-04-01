@@ -1,13 +1,23 @@
 import type { MenuPlayerId, PlayerId } from "../Gameplay/types";
 
-export const CANVAS_WIDTH = 480;
-export const CANVAS_HEIGHT = 480;
-export const HUD_HEIGHT = 74;
+export const CANVAS_WIDTH = 960;
+export const CANVAS_HEIGHT = 690;
+export const HUD_HEIGHT = 60;
 export const TILE_SIZE = 40;
 export const GRID_WIDTH = 11;
 export const GRID_HEIGHT = 9;
+export const MAX_ARENA_GRID_WIDTH = 23;
+export const MAX_ARENA_GRID_HEIGHT = 15;
 export const ARENA_OFFSET_X = Math.floor((CANVAS_WIDTH - GRID_WIDTH * TILE_SIZE) / 2);
 export const ARENA_OFFSET_Y = HUD_HEIGHT + 6;
+
+export function getArenaOffsetX(gridWidth: number): number {
+  return Math.floor((CANVAS_WIDTH - gridWidth * TILE_SIZE) / 2);
+}
+
+export function getArenaOffsetY(_gridHeight: number): number {
+  return ARENA_OFFSET_Y;
+}
 
 export const FIXED_STEP_MS = 1000 / 60;
 export const ROUND_DURATION_MS = 90_000;

@@ -7,8 +7,6 @@ import { TILE_SIZE } from "../../PersonalConfig/config";
 import type { SkillContext } from "../../ultimate/shared";
 import { KILLER_BEE_SKILL_COOLDOWN_MS } from "../../ultimate/skill-registry";
 import {
-  ARENA_PIXEL_HEIGHT,
-  ARENA_PIXEL_WIDTH,
   directionDelta,
   getDashDistancePx,
   hasReachedSkillTarget,
@@ -66,15 +64,17 @@ export function updateKillerBeeDash(
   const start = { ...player.position };
   const remainingMs = Math.max(0, player.skill.channelRemainingMs);
   const stepFraction = remainingMs <= 0 ? 1 : Math.min(1, deltaMs / remainingMs);
-  const deltaX = context.getWrappedDelta(target.x, player.position.x, ARENA_PIXEL_WIDTH);
-  const deltaY = context.getWrappedDelta(target.y, player.position.y, ARENA_PIXEL_HEIGHT);
+  const arenaPixelWidth = context.arena.config.grid.width * TILE_SIZE;
+  const arenaPixelHeight = context.arena.config.grid.height * TILE_SIZE;
+  const deltaX = context.getWrappedDelta(target.x, player.position.x, arenaPixelWidth);
+  const deltaY = context.getWrappedDelta(target.y, player.position.y, arenaPixelHeight);
   player.position = context.normalizeArenaPosition({
     x: player.position.x + deltaX * stepFraction,
     y: player.position.y + deltaY * stepFraction,
   });
   player.velocity = {
-    x: context.getWrappedDelta(player.position.x, start.x, ARENA_PIXEL_WIDTH) / (deltaMs / 1000),
-    y: context.getWrappedDelta(player.position.y, start.y, ARENA_PIXEL_HEIGHT) / (deltaMs / 1000),
+    x: context.getWrappedDelta(player.position.x, start.x, arenaPixelWidth) / (deltaMs / 1000),
+    y: context.getWrappedDelta(player.position.y, start.y, arenaPixelHeight) / (deltaMs / 1000),
   };
   player.direction = dashDirection;
   player.lastMoveDirection = dashDirection;

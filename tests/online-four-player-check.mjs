@@ -78,12 +78,7 @@ const game = new GameApp(root, assets);
 game.startServerAuthoritativeMatch([1, 2, 3, 4], { 1: 0, 2: 1, 3: 0, 4: 1 });
 
 const snapshot = game.exportOnlineSnapshot();
-const expectedTiles = {
-  1: { x: 2, y: 1 },
-  2: { x: 8, y: 1 },
-  3: { x: 2, y: 7 },
-  4: { x: 8, y: 7 },
-};
+const expectedTiles = snapshot.arena.spawnMap;
 
 const players = snapshot.activePlayerIds.map((playerId) => ({
   id: playerId,
@@ -93,11 +88,12 @@ const players = snapshot.activePlayerIds.map((playerId) => ({
 }));
 
 const pass = snapshot.activePlayerIds.length === 4
+  && Boolean(snapshot.arena)
   && snapshot.activePlayerIds.every((playerId) => (
     snapshot.players[playerId].active
     && snapshot.players[playerId].alive
-    && snapshot.players[playerId].tile.x === expectedTiles[playerId].x
-    && snapshot.players[playerId].tile.y === expectedTiles[playerId].y
+    && snapshot.players[playerId].tile.x === expectedTiles[playerId].tile.x
+    && snapshot.players[playerId].tile.y === expectedTiles[playerId].tile.y
   ));
 
 console.log(JSON.stringify({

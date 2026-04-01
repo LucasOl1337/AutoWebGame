@@ -1,4 +1,5 @@
 import type {
+  ArenaRuntimeConfig,
   BombState,
   Direction,
   FlameState,
@@ -71,6 +72,7 @@ export interface MatchStartConfig {
   roomCode: string;
   role: OnlineRole;
   roomMode: LobbyMode;
+  arena: ArenaRuntimeConfig;
   localPlayerId: PlayerId;
   activePlayerIds: PlayerId[];
   botPlayerIds: PlayerId[];
@@ -90,6 +92,7 @@ export interface OnlineGameSnapshot {
   ackedInputSeq: Record<PlayerId, number>;
   mode: Mode;
   roomMode: LobbyMode;
+  arena: ArenaRuntimeConfig;
   breakableTiles: string[];
   powerUps: PowerUpState[];
   players: Record<PlayerId, PlayerState>;

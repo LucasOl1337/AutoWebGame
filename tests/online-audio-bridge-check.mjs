@@ -28,6 +28,7 @@ const fakeCanvas = {
   width: 0,
   height: 0,
   style: {},
+  dataset: {},
   setAttribute: noop,
   getContext: () => fakeCtx,
   requestFullscreen: async () => {},

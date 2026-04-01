@@ -1,4 +1,5 @@
 const playedUrls = [];
+let mockNowMs = 0;
 class MockAudio {
   constructor(url = "") {
     this.url = url;
@@ -25,8 +26,14 @@ class MockAudio {
 }
 
 globalThis.Audio = MockAudio;
+Object.defineProperty(globalThis, "performance", {
+  configurable: true,
+  value: {
+    now: () => mockNowMs,
+  },
+});
 
-const { SoundManager, SFX_MANIFEST } = await import("..aoutputaesmaEngineasound-manager.js");
+const { SoundManager, SFX_MANIFEST } = await import("../output/esm/Engine/sound-manager.js");
 
 const explosionVariants = SFX_MANIFEST.bombExplode;
 const manifestPass = !Array.isArray(explosionVariants)
@@ -37,15 +44,22 @@ await manager.loadSounds(SFX_MANIFEST);
 manager.unlocked = true;
 
 manager.playOneShot("bombExplode");
+manager.playOneShot("bombExplode");
 await Promise.resolve();
 const playbackPass = playedUrls.length === 1
-  && playedUrls[0] === "aassetsaaudioasfxabomb_explode_default.mp3";
+  && playedUrls[0] === "/Assets/SoundEffects/bomb_explode_default.mp3";
 
-const pass = manifestPass && playbackPass;
+mockNowMs = 200;
+manager.playOneShot("bombExplode");
+await Promise.resolve();
+const antiSpamPass = playedUrls.length === 2;
+
+const pass = manifestPass && playbackPass && antiSpamPass;
 
 console.log(JSON.stringify({
   manifestPass,
   playbackPass,
+  antiSpamPass,
   playedUrls,
   pass,
 }, null, 2));

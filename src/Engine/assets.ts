@@ -1,7 +1,7 @@
 import type { Direction, PlayerId, PowerUpType } from "../Gameplay/types";
 import { assetUrl } from "./asset-url";
 import type { ArenaThemeDefinition } from "../Arenas/arena-theme-library";
-import { resolveArenaTheme } from "../Arenas/arena-theme-library";
+import { getArenaThemeById, resolveArenaTheme } from "../Arenas/arena-theme-library";
 
 export interface DirectionalSprites {
   up: HTMLImageElement | null;
@@ -286,8 +286,9 @@ function createCharacterSpriteLoader(): (entry: CharacterRosterEntry) => Promise
   };
 }
 
-export async function loadGameAssets(): Promise<GameAssets> {
-  const arenaTheme = resolveArenaTheme(typeof window !== "undefined" ? window.location.search : "");
+export async function loadGameAssets(arenaThemeId?: string | null): Promise<GameAssets> {
+  const resolvedTheme = arenaThemeId ? getArenaThemeById(arenaThemeId) : null;
+  const arenaTheme = resolvedTheme ?? resolveArenaTheme(typeof window !== "undefined" ? window.location.search : "");
   const arenaTilePaths = arenaTheme.renderMode === "sprite" ? arenaTheme.tilePaths ?? null : null;
   const characterSpriteLoader = createCharacterSpriteLoader();
   const [

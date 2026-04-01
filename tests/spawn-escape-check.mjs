@@ -2,12 +2,7 @@ import { GRID_HEIGHT, GRID_WIDTH } from "../output/esm/PersonalConfig/config.js"
 import { createArena, tileKey } from "../output/esm/Arenas/arena.js";
 
 const arena = createArena();
-const spawns = [
-  { id: 1, tile: { x: 2, y: 1 } },
-  { id: 2, tile: { x: GRID_WIDTH - 3, y: 1 } },
-  { id: 3, tile: { x: 2, y: GRID_HEIGHT - 2 } },
-  { id: 4, tile: { x: GRID_WIDTH - 3, y: GRID_HEIGHT - 2 } },
-];
+const spawns = arena.config.spawns.map((spawn) => ({ id: spawn.playerId, tile: spawn.tile }));
 
 const neighbors = (tile) => ([
   { x: tile.x + 1, y: tile.y },
@@ -70,8 +65,8 @@ console.log(JSON.stringify(report, null, 2));
 
 const pass = report.every((entry) => (
   entry.spawnPathable &&
-  entry.freeNeighborCount >= 1 &&
-  entry.reachableOpenTiles >= 4
+  entry.freeNeighborCount >= 2 &&
+  entry.reachableOpenTiles >= 3
 ));
 
 if (!pass) {

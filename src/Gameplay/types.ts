@@ -5,6 +5,7 @@ export const MENU_PLAYER_IDS = [1, 2] as const;
 export type Mode = "boot" | "menu" | "match" | "match-result";
 export type Direction = "up" | "down" | "left" | "right";
 export type FlameStyle = "normal" | "arcane" | "shadow" | "toxic";
+export type ArenaDefinitionStatus = "draft" | "active";
 export type CharacterSkillId =
   | "ranni-ice-blink"
   | "killer-bee-wing-dash"
@@ -96,7 +97,45 @@ export interface PowerUpState {
   collected: boolean;
 }
 
+export interface ArenaSpawnDefinition {
+  playerId: PlayerId;
+  tile: TileCoord;
+  direction: Direction;
+}
+
+export interface ArenaDefinition {
+  id: string;
+  name: string;
+  status: ArenaDefinitionStatus;
+  themeId: string;
+  grid: {
+    width: number;
+    height: number;
+  };
+  tiles: {
+    solid: string[];
+    breakable: string[];
+  };
+  spawns: ArenaSpawnDefinition[];
+  version: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ArenaValidationIssue {
+  severity: "error" | "warning";
+  code: string;
+  message: string;
+}
+
+export interface ArenaRuntimeConfig extends ArenaDefinition {
+  wrapPortals: TileCoord[];
+  suddenDeathPath: TileCoord[];
+  spawnMap: Record<PlayerId, ArenaSpawnDefinition>;
+}
+
 export interface ArenaState {
+  config: ArenaRuntimeConfig;
   solid: Set<string>;
   breakable: Set<string>;
   powerUps: PowerUpState[];

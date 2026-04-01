@@ -1,8 +1,6 @@
 import {
   BASE_MOVE_MS,
   BOMB_FUSE_MS,
-  GRID_HEIGHT,
-  GRID_WIDTH,
   MIN_MOVE_MS,
   SPEED_STEP_MS,
   TILE_SIZE,
@@ -515,7 +513,9 @@ function findDirectionToNearestTile(
  * Check if a tile is pathable for the bot
  */
 function isTilePathableForBot(player: PlayerState, tile: TileCoord, context: BotContext): boolean {
-  if (tile.x < 0 || tile.y < 0 || tile.x >= GRID_WIDTH || tile.y >= GRID_HEIGHT) {
+  const arenaWidth = context.arena.config.grid.width;
+  const arenaHeight = context.arena.config.grid.height;
+  if (tile.x < 0 || tile.y < 0 || tile.x >= arenaWidth || tile.y >= arenaHeight) {
     return false;
   }
   const key = tileKey(tile.x, tile.y);
@@ -647,8 +647,8 @@ function getSuddenDeathPressureDirection(player: PlayerState, danger: Map<string
   const start = getTileFromPosition(player.position);
   const moveDuration = getMoveDuration(player);
   const centerTile = {
-    x: Math.floor(GRID_WIDTH / 2),
-    y: Math.floor(GRID_HEIGHT / 2),
+    x: Math.floor(context.arena.config.grid.width / 2),
+    y: Math.floor(context.arena.config.grid.height / 2),
   };
   const currentDistanceToCenter = getTileDistance(start, centerTile);
   const desiredSafetyWindowMs = Math.max(BOT_SUDDEN_DEATH_LOOKAHEAD_MS, moveDuration * 4);
@@ -687,8 +687,8 @@ function getPatrolDirection(
 ): Direction | null {
   const playerTile = getTileFromPosition(player.position);
   const centerTile = {
-    x: Math.floor(GRID_WIDTH / 2),
-    y: Math.floor(GRID_HEIGHT / 2),
+    x: Math.floor(context.arena.config.grid.width / 2),
+    y: Math.floor(context.arena.config.grid.height / 2),
   };
   const currentCenterDistance = getTileDistance(playerTile, centerTile);
   const lastDirection = player.lastMoveDirection ?? player.direction;
@@ -824,11 +824,13 @@ function getDangerMap(
  */
 function getBombBlastKeys(origin: TileCoord, range: number, context: BotContext): Set<string> {
   const keys = new Set<string>([tileKey(origin.x, origin.y)]);
+  const arenaWidth = context.arena.config.grid.width;
+  const arenaHeight = context.arena.config.grid.height;
   for (const delta of Object.values(directionDelta)) {
     for (let step = 1; step <= range; step += 1) {
       const x = origin.x + delta.x * step;
       const y = origin.y + delta.y * step;
-      if (x < 0 || y < 0 || x >= GRID_WIDTH || y >= GRID_HEIGHT) {
+      if (x < 0 || y < 0 || x >= arenaWidth || y >= arenaHeight) {
         break;
       }
       const key = tileKey(x, y);

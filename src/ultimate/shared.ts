@@ -11,14 +11,9 @@ import type {
   TileCoord,
 } from "../Gameplay/types";
 import {
-  GRID_HEIGHT,
-  GRID_WIDTH,
   TILE_SIZE,
 } from "../PersonalConfig/config";
 import type { CharacterRosterEntry } from "../Engine/assets";
-
-export const ARENA_PIXEL_WIDTH = GRID_WIDTH * TILE_SIZE;
-export const ARENA_PIXEL_HEIGHT = GRID_HEIGHT * TILE_SIZE;
 
 export const directionDelta: Record<Direction, TileCoord> = {
   up: { x: 0, y: -1 },
@@ -74,10 +69,12 @@ export function getDashDistancePx(
   direction: Direction,
   context: SkillContext,
 ): number {
+  const arenaPixelWidth = context.arena.config.grid.width * TILE_SIZE;
+  const arenaPixelHeight = context.arena.config.grid.height * TILE_SIZE;
   if (direction === "left" || direction === "right") {
-    return Math.abs(context.getWrappedDelta(to.x, from.x, ARENA_PIXEL_WIDTH));
+    return Math.abs(context.getWrappedDelta(to.x, from.x, arenaPixelWidth));
   }
-  return Math.abs(context.getWrappedDelta(to.y, from.y, ARENA_PIXEL_HEIGHT));
+  return Math.abs(context.getWrappedDelta(to.y, from.y, arenaPixelHeight));
 }
 
 export function hasReachedSkillTarget(
@@ -85,8 +82,10 @@ export function hasReachedSkillTarget(
   target: PixelCoord,
   context: SkillContext,
 ): boolean {
-  const deltaX = context.getWrappedDelta(target.x, position.x, ARENA_PIXEL_WIDTH);
-  const deltaY = context.getWrappedDelta(target.y, position.y, ARENA_PIXEL_HEIGHT);
+  const arenaPixelWidth = context.arena.config.grid.width * TILE_SIZE;
+  const arenaPixelHeight = context.arena.config.grid.height * TILE_SIZE;
+  const deltaX = context.getWrappedDelta(target.x, position.x, arenaPixelWidth);
+  const deltaY = context.getWrappedDelta(target.y, position.y, arenaPixelHeight);
   return Math.hypot(deltaX, deltaY) <= 0.5;
 }
 

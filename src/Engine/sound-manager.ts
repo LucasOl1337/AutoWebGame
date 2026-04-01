@@ -15,7 +15,15 @@ interface SoundDefinition {
 
 type SoundManifestEntry = SoundDefinition | SoundDefinition[];
 
+interface SoundPlaybackPolicy {
+  minIntervalMs?: number;
+}
+
 const MASTER_VOLUME = 0.5;
+const SFX_PLAYBACK_POLICIES: Partial<Record<SfxKey, SoundPlaybackPolicy>> = {
+  bombExplode: { minIntervalMs: 140 },
+  flames: { minIntervalMs: 110 },
+};
 
 export const SFX_MANIFEST: Partial<Record<SfxKey, SoundManifestEntry>> = {
   bombPlace: { url: assetUrl("/Assets/SoundEffects/bomb_place.mp3"), volume: 0.72 * MASTER_VOLUME },
@@ -28,6 +36,7 @@ export const SFX_MANIFEST: Partial<Record<SfxKey, SoundManifestEntry>> = {
 
 export class SoundManager {
   private readonly sounds = new Map<SfxKey, HTMLAudioElement[]>();
+  private readonly lastPlayAtMs = new Map<SfxKey, number>();
   private unlocked = false;
   private unlockTarget: EventTarget | null = null;
 
@@ -79,6 +88,16 @@ export class SoundManager {
       return;
     }
 
+    const nowMs = this.getNowMs();
+    const policy = SFX_PLAYBACK_POLICIES[key];
+    if (policy?.minIntervalMs !== undefined) {
+      const lastPlayAtMs = this.lastPlayAtMs.get(key);
+      if (lastPlayAtMs !== undefined && nowMs - lastPlayAtMs < policy.minIntervalMs) {
+        return;
+      }
+      this.lastPlayAtMs.set(key, nowMs);
+    }
+
     const startIndex = variants.length === 1
       ? 0
       : Math.floor(Math.random() * variants.length);
@@ -112,5 +131,12 @@ export class SoundManager {
     }
 
     this.unlockTarget = null;
+  }
+
+  private getNowMs(): number {
+    if (typeof performance !== "undefined" && typeof performance.now === "function") {
+      return performance.now();
+    }
+    return Date.now();
   }
 }

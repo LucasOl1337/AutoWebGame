@@ -88,11 +88,17 @@ interface SessionElements {
   selectorGrid: HTMLDivElement;
   setupPrimaryButton: HTMLButtonElement;
   setupPrimaryHint: HTMLParagraphElement;
+  matchStage: HTMLDivElement;
+  matchDock: HTMLDivElement;
   matchViewport: HTMLDivElement;
   matchCode: HTMLSpanElement;
   matchStatus: HTMLParagraphElement;
   matchCopyButton: HTMLButtonElement;
   matchLeaveButton: HTMLButtonElement;
+  matchInfoToggleButton: HTMLButtonElement;
+  matchChatToggleButton: HTMLButtonElement;
+  matchInfoPanel: HTMLElement;
+  matchChatPanel: HTMLElement;
   matchRoster: HTMLDivElement;
   matchChatLog: HTMLDivElement;
   matchChatInput: HTMLInputElement;
@@ -130,6 +136,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private accountRequestPending = false;
   private feedbackDialogOpen = false;
   private feedbackRequestPending = false;
+  private matchInfoPanelOpen = true;
+  private matchChatPanelOpen = false;
+  private statusClearTimer: number | null = null;
   private reconnectingForAccountRefresh = false;
   private realtimeReady = false;
   private currentSessionState: OnlineSessionState | null = null;
@@ -363,6 +372,16 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     });
     this.elements.matchLeaveButton.addEventListener("click", () => {
       this.leaveCurrentLobby();
+    });
+    this.elements.matchInfoToggleButton.addEventListener("click", () => {
+      this.matchInfoPanelOpen = true;
+      this.matchChatPanelOpen = false;
+      this.renderMatchSurfaceState();
+    });
+    this.elements.matchChatToggleButton.addEventListener("click", () => {
+      this.matchInfoPanelOpen = false;
+      this.matchChatPanelOpen = true;
+      this.renderMatchSurfaceState();
     });
     this.elements.matchChatSend.addEventListener("click", () => {
       this.sendChat();
@@ -1049,6 +1068,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const match = document.createElement("section");
     match.className = "experience-screen experience-screen--match";
 
+    const matchStage = document.createElement("div");
+    matchStage.className = "experience-match__stage";
+
     const matchOverlay = document.createElement("div");
     matchOverlay.className = "experience-match__overlay";
 
@@ -1074,12 +1096,31 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     matchActions.append(matchCopyButton, matchLeaveButton);
     matchOverlay.append(matchCode, matchStatus, matchActions);
 
-    const matchLayout = document.createElement("div");
-    matchLayout.className = "experience-match__layout";
+    const matchViewport = document.createElement("div");
+    matchViewport.className = "experience-match__viewport";
+
+    const matchDock = document.createElement("div");
+    matchDock.className = "experience-match__dock";
+
+    const matchDockTabs = document.createElement("div");
+    matchDockTabs.className = "experience-match__dock-tabs";
+
+    const matchInfoToggleButton = document.createElement("button");
+    matchInfoToggleButton.className = "experience-match__toggle experience-match__toggle--info";
+    matchInfoToggleButton.type = "button";
+    matchInfoToggleButton.textContent = this.translate("Sala", "Room");
+
+    const matchChatToggleButton = document.createElement("button");
+    matchChatToggleButton.className = "experience-match__toggle experience-match__toggle--chat";
+    matchChatToggleButton.type = "button";
+    matchChatToggleButton.textContent = this.translate("Chat", "Chat");
 
     const matchInfoRail = document.createElement("aside");
-    matchInfoRail.className = "experience-match__rail experience-match__rail--info";
-    matchInfoRail.innerHTML = `
+    matchInfoRail.className = "experience-match__panel experience-match__panel--info";
+
+    const matchInfoRailHeader = document.createElement("div");
+    matchInfoRailHeader.className = "experience-match__panel-header";
+    matchInfoRailHeader.innerHTML = `
       <p class="experience-kicker">${copy.match.infoKicker}</p>
       <h3>${copy.match.infoTitle}</h3>
       <p class="experience-match__rail-copy">${copy.match.infoCopy}</p>
@@ -1087,16 +1128,13 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     const matchRoster = document.createElement("div");
     matchRoster.className = "experience-match__roster";
-    matchInfoRail.append(matchRoster);
-
-    const matchViewport = document.createElement("div");
-    matchViewport.className = "experience-match__viewport";
+    matchInfoRail.append(matchInfoRailHeader, matchRoster);
 
     const matchChatRail = document.createElement("aside");
-    matchChatRail.className = "experience-match__rail experience-match__rail--chat";
+    matchChatRail.className = "experience-match__panel experience-match__panel--chat";
 
     const matchChatHeading = document.createElement("div");
-    matchChatHeading.className = "experience-match__chat-heading";
+    matchChatHeading.className = "experience-match__chat-heading experience-match__panel-header";
     matchChatHeading.innerHTML = `
       <p class="experience-kicker">${copy.match.chatKicker}</p>
       <h3>${copy.match.chatTitle}</h3>
@@ -1122,9 +1160,15 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     matchChatComposer.append(matchChatInput, matchChatSend);
     matchChatRail.append(matchChatHeading, matchChatLog, matchChatComposer);
+    matchDockTabs.append(matchInfoToggleButton, matchChatToggleButton);
+    matchDock.append(matchDockTabs, matchInfoRail, matchChatRail);
 
-    matchLayout.append(matchInfoRail, matchViewport, matchChatRail);
-    match.append(matchOverlay, matchLayout);
+    matchStage.append(
+      matchViewport,
+      matchOverlay,
+      matchDock,
+    );
+    match.append(matchStage);
 
     const status = document.createElement("p");
     status.className = "experience-status";
@@ -1181,11 +1225,17 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       selectorGrid,
       setupPrimaryButton,
       setupPrimaryHint,
+      matchStage,
+      matchDock,
       matchViewport,
       matchCode,
       matchStatus,
       matchCopyButton,
       matchLeaveButton,
+      matchInfoToggleButton,
+      matchChatToggleButton,
+      matchInfoPanel: matchInfoRail,
+      matchChatPanel: matchChatRail,
       matchRoster,
       matchChatLog,
       matchChatInput,
@@ -1205,7 +1255,23 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.renderMatch();
     this.renderMatchRoster();
     this.renderMatchChat();
+    this.renderMatchSurfaceState();
     this.renderShellState();
+  }
+
+  private renderMatchSurfaceState(): void {
+    const isMatchScreen = this.getScreen() === "match";
+    this.elements.matchStage.dataset.infoOpen = isMatchScreen && this.matchInfoPanelOpen ? "true" : "false";
+    this.elements.matchStage.dataset.chatOpen = isMatchScreen && this.matchChatPanelOpen ? "true" : "false";
+    this.elements.matchDock.hidden = !isMatchScreen;
+    this.elements.matchInfoToggleButton.setAttribute(
+      "aria-expanded",
+      isMatchScreen && this.matchInfoPanelOpen ? "true" : "false",
+    );
+    this.elements.matchChatToggleButton.setAttribute(
+      "aria-expanded",
+      isMatchScreen && this.matchChatPanelOpen ? "true" : "false",
+    );
   }
 
   private renderShellState(): void {
@@ -2158,7 +2224,32 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   }
 
   private setStatus(message: string): void {
+    if (this.statusClearTimer !== null) {
+      window.clearTimeout(this.statusClearTimer);
+      this.statusClearTimer = null;
+    }
     this.elements.status.textContent = message;
+    const persistentMessages = new Set([
+      this.copy.status.connecting,
+      this.copy.status.disconnected,
+      this.copy.status.connectionError,
+      this.copy.status.searchingRoom,
+      this.copy.status.enteringLobby,
+      this.translate("Entrando na partida infinita...", "Joining the endless match..."),
+      this.translate("Conectando backend local...", "Connecting local backend..."),
+      this.translate("Atualizando sua conta...", "Refreshing your account..."),
+    ]);
+    if (message.length === 0 || persistentMessages.has(message)) {
+      return;
+    }
+    const matchScreen = this.getScreen() === "match";
+    const durationMs = matchScreen ? 900 : 2200;
+    this.statusClearTimer = window.setTimeout(() => {
+      if (this.elements.status.textContent === message) {
+        this.elements.status.textContent = "";
+      }
+      this.statusClearTimer = null;
+    }, durationMs);
   }
 
   private send(payload: object): boolean {

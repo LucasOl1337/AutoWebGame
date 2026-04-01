@@ -131,3 +131,15 @@ pm run deploy:cloudflare; versao ativa 1c7a59a-f76b-4245-a50e-39d2f066e23f, pub
 TODOs / suggestions:
 - If more legacy canvas-based tests are brought back into the active release suite, audit them for the same dataset expectation introduced by GameApp canvas tagging.
 - Decide whether AgentHandoff.md should remain as a committed internal engineering note or be folded into README/developer docs later.
+
+- 2026-04-01: iniciado ajuste de apresentacao full-size para arenas largas; foco atual em escala dinamica do render, HUD compacto 4p e dock menor na direita.
+
+- 2026-04-01: movido switcher de idioma do match para a coluna direita e reduzido o dock para liberar mais largura do gameplay sem sobrepor a barra superior.
+
+- 2026-04-01: ocultada a barra de status global quando vazia para nao manter uma faixa morta sobre a arena durante a partida.
+
+- 2026-04-01: iniciada passada agressiva de fullscreen; dock da direita virou overlay pequeno e a arena passou a usar preenchimento mais forte no eixo vertical para mapas wide.
+
+- 2026-04-01: removida a distorcao nao uniforme do render; agora a escala interna voltou a ser uniforme e o canvas visivel passa a considerar a altura real do conteudo para crescer mais na largura.
+
+- 2026-04-01: arena deixou de ser centralizada verticalmente; agora fica ancorada logo abaixo da HUD para cortar o bloco morto superior e liberar mais escala horizontal.
