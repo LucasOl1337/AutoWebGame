@@ -11,18 +11,18 @@
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
       :root {
-        --bg:          #0c0b09;
-        --bg-1:        #131210;
-        --bg-2:        #1a1815;
+        --bg:          #07070e;
+        --bg-1:        #0d0d1a;
+        --bg-2:        #141428;
         --border:      rgba(255,255,255,0.06);
-        --border-gold: rgba(196,158,76,0.28);
+        --border-gold: rgba(245,96,26,0.28);
         --text:        #ede8df;
         --muted:       #6b6050;
         --muted-2:     #9a8f7a;
-        --gold:        #c49e4c;
-        --gold-bright: #ddb860;
-        --gold-dim:    #9a7a30;
-        --gold-soft:   rgba(196,158,76,0.10);
+        --gold:        #f5601a;
+        --gold-bright: #ff8040;
+        --gold-dim:    #cc4010;
+        --gold-soft:   rgba(245,96,26,0.10);
         --serif:       'Playfair Display', Georgia, serif;
         --sans:        'Inter', system-ui, -apple-system, sans-serif;
         --max-w:       860px;
@@ -102,8 +102,8 @@
         padding: 120px 32px 80px;
         position: relative;
         background:
-          radial-gradient(ellipse 70% 50% at 50% -10%, rgba(196,158,76,0.09) 0%, transparent 100%),
-          radial-gradient(ellipse 40% 30% at 15% 70%, rgba(196,158,76,0.04) 0%, transparent 100%),
+          radial-gradient(ellipse 70% 50% at 50% -10%, rgba(245,96,26,0.09) 0%, transparent 100%),
+          radial-gradient(ellipse 40% 30% at 15% 70%, rgba(245,96,26,0.04) 0%, transparent 100%),
           radial-gradient(ellipse 40% 30% at 85% 80%, rgba(180,80,40,0.04) 0%, transparent 100%);
       }
 
@@ -211,14 +211,14 @@
         text-transform: uppercase;
         color: #0d0a04;
         text-decoration: none;
-        background: linear-gradient(135deg, var(--gold-bright) 0%, #a87832 100%);
-        box-shadow: 0 0 32px rgba(196,158,76,0.18);
+        background: linear-gradient(135deg, var(--gold-bright) 0%, #cc4010 100%);
+        box-shadow: 0 0 32px rgba(245,96,26,0.18);
         transition: transform 200ms, box-shadow 200ms, filter 200ms;
       }
 
       .btn-play:hover {
         transform: translateY(-2px);
-        box-shadow: 0 0 48px rgba(196,158,76,0.28);
+        box-shadow: 0 0 48px rgba(245,96,26,0.28);
         filter: brightness(1.08);
       }
 
@@ -275,7 +275,7 @@
         font-size: clamp(5rem, 12vw, 9rem);
         font-weight: 900;
         color: transparent;
-        -webkit-text-stroke: 1px rgba(196,158,76,0.10);
+        -webkit-text-stroke: 1px rgba(245,96,26,0.10);
         line-height: 1;
         pointer-events: none;
         user-select: none;
@@ -770,7 +770,7 @@
         text-transform: uppercase;
         color: #0d0a04;
         text-decoration: none;
-        background: linear-gradient(135deg, var(--gold-bright), #a87832);
+        background: linear-gradient(135deg, var(--gold-bright), #cc4010);
         transition: filter 180ms, transform 180ms;
       }
 

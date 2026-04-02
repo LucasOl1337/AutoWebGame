@@ -170,8 +170,8 @@ export interface SiteCopy {
 export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
   pt: {
     language: {
-      portuguese: "Portugues",
-      english: "Ingles",
+      portuguese: "PT",
+      english: "EN",
     },
     common: {
       back: "Voltar",
@@ -334,8 +334,8 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
   },
   en: {
     language: {
-      portuguese: "Portuguese",
-      english: "English",
+      portuguese: "PT",
+      english: "EN",
     },
     common: {
       back: "Back",

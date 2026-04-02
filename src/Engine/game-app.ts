@@ -169,14 +169,14 @@ const PLAYER_SPRITE_MAX_WIDTH_SCALE = 1.2;
 const CANVAS_UI_PANEL_BG = "rgba(18, 15, 12, 0.82)";
 const CANVAS_UI_PANEL_BG_STRONG = "rgba(14, 12, 10, 0.92)";
 const CANVAS_UI_PANEL_BG_SOFT = "rgba(22, 18, 14, 0.72)";
-const CANVAS_UI_BORDER = "rgba(196, 158, 76, 0.28)";
-const CANVAS_UI_BORDER_STRONG = "rgba(196, 158, 76, 0.46)";
+const CANVAS_UI_BORDER = "rgba(245, 96, 26, 0.28)";
+const CANVAS_UI_BORDER_STRONG = "rgba(245, 96, 26, 0.48)";
 const CANVAS_UI_TEXT = "#ede8df";
 const CANVAS_UI_MUTED = "#b4a793";
 const CANVAS_UI_MUTED_SOFT = "rgba(180, 167, 147, 0.68)";
-const CANVAS_UI_GOLD = "#c49e4c";
-const CANVAS_UI_GOLD_BRIGHT = "#ddb860";
-const CANVAS_UI_GOLD_SOFT = "rgba(196, 158, 76, 0.18)";
+const CANVAS_UI_GOLD = "#f5601a";
+const CANVAS_UI_GOLD_BRIGHT = "#ff8040";
+const CANVAS_UI_GOLD_SOFT = "rgba(245, 96, 26, 0.18)";
 const CANVAS_UI_SUCCESS = "#efe7d3";
 const CANVAS_UI_DANGER = "#e3a480";
 const CANVAS_UI_SHADOW = "rgba(8, 6, 5, 0.9)";
@@ -3001,7 +3001,7 @@ export class GameApp {
     c.fillStyle = "rgba(12, 10, 9, 0.5)";
     c.fillRect(frameX + 4, frameY + 14, frameWidth - 8, frameHeight - 4);
 
-    c.fillStyle = "rgba(196, 158, 76, 0.16)";
+    c.fillStyle = "rgba(245, 96, 26, 0.16)";
     c.beginPath();
     c.moveTo(frameX, frameY + 4);
     c.lineTo(frameX + frameWidth, frameY + 4);
@@ -3010,7 +3010,7 @@ export class GameApp {
     c.closePath();
     c.fill();
 
-    c.strokeStyle = "rgba(196, 158, 76, 0.22)";
+    c.strokeStyle = "rgba(245, 96, 26, 0.22)";
     c.lineWidth = 1;
     c.strokeRect(frameX + 0.5, frameY + 0.5, frameWidth - 1, frameHeight - 1);
 
@@ -3808,7 +3808,7 @@ export class GameApp {
     }
     const dangerTiles = this.getDangerOverlayTiles();
     for (const tile of dangerTiles) {
-      let fill = "rgba(196, 158, 76, 0.14)";
+      let fill = "rgba(245, 96, 26, 0.14)";
       let stroke = "rgba(232, 210, 162, 0.34)";
       if (tile.etaMs <= 0) {
         fill = "rgba(255, 62, 62, 0.42)";
@@ -3888,7 +3888,7 @@ export class GameApp {
       const screenX = tile.x * TILE_SIZE;
       const screenY = tile.y * TILE_SIZE;
       const isOrigin = tile.x === origin.x && tile.y === origin.y;
-      this.ctx.fillStyle = isOrigin ? "rgba(221, 184, 96, 0.34)" : "rgba(196, 158, 76, 0.22)";
+      this.ctx.fillStyle = isOrigin ? "rgba(255, 128, 64, 0.34)" : "rgba(245, 96, 26, 0.22)";
       this.ctx.fillRect(screenX + 6, screenY + 6, TILE_SIZE - 12, TILE_SIZE - 12);
       this.ctx.strokeStyle = isOrigin ? "rgba(255, 243, 212, 0.82)" : "rgba(236, 214, 168, 0.56)";
       this.ctx.strokeRect(screenX + 6.5, screenY + 6.5, TILE_SIZE - 13, TILE_SIZE - 13);
