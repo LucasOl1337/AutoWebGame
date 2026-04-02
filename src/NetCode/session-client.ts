@@ -984,8 +984,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     landingFeedbackButton.type = "button";
     landingFeedbackButton.textContent = copy.landing.feedback;
 
-    landingActionsPrimary.append(landingQuickMatchButton, landingLobbyButton);
-    landingActionsSecondary.append(landingEndlessButton, landingBotMatchButton, landingFeedbackButton);
+    landingActionsPrimary.append(landingQuickMatchButton);
+    landingActionsSecondary.append(landingBotMatchButton, landingLobbyButton, landingFeedbackButton);
     landingActions.append(landingActionsPrimary, landingActionsSecondary);
     landingCopy.append(landingMeta, landingActions, landingAccountCard);
 
@@ -1160,6 +1160,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
                 <span class="experience-key">D</span>
               </div>
             </div>
+            <span class="experience-controls__or">${this.translate("ou", "or")}</span>
             <div class="experience-key-cluster">
               <span class="experience-key experience-key--solo">&uarr;</span>
               <div class="experience-key-row">
@@ -1178,7 +1179,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
               <strong>${copy.controls.bomb}</strong>
             </div>
             <div class="experience-action-card">
-              <span class="experience-key experience-key--wide">Espaco</span>
+              <span class="experience-key experience-key--wide">${this.translate("Espaço", "Space")}</span>
               <strong>${copy.controls.ultimate}</strong>
             </div>
           </div>
@@ -1854,35 +1855,32 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const shell = document.createElement("div");
     shell.className = "experience-landing-picker";
 
-    const header = document.createElement("div");
-    header.className = "experience-landing-picker__header";
-
-    const titleWrap = document.createElement("div");
-    titleWrap.className = "experience-landing-picker__title";
-
+    // Kicker
     const kicker = document.createElement("p");
     kicker.className = "experience-kicker";
     kicker.textContent = this.translate("Bomber selecionado", "Selected bomber");
 
-    const title = document.createElement("strong");
-    title.textContent = selected.name;
+    // Large focus card
+    const focus = document.createElement("div");
+    focus.className = "experience-character-focus";
 
-    const note = document.createElement("p");
-    note.className = "experience-hero__meta";
-    note.textContent = this.translate(
-      "Sua escolha ja vale para partida rapida, infinita e contra bots.",
-      "Your choice already applies to quick match, endless, and bot matches.",
-    );
+    const portrait = this.createPortraitImage("experience-character-focus__portrait", 160, selected.name, true);
+    this.renderPortrait(portrait, selected);
 
-    titleWrap.append(kicker, title, note);
+    const focusName = document.createElement("strong");
+    focusName.className = "experience-character-focus__name";
+    focusName.textContent = selected.name;
 
+    focus.append(portrait, focusName);
+
+    // Nav row — prev / next
     const nav = document.createElement("div");
     nav.className = "experience-landing-picker__nav";
 
     const previousButton = document.createElement("button");
     previousButton.type = "button";
     previousButton.className = "experience-button experience-button--ghost";
-    previousButton.textContent = this.translate("Anterior", "Previous");
+    previousButton.textContent = this.translate("← Anterior", "← Prev");
     previousButton.addEventListener("click", () => {
       this.updatePreferredCharacter(this.preferredCharacterIndex - 1);
     });
@@ -1890,53 +1888,35 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const nextButton = document.createElement("button");
     nextButton.type = "button";
     nextButton.className = "experience-button experience-button--ghost";
-    nextButton.textContent = this.translate("Proximo", "Next");
+    nextButton.textContent = this.translate("Próximo →", "Next →");
     nextButton.addEventListener("click", () => {
       this.updatePreferredCharacter(this.preferredCharacterIndex + 1);
     });
 
     nav.append(previousButton, nextButton);
-    header.append(titleWrap, nav);
 
-    const focus = document.createElement("div");
-    focus.className = "experience-character-summary experience-character-summary--landing";
-
-    const portrait = this.createPortraitImage("experience-character-summary__portrait", 144, selected.name, true);
-    this.renderPortrait(portrait, selected);
-
-    const focusCopy = document.createElement("div");
-    focusCopy.className = "experience-character-summary__copy";
-
-    const focusName = document.createElement("p");
-    focusName.className = "experience-character-summary__name";
-    focusName.textContent = selected.name;
-
-    const focusHint = document.createElement("p");
-    focusHint.className = "experience-character-summary__note";
-    focusHint.textContent = this.translate(
-      "Troque aqui mesmo antes de entrar. O jogo abre ja com esse personagem preparado.",
-      "Switch here before entering. The game opens with this character already prepared.",
-    );
-
-    focusCopy.append(focusName, focusHint);
-    focus.append(portrait, focusCopy);
-
-    const grid = document.createElement("div");
-    grid.className = "experience-character-grid experience-character-grid--landing";
-    grid.append(
+    // Compact portrait strip — all chars, no text labels
+    const strip = document.createElement("div");
+    strip.className = "experience-character-strip";
+    strip.append(
       ...this.getLandingCharacterWindow(6).map((index) => {
         const entry = this.getCharacter(index);
-        return this.createCharacterOptionButton(
-          entry,
-          index,
-          index === this.preferredCharacterIndex
-            ? this.translate("Selecionado agora", "Selected now")
-            : this.translate("Clique para usar", "Click to use"),
-        );
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "experience-character-strip__item";
+        if (index === this.preferredCharacterIndex) {
+          btn.dataset.selected = "true";
+        }
+        btn.title = entry.name;
+        const img = this.createPortraitImage("experience-character-strip__portrait", 56, entry.name);
+        this.renderPortrait(img, entry);
+        btn.append(img);
+        btn.addEventListener("click", () => this.updatePreferredCharacter(index));
+        return btn;
       }),
     );
 
-    shell.append(header, focus, grid);
+    shell.append(kicker, focus, nav, strip);
     this.elements.landingRoster.replaceChildren(shell);
   }
 

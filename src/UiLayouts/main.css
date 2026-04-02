@@ -2,25 +2,26 @@
   color-scheme: dark;
   font-family: "Inter", "Segoe UI Variable Text", "Segoe UI", sans-serif;
   --font-display: "Playfair Display", Georgia, serif;
-  --bg-0: #0c0b09;
-  --bg-1: #131210;
-  --bg-2: #1a1815;
-  --surface-0: rgba(18, 15, 12, 0.84);
-  --surface-1: rgba(21, 18, 15, 0.9);
-  --surface-2: rgba(26, 22, 18, 0.94);
-  --line-soft: rgba(255, 255, 255, 0.06);
-  --line-strong: rgba(196, 158, 76, 0.28);
-  --text: #ede8df;
-  --muted: #6b6050;
-  --muted-strong: #9a8f7a;
-  --accent: #c49e4c;
-  --accent-strong: #ddb860;
-  --accent-soft: rgba(196, 158, 76, 0.1);
-  --danger: #f56f62;
+  --bg-0: #0d0c0a;
+  --bg-1: #151311;
+  --bg-2: #1c1915;
+  --surface-0: rgba(20, 17, 13, 0.86);
+  --surface-1: rgba(24, 20, 16, 0.92);
+  --surface-2: rgba(30, 25, 20, 0.96);
+  --line-soft: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(214, 168, 62, 0.32);
+  --text: #f0ead9;
+  --muted: #6e6250;
+  --muted-strong: #a0937e;
+  /* Game-oriented amber-gold — more saturated and vibrant */
+  --accent: #d4a82e;
+  --accent-strong: #f0c040;
+  --accent-soft: rgba(212, 168, 46, 0.12);
+  --danger: #e85c4a;
   background:
-    radial-gradient(circle at 18% 16%, rgba(196, 158, 76, 0.14), transparent 28%),
-    radial-gradient(circle at 84% 84%, rgba(155, 93, 47, 0.1), transparent 30%),
-    linear-gradient(180deg, #131210 0%, #0f0e0c 44%, #0c0b09 100%);
+    radial-gradient(circle at 20% 14%, rgba(212, 168, 46, 0.16), transparent 26%),
+    radial-gradient(circle at 82% 86%, rgba(168, 98, 38, 0.11), transparent 28%),
+    linear-gradient(180deg, #161310 0%, #100e0c 44%, #0d0c0a 100%);
   color: var(--text);
 }
 
@@ -179,9 +180,9 @@ button {
 }
 
 .experience-language-switcher__option[data-active="true"] {
-  border-color: rgba(196, 158, 76, 0.42);
+  border-color: rgba(214, 168, 46, 0.48);
   color: #0d0a04;
-  background: linear-gradient(135deg, #ddb860 0%, #a87832 100%);
+  background: linear-gradient(135deg, #f0c040 0%, #b88426 100%);
 }
 
 .experience-language-switcher__option:disabled {
@@ -239,9 +240,10 @@ button {
 }
 
 .experience-button--primary {
-  border-color: rgba(196, 158, 76, 0.34);
-  background: linear-gradient(135deg, #ddb860 0%, #a87832 100%);
+  border-color: rgba(214, 168, 46, 0.46);
+  background: linear-gradient(135deg, #f0c040 0%, #b88426 100%);
   color: #0d0a04;
+  box-shadow: 0 2px 14px rgba(212, 168, 46, 0.22);
 }
 
 .experience-button--secondary {
@@ -3358,4 +3360,151 @@ button {
     width: 72px;
     height: 72px;
   }
+}
+
+/* ── New minimal character focus (landing picker redesign) ── */
+
+.experience-landing-picker {
+  display: grid;
+  gap: 20px;
+  padding: 0;
+  align-content: start;
+}
+
+.experience-character-focus {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 28px 20px;
+  border-radius: 28px;
+  border: 1px solid var(--line-soft);
+  background:
+    linear-gradient(180deg, rgba(22, 18, 14, 0.9), rgba(14, 12, 10, 0.86)),
+    radial-gradient(circle at 50% 0%, rgba(212, 168, 46, 0.12), transparent 52%);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.experience-character-focus__portrait {
+  width: 160px;
+  height: 160px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(212, 168, 46, 0.2), transparent 56%),
+    rgba(18, 15, 12, 0.9);
+  border: 1px solid var(--line-soft);
+}
+
+.experience-character-focus__name {
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.experience-screen--landing .experience-landing-picker__nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.experience-screen--landing .experience-landing-picker__nav .experience-button {
+  flex: 1;
+  min-height: 38px;
+  font-size: 0.78rem;
+}
+
+/* Portrait strip — compact thumbnails for direct character selection */
+.experience-character-strip {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.experience-character-strip__item {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  border: 2px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    border-color 150ms ease,
+    transform 150ms ease,
+    background-color 150ms ease;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.experience-character-strip__item:hover {
+  border-color: rgba(212, 168, 46, 0.38);
+  transform: translateY(-2px);
+}
+
+.experience-character-strip__item[data-selected="true"] {
+  border-color: var(--accent);
+  background: rgba(212, 168, 46, 0.1);
+  box-shadow: 0 0 0 1px rgba(212, 168, 46, 0.24);
+}
+
+.experience-character-strip__portrait {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  display: block;
+}
+
+/* "or" separator between key clusters */
+.experience-controls__or {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0 6px;
+}
+
+/* Primary button hover — game-oriented glow */
+.experience-button--primary:hover:not(:disabled) {
+  box-shadow: 0 4px 24px rgba(212, 168, 46, 0.38);
+}
+
+/* Landing actions: primary takes full width */
+.experience-screen--landing .experience-actions__group--primary {
+  width: 100%;
+}
+
+.experience-screen--landing .experience-actions__group--primary .experience-button {
+  flex: 1;
+  font-size: 0.9rem;
+  letter-spacing: 0.12em;
+  min-height: 52px;
+}
+
+/* Landing screen right panel — lighter glass panel */
+.experience-screen--landing .experience-hero__art {
+  padding: clamp(20px, 4vw, 36px);
+  border: 1px solid var(--line-soft);
+  background:
+    linear-gradient(180deg, rgba(20, 17, 13, 0.88), rgba(13, 11, 9, 0.84)),
+    radial-gradient(circle at 50% 0%, rgba(212, 168, 46, 0.1), transparent 44%);
+  box-shadow:
+    0 28px 90px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(18px);
+  border-radius: 36px;
 }

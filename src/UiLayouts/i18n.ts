@@ -518,6 +518,16 @@ export function getPathSiteLanguage(pathname?: string): SiteLanguage | null {
 }
 
 export function detectSiteLanguage(): SiteLanguage {
+  // Domain-based default: bombpvp.com (no 'a') → English, bombapvp.com → Portuguese
+  if (typeof window !== "undefined") {
+    const { hostname } = window.location;
+    if (hostname === "bombpvp.com" || hostname.endsWith(".bombpvp.com")) {
+      return "en";
+    }
+    if (hostname === "bombapvp.com" || hostname.endsWith(".bombapvp.com")) {
+      return "pt";
+    }
+  }
   if (typeof navigator === "undefined") {
     return "pt";
   }
