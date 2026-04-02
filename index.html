@@ -99,7 +99,7 @@
         align-items: center;
         justify-content: center;
         text-align: center;
-        padding: 80px 32px 80px;
+        padding: 120px 32px 80px;
         position: relative;
         background:
           radial-gradient(ellipse 70% 50% at 50% -10%, rgba(196,158,76,0.09) 0%, transparent 100%),
@@ -570,6 +570,89 @@
         transform: none;
       }
 
+      /* ── Topbar ── */
+      .topbar {
+        position: fixed;
+        top: 0; left: 0; right: 0;
+        z-index: 200;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 32px;
+        height: 56px;
+        background: rgba(12,11,9,0.82);
+        backdrop-filter: blur(14px);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .topbar-logo {
+        font-family: var(--serif);
+        font-size: 1rem;
+        font-weight: 900;
+        color: var(--text);
+        text-decoration: none;
+        letter-spacing: -0.01em;
+      }
+
+      .topbar-logo span { color: var(--gold); }
+
+      .topbar-links {
+        display: flex;
+        gap: 28px;
+      }
+
+      .topbar-links a {
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted-2);
+        text-decoration: none;
+        transition: color 180ms;
+      }
+
+      .topbar-links a:hover { color: var(--text); }
+
+      .topbar-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 18px;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #0d0a04;
+        text-decoration: none;
+        background: linear-gradient(135deg, var(--gold-bright), #a87832);
+        transition: filter 180ms, transform 180ms;
+      }
+
+      .topbar-cta:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+      /* ── Char sprite ── */
+      .char-sprite {
+        width: 72px;
+        height: 72px;
+        margin-bottom: 14px;
+        background: var(--bg-2);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+      }
+
+      .char-sprite img {
+        width: 56px;
+        height: 56px;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+        object-fit: contain;
+      }
+
       /* ── Responsive ── */
       @media (max-width: 700px) {
         .sidenav { display: none; }
@@ -592,6 +675,18 @@
     </style>
   </head>
   <body>
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <a href="#top" class="topbar-logo">BOMBA <span>PvP</span></a>
+      <nav class="topbar-links">
+        <a href="#combate">Combate</a>
+        <a href="#personagens">Personagens</a>
+        <a href="#arenas">Arenas</a>
+        <a href="#modos">Modos</a>
+      </nav>
+      <a href="/game" class="topbar-cta">Jogar →</a>
+    </header>
 
     <!-- Side nav -->
     <nav class="sidenav" aria-label="Seções">
@@ -701,25 +796,45 @@
 
       <div class="character-grid">
         <div class="char-card">
-          <span class="char-icon">🌙</span>
+          <div class="char-sprite">
+            <img src="/Assets/Characters/Animations/03a976fb-7313-4064-a477-5bb9b0760034/idle-south-0.png"
+                 data-base="/Assets/Characters/Animations/03a976fb-7313-4064-a477-5bb9b0760034/"
+                 data-frames='["idle-south-0.png","idle-south-1.png","idle-south-2.png","idle-south-3.png"]'
+                 alt="Ranni">
+          </div>
           <h3>Ranni</h3>
           <span class="char-skill">Ice Blink</span>
           <p>Canalize e teleporte instantaneamente para uma posição projetada. Fuga ou ataque surpresa.</p>
         </div>
         <div class="char-card">
-          <span class="char-icon">🐝</span>
+          <div class="char-sprite">
+            <img src="/Assets/Characters/Animations/6ee8baa5-3277-413b-ae0e-2659b9cc52e9/idle-south-0.png"
+                 data-base="/Assets/Characters/Animations/6ee8baa5-3277-413b-ae0e-2659b9cc52e9/"
+                 data-frames='["idle-south-0.png","idle-south-1.png","idle-south-2.png","idle-south-3.png"]'
+                 alt="Killer Bee">
+          </div>
           <h3>Killer Bee</h3>
           <span class="char-skill">Wing Dash</span>
           <p>Dash veloz de 3 tiles em qualquer direção. Escape de cercos e reposicione em milissegundos.</p>
         </div>
         <div class="char-card">
-          <span class="char-icon">🐊</span>
+          <div class="char-sprite">
+            <img src="/Assets/Characters/Animations/d083c3dc-7162-4391-8628-6adde0b8d8d6/idle-south-0.png"
+                 data-base="/Assets/Characters/Animations/d083c3dc-7162-4391-8628-6adde0b8d8d6/"
+                 data-frames='["idle-south-0.png","idle-south-1.png","idle-south-2.png","idle-south-3.png"]'
+                 alt="Crocodilo Arcano">
+          </div>
           <h3>Crocodilo Arcano</h3>
           <span class="char-skill">Emerald Surge</span>
           <p>Libera uma onda arcana em área. Empurra inimigos e bombas em raio de 2 tiles.</p>
         </div>
         <div class="char-card">
-          <span class="char-icon">✨</span>
+          <div class="char-sprite">
+            <img src="/Assets/Characters/Animations/5474c45c-2987-43e0-af2c-a6500c836881/idle-south-0.png"
+                 data-base="/Assets/Characters/Animations/5474c45c-2987-43e0-af2c-a6500c836881/"
+                 data-frames='["idle-south-0.png","idle-south-1.png","idle-south-2.png","idle-south-3.png"]'
+                 alt="Nico">
+          </div>
           <h3>Nico</h3>
           <span class="char-skill">Arcane Beam</span>
           <p>Canalize e dispare um feixe mágico na sua direção. Longo alcance, dano instantâneo.</p>
@@ -901,6 +1016,20 @@
       sectionIds.forEach(id => {
         const el = document.getElementById(id);
         if (el) navObserver.observe(el);
+      });
+
+      // Animate character sprites
+      document.querySelectorAll('.char-sprite img').forEach(img => {
+        const frames = JSON.parse(img.dataset.frames);
+        const base = img.dataset.base;
+        let i = 0;
+        // Stagger start so all 4 don't blink in sync
+        const offset = Math.floor(Math.random() * frames.length);
+        i = offset;
+        setInterval(() => {
+          i = (i + 1) % frames.length;
+          img.src = base + frames[i];
+        }, 180);
       });
     </script>
   </body>
