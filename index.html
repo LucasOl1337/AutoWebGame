@@ -570,6 +570,151 @@
         transform: none;
       }
 
+      /* ── Kbd key ── */
+      kbd {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 28px;
+        height: 28px;
+        padding: 0 7px;
+        border: 1px solid rgba(255,255,255,0.12);
+        border-bottom: 2px solid rgba(255,255,255,0.08);
+        border-radius: 5px;
+        background: var(--bg-2);
+        font-family: var(--sans);
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: var(--text);
+        letter-spacing: 0;
+        line-height: 1;
+      }
+
+      /* ── Controls section ── */
+      .controls-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      .ctrl-panel {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+
+      .ctrl-panel-header {
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-2);
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--gold-dim);
+      }
+
+      .ctrl-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 13px 20px;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-1);
+        transition: background 180ms;
+      }
+
+      .ctrl-row:last-child { border-bottom: none; }
+      .ctrl-row:hover { background: var(--bg-2); }
+
+      .ctrl-action {
+        font-size: 0.82rem;
+        color: var(--muted-2);
+      }
+
+      .ctrl-keys {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+        flex-shrink: 0;
+      }
+
+      .ctrl-sep {
+        font-size: 0.65rem;
+        color: var(--muted);
+        margin: 0 2px;
+      }
+
+      /* ── Char detail panel ── */
+      .char-detail {
+        display: none;
+        grid-column: 1 / -1;
+        border: 1px solid var(--border-gold);
+        border-radius: 10px;
+        padding: 24px;
+        background: var(--bg-2);
+        margin-top: 4px;
+        animation: slideDown 200ms ease;
+      }
+
+      .char-detail.open { display: block; }
+
+      @keyframes slideDown {
+        from { opacity: 0; transform: translateY(-8px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+
+      .char-detail h4 {
+        font-family: var(--serif);
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--gold);
+        margin-bottom: 10px;
+      }
+
+      .char-detail p {
+        font-size: 0.84rem;
+        color: var(--muted-2);
+        line-height: 1.7;
+        margin-bottom: 14px;
+      }
+
+      .char-detail-meta {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .char-meta-item {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+
+      .char-meta-label {
+        font-size: 0.58rem;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .char-meta-val {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--text);
+      }
+
+      .char-card {
+        cursor: pointer;
+      }
+
+      .char-card.selected {
+        border-color: var(--border-gold);
+        background: var(--bg-2);
+      }
+
       /* ── Topbar ── */
       .topbar {
         position: fixed;
@@ -690,11 +835,12 @@
 
     <!-- Side nav -->
     <nav class="sidenav" aria-label="Seções">
-      <a href="#combate"    data-s="combate">01</a>
+      <a href="#combate"     data-s="combate">01</a>
       <a href="#personagens" data-s="personagens">02</a>
-      <a href="#arenas"     data-s="arenas">03</a>
-      <a href="#modos"      data-s="modos">04</a>
-      <a href="#em-breve"   data-s="em-breve">05</a>
+      <a href="#arenas"      data-s="arenas">03</a>
+      <a href="#controles"   data-s="controles">04</a>
+      <a href="#modos"       data-s="modos">05</a>
+      <a href="#em-breve"    data-s="em-breve">06</a>
     </nav>
 
     <!-- ── HERO ── -->
@@ -794,8 +940,9 @@
         <p class="section-desc">Cada personagem tem uma ultimate única que muda completamente como você joga.</p>
       </div>
 
-      <div class="character-grid">
-        <div class="char-card">
+      <p style="font-size:0.78rem;color:var(--muted);margin-bottom:20px;">Clique em um personagem para ver detalhes</p>
+      <div class="character-grid" id="char-grid">
+        <div class="char-card" data-char="ranni">
           <div class="char-sprite">
             <img src="/Assets/Characters/Animations/03a976fb-7313-4064-a477-5bb9b0760034/idle-south-0.png"
                  data-base="/Assets/Characters/Animations/03a976fb-7313-4064-a477-5bb9b0760034/"
@@ -804,9 +951,9 @@
           </div>
           <h3>Ranni</h3>
           <span class="char-skill">Ice Blink</span>
-          <p>Canalize e teleporte instantaneamente para uma posição projetada. Fuga ou ataque surpresa.</p>
+          <p>Canalize e teleporte instantaneamente para uma posição projetada.</p>
         </div>
-        <div class="char-card">
+        <div class="char-card" data-char="killerbee">
           <div class="char-sprite">
             <img src="/Assets/Characters/Animations/6ee8baa5-3277-413b-ae0e-2659b9cc52e9/idle-south-0.png"
                  data-base="/Assets/Characters/Animations/6ee8baa5-3277-413b-ae0e-2659b9cc52e9/"
@@ -815,9 +962,9 @@
           </div>
           <h3>Killer Bee</h3>
           <span class="char-skill">Wing Dash</span>
-          <p>Dash veloz de 3 tiles em qualquer direção. Escape de cercos e reposicione em milissegundos.</p>
+          <p>Dash veloz de 3 tiles em qualquer direção.</p>
         </div>
-        <div class="char-card">
+        <div class="char-card" data-char="croc">
           <div class="char-sprite">
             <img src="/Assets/Characters/Animations/d083c3dc-7162-4391-8628-6adde0b8d8d6/idle-south-0.png"
                  data-base="/Assets/Characters/Animations/d083c3dc-7162-4391-8628-6adde0b8d8d6/"
@@ -826,9 +973,9 @@
           </div>
           <h3>Crocodilo Arcano</h3>
           <span class="char-skill">Emerald Surge</span>
-          <p>Libera uma onda arcana em área. Empurra inimigos e bombas em raio de 2 tiles.</p>
+          <p>Libera uma onda arcana em área. Empurra inimigos e bombas.</p>
         </div>
-        <div class="char-card">
+        <div class="char-card" data-char="nico">
           <div class="char-sprite">
             <img src="/Assets/Characters/Animations/5474c45c-2987-43e0-af2c-a6500c836881/idle-south-0.png"
                  data-base="/Assets/Characters/Animations/5474c45c-2987-43e0-af2c-a6500c836881/"
@@ -837,7 +984,31 @@
           </div>
           <h3>Nico</h3>
           <span class="char-skill">Arcane Beam</span>
-          <p>Canalize e dispare um feixe mágico na sua direção. Longo alcance, dano instantâneo.</p>
+          <p>Canalize e dispare um feixe mágico na sua direção.</p>
+        </div>
+
+        <!-- Detail panel (spans full width) -->
+        <div class="char-detail" id="char-detail">
+          <h4 id="detail-title">—</h4>
+          <p id="detail-desc">—</p>
+          <div class="char-detail-meta">
+            <div class="char-meta-item">
+              <span class="char-meta-label">Ultimate</span>
+              <span class="char-meta-val" id="detail-skill">—</span>
+            </div>
+            <div class="char-meta-item">
+              <span class="char-meta-label">Tipo</span>
+              <span class="char-meta-val" id="detail-type">—</span>
+            </div>
+            <div class="char-meta-item">
+              <span class="char-meta-label">Cooldown</span>
+              <span class="char-meta-val" id="detail-cd">—</span>
+            </div>
+            <div class="char-meta-item">
+              <span class="char-meta-label">Canal</span>
+              <span class="char-meta-val" id="detail-channel">—</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -893,10 +1064,75 @@
 
     <div class="rule"></div>
 
-    <!-- ── 04 MODOS ── -->
-    <section class="section reveal" id="modos">
+    <!-- ── 04 CONTROLES ── -->
+    <section class="section reveal" id="controles">
       <div class="section-head" data-num="04">
-        <span class="section-kicker">04 — Modos de Jogo</span>
+        <span class="section-kicker">04 — Controles</span>
+        <h2>Teclas. Simples.<br>Sem desculpa.</h2>
+        <p class="section-desc">Dois jogadores no mesmo teclado. Saiba seus atalhos antes de entrar na arena.</p>
+      </div>
+
+      <div class="controls-grid">
+        <div class="ctrl-panel">
+          <div class="ctrl-panel-header">Jogador 1 — WASD</div>
+          <div class="ctrl-row">
+            <span class="ctrl-action">Mover</span>
+            <span class="ctrl-keys">
+              <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
+            </span>
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-action">Plantar bomba</span>
+            <span class="ctrl-keys"><kbd>Q</kbd></span>
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-action">Detonar bomba</span>
+            <span class="ctrl-keys"><kbd>R</kbd></span>
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-action">Ultimate</span>
+            <span class="ctrl-keys"><kbd>Space</kbd></span>
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-action">Pronto (menu)</span>
+            <span class="ctrl-keys"><kbd>E</kbd></span>
+          </div>
+        </div>
+
+        <div class="ctrl-panel">
+          <div class="ctrl-panel-header">Jogador 2 — Setas</div>
+          <div class="ctrl-row">
+            <span class="ctrl-action">Mover</span>
+            <span class="ctrl-keys">
+              <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd>
+            </span>
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-action">Plantar bomba</span>
+            <span class="ctrl-keys"><kbd>O</kbd></span>
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-action">Detonar bomba</span>
+            <span class="ctrl-keys"><kbd>U</kbd></span>
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-action">Ultimate</span>
+            <span class="ctrl-keys"><kbd>Space</kbd></span>
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-action">Pronto (menu)</span>
+            <span class="ctrl-keys"><kbd>P</kbd></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="rule"></div>
+
+    <!-- ── 05 MODOS ── -->
+    <section class="section reveal" id="modos">
+      <div class="section-head" data-num="05">
+        <span class="section-kicker">05 — Modos de Jogo</span>
         <h2>Do casual<br>ao competitivo.</h2>
         <p class="section-desc">Jogue como preferir. Todos os modos, todas as arenas.</p>
       </div>
@@ -922,10 +1158,10 @@
 
     <div class="rule"></div>
 
-    <!-- ── 05 EM BREVE ── -->
+    <!-- ── 06 EM BREVE ── -->
     <section class="section reveal" id="em-breve">
-      <div class="section-head" data-num="05">
-        <span class="section-kicker">05 — Em Breve</span>
+      <div class="section-head" data-num="06">
+        <span class="section-kicker">06 — Em Breve</span>
         <h2>O que está sendo<br>cozinhado.</h2>
         <p class="section-desc">Features em desenvolvimento, sem data oficial ainda.</p>
       </div>
@@ -999,7 +1235,7 @@
 
       // Active sidenav
       const navLinks = document.querySelectorAll('.sidenav a');
-      const sectionIds = ['combate','personagens','arenas','modos','em-breve'];
+      const sectionIds = ['combate','personagens','arenas','controles','modos','em-breve'];
 
       const navObserver = new IntersectionObserver(
         entries => {
@@ -1022,14 +1258,71 @@
       document.querySelectorAll('.char-sprite img').forEach(img => {
         const frames = JSON.parse(img.dataset.frames);
         const base = img.dataset.base;
-        let i = 0;
-        // Stagger start so all 4 don't blink in sync
-        const offset = Math.floor(Math.random() * frames.length);
-        i = offset;
+        let i = Math.floor(Math.random() * frames.length);
         setInterval(() => {
           i = (i + 1) % frames.length;
           img.src = base + frames[i];
         }, 180);
+      });
+
+      // Count-up animation for stats
+      const statEls = document.querySelectorAll('.stat-n');
+      const countObserver = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting) return;
+          countObserver.unobserve(entry.target);
+          const el = entry.target;
+          const raw = el.textContent.trim();
+          const num = parseInt(raw);
+          if (isNaN(num)) return;
+          const suffix = raw.replace(String(num), '');
+          let start = 0;
+          const duration = 900;
+          const step = 16;
+          const steps = duration / step;
+          const inc = num / steps;
+          const timer = setInterval(() => {
+            start += inc;
+            if (start >= num) { el.textContent = num + suffix; clearInterval(timer); }
+            else el.textContent = Math.floor(start) + suffix;
+          }, step);
+        });
+      }, { threshold: 0.8 });
+      statEls.forEach(el => countObserver.observe(el));
+
+      // Character card click → detail panel
+      const charData = {
+        ranni:    { title: 'Ranni', skill: 'Ice Blink',     type: 'Teleporte',  cd: '~12s', channel: '1.5s', desc: 'Canalize enquanto você se move — Ranni projeta a posição de chegada em tempo real. Solte para teletransportar instantaneamente. Use para escapar de explosões no último frame ou reposicionar atrás de um inimigo.' },
+        killerbee:{ title: 'Killer Bee', skill: 'Wing Dash', type: 'Mobilidade', cd: '~8s',  channel: 'Instant', desc: 'Dash de 3 tiles na direção que você está pressionando no momento da ativação. Sem canal, sem aviso. O movimento mais rápido do jogo — ideal para atravessar chamas ou fugir de canto em canto.' },
+        croc:     { title: 'Crocodilo Arcano', skill: 'Emerald Surge', type: 'Área', cd: '~14s', channel: '1.6s', desc: 'Canal lento mas devastador. Ao liberar, empurra tudo em raio de 2 tiles ao redor — inimigos, bombas e powerups. Use para redirecionar bombas de volta ao dono ou empurrar jogadores para zonas de fogo.' },
+        nico:     { title: 'Nico', skill: 'Arcane Beam',   type: 'Projétil',   cd: '~10s', channel: '2s',   desc: 'Canal longo e previsível, mas o dano é instantâneo ao liberar. O feixe atravessa tiles em linha reta na direção do olhar. Cobertura de arena inteira — mas o inimigo vê você carregando.' },
+      };
+
+      let selectedChar = null;
+      document.querySelectorAll('.char-card[data-char]').forEach(card => {
+        card.addEventListener('click', () => {
+          const key = card.dataset.char;
+          const detail = document.getElementById('char-detail');
+          if (selectedChar === key) {
+            // toggle off
+            selectedChar = null;
+            detail.classList.remove('open');
+            document.querySelectorAll('.char-card').forEach(c => c.classList.remove('selected'));
+            return;
+          }
+          selectedChar = key;
+          const d = charData[key];
+          document.getElementById('detail-title').textContent = d.title;
+          document.getElementById('detail-desc').textContent = d.desc;
+          document.getElementById('detail-skill').textContent = d.skill;
+          document.getElementById('detail-type').textContent = d.type;
+          document.getElementById('detail-cd').textContent = d.cd;
+          document.getElementById('detail-channel').textContent = d.channel;
+          detail.classList.add('open');
+          document.querySelectorAll('.char-card').forEach(c =>
+            c.classList.toggle('selected', c.dataset.char === key)
+          );
+        });
       });
     </script>
   </body>
