@@ -1,13 +1,837 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BOMBA</title>
+    <title>BOMBA PvP — O jogo de bombas competitivo</title>
+    <meta name="description" content="Plante bombas. Destrua tudo. Sobreviva. BOMBA é o jogo de bombas competitivo com personagens únicos, arenas temáticas e partidas online.">
     <link rel="icon" href="/Assets/UiLayouts/ICON.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --bg: #0a0a0a;
+        --bg-1: #111111;
+        --bg-2: #161616;
+        --border: rgba(255,255,255,0.07);
+        --border-gold: rgba(201,165,90,0.25);
+        --text: #f0ece4;
+        --muted: #7a7060;
+        --muted-2: #a09070;
+        --gold: #c9a55a;
+        --gold-bright: #e0b96a;
+        --gold-soft: rgba(201,165,90,0.12);
+        --serif: 'Playfair Display', Georgia, serif;
+        --sans: 'Inter', system-ui, sans-serif;
+      }
+
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      html { scroll-behavior: smooth; }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 16px;
+        line-height: 1.6;
+        overflow-x: hidden;
+      }
+
+      /* ── Scrollbar ── */
+      ::-webkit-scrollbar { width: 4px; }
+      ::-webkit-scrollbar-track { background: var(--bg); }
+      ::-webkit-scrollbar-thumb { background: var(--border-gold); border-radius: 2px; }
+
+      /* ── Side Nav ── */
+      .sidenav {
+        position: fixed;
+        left: 28px;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .sidenav a {
+        display: block;
+        width: 28px;
+        height: 28px;
+        line-height: 28px;
+        text-align: center;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+        text-decoration: none;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        transition: color 200ms, border-color 200ms, background 200ms;
+      }
+
+      .sidenav a:hover,
+      .sidenav a.active {
+        color: var(--gold);
+        border-color: var(--border-gold);
+        background: var(--gold-soft);
+      }
+
+      /* ── Hero ── */
+      .hero {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 80px 24px 60px;
+        position: relative;
+        background:
+          radial-gradient(ellipse at 50% 0%, rgba(201,165,90,0.08) 0%, transparent 60%),
+          radial-gradient(ellipse at 20% 80%, rgba(201,165,90,0.04) 0%, transparent 50%);
+      }
+
+      .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 14px;
+        border: 1px solid var(--border-gold);
+        border-radius: 999px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--gold);
+        margin-bottom: 36px;
+      }
+
+      .hero-badge span {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--gold);
+        animation: pulse 2s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+      }
+
+      .hero h1 {
+        font-family: var(--serif);
+        font-size: clamp(5rem, 14vw, 11rem);
+        font-weight: 900;
+        line-height: 0.9;
+        letter-spacing: -0.02em;
+        color: var(--text);
+        margin-bottom: 0;
+      }
+
+      .hero h1 .gold {
+        color: var(--gold);
+        display: block;
+      }
+
+      .hero-sub {
+        margin-top: 28px;
+        max-width: 480px;
+        font-size: 1rem;
+        color: var(--muted-2);
+        line-height: 1.65;
+      }
+
+      .hero-stats {
+        display: flex;
+        gap: 48px;
+        margin-top: 52px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      .stat {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .stat-num {
+        font-family: var(--serif);
+        font-size: 2.6rem;
+        font-weight: 700;
+        color: var(--gold);
+        line-height: 1;
+      }
+
+      .stat-label {
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .hero-cta {
+        margin-top: 52px;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 32px;
+        border: 1px solid var(--border-gold);
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--text);
+        text-decoration: none;
+        background: transparent;
+        transition: background 200ms, color 200ms, border-color 200ms, transform 200ms;
+      }
+
+      .hero-cta:hover {
+        background: var(--gold-soft);
+        border-color: var(--gold);
+        color: var(--gold-bright);
+        transform: translateY(-2px);
+      }
+
+      .hero-cta-play {
+        margin-top: 16px;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 16px 40px;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #0a0805;
+        text-decoration: none;
+        background: linear-gradient(135deg, var(--gold-bright), #b8893a);
+        transition: transform 200ms, filter 200ms;
+      }
+
+      .hero-cta-play:hover {
+        transform: translateY(-2px);
+        filter: brightness(1.1);
+      }
+
+      .hero-cta-row {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0;
+        margin-top: 52px;
+      }
+
+      /* ── Divider ── */
+      .divider {
+        width: 100%;
+        height: 1px;
+        background: var(--border);
+        margin: 0;
+      }
+
+      /* ── Section ── */
+      .section {
+        padding: 120px 24px;
+        max-width: 900px;
+        margin: 0 auto;
+        position: relative;
+      }
+
+      .section-num {
+        font-family: var(--serif);
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        color: var(--gold);
+        margin-bottom: 16px;
+        display: block;
+      }
+
+      .section h2 {
+        font-family: var(--serif);
+        font-size: clamp(2.4rem, 5vw, 3.8rem);
+        font-weight: 700;
+        line-height: 1.1;
+        color: var(--text);
+        margin-bottom: 16px;
+      }
+
+      .section-desc {
+        font-size: 1rem;
+        color: var(--muted-2);
+        max-width: 540px;
+        margin-bottom: 56px;
+        line-height: 1.7;
+      }
+
+      /* ── Mechanic Cards (01) ── */
+      .mechanic-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 1px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+
+      .mechanic-card {
+        padding: 28px;
+        background: var(--bg-1);
+        transition: background 200ms;
+      }
+
+      .mechanic-card:hover { background: var(--bg-2); }
+
+      .mechanic-icon {
+        font-size: 1.6rem;
+        margin-bottom: 14px;
+        display: block;
+      }
+
+      .mechanic-card h3 {
+        font-size: 0.9rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        color: var(--text);
+        margin-bottom: 8px;
+        text-transform: uppercase;
+      }
+
+      .mechanic-card p {
+        font-size: 0.85rem;
+        color: var(--muted-2);
+        line-height: 1.6;
+      }
+
+      /* ── Character Cards (02) ── */
+      .character-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 16px;
+      }
+
+      .character-card {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 28px 24px;
+        background: var(--bg-1);
+        transition: border-color 200ms, background 200ms, transform 200ms;
+        cursor: default;
+      }
+
+      .character-card:hover {
+        border-color: var(--border-gold);
+        background: var(--bg-2);
+        transform: translateY(-3px);
+      }
+
+      .character-emoji {
+        font-size: 2.4rem;
+        display: block;
+        margin-bottom: 14px;
+      }
+
+      .character-card h3 {
+        font-family: var(--serif);
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: var(--text);
+        margin-bottom: 6px;
+      }
+
+      .character-skill {
+        display: inline-block;
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--gold);
+        border: 1px solid var(--border-gold);
+        border-radius: 999px;
+        padding: 3px 10px;
+        margin-bottom: 12px;
+      }
+
+      .character-card p {
+        font-size: 0.82rem;
+        color: var(--muted-2);
+        line-height: 1.6;
+      }
+
+      /* ── Arena List (03) ── */
+      .arena-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+
+      .arena-item {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 20px 24px;
+        background: var(--bg-1);
+        transition: background 200ms;
+        cursor: default;
+      }
+
+      .arena-item:hover { background: var(--bg-2); }
+
+      .arena-index {
+        font-family: var(--serif);
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--muted);
+        min-width: 24px;
+        text-align: right;
+      }
+
+      .arena-name {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--text);
+        flex: 1;
+      }
+
+      .arena-tag {
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 3px 10px;
+      }
+
+      .arena-tag.featured {
+        color: var(--gold);
+        border-color: var(--border-gold);
+        background: var(--gold-soft);
+      }
+
+      /* ── Mode Cards (04) ── */
+      .mode-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 16px;
+      }
+
+      .mode-card {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 32px 28px;
+        background: var(--bg-1);
+        transition: border-color 200ms, background 200ms, transform 200ms;
+      }
+
+      .mode-card:hover {
+        border-color: var(--border-gold);
+        background: var(--bg-2);
+        transform: translateY(-3px);
+      }
+
+      .mode-icon {
+        font-size: 2rem;
+        display: block;
+        margin-bottom: 16px;
+      }
+
+      .mode-card h3 {
+        font-size: 1rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text);
+        margin-bottom: 10px;
+      }
+
+      .mode-card p {
+        font-size: 0.85rem;
+        color: var(--muted-2);
+        line-height: 1.6;
+      }
+
+      /* ── Hidden Features (05) ── */
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 16px;
+      }
+
+      .feature-card {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 28px 24px;
+        background: var(--bg-1);
+        opacity: 0.7;
+        transition: opacity 200ms, border-color 200ms, background 200ms;
+      }
+
+      .feature-card:hover {
+        opacity: 1;
+        border-color: var(--border-gold);
+        background: var(--bg-2);
+      }
+
+      .feature-card h3 {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: var(--text);
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .feature-card h3::after {
+        content: 'Em breve';
+        font-size: 0.58rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 2px 8px;
+      }
+
+      .feature-card p {
+        font-size: 0.82rem;
+        color: var(--muted-2);
+        line-height: 1.6;
+      }
+
+      /* ── Footer ── */
+      footer {
+        padding: 48px 24px;
+        text-align: center;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      footer a {
+        color: var(--gold);
+        text-decoration: none;
+      }
+
+      footer a:hover { text-decoration: underline; }
+
+      /* ── Fade-in animation ── */
+      .fade-in {
+        opacity: 0;
+        transform: translateY(24px);
+        transition: opacity 600ms ease, transform 600ms ease;
+      }
+
+      .fade-in.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      /* ── Responsive ── */
+      @media (max-width: 640px) {
+        .sidenav { display: none; }
+        .hero-stats { gap: 28px; }
+        .stat-num { font-size: 2rem; }
+      }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
-    <script type="module" src="/src/UiLayouts/main.ts"></script>
+
+    <!-- Side Navigation -->
+    <nav class="sidenav" aria-label="Seções">
+      <a href="#combate" data-section="combate">01</a>
+      <a href="#personagens" data-section="personagens">02</a>
+      <a href="#arenas" data-section="arenas">03</a>
+      <a href="#modos" data-section="modos">04</a>
+      <a href="#em-breve" data-section="em-breve">05</a>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero" id="hero">
+      <div class="hero-badge">
+        <span></span>
+        Online · Competitivo · Grátis
+      </div>
+
+      <h1>
+        BOMBA
+        <span class="gold">PvP</span>
+      </h1>
+
+      <p class="hero-sub">
+        Plante bombas. Destrua tudo. Sobreviva. Um jogo de arena competitivo com personagens únicos, ultis devastadoras e partidas online em tempo real.
+      </p>
+
+      <div class="hero-stats">
+        <div class="stat">
+          <span class="stat-num">4+</span>
+          <span class="stat-label">Personagens</span>
+        </div>
+        <div class="stat">
+          <span class="stat-num">7+</span>
+          <span class="stat-label">Arenas</span>
+        </div>
+        <div class="stat">
+          <span class="stat-num">4v4</span>
+          <span class="stat-label">Online</span>
+        </div>
+        <div class="stat">
+          <span class="stat-num">∞</span>
+          <span class="stat-label">Caos</span>
+        </div>
+      </div>
+
+      <div class="hero-cta-row">
+        <a href="/game" class="hero-cta-play">Jogar Agora</a>
+        <a href="#combate" class="hero-cta" style="margin-top: 16px;">Explorar ↓</a>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- 01: O Combate -->
+    <section class="section fade-in" id="combate">
+      <span class="section-num">01</span>
+      <h2>O Combate</h2>
+      <p class="section-desc">Mecânicas simples de aprender, impossíveis de dominar. Cada decisão importa.</p>
+
+      <div class="mechanic-grid">
+        <div class="mechanic-card">
+          <span class="mechanic-icon">💣</span>
+          <h3>Bombas</h3>
+          <p>Plante bombas com temporizador que explodem em cruz. Gerencie quantas você tem ativas ao mesmo tempo.</p>
+        </div>
+        <div class="mechanic-card">
+          <span class="mechanic-icon">🔥</span>
+          <h3>Chamas</h3>
+          <p>Explosões deixam chamas temporárias no campo. Mais range de bomba = mais território de chamas.</p>
+        </div>
+        <div class="mechanic-card">
+          <span class="mechanic-icon">📦</span>
+          <h3>Caixotes</h3>
+          <p>Destrua caixotes para encontrar powerups escondidos. Calcule suas rotas com cuidado.</p>
+        </div>
+        <div class="mechanic-card">
+          <span class="mechanic-icon">⚡</span>
+          <h3>Powerups</h3>
+          <p>Aumento de velocidade, range de explosão, bombas extras, e muito mais. Priorize os certos.</p>
+        </div>
+        <div class="mechanic-card">
+          <span class="mechanic-icon">🌀</span>
+          <h3>Morte Súbita</h3>
+          <p>O mapa vai fechando progressivamente. Sem esconderijo. Ninguém sobrevive parado.</p>
+        </div>
+        <div class="mechanic-card">
+          <span class="mechanic-icon">🏆</span>
+          <h3>Rounds</h3>
+          <p>Vença rounds acumulando pontos. O primeiro a atingir o limite de vitórias leva a partida.</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- 02: Personagens -->
+    <section class="section fade-in" id="personagens">
+      <span class="section-num">02</span>
+      <h2>Personagens</h2>
+      <p class="section-desc">4 lutadores com ultis únicas que mudam completamente como você joga.</p>
+
+      <div class="character-grid">
+        <div class="character-card">
+          <span class="character-emoji">🌙</span>
+          <h3>Ranni</h3>
+          <span class="character-skill">Ice Blink</span>
+          <p>Canalize e teleporte instantaneamente para uma posição projetada. Fuga perfeita ou ataque surpresa.</p>
+        </div>
+        <div class="character-card">
+          <span class="character-emoji">🐝</span>
+          <h3>Killer Bee</h3>
+          <span class="character-skill">Wing Dash</span>
+          <p>Dash veloz em 3 tiles em qualquer direção. Atravesse explosões, escape de cercos, reposicione rápido.</p>
+        </div>
+        <div class="character-card">
+          <span class="character-emoji">🐊</span>
+          <h3>Crocodilo Arcano</h3>
+          <span class="character-skill">Emerald Surge</span>
+          <p>Libere uma onda arcana em área. Empurra inimigos e bombas no raio de 2 tiles ao redor.</p>
+        </div>
+        <div class="character-card">
+          <span class="character-emoji">✨</span>
+          <h3>Nico</h3>
+          <span class="character-skill">Arcane Beam</span>
+          <p>Canalize e dispare um feixe mágico na direção que você está olhando. Longo alcance, dano letal.</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- 03: Arenas -->
+    <section class="section fade-in" id="arenas">
+      <span class="section-num">03</span>
+      <h2>Arenas</h2>
+      <p class="section-desc">7 cenários com temas visuais únicos, cada um com paleta e motivo próprio.</p>
+
+      <div class="arena-list">
+        <div class="arena-item">
+          <span class="arena-index">01</span>
+          <span class="arena-name">Tournament Clean</span>
+          <span class="arena-tag featured">Arena Padrão</span>
+        </div>
+        <div class="arena-item">
+          <span class="arena-index">02</span>
+          <span class="arena-name">Arcane Citadel</span>
+          <span class="arena-tag">Mágico</span>
+        </div>
+        <div class="arena-item">
+          <span class="arena-index">03</span>
+          <span class="arena-name">Verdant Ruins</span>
+          <span class="arena-tag">Natural</span>
+        </div>
+        <div class="arena-item">
+          <span class="arena-index">04</span>
+          <span class="arena-name">Skyfoundry Bastion</span>
+          <span class="arena-tag">Industrial</span>
+        </div>
+        <div class="arena-item">
+          <span class="arena-index">05</span>
+          <span class="arena-name">Royal Marble</span>
+          <span class="arena-tag">Nobre</span>
+        </div>
+        <div class="arena-item">
+          <span class="arena-index">06</span>
+          <span class="arena-name">Glacier Sanctum</span>
+          <span class="arena-tag">Gélido</span>
+        </div>
+        <div class="arena-item">
+          <span class="arena-index">07</span>
+          <span class="arena-name">Obsidian Garden</span>
+          <span class="arena-tag">Premium Dark</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- 04: Modos de Jogo -->
+    <section class="section fade-in" id="modos">
+      <span class="section-num">04</span>
+      <h2>Modos de Jogo</h2>
+      <p class="section-desc">Do casual ao competitivo. Jogue como preferir.</p>
+
+      <div class="mode-grid">
+        <div class="mode-card">
+          <span class="mode-icon">🌐</span>
+          <h3>Online</h3>
+          <p>Partida rápida ou lobby privado com amigos. Até 4 jogadores em tempo real, servidor dedicado.</p>
+        </div>
+        <div class="mode-card">
+          <span class="mode-icon">🛋️</span>
+          <h3>Local</h3>
+          <p>Até 4 jogadores no mesmo teclado. Ideal para partidas no sofá sem precisar de internet.</p>
+        </div>
+        <div class="mode-card">
+          <span class="mode-icon">🤖</span>
+          <h3>vs Bots</h3>
+          <p>Treine contra bots com comportamento adaptativo. Perfeito para aprender personagens novos.</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- 05: Em Breve -->
+    <section class="section fade-in" id="em-breve">
+      <span class="section-num">05</span>
+      <h2>Em Breve</h2>
+      <p class="section-desc">O que está sendo cozinhado nos bastidores.</p>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h3>Novos Personagens</h3>
+          <p>Mais lutadores com ultis inéditas e estilos de jogo completamente diferentes.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Ranking Competitivo</h3>
+          <p>Sistema de elo com divisões, temporadas e recompensas para os melhores jogadores.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Novas Arenas</h3>
+          <p>Cenários temáticos com layouts assimétricos que criam vantagens estratégicas únicas.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Torneios</h3>
+          <p>Brackets automáticos, partidas monitoradas e transmissões ao vivo integradas.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Modo Espectador</h3>
+          <p>Assista partidas ao vivo ou replays de partidas anteriores com câmeras livres.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Customização</h3>
+          <p>Skins de personagens, efeitos de bomba e ícones de perfil desbloqueáveis.</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- Footer -->
+    <footer>
+      <p>
+        <strong style="color: var(--text);">BOMBA PvP</strong> &nbsp;·&nbsp;
+        <a href="/game">Jogar agora</a> &nbsp;·&nbsp;
+        <span style="color: var(--muted);">Feito com 💣 e muito caos</span>
+      </p>
+    </footer>
+
+    <script>
+      // Fade-in on scroll
+      const observer = new IntersectionObserver(
+        (entries) => entries.forEach(e => e.target.classList.toggle('visible', e.isIntersecting)),
+        { threshold: 0.12 }
+      );
+      document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+      // Active sidenav
+      const sections = ['combate', 'personagens', 'arenas', 'modos', 'em-breve'];
+      const navLinks = document.querySelectorAll('.sidenav a');
+
+      const sectionObserver = new IntersectionObserver(
+        (entries) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              const id = entry.target.id;
+              navLinks.forEach(link => {
+                link.classList.toggle('active', link.dataset.section === id);
+              });
+            }
+          });
+        },
+        { rootMargin: '-40% 0px -40% 0px' }
+      );
+
+      sections.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) sectionObserver.observe(el);
+      });
+    </script>
   </body>
 </html>
