@@ -147,6 +147,8 @@ const LOCAL_BOT_CYCLE_KEY = "KeyN";
 const MAX_LOCAL_BOT_FILL = 3;
 const BOT_BOMB_COOLDOWN_MS = 900;
 const BOT_DANGER_FUSE_MS = 1000;
+const FULLSCREEN_HUD_HEIGHT = 34;
+const FULLSCREEN_HUD_CENTER_WIDTH = 224;
 const WALK_FRAME_MS = 100;
 const SKILL_FRAME_MS = 100;
 const DEATH_FRAME_MS = 90;
@@ -164,6 +166,20 @@ const CANVAS_BACKBUFFER_SCALE = 2;
 const CANVAS_VIEWPORT_PADDING = 32;
 const PLAYER_SPRITE_HEIGHT_SCALE = 1.45;
 const PLAYER_SPRITE_MAX_WIDTH_SCALE = 1.2;
+const CANVAS_UI_PANEL_BG = "rgba(18, 15, 12, 0.82)";
+const CANVAS_UI_PANEL_BG_STRONG = "rgba(14, 12, 10, 0.92)";
+const CANVAS_UI_PANEL_BG_SOFT = "rgba(22, 18, 14, 0.72)";
+const CANVAS_UI_BORDER = "rgba(196, 158, 76, 0.28)";
+const CANVAS_UI_BORDER_STRONG = "rgba(196, 158, 76, 0.46)";
+const CANVAS_UI_TEXT = "#ede8df";
+const CANVAS_UI_MUTED = "#b4a793";
+const CANVAS_UI_MUTED_SOFT = "rgba(180, 167, 147, 0.68)";
+const CANVAS_UI_GOLD = "#c49e4c";
+const CANVAS_UI_GOLD_BRIGHT = "#ddb860";
+const CANVAS_UI_GOLD_SOFT = "rgba(196, 158, 76, 0.18)";
+const CANVAS_UI_SUCCESS = "#efe7d3";
+const CANVAS_UI_DANGER = "#e3a480";
+const CANVAS_UI_SHADOW = "rgba(8, 6, 5, 0.9)";
 
 function createEmptyDirectionalSprites(): DirectionalSprites {
   return {
@@ -393,7 +409,11 @@ export class GameApp {
       this.canvas.width = CANVAS_WIDTH * CANVAS_BACKBUFFER_SCALE;
       this.canvas.height = CANVAS_HEIGHT * CANVAS_BACKBUFFER_SCALE;
       this.canvas.setAttribute("aria-label", "BOMBA game canvas");
-      this.canvas.dataset.gameCanvas = "true";
+      if ("dataset" in this.canvas && this.canvas.dataset) {
+        this.canvas.dataset.gameCanvas = "true";
+      } else {
+        this.canvas.setAttribute("data-game-canvas", "true");
+      }
 
       const ctx = this.canvas.getContext("2d");
       if (!ctx) {
@@ -441,21 +461,36 @@ export class GameApp {
     return this.getArenaGridHeight() * TILE_SIZE;
   }
 
+  private isFullscreenMatchLayoutActive(): boolean {
+    if (this.headless || this.mode !== "match" || typeof document === "undefined") {
+      return false;
+    }
+    const stage = this.canvas.closest(".experience-match__stage");
+    return stage instanceof HTMLElement && stage.dataset.fullscreen === "true";
+  }
+
+  private getHudRenderHeight(): number {
+    return this.isFullscreenMatchLayoutActive() ? FULLSCREEN_HUD_HEIGHT : HUD_HEIGHT;
+  }
+
   private getArenaRenderMetrics(): ArenaRenderMetrics {
     const logicalArenaWidth = this.getArenaPixelWidth();
     const logicalArenaHeight = this.getArenaPixelHeight();
-    const playfieldPaddingX = 4;
-    const playfieldTop = HUD_HEIGHT + 4;
-    const playfieldBottom = CANVAS_HEIGHT - 4;
+    const compactFullscreenLayout = this.isFullscreenMatchLayoutActive();
+    const hudHeight = this.getHudRenderHeight();
+    const playfieldPaddingX = compactFullscreenLayout ? 0 : 2;
+    const playfieldTop = hudHeight + (compactFullscreenLayout ? 1 : 2);
+    const playfieldBottom = CANVAS_HEIGHT - (compactFullscreenLayout ? 1 : 2);
     const availableWidth = Math.max(120, CANVAS_WIDTH - playfieldPaddingX * 2);
     const availableHeight = Math.max(120, playfieldBottom - playfieldTop);
     const widthScale = availableWidth / logicalArenaWidth;
     const heightScale = availableHeight / logicalArenaHeight;
-    const scale = Math.max(0.82, Math.min(1.62, Math.min(widthScale, heightScale)));
+    const maxScale = compactFullscreenLayout ? 2.24 : 2.08;
+    const scale = Math.max(0.82, Math.min(maxScale, Math.min(widthScale, heightScale)));
     const arenaPixelWidth = logicalArenaWidth * scale;
     const arenaPixelHeight = logicalArenaHeight * scale;
     const arenaX = Math.round((CANVAS_WIDTH - arenaPixelWidth) / 2);
-    const arenaY = Math.round(playfieldTop + 2);
+    const arenaY = Math.round(playfieldTop + (compactFullscreenLayout ? 1 : 2));
     return {
       scale,
       tileSize: TILE_SIZE * scale,
@@ -1027,18 +1062,20 @@ export class GameApp {
     const viewportHeight = viewport?.clientHeight
       ?? (typeof window.innerHeight === "number" ? window.innerHeight : CANVAS_HEIGHT + CANVAS_VIEWPORT_PADDING);
     const metrics = this.getArenaRenderMetrics();
-    const viewportPadding = viewport ? 6 : CANVAS_VIEWPORT_PADDING;
+    const compactFullscreenLayout = this.isFullscreenMatchLayoutActive();
+    const hudHeight = this.getHudRenderHeight();
+    const viewportPadding = viewport ? (compactFullscreenLayout ? 2 : 6) : CANVAS_VIEWPORT_PADDING;
     const availableWidth = Math.max(160, viewportWidth - viewportPadding);
     const availableHeight = Math.max(160, viewportHeight - viewportPadding);
-    const contentHeight = Math.max(HUD_HEIGHT + 12, metrics.arenaY + metrics.arenaPixelHeight + 8);
+    const contentHeight = Math.max(hudHeight + 8, metrics.arenaY + metrics.arenaPixelHeight + (compactFullscreenLayout ? 4 : 8));
     const fitScale = Math.min(availableWidth / CANVAS_WIDTH, availableHeight / contentHeight);
-    const displayScale = Math.max(0.5, fitScale);
+    const displayScale = Math.max(compactFullscreenLayout ? 0.66 : 0.5, fitScale);
     const displayWidth = Math.max(1, Math.round(CANVAS_WIDTH * displayScale));
     const displayHeight = Math.max(1, Math.round(CANVAS_HEIGHT * displayScale));
     this.canvas.style.width = `${displayWidth}px`;
     this.canvas.style.height = `${displayHeight}px`;
     this.canvas.style.justifySelf = "center";
-    this.canvas.style.alignSelf = "start";
+    this.canvas.style.alignSelf = compactFullscreenLayout ? "center" : "start";
   };
 
   private captureOnlineLocalInput(): void {
@@ -2925,26 +2962,26 @@ export class GameApp {
     const frameHeight = arenaHeight + 20;
 
     const gradient = c.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    gradient.addColorStop(0, "#2b466f");
-    gradient.addColorStop(0.38, "#122540");
-    gradient.addColorStop(1, "#050913");
+    gradient.addColorStop(0, "#201b16");
+    gradient.addColorStop(0.38, "#14110e");
+    gradient.addColorStop(1, "#090807");
     c.fillStyle = gradient;
     c.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     const mist = c.createRadialGradient(CANVAS_WIDTH - 92, 84, 18, CANVAS_WIDTH - 92, 84, 214);
-    mist.addColorStop(0, "rgba(198, 223, 255, 0.18)");
-    mist.addColorStop(0.4, "rgba(128, 168, 214, 0.12)");
-    mist.addColorStop(1, "rgba(9, 20, 39, 0)");
+    mist.addColorStop(0, "rgba(224, 198, 142, 0.16)");
+    mist.addColorStop(0.4, "rgba(143, 104, 64, 0.12)");
+    mist.addColorStop(1, "rgba(20, 14, 9, 0)");
     c.fillStyle = mist;
     c.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     const floorGlow = c.createLinearGradient(0, arenaBottom - 24, 0, CANVAS_HEIGHT);
-    floorGlow.addColorStop(0, "rgba(31, 48, 72, 0)");
-    floorGlow.addColorStop(1, "rgba(6, 12, 22, 0.9)");
+    floorGlow.addColorStop(0, "rgba(36, 28, 20, 0)");
+    floorGlow.addColorStop(1, "rgba(10, 9, 8, 0.92)");
     c.fillStyle = floorGlow;
     c.fillRect(0, arenaBottom - 24, CANVAS_WIDTH, CANVAS_HEIGHT - arenaBottom + 24);
 
-    c.fillStyle = "rgba(15, 26, 45, 0.72)";
+    c.fillStyle = "rgba(20, 17, 14, 0.76)";
     c.beginPath();
     c.moveTo(0, arenaY - 10);
     c.lineTo(arenaX - 2, arenaY + 44);
@@ -2961,10 +2998,10 @@ export class GameApp {
     c.closePath();
     c.fill();
 
-    c.fillStyle = "rgba(7, 11, 20, 0.46)";
+    c.fillStyle = "rgba(12, 10, 9, 0.5)";
     c.fillRect(frameX + 4, frameY + 14, frameWidth - 8, frameHeight - 4);
 
-    c.fillStyle = "rgba(129, 156, 194, 0.2)";
+    c.fillStyle = "rgba(196, 158, 76, 0.16)";
     c.beginPath();
     c.moveTo(frameX, frameY + 4);
     c.lineTo(frameX + frameWidth, frameY + 4);
@@ -2973,16 +3010,16 @@ export class GameApp {
     c.closePath();
     c.fill();
 
-    c.strokeStyle = "rgba(171, 214, 255, 0.18)";
+    c.strokeStyle = "rgba(196, 158, 76, 0.22)";
     c.lineWidth = 1;
     c.strokeRect(frameX + 0.5, frameY + 0.5, frameWidth - 1, frameHeight - 1);
 
-    c.fillStyle = "rgba(176, 208, 248, 0.06)";
+    c.fillStyle = "rgba(233, 215, 179, 0.05)";
     c.beginPath();
     c.ellipse(CANVAS_WIDTH - 84, arenaBottom + 16, 104, 76, -0.35, 0, Math.PI * 2);
     c.fill();
 
-    c.fillStyle = "rgba(9, 16, 28, 0.34)";
+    c.fillStyle = "rgba(12, 10, 9, 0.34)";
     c.beginPath();
     c.moveTo(24, arenaY + 54);
     c.lineTo(56, arenaY + 120);
@@ -2991,7 +3028,7 @@ export class GameApp {
     c.closePath();
     c.fill();
 
-    c.strokeStyle = "rgba(174, 206, 235, 0.09)";
+    c.strokeStyle = "rgba(214, 194, 157, 0.08)";
     c.lineWidth = 2;
     for (let i = 0; i < 6; i += 1) {
       c.beginPath();
@@ -3030,16 +3067,16 @@ export class GameApp {
     this.renderArena();
     this.renderHud();
 
-    this.ctx.fillStyle = "rgba(4, 10, 18, 0.7)";
+    this.ctx.fillStyle = CANVAS_UI_PANEL_BG;
     this.ctx.fillRect(12, HUD_HEIGHT + 10, 456, 48);
-    this.ctx.strokeStyle = "rgba(143, 205, 247, 0.32)";
+    this.ctx.strokeStyle = CANVAS_UI_BORDER_STRONG;
     this.ctx.strokeRect(12.5, HUD_HEIGHT + 10.5, 455, 47);
     this.ctx.textAlign = "left";
-    this.ctx.font = "bold 9px monospace";
-    this.ctx.fillStyle = "#e2f2ff";
+    this.ctx.font = "700 9px Inter";
+    this.ctx.fillStyle = CANVAS_UI_TEXT;
     this.ctx.fillText("MENU LOCAL  |  E/P READY  |  G/K CHARACTER", 22, HUD_HEIGHT + 27);
-    this.ctx.font = "8px monospace";
-    this.ctx.fillStyle = "#bbd7ee";
+    this.ctx.font = "600 8px Inter";
+    this.ctx.fillStyle = CANVAS_UI_MUTED;
     this.ctx.fillText(
       `B toggle bot rapido  |  N cicla bots: ${this.localBotFill}  |  ativos: ${this.activePlayerIds.length}`,
       22,
@@ -3052,7 +3089,7 @@ export class GameApp {
   }
 
   private renderCharacterSelectionOverlay(): void {
-    this.ctx.fillStyle = "rgba(2, 6, 12, 0.74)";
+    this.ctx.fillStyle = "rgba(8, 6, 5, 0.78)";
     this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     this.drawCharacterSelectionPanel(1, 28, 112);
     this.drawCharacterSelectionPanel(2, 252, 112);
@@ -3061,23 +3098,22 @@ export class GameApp {
   private drawCharacterSelectionPanel(playerId: PlayerId, x: number, y: number): void {
     const panelWidth = 200;
     const panelHeight = 244;
-    const palette = PLAYER_COLORS[playerId];
     const isOpen = this.characterMenuOpen[playerId];
     const entry = this.getPreviewCharacterEntry(playerId);
     const currentIndex = this.pendingCharacterIndex[playerId];
 
-    this.ctx.fillStyle = "rgba(8, 14, 23, 0.94)";
+    this.ctx.fillStyle = CANVAS_UI_PANEL_BG_STRONG;
     this.ctx.fillRect(x, y, panelWidth, panelHeight);
-    this.ctx.strokeStyle = palette.primary;
+    this.ctx.strokeStyle = CANVAS_UI_BORDER_STRONG;
     this.ctx.lineWidth = 2;
     this.ctx.strokeRect(x + 0.5, y + 0.5, panelWidth - 1, panelHeight - 1);
 
     this.ctx.textAlign = "left";
-    this.ctx.fillStyle = palette.primary;
-    this.ctx.font = "bold 13px monospace";
+    this.ctx.fillStyle = CANVAS_UI_GOLD_BRIGHT;
+    this.ctx.font = "700 13px Inter";
     this.ctx.fillText(`P${playerId} CHARACTER`, x + 10, y + 20);
-    this.ctx.fillStyle = "#d9ebfb";
-    this.ctx.font = "11px monospace";
+    this.ctx.fillStyle = CANVAS_UI_TEXT;
+    this.ctx.font = "600 11px Inter";
     this.ctx.fillText(this.shortenCharacterName(entry.name, 24), x + 10, y + 40);
     this.ctx.fillText(`${currentIndex + 1}/${this.characterRoster.length}`, x + 10, y + 56);
 
@@ -3087,43 +3123,137 @@ export class GameApp {
       const item = this.characterRoster[index];
       const rowY = y + 76 + row * 26;
       const selected = offset === 0;
-      this.ctx.fillStyle = selected ? "rgba(113, 210, 255, 0.24)" : "rgba(255, 255, 255, 0.04)";
+      this.ctx.fillStyle = selected ? CANVAS_UI_GOLD_SOFT : "rgba(255, 255, 255, 0.03)";
       this.ctx.fillRect(x + 8, rowY - 14, panelWidth - 16, 22);
-      this.ctx.fillStyle = selected ? "#f4fbff" : "rgba(214, 231, 247, 0.78)";
-      this.ctx.font = selected ? "bold 11px monospace" : "10px monospace";
+      this.ctx.fillStyle = selected ? CANVAS_UI_TEXT : CANVAS_UI_MUTED;
+      this.ctx.font = selected ? "700 11px Inter" : "500 10px Inter";
       this.ctx.fillText(this.shortenCharacterName(item.name, 26), x + 12, rowY);
     }
 
-    this.ctx.fillStyle = "#b9d3e8";
-    this.ctx.font = "10px monospace";
+    this.ctx.fillStyle = CANVAS_UI_MUTED;
+    this.ctx.font = "500 10px Inter";
     this.ctx.fillText(
       playerId === 1 ? "W/S browse  E lock  G close" : "UP/DN browse  P lock  K close",
       x + 10,
       y + 222,
     );
     if (isOpen) {
-      this.ctx.fillStyle = "rgba(244, 251, 255, 0.9)";
+      this.ctx.fillStyle = CANVAS_UI_TEXT;
       this.ctx.fillText("Selection is live after lock.", x + 10, y + 238);
     }
   }
 
   private drawHudPanel(x: number, y: number, width: number, height: number, accent: string): void {
-    this.ctx.fillStyle = "rgba(8, 15, 25, 0.72)";
+    this.ctx.fillStyle = CANVAS_UI_PANEL_BG;
     this.ctx.fillRect(x, y, width, height);
     this.ctx.fillStyle = accent;
     this.ctx.fillRect(x, y, width, 3);
-    this.ctx.strokeStyle = "rgba(168, 213, 255, 0.18)";
+    this.ctx.strokeStyle = CANVAS_UI_BORDER;
     this.ctx.strokeRect(x + 0.5, y + 0.5, width - 1, height - 1);
   }
 
+  private renderCompactPlayerHud(playerId: PlayerId, x: number, y: number, width: number): void {
+    const player = this.players[playerId];
+    const palette = PLAYER_COLORS[playerId];
+    const compactWidth = Math.max(108, width);
+    const status = !player.alive
+      ? "DOWN"
+      : player.skill.phase === "channeling"
+        ? "ICE"
+        : player.flameGuardMs > 0
+          ? "GUARD"
+          : "LIVE";
+    const scoreText = this.onlineRoomMode === "endless"
+      ? `K${this.endlessKills[playerId]} W${this.endlessRoundWins[playerId]}`
+      : `W${this.score[playerId]}`;
+    const statText = `B${player.maxBombs} F${player.flameRange} S${player.speedLevel}`;
+
+    this.drawHudPanel(x, y, compactWidth, 18, palette.glow);
+    this.ctx.textAlign = "left";
+    this.ctx.font = "700 7px Inter";
+    this.drawHudText(this.getPlayerSlotLabel(playerId), x + 6, y + 7, palette.primary, CANVAS_UI_SHADOW);
+    this.ctx.font = "700 6px Inter";
+    this.drawHudText(scoreText, x + 30, y + 7, CANVAS_UI_TEXT, CANVAS_UI_SHADOW);
+    this.ctx.textAlign = "right";
+    this.drawHudText(status, x + compactWidth - 6, y + 7, player.alive ? CANVAS_UI_SUCCESS : CANVAS_UI_MUTED_SOFT, CANVAS_UI_SHADOW);
+    this.ctx.font = "500 6px Inter";
+    this.drawHudText(statText, x + compactWidth - 6, y + 14, CANVAS_UI_MUTED, CANVAS_UI_SHADOW);
+  }
+
+  private renderCompactHud(): void {
+    const hudHeight = this.getHudRenderHeight();
+    const leftPlayers = this.activePlayerIds.filter((playerId) => playerId === 1 || playerId === 3);
+    const rightPlayers = this.activePlayerIds.filter((playerId) => playerId === 2 || playerId === 4);
+    const centerWidth = Math.min(FULLSCREEN_HUD_CENTER_WIDTH, CANVAS_WIDTH - 240);
+    const centerX = Math.round((CANVAS_WIDTH - centerWidth) / 2);
+    const sideWidth = Math.max(140, Math.floor((centerX - 14) / Math.max(1, leftPlayers.length || 1)));
+    const rightStartX = centerX + centerWidth + 10;
+    const rightAvailable = Math.max(0, CANVAS_WIDTH - rightStartX - 10);
+    const rightWidth = Math.max(140, Math.floor(rightAvailable / Math.max(1, rightPlayers.length || 1)));
+
+    const hudGradient = this.ctx.createLinearGradient(0, 0, CANVAS_WIDTH, hudHeight);
+    hudGradient.addColorStop(0, "rgba(18, 15, 13, 0.76)");
+    hudGradient.addColorStop(0.5, "rgba(24, 20, 16, 0.72)");
+    hudGradient.addColorStop(1, "rgba(18, 15, 13, 0.76)");
+    this.ctx.fillStyle = hudGradient;
+    this.ctx.fillRect(0, 0, CANVAS_WIDTH, hudHeight);
+    this.ctx.fillStyle = CANVAS_UI_BORDER;
+    this.ctx.fillRect(0, hudHeight - 1, CANVAS_WIDTH, 1);
+
+    leftPlayers.forEach((playerId, index) => {
+      this.renderCompactPlayerHud(playerId, 6 + index * sideWidth, 7, sideWidth - 4);
+    });
+    rightPlayers.forEach((playerId, index) => {
+      this.renderCompactPlayerHud(playerId, rightStartX + index * rightWidth, 7, rightWidth - 4);
+    });
+
+    this.drawHudPanel(centerX, 5, centerWidth, 22, CANVAS_UI_BORDER_STRONG);
+    this.ctx.textAlign = "center";
+    this.ctx.font = "700 7px Inter";
+    this.drawHudText(
+      this.onlineRoomMode === "endless"
+        ? `R${this.roundNumber}  ENDLESS`
+        : `R${this.roundNumber}  FT${TARGET_WINS}`,
+      centerX + centerWidth / 2,
+      7,
+      CANVAS_UI_MUTED,
+      CANVAS_UI_SHADOW,
+    );
+    this.ctx.font = "700 15px Inter";
+    this.drawHudText(
+      Math.ceil(this.roundTimeMs / 1000).toString().padStart(2, "0"),
+      centerX + centerWidth / 2,
+      18,
+      CANVAS_UI_TEXT,
+      CANVAS_UI_SHADOW,
+    );
+    this.ctx.font = "600 6px Inter";
+    if (!this.roundOutcome) {
+      const suddenDeathText = this.suddenDeathActive
+        ? "SUDDEN DEATH"
+        : `SD ${Math.ceil(Math.max(0, this.roundTimeMs - SUDDEN_DEATH_START_MS) / 1000)}s`;
+      this.drawHudText(
+        suddenDeathText,
+        centerX + centerWidth / 2,
+        25,
+        this.suddenDeathActive ? CANVAS_UI_DANGER : CANVAS_UI_MUTED,
+        CANVAS_UI_SHADOW,
+      );
+    }
+  }
+
   private renderHud(): void {
+    if (this.isFullscreenMatchLayoutActive()) {
+      this.renderCompactHud();
+      return;
+    }
     const hudGradient = this.ctx.createLinearGradient(0, 0, CANVAS_WIDTH, HUD_HEIGHT);
-    hudGradient.addColorStop(0, "rgba(17, 28, 46, 0.96)");
-    hudGradient.addColorStop(0.5, "rgba(22, 38, 61, 0.96)");
-    hudGradient.addColorStop(1, "rgba(19, 31, 50, 0.96)");
+    hudGradient.addColorStop(0, "rgba(18, 15, 13, 0.96)");
+    hudGradient.addColorStop(0.5, "rgba(25, 21, 17, 0.96)");
+    hudGradient.addColorStop(1, "rgba(18, 15, 13, 0.96)");
     this.ctx.fillStyle = hudGradient;
     this.ctx.fillRect(0, 0, CANVAS_WIDTH, HUD_HEIGHT);
-    this.ctx.fillStyle = "rgba(158, 214, 255, 0.18)";
+    this.ctx.fillStyle = CANVAS_UI_BORDER;
     this.ctx.fillRect(0, HUD_HEIGHT - 2, CANVAS_WIDTH, 2);
 
     const playerCount = Math.max(1, this.activePlayerIds.length);
@@ -3148,39 +3278,39 @@ export class GameApp {
     }
 
     this.ctx.textAlign = "center";
-    this.ctx.font = "bold 7px monospace";
+    this.ctx.font = "700 7px Inter";
     this.drawHudText(
       this.onlineRoomMode === "endless"
         ? `R${this.roundNumber} | ENDLESS`
         : `R${this.roundNumber} | FIRST TO ${TARGET_WINS}`,
       CANVAS_WIDTH / 2,
       6,
-      "#d8eaf8",
-      "rgba(4, 10, 19, 0.9)",
+      CANVAS_UI_MUTED,
+      CANVAS_UI_SHADOW,
     );
-    this.ctx.font = "bold 8px monospace";
-    this.drawHudText("TIME", CANVAS_WIDTH / 2, 14, "#b8cde2", "rgba(4, 10, 19, 0.9)");
-    this.ctx.font = "bold 16px monospace";
+    this.ctx.font = "700 8px Inter";
+    this.drawHudText("TIME", CANVAS_WIDTH / 2, 14, CANVAS_UI_GOLD, CANVAS_UI_SHADOW);
+    this.ctx.font = "700 16px Inter";
     this.drawHudText(
       Math.ceil(this.roundTimeMs / 1000).toString().padStart(2, "0"),
       CANVAS_WIDTH / 2,
       27,
-      "#f7fbff",
-      "rgba(4, 10, 19, 0.9)",
+      CANVAS_UI_TEXT,
+      CANVAS_UI_SHADOW,
     );
     if (!this.roundOutcome) {
       this.ctx.textAlign = "center";
-      this.ctx.font = "bold 8px monospace";
+      this.ctx.font = "700 8px Inter";
       if (this.suddenDeathActive) {
-        this.drawHudText("SUDDEN DEATH", 240, HUD_HEIGHT - 18, "#ffb58f", "rgba(4, 10, 19, 0.9)");
+        this.drawHudText("SUDDEN DEATH", 240, HUD_HEIGHT - 18, CANVAS_UI_DANGER, CANVAS_UI_SHADOW);
       } else {
         const untilSuddenDeath = Math.max(0, this.roundTimeMs - SUDDEN_DEATH_START_MS);
         this.drawHudText(
           `SD ${Math.ceil(untilSuddenDeath / 1000)}s`,
           240,
           HUD_HEIGHT - 18,
-          "rgba(203, 222, 238, 0.82)",
-          "rgba(4, 10, 19, 0.9)",
+          CANVAS_UI_MUTED,
+          CANVAS_UI_SHADOW,
         );
       }
     }
@@ -3211,30 +3341,30 @@ export class GameApp {
 
     this.drawHudPanel(x, y, width, 42, palette.glow);
     this.ctx.textAlign = "left";
-    this.ctx.font = "bold 8px monospace";
-    this.drawHudText(title, x + 6, y + 10, palette.primary, "rgba(4, 10, 19, 0.9)");
-    this.ctx.font = "6px monospace";
+    this.ctx.font = "700 8px Inter";
+    this.drawHudText(title, x + 6, y + 10, palette.primary, CANVAS_UI_SHADOW);
+    this.ctx.font = "500 6px Inter";
     this.drawHudText(
       this.shortenCharacterName(this.getCharacterLabel(playerId, compact ? 8 : 12), compact ? 8 : 12),
       x + 6,
       y + 18,
-      "#dbefff",
-      "rgba(4, 10, 19, 0.9)",
+      CANVAS_UI_TEXT,
+      CANVAS_UI_SHADOW,
     );
     this.ctx.textAlign = "right";
     this.drawHudText(
       compact ? statLine : status,
       x + width - 6,
       y + 10,
-      player.alive ? "#e5fff7" : "rgba(210, 220, 231, 0.55)",
-      "rgba(4, 10, 19, 0.85)",
+      player.alive ? CANVAS_UI_SUCCESS : CANVAS_UI_MUTED_SOFT,
+      CANVAS_UI_SHADOW,
     );
     this.drawHudText(
       compact ? status : statLine,
       x + width - 6,
       y + 18,
-      "#dbefff",
-      "rgba(4, 10, 19, 0.85)",
+      CANVAS_UI_MUTED,
+      CANVAS_UI_SHADOW,
     );
     if (this.onlineRoomMode === "endless") {
       this.drawEndlessHudStats(x + 6, y + 28, playerId, palette);
@@ -3268,17 +3398,17 @@ export class GameApp {
       const filled = index < wins;
       this.ctx.beginPath();
       this.ctx.arc(centerX, y + 4, 4.5, 0, Math.PI * 2);
-      this.ctx.fillStyle = filled ? "#ffd768" : "rgba(255, 255, 255, 0.08)";
+      this.ctx.fillStyle = filled ? CANVAS_UI_GOLD_BRIGHT : "rgba(255, 255, 255, 0.08)";
       this.ctx.fill();
       this.ctx.lineWidth = 1;
-      this.ctx.strokeStyle = filled ? palette.primary : "rgba(207, 223, 238, 0.34)";
+      this.ctx.strokeStyle = filled ? palette.primary : CANVAS_UI_BORDER;
       this.ctx.stroke();
       if (!filled) {
         continue;
       }
       this.ctx.beginPath();
       this.ctx.arc(centerX, y + 4, 1.75, 0, Math.PI * 2);
-      this.ctx.fillStyle = "#fff6cf";
+      this.ctx.fillStyle = "#fff7df";
       this.ctx.fill();
     }
   }
@@ -3290,13 +3420,13 @@ export class GameApp {
     palette: { primary: string; secondary: string; glow: string },
   ): void {
     this.ctx.textAlign = "left";
-    this.ctx.font = "bold 6px monospace";
+    this.ctx.font = "700 6px Inter";
     this.drawHudText(
       `K ${this.endlessKills[playerId]}  W ${this.endlessRoundWins[playerId]}`,
       x,
       y,
       palette.primary,
-      "rgba(4, 10, 19, 0.9)",
+      CANVAS_UI_SHADOW,
     );
   }
 
@@ -3338,10 +3468,10 @@ export class GameApp {
 
   private drawHudSkillSlot(x: number, y: number, width: number, height: number, slot: HudSkillSlot): void {
     const definition = getPowerUpDefinition(slot.type);
-    const tint = slot.acquired ? definition.tint : "rgba(173, 196, 217, 0.35)";
-    this.ctx.fillStyle = slot.acquired ? "rgba(7, 18, 31, 0.88)" : "rgba(7, 15, 26, 0.62)";
+    const tint = slot.acquired ? definition.tint : "rgba(180, 167, 147, 0.4)";
+    this.ctx.fillStyle = slot.acquired ? CANVAS_UI_PANEL_BG_STRONG : CANVAS_UI_PANEL_BG_SOFT;
     this.ctx.fillRect(x, y, width, height);
-    this.ctx.strokeStyle = slot.acquired ? tint : "rgba(156, 190, 220, 0.2)";
+    this.ctx.strokeStyle = slot.acquired ? tint : CANVAS_UI_BORDER;
     this.ctx.strokeRect(x + 0.5, y + 0.5, Math.max(1, width - 1), Math.max(1, height - 1));
 
     const icon = this.assets.powerUps[slot.type];
@@ -3351,18 +3481,18 @@ export class GameApp {
       this.ctx.globalAlpha = 1;
     } else {
       this.ctx.textAlign = "center";
-      this.ctx.font = "bold 6px monospace";
-      this.drawHudText(definition.shortLabel, x + 5, y + 7, tint, "rgba(4, 10, 19, 0.9)");
+      this.ctx.font = "700 6px Inter";
+      this.drawHudText(definition.shortLabel, x + 5, y + 7, tint, CANVAS_UI_SHADOW);
     }
 
     this.ctx.textAlign = "left";
-    this.ctx.font = "bold 6px monospace";
-    const valueColor = slot.acquired ? "#e9f7ff" : "rgba(169, 192, 214, 0.62)";
-    this.drawHudText(slot.valueLabel, x + 11, y + 7, valueColor, "rgba(4, 10, 19, 0.9)");
+    this.ctx.font = "700 6px Inter";
+    const valueColor = slot.acquired ? CANVAS_UI_TEXT : CANVAS_UI_MUTED_SOFT;
+    this.drawHudText(slot.valueLabel, x + 11, y + 7, valueColor, CANVAS_UI_SHADOW);
     if (slot.keyLabel && width >= 24) {
       this.ctx.textAlign = "right";
-      this.ctx.font = "6px monospace";
-      this.drawHudText(slot.keyLabel, x + width - 2, y + 7, tint, "rgba(4, 10, 19, 0.9)");
+      this.ctx.font = "500 6px Inter";
+      this.drawHudText(slot.keyLabel, x + width - 2, y + 7, tint, CANVAS_UI_SHADOW);
     }
   }
 
@@ -3678,8 +3808,8 @@ export class GameApp {
     }
     const dangerTiles = this.getDangerOverlayTiles();
     for (const tile of dangerTiles) {
-      let fill = "rgba(104, 188, 255, 0.16)";
-      let stroke = "rgba(184, 230, 255, 0.35)";
+      let fill = "rgba(196, 158, 76, 0.14)";
+      let stroke = "rgba(232, 210, 162, 0.34)";
       if (tile.etaMs <= 0) {
         fill = "rgba(255, 62, 62, 0.42)";
         stroke = "rgba(255, 189, 176, 0.72)";
@@ -3687,8 +3817,8 @@ export class GameApp {
         fill = "rgba(255, 120, 72, 0.34)";
         stroke = "rgba(255, 216, 186, 0.65)";
       } else if (tile.etaMs <= 1500) {
-        fill = "rgba(255, 195, 92, 0.24)";
-        stroke = "rgba(255, 236, 173, 0.52)";
+        fill = "rgba(215, 172, 84, 0.24)";
+        stroke = "rgba(247, 229, 177, 0.5)";
       }
       const screenX = tile.x * TILE_SIZE;
       const screenY = tile.y * TILE_SIZE;
@@ -3758,9 +3888,9 @@ export class GameApp {
       const screenX = tile.x * TILE_SIZE;
       const screenY = tile.y * TILE_SIZE;
       const isOrigin = tile.x === origin.x && tile.y === origin.y;
-      this.ctx.fillStyle = isOrigin ? "rgba(115, 255, 226, 0.34)" : "rgba(109, 228, 255, 0.22)";
+      this.ctx.fillStyle = isOrigin ? "rgba(221, 184, 96, 0.34)" : "rgba(196, 158, 76, 0.22)";
       this.ctx.fillRect(screenX + 6, screenY + 6, TILE_SIZE - 12, TILE_SIZE - 12);
-      this.ctx.strokeStyle = isOrigin ? "rgba(208, 255, 241, 0.85)" : "rgba(187, 248, 255, 0.58)";
+      this.ctx.strokeStyle = isOrigin ? "rgba(255, 243, 212, 0.82)" : "rgba(236, 214, 168, 0.56)";
       this.ctx.strokeRect(screenX + 6.5, screenY + 6.5, TILE_SIZE - 13, TILE_SIZE - 13);
     }
   }
@@ -3931,12 +4061,12 @@ export class GameApp {
     }
     const definition = getPowerUpDefinition(powerUp.type);
 
-    this.ctx.fillStyle = "rgba(6, 14, 28, 0.75)";
+    this.ctx.fillStyle = CANVAS_UI_PANEL_BG_STRONG;
     this.ctx.fillRect(x + 8, y + 8, 16, 16);
     this.ctx.fillStyle = definition.tint;
     this.ctx.fillRect(x + 10, y + 10, 12, 12);
-    this.ctx.fillStyle = "#041120";
-    this.ctx.font = "bold 10px monospace";
+    this.ctx.fillStyle = "#120d06";
+    this.ctx.font = "700 10px Inter";
     this.ctx.textAlign = "center";
     this.ctx.fillText(definition.shortLabel, x + 16, y + 19);
   }
@@ -3952,15 +4082,15 @@ export class GameApp {
       this.ctx.restore();
       return;
     }
-    this.ctx.fillStyle = `rgba(255, 239, 173, ${Math.max(0.35, pulse)})`;
+    this.ctx.fillStyle = `rgba(255, 228, 160, ${Math.max(0.35, pulse)})`;
     this.ctx.beginPath();
     this.ctx.arc(x + 16, y + 8, 4, 0, Math.PI * 2);
     this.ctx.fill();
-    this.ctx.fillStyle = "#1d2a39";
+    this.ctx.fillStyle = "#241f1a";
     this.ctx.beginPath();
     this.ctx.arc(x + 16, y + 18, 10, 0, Math.PI * 2);
     this.ctx.fill();
-    this.ctx.strokeStyle = "#d6ecff";
+    this.ctx.strokeStyle = "#f2dfba";
     this.ctx.stroke();
   }
 
@@ -4228,7 +4358,7 @@ export class GameApp {
       sprite = this.getRenderableSprite(baseSprites, renderDirection);
     }
 
-    this.ctx.fillStyle = "rgba(4, 10, 19, 0.34)";
+    this.ctx.fillStyle = "rgba(10, 8, 7, 0.32)";
     this.ctx.beginPath();
     this.ctx.ellipse(x + TILE_SIZE * 0.5, y + TILE_SIZE - 2, TILE_SIZE * 0.4, TILE_SIZE * 0.18, 0, 0, Math.PI * 2);
     this.ctx.fill();
@@ -4263,14 +4393,14 @@ export class GameApp {
       return;
     }
 
-    this.ctx.fillStyle = "#07111d";
+    this.ctx.fillStyle = "#15120f";
     this.ctx.fillRect(x + 6, y + 3, TILE_SIZE - 12, TILE_SIZE - 4);
-    this.ctx.fillStyle = player.alive ? palette.primary : "#8a96a1";
+    this.ctx.fillStyle = player.alive ? palette.primary : "#8f8372";
     this.ctx.globalAlpha = alpha;
     this.ctx.fillRect(x + 7, y + 4, TILE_SIZE - 14, TILE_SIZE - 6);
-    this.ctx.fillStyle = player.alive ? palette.secondary : "#53606d";
+    this.ctx.fillStyle = player.alive ? palette.secondary : "#5e554b";
     this.ctx.fillRect(x + 8, y + 8, TILE_SIZE - 16, TILE_SIZE - 13);
-    this.ctx.fillStyle = "#f5fbff";
+    this.ctx.fillStyle = "#f4ead8";
 
     if (renderDirection === "up") {
       this.ctx.fillRect(x + 12, y + 10, 4, 4);
@@ -4523,16 +4653,16 @@ export class GameApp {
   }
 
   private drawCenterOverlay(title: string, subtitle: string): void {
-    this.ctx.fillStyle = "rgba(1, 4, 12, 0.72)";
+    this.ctx.fillStyle = CANVAS_UI_PANEL_BG_STRONG;
     this.ctx.fillRect(40, 164, CANVAS_WIDTH - 80, 120);
-    this.ctx.strokeStyle = "rgba(133, 216, 255, 0.6)";
+    this.ctx.strokeStyle = CANVAS_UI_BORDER_STRONG;
     this.ctx.strokeRect(40, 164, CANVAS_WIDTH - 80, 120);
     this.ctx.textAlign = "center";
-    this.ctx.fillStyle = "#f4fbff";
-    this.ctx.font = "bold 22px monospace";
+    this.ctx.fillStyle = CANVAS_UI_TEXT;
+    this.ctx.font = "700 22px Playfair Display";
     this.ctx.fillText(title, CANVAS_WIDTH / 2, 214);
-    this.ctx.fillStyle = "#a6d9f7";
-    this.ctx.font = "13px monospace";
+    this.ctx.fillStyle = CANVAS_UI_MUTED;
+    this.ctx.font = "600 13px Inter";
     this.ctx.fillText(subtitle, CANVAS_WIDTH / 2, 248);
   }
 

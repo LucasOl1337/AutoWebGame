@@ -46,6 +46,8 @@ type IdleScreen = "landing" | "lobby-list";
 
 interface SessionElements {
   shell: HTMLDivElement;
+  rail: HTMLDivElement;
+  railItems: Record<ExperienceScreen, HTMLSpanElement>;
   languageSwitcher: HTMLDivElement;
   languageLabel: HTMLSpanElement;
   languagePortugueseButton: HTMLButtonElement;
@@ -95,6 +97,7 @@ interface SessionElements {
   matchStatus: HTMLParagraphElement;
   matchCopyButton: HTMLButtonElement;
   matchLeaveButton: HTMLButtonElement;
+  matchFullscreenButton: HTMLButtonElement;
   matchInfoToggleButton: HTMLButtonElement;
   matchChatToggleButton: HTMLButtonElement;
   matchInfoPanel: HTMLElement;
@@ -136,8 +139,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private accountRequestPending = false;
   private feedbackDialogOpen = false;
   private feedbackRequestPending = false;
-  private matchInfoPanelOpen = true;
+  private matchInfoPanelOpen = false;
   private matchChatPanelOpen = false;
+  private matchChromeVisible = true;
+  private matchChromeHideTimer: number | null = null;
   private statusClearTimer: number | null = null;
   private reconnectingForAccountRefresh = false;
   private realtimeReady = false;
@@ -196,6 +201,72 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
   private translate(portuguese: string, english: string): string {
     return this.language === "pt" ? portuguese : english;
+  }
+
+  private isFullscreenSupported(): boolean {
+    return typeof document !== "undefined" && typeof this.elements.matchStage.requestFullscreen === "function";
+  }
+
+  private isMatchStageFullscreen(): boolean {
+    return typeof document !== "undefined" && document.fullscreenElement === this.elements.matchStage;
+  }
+
+  private async toggleMatchFullscreen(): Promise<void> {
+    if (!this.isFullscreenSupported()) {
+      this.setStatus(this.translate("Tela cheia indisponivel neste navegador.", "Fullscreen is unavailable in this browser."));
+      return;
+    }
+    try {
+      if (this.isMatchStageFullscreen()) {
+        await document.exitFullscreen();
+      } else {
+        await this.elements.matchStage.requestFullscreen();
+      }
+    } catch {
+      this.setStatus(this.translate("Nao foi possivel abrir a tela cheia agora.", "Could not enter fullscreen right now."));
+    } finally {
+      this.renderMatchSurfaceState();
+      this.refreshMatchChromeAutohide();
+    }
+  }
+
+  private clearMatchChromeHideTimer(): void {
+    if (this.matchChromeHideTimer !== null) {
+      window.clearTimeout(this.matchChromeHideTimer);
+      this.matchChromeHideTimer = null;
+    }
+  }
+
+  private shouldAutoHideMatchChrome(): boolean {
+    return this.getScreen() === "match"
+      && this.isMatchStageFullscreen()
+      && !this.matchInfoPanelOpen
+      && !this.matchChatPanelOpen;
+  }
+
+  private setMatchChromeVisible(visible: boolean): void {
+    if (this.matchChromeVisible === visible) {
+      return;
+    }
+    this.matchChromeVisible = visible;
+    this.renderMatchSurfaceState();
+  }
+
+  private refreshMatchChromeAutohide(): void {
+    this.clearMatchChromeHideTimer();
+    if (!this.shouldAutoHideMatchChrome()) {
+      this.setMatchChromeVisible(true);
+      return;
+    }
+    this.setMatchChromeVisible(true);
+    this.matchChromeHideTimer = window.setTimeout(() => {
+      if (!this.shouldAutoHideMatchChrome()) {
+        this.setMatchChromeVisible(true);
+        return;
+      }
+      this.matchChromeHideTimer = null;
+      this.setMatchChromeVisible(false);
+    }, 1600);
   }
 
   private createPortraitImage(className: string, size: number, alt: string, eager = false): HTMLImageElement {
@@ -373,15 +444,60 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.elements.matchLeaveButton.addEventListener("click", () => {
       this.leaveCurrentLobby();
     });
+    this.elements.matchFullscreenButton.addEventListener("click", () => {
+      this.setMatchChromeVisible(true);
+      void this.toggleMatchFullscreen();
+    });
     this.elements.matchInfoToggleButton.addEventListener("click", () => {
-      this.matchInfoPanelOpen = true;
-      this.matchChatPanelOpen = false;
-      this.renderMatchSurfaceState();
+      this.setActiveMatchPanel(this.matchInfoPanelOpen ? null : "info");
     });
     this.elements.matchChatToggleButton.addEventListener("click", () => {
-      this.matchInfoPanelOpen = false;
-      this.matchChatPanelOpen = true;
+      this.setActiveMatchPanel(this.matchChatPanelOpen ? null : "chat");
+    });
+    this.elements.matchViewport.addEventListener("pointerdown", () => {
+      this.setMatchChromeVisible(true);
+      if (!this.matchInfoPanelOpen && !this.matchChatPanelOpen) {
+        this.refreshMatchChromeAutohide();
+        return;
+      }
+      this.setActiveMatchPanel(null);
+    });
+    this.elements.matchStage.addEventListener("pointermove", () => {
+      if (!this.shouldAutoHideMatchChrome()) {
+        return;
+      }
+      this.refreshMatchChromeAutohide();
+    });
+    this.elements.matchStage.addEventListener("pointerleave", () => {
+      if (!this.shouldAutoHideMatchChrome()) {
+        return;
+      }
+      this.clearMatchChromeHideTimer();
+      this.matchChromeHideTimer = window.setTimeout(() => {
+        if (!this.shouldAutoHideMatchChrome()) {
+          this.setMatchChromeVisible(true);
+          return;
+        }
+        this.matchChromeHideTimer = null;
+        this.setMatchChromeVisible(false);
+      }, 700);
+    });
+    this.elements.matchStage.addEventListener("focusin", () => {
+      if (!this.shouldAutoHideMatchChrome()) {
+        return;
+      }
+      this.refreshMatchChromeAutohide();
+    });
+    this.elements.matchViewport.addEventListener("dblclick", () => {
+      if (this.getScreen() !== "match") {
+        return;
+      }
+      this.setMatchChromeVisible(true);
+      void this.toggleMatchFullscreen();
+    });
+    document.addEventListener("fullscreenchange", () => {
       this.renderMatchSurfaceState();
+      this.refreshMatchChromeAutohide();
     });
     this.elements.matchChatSend.addEventListener("click", () => {
       this.sendChat();
@@ -636,6 +752,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
             status: "playing",
           };
         }
+        this.setActiveMatchPanel(null);
         this.syncPreferredCharacterFromMatchConfig(message.config);
         this.app.startOnlineMatch(message.config);
         this.observedMatchWinner = null;
@@ -726,6 +843,30 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const copy = this.copy;
     const shell = document.createElement("div");
     shell.className = "experience-shell";
+
+    const rail = document.createElement("div");
+    rail.className = "experience-rail";
+
+    const railItems = {
+      landing: document.createElement("span"),
+      "lobby-list": document.createElement("span"),
+      setup: document.createElement("span"),
+      match: document.createElement("span"),
+    } satisfies Record<ExperienceScreen, HTMLSpanElement>;
+
+    (
+      [
+        ["landing", "01"],
+        ["lobby-list", "02"],
+        ["setup", "03"],
+        ["match", "04"],
+      ] as const satisfies ReadonlyArray<readonly [ExperienceScreen, string]>
+    ).forEach(([screen, label]) => {
+      const item = railItems[screen];
+      item.className = "experience-rail__item";
+      item.textContent = label;
+      rail.appendChild(item);
+    });
 
     const languageSwitcher = document.createElement("div");
     languageSwitcher.className = "experience-language-switcher";
@@ -1093,7 +1234,12 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     matchLeaveButton.type = "button";
     matchLeaveButton.textContent = copy.match.leave;
 
-    matchActions.append(matchCopyButton, matchLeaveButton);
+    const matchFullscreenButton = document.createElement("button");
+    matchFullscreenButton.className = "experience-button experience-button--secondary experience-match__fullscreen-button";
+    matchFullscreenButton.type = "button";
+    matchFullscreenButton.textContent = this.translate("Tela cheia", "Fullscreen");
+
+    matchActions.append(matchFullscreenButton, matchCopyButton, matchLeaveButton);
     matchOverlay.append(matchCode, matchStatus, matchActions);
 
     const matchViewport = document.createElement("div");
@@ -1173,11 +1319,13 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const status = document.createElement("p");
     status.className = "experience-status";
 
-    shell.append(languageSwitcher, landing, feedbackDialog, lobbyList, setup, match, status);
+    shell.append(rail, languageSwitcher, landing, feedbackDialog, lobbyList, setup, match, status);
     root.prepend(shell);
 
     return {
       shell,
+      rail,
+      railItems,
       languageSwitcher,
       languageLabel,
       languagePortugueseButton,
@@ -1232,6 +1380,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       matchStatus,
       matchCopyButton,
       matchLeaveButton,
+      matchFullscreenButton,
       matchInfoToggleButton,
       matchChatToggleButton,
       matchInfoPanel: matchInfoRail,
@@ -1261,8 +1410,17 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
   private renderMatchSurfaceState(): void {
     const isMatchScreen = this.getScreen() === "match";
+    const fullscreenActive = this.isMatchStageFullscreen();
+    const chromeHidden = isMatchScreen
+      && fullscreenActive
+      && !this.matchChromeVisible
+      && !this.matchInfoPanelOpen
+      && !this.matchChatPanelOpen;
     this.elements.matchStage.dataset.infoOpen = isMatchScreen && this.matchInfoPanelOpen ? "true" : "false";
     this.elements.matchStage.dataset.chatOpen = isMatchScreen && this.matchChatPanelOpen ? "true" : "false";
+    this.elements.matchStage.dataset.fullscreen = isMatchScreen && fullscreenActive ? "true" : "false";
+    this.elements.matchStage.dataset.chromeHidden = chromeHidden ? "true" : "false";
+    this.elements.shell.dataset.matchFullscreen = isMatchScreen && fullscreenActive ? "true" : "false";
     this.elements.matchDock.hidden = !isMatchScreen;
     this.elements.matchInfoToggleButton.setAttribute(
       "aria-expanded",
@@ -1272,12 +1430,36 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       "aria-expanded",
       isMatchScreen && this.matchChatPanelOpen ? "true" : "false",
     );
+    this.elements.matchFullscreenButton.hidden = !isMatchScreen || !this.isFullscreenSupported();
+    this.elements.matchFullscreenButton.textContent = fullscreenActive
+      ? this.translate("Sair da tela cheia", "Exit fullscreen")
+      : this.translate("Tela cheia", "Fullscreen");
+    this.elements.matchFullscreenButton.setAttribute("aria-pressed", isMatchScreen && fullscreenActive ? "true" : "false");
+  }
+
+  private setActiveMatchPanel(panel: "info" | "chat" | null): void {
+    this.matchInfoPanelOpen = panel === "info";
+    this.matchChatPanelOpen = panel === "chat";
+    this.matchChromeVisible = true;
+    this.renderMatchSurfaceState();
+    this.refreshMatchChromeAutohide();
   }
 
   private renderShellState(): void {
     const screen = this.getScreen();
+    if (screen !== "match" && (this.matchInfoPanelOpen || this.matchChatPanelOpen)) {
+      this.matchInfoPanelOpen = false;
+      this.matchChatPanelOpen = false;
+    }
+    if (screen !== "match") {
+      this.clearMatchChromeHideTimer();
+      this.matchChromeVisible = true;
+    }
     this.telemetry.trackScreenView(screen, this.currentLobby?.roomCode ?? null);
     this.elements.shell.dataset.screen = screen;
+    for (const [key, node] of Object.entries(this.elements.railItems) as Array<[ExperienceScreen, HTMLSpanElement]>) {
+      node.dataset.active = key === screen ? "true" : "false";
+    }
     for (const [key, node] of Object.entries(this.elements.screens) as Array<[ExperienceScreen, HTMLElement]>) {
       const active = key === screen;
       node.dataset.active = active ? "true" : "false";
