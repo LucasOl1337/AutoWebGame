@@ -985,7 +985,12 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     landingFeedbackButton.textContent = copy.landing.feedback;
 
     landingActionsPrimary.append(landingQuickMatchButton);
-    landingActionsSecondary.append(landingBotMatchButton, landingLobbyButton, landingFeedbackButton);
+    landingActionsSecondary.append(
+      landingEndlessButton,
+      landingBotMatchButton,
+      landingLobbyButton,
+      landingFeedbackButton,
+    );
     landingActions.append(landingActionsPrimary, landingActionsSecondary);
     landingCopy.append(landingMeta, landingActions, landingAccountCard);
 
