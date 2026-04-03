@@ -2962,26 +2962,26 @@ export class GameApp {
     const frameHeight = arenaHeight + 20;
 
     const gradient = c.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    gradient.addColorStop(0, "#201b16");
-    gradient.addColorStop(0.38, "#14110e");
-    gradient.addColorStop(1, "#090807");
+    gradient.addColorStop(0, "#0e1a0c");
+    gradient.addColorStop(0.38, "#080e07");
+    gradient.addColorStop(1, "#050805");
     c.fillStyle = gradient;
     c.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     const mist = c.createRadialGradient(CANVAS_WIDTH - 92, 84, 18, CANVAS_WIDTH - 92, 84, 214);
-    mist.addColorStop(0, "rgba(224, 198, 142, 0.16)");
-    mist.addColorStop(0.4, "rgba(143, 104, 64, 0.12)");
-    mist.addColorStop(1, "rgba(20, 14, 9, 0)");
+    mist.addColorStop(0, "rgba(120, 220, 80, 0.10)");
+    mist.addColorStop(0.4, "rgba(60, 140, 30, 0.07)");
+    mist.addColorStop(1, "rgba(8, 16, 6, 0)");
     c.fillStyle = mist;
     c.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     const floorGlow = c.createLinearGradient(0, arenaBottom - 24, 0, CANVAS_HEIGHT);
-    floorGlow.addColorStop(0, "rgba(36, 28, 20, 0)");
-    floorGlow.addColorStop(1, "rgba(10, 9, 8, 0.92)");
+    floorGlow.addColorStop(0, "rgba(10, 20, 8, 0)");
+    floorGlow.addColorStop(1, "rgba(4, 8, 4, 0.92)");
     c.fillStyle = floorGlow;
     c.fillRect(0, arenaBottom - 24, CANVAS_WIDTH, CANVAS_HEIGHT - arenaBottom + 24);
 
-    c.fillStyle = "rgba(20, 17, 14, 0.76)";
+    c.fillStyle = "rgba(8, 14, 8, 0.76)";
     c.beginPath();
     c.moveTo(0, arenaY - 10);
     c.lineTo(arenaX - 2, arenaY + 44);
@@ -2998,7 +2998,7 @@ export class GameApp {
     c.closePath();
     c.fill();
 
-    c.fillStyle = "rgba(12, 10, 9, 0.5)";
+    c.fillStyle = "rgba(6, 10, 6, 0.5)";
     c.fillRect(frameX + 4, frameY + 14, frameWidth - 8, frameHeight - 4);
 
     c.fillStyle = "rgba(168, 255, 56, 0.10)";
@@ -3019,7 +3019,7 @@ export class GameApp {
     c.ellipse(CANVAS_WIDTH - 84, arenaBottom + 16, 104, 76, -0.35, 0, Math.PI * 2);
     c.fill();
 
-    c.fillStyle = "rgba(12, 10, 9, 0.34)";
+    c.fillStyle = "rgba(6, 10, 6, 0.34)";
     c.beginPath();
     c.moveTo(24, arenaY + 54);
     c.lineTo(56, arenaY + 120);
