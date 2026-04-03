@@ -2,27 +2,36 @@
   color-scheme: dark;
   font-family: "Inter", "Segoe UI Variable Text", "Segoe UI", sans-serif;
   --font-display: "Playfair Display", Georgia, serif;
-  /* Deep navy-black base — cool, immersive, game-forward */
-  --bg-0: #07070e;
-  --bg-1: #0d0d1a;
-  --bg-2: #141428;
-  --surface-0: rgba(9, 9, 20, 0.88);
-  --surface-1: rgba(13, 13, 26, 0.93);
-  --surface-2: rgba(18, 18, 34, 0.97);
-  --line-soft: rgba(255, 255, 255, 0.07);
-  --line-strong: rgba(245, 96, 26, 0.32);
-  --text: #f2edea;
-  --muted: #68657a;
-  --muted-strong: #9e9ab0;
-  /* Explosive orange-red — molten, energetic */
-  --accent: #f5601a;
-  --accent-strong: #ff8040;
-  --accent-soft: rgba(245, 96, 26, 0.12);
-  --danger: #e83838;
+  /* Green accent system — three tiers */
+  --accent-rgb: 168, 255, 56;          /* #a8ff38 — primary lime-green */
+  --accent-deep-rgb: 68, 190, 22;      /* #44be16 — rich mid-green */
+  --accent-forest-rgb: 28, 88, 8;      /* #1c5808 — dark forest green */
+  --steel-rgb: 218, 232, 218;          /* warm-green steel for subtle tints */
+  /* Dark base — green-tinted near-black */
+  --bg-0: #040605;
+  --bg-1: #0a0e0a;
+  --bg-2: #121a12;
+  --surface-0: rgba(12, 18, 12, 0.92);
+  --surface-1: rgba(16, 24, 16, 0.95);
+  --surface-2: rgba(22, 32, 22, 0.98);
+  --line-soft: rgba(var(--steel-rgb), 0.16);
+  --line-strong: rgba(var(--accent-rgb), 0.52);
+  --text: #f4faf4;
+  --muted: #8fa68a;
+  --muted-strong: #d4e8d0;
+  /* Multi-shade green accent */
+  --accent: #a8ff38;           /* primary CTA — vibrant lime */
+  --accent-strong: #c8ff72;    /* bright highlight — saturated, not washed */
+  --accent-deep: #44be16;      /* deep green — gradient base */
+  --accent-forest: #1c5808;    /* forest — tinted surfaces */
+  --accent-soft: rgba(var(--accent-rgb), 0.13);
+  --accent-contrast: #060f02;  /* near-black text on green */
+  --danger: #ff5f57;
   background:
-    radial-gradient(circle at 18% 12%, rgba(245, 96, 26, 0.18), transparent 30%),
-    radial-gradient(circle at 84% 88%, rgba(200, 55, 10, 0.10), transparent 32%),
-    linear-gradient(180deg, #0e0e1e 0%, #08081a 44%, #07070e 100%);
+    radial-gradient(circle at 18% 12%, rgba(var(--accent-rgb), 0.10), transparent 28%),
+    radial-gradient(circle at 82% 86%, rgba(var(--accent-deep-rgb), 0.12), transparent 36%),
+    radial-gradient(circle at 50% 50%, rgba(var(--accent-forest-rgb), 0.08), transparent 60%),
+    linear-gradient(180deg, #131a10 0%, #080d07 38%, #040605 100%);
   color: var(--text);
 }
 
@@ -145,7 +154,7 @@ button {
   padding: 4px;
   border: 1px solid var(--line-soft);
   border-radius: 999px;
-  background: rgba(8, 8, 20, 0.55);
+  background: rgba(4, 8, 4, 0.58);
   backdrop-filter: blur(14px);
   opacity: 0.6;
   transition: opacity 200ms ease;
@@ -185,14 +194,14 @@ button {
 
 .experience-language-switcher__option:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: rgba(245, 96, 26, 0.34);
+  border-color: rgba(var(--accent-rgb), 0.34);
   color: var(--text);
 }
 
 .experience-language-switcher__option[data-active="true"] {
-  border-color: rgba(245, 96, 26, 0.48);
-  color: #070718;
-  background: linear-gradient(135deg, #ff8040 0%, #cc4010 100%);
+  border-color: rgba(var(--accent-rgb), 0.48);
+  color: var(--accent-contrast);
+  background: linear-gradient(135deg, var(--accent-strong) 0%, var(--accent-deep) 100%);
 }
 
 .experience-language-switcher__option:disabled {
@@ -245,20 +254,25 @@ button {
 .experience-button:focus-visible,
 .experience-character-option:focus-visible,
 .experience-room-card:focus-visible {
-  outline: 2px solid rgba(245, 96, 26, 0.82);
+  outline: 2px solid rgba(var(--accent-rgb), 0.82);
   outline-offset: 2px;
 }
 
 .experience-button--primary {
-  border-color: rgba(245, 96, 26, 0.46);
-  background: linear-gradient(135deg, #ff8040 0%, #cc4010 100%);
-  color: #070718;
-  box-shadow: 0 2px 14px rgba(245, 96, 26, 0.22);
+  border-color: rgba(var(--accent-rgb), 0.46);
+  background: linear-gradient(135deg, var(--accent-strong) 0%, var(--accent-deep) 100%);
+  color: var(--accent-contrast);
+  box-shadow: 0 2px 18px rgba(var(--accent-rgb), 0.28);
 }
 
 .experience-button--secondary {
-  border-color: rgba(245, 96, 26, 0.28);
-  background: rgba(245, 96, 26, 0.1);
+  border-color: rgba(var(--accent-rgb), 0.34);
+  background:
+    linear-gradient(180deg, rgba(var(--accent-rgb), 0.16), rgba(var(--accent-rgb), 0.08)),
+    rgba(14, 20, 14, 0.88);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 0 18px rgba(var(--accent-rgb), 0.08);
 }
 
 .experience-button--ghost {
@@ -298,11 +312,12 @@ button {
 .experience-panel__header {
   border: 1px solid var(--line-soft);
   background:
-    linear-gradient(180deg, rgba(12, 12, 24, 0.92), rgba(9, 9, 18, 0.88)),
-    radial-gradient(circle at top right, rgba(245, 96, 26, 0.08), transparent 42%);
+    linear-gradient(180deg, rgba(18, 26, 18, 0.94), rgba(10, 16, 10, 0.9)),
+    radial-gradient(circle at top right, rgba(var(--steel-rgb), 0.07), transparent 42%),
+    radial-gradient(circle at bottom left, rgba(var(--accent-deep-rgb), 0.08), transparent 44%);
   box-shadow:
     0 28px 90px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(18px);
 }
 
@@ -396,11 +411,13 @@ button {
   border: 1px solid var(--line-soft);
   border-radius: 16px;
   color: var(--text);
-  background: rgba(7, 7, 16, 0.88);
+  background:
+    linear-gradient(180deg, rgba(14, 20, 14, 0.92), rgba(10, 15, 10, 0.9)),
+    radial-gradient(circle at top right, rgba(var(--steel-rgb), 0.05), transparent 48%);
 }
 
 .experience-account__input::placeholder {
-  color: #7f7362;
+  color: var(--muted);
 }
 
 .experience-actions {
@@ -430,7 +447,7 @@ button {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(5, 5, 14, 0.74);
+  background: rgba(4, 5, 6, 0.8);
   backdrop-filter: blur(10px);
 }
 
@@ -446,8 +463,9 @@ button {
   border-radius: 28px;
   border: 1px solid var(--line-soft);
   background:
-    linear-gradient(180deg, rgba(12, 12, 24, 0.96), rgba(8, 8, 18, 0.94)),
-    radial-gradient(circle at top right, rgba(245, 96, 26, 0.14), transparent 42%);
+    linear-gradient(180deg, rgba(20, 28, 20, 0.96), rgba(12, 18, 12, 0.94)),
+    radial-gradient(circle at top right, rgba(var(--steel-rgb), 0.07), transparent 42%),
+    radial-gradient(circle at bottom left, rgba(var(--accent-rgb), 0.10), transparent 44%);
   box-shadow: 0 28px 72px rgba(0, 0, 0, 0.42);
 }
 
@@ -471,12 +489,14 @@ button {
   border-radius: 20px;
   border: 1px solid var(--line-soft);
   color: var(--text);
-  background: rgba(7, 7, 16, 0.88);
+  background:
+    linear-gradient(180deg, rgba(14, 20, 14, 0.94), rgba(9, 13, 9, 0.92)),
+    radial-gradient(circle at top right, rgba(var(--steel-rgb), 0.05), transparent 48%);
   line-height: 1.5;
 }
 
 .experience-feedback__textarea::placeholder {
-  color: #7f7362;
+  color: var(--muted);
 }
 
 .experience-feedback__status {
@@ -500,9 +520,11 @@ button {
   display: grid;
   align-items: stretch;
   background:
-    linear-gradient(180deg, rgba(11, 11, 22, 0.72), rgba(5, 5, 14, 0.32)),
-    radial-gradient(circle at 50% 0%, rgba(245, 96, 26, 0.18), transparent 46%),
-    radial-gradient(circle at 50% 100%, rgba(180, 45, 5, 0.12), transparent 44%);
+    linear-gradient(180deg, rgba(16, 22, 14, 0.78), rgba(6, 10, 6, 0.4)),
+    radial-gradient(circle at 20% 8%, rgba(var(--steel-rgb), 0.08), transparent 36%),
+    radial-gradient(circle at 50% 0%, rgba(var(--accent-rgb), 0.20), transparent 46%),
+    radial-gradient(circle at 50% 100%, rgba(var(--accent-deep-rgb), 0.16), transparent 44%),
+    radial-gradient(circle at 80% 60%, rgba(var(--accent-forest-rgb), 0.14), transparent 40%);
 }
 
 .experience-landing-picker {
@@ -544,8 +566,9 @@ button {
   border-radius: 28px;
   border: 1px solid var(--line-soft);
   background:
-    linear-gradient(180deg, rgba(11, 11, 22, 0.9), rgba(7, 7, 16, 0.84)),
-    radial-gradient(circle at top right, rgba(245, 96, 26, 0.14), transparent 42%);
+    linear-gradient(180deg, rgba(18, 24, 18, 0.92), rgba(9, 13, 9, 0.88)),
+    radial-gradient(circle at top right, rgba(var(--steel-rgb), 0.08), transparent 42%),
+    radial-gradient(circle at bottom left, rgba(var(--accent-rgb), 0.12), transparent 44%);
 }
 
 .experience-character-summary--landing .experience-character-summary__portrait {
@@ -564,7 +587,9 @@ button {
   justify-items: center;
   padding: 16px;
   border-radius: 26px;
-  background: rgba(10, 10, 20, 0.58);
+  background:
+    linear-gradient(180deg, rgba(18, 24, 18, 0.76), rgba(9, 13, 9, 0.62)),
+    radial-gradient(circle at top, rgba(var(--steel-rgb), 0.08), transparent 44%);
   border: 1px solid var(--line-soft);
   box-shadow: 0 24px 56px rgba(0, 0, 0, 0.28);
 }
@@ -589,7 +614,9 @@ button {
 
 .experience-hero__portrait[data-selected="true"] {
   border-color: var(--line-strong);
-  background: rgba(245, 96, 26, 0.1);
+  background:
+    linear-gradient(180deg, rgba(var(--accent-rgb), 0.18), rgba(var(--accent-deep-rgb), 0.1)),
+    rgba(9, 13, 9, 0.88);
 }
 
 .experience-hero__portrait img {
@@ -680,7 +707,7 @@ button {
 .experience-room-list__empty {
   padding: 24px;
   border-radius: 22px;
-  border: 1px dashed rgba(245, 96, 26, 0.2);
+  border: 1px dashed rgba(var(--accent-rgb), 0.2);
   color: var(--muted);
   text-align: center;
 }
@@ -706,7 +733,7 @@ button {
 
 .experience-room-card:hover {
   transform: none;
-  border-color: rgba(245, 96, 26, 0.28);
+  border-color: rgba(var(--accent-rgb), 0.28);
 }
 
 .experience-room-card strong {
@@ -752,7 +779,7 @@ button {
 }
 
 .experience-room-card__occupant[data-filled="true"] {
-  background: rgba(245, 96, 26, 0.1);
+  background: rgba(var(--accent-rgb), 0.1);
   color: var(--muted-strong);
 }
 
@@ -777,8 +804,8 @@ button {
 }
 
 .experience-seat-pill[data-ready="true"] {
-  border-color: rgba(245, 96, 26, 0.28);
-  background: rgba(245, 96, 26, 0.1);
+  border-color: rgba(var(--accent-rgb), 0.28);
+  background: rgba(var(--accent-rgb), 0.1);
   color: var(--muted-strong);
 }
 
@@ -822,8 +849,9 @@ button {
   border-radius: 22px;
   border: 1px solid var(--line-soft);
   background:
-    radial-gradient(circle at top, rgba(245, 96, 26, 0.18), transparent 48%),
-    rgba(9, 9, 18, 0.92);
+    radial-gradient(circle at top, rgba(var(--steel-rgb), 0.12), transparent 44%),
+    radial-gradient(circle at 50% 10%, rgba(var(--accent-rgb), 0.22), transparent 52%),
+    rgba(14, 20, 14, 0.94);
 }
 
 .experience-character-summary__copy {
@@ -867,7 +895,9 @@ button {
   border-radius: 20px;
   color: var(--text);
   text-align: left;
-  background: rgba(255, 255, 255, 0.02);
+  background:
+    linear-gradient(180deg, rgba(18, 24, 18, 0.56), rgba(10, 14, 10, 0.46)),
+    rgba(var(--steel-rgb), 0.04);
   cursor: pointer;
   transition:
     transform 150ms ease,
@@ -877,12 +907,14 @@ button {
 
 .experience-character-option:hover {
   transform: translateY(-1px);
-  border-color: rgba(245, 96, 26, 0.24);
+  border-color: rgba(var(--accent-rgb), 0.24);
 }
 
 .experience-character-option[data-selected="true"] {
   border-color: var(--line-strong);
-  background: rgba(245, 96, 26, 0.1);
+  background:
+    linear-gradient(180deg, rgba(var(--accent-rgb), 0.18), rgba(var(--accent-deep-rgb), 0.1)),
+    rgba(12, 18, 12, 0.92);
 }
 
 .experience-character-option__portrait {
@@ -892,8 +924,9 @@ button {
   justify-self: center;
   border-radius: 16px;
   background:
-    radial-gradient(circle at top, rgba(245, 96, 26, 0.15), transparent 48%),
-    rgba(9, 9, 18, 0.92);
+    radial-gradient(circle at top, rgba(var(--steel-rgb), 0.12), transparent 42%),
+    radial-gradient(circle at 50% 10%, rgba(var(--accent-rgb), 0.2), transparent 52%),
+    rgba(14, 20, 14, 0.94);
 }
 
 .experience-character-option__copy {
@@ -993,7 +1026,7 @@ button {
 }
 
 .experience-presence__item[data-self="true"] {
-  border-bottom-color: rgba(245, 96, 26, 0.22);
+  border-bottom-color: rgba(var(--accent-rgb), 0.22);
   background: none;
 }
 
@@ -1107,8 +1140,9 @@ button {
   height: 100%;
   overflow: hidden;
   background:
-    linear-gradient(180deg, rgba(9, 9, 18, 0.96), rgba(5, 5, 14, 1)),
-    radial-gradient(circle at 50% 12%, rgba(245, 96, 26, 0.08), transparent 30%);
+    radial-gradient(circle at 18% 0%, rgba(var(--steel-rgb), 0.07), transparent 32%),
+    radial-gradient(circle at 50% 12%, rgba(var(--accent-rgb), 0.1), transparent 30%),
+    linear-gradient(180deg, rgba(18, 22, 26, 0.98), rgba(4, 6, 4, 1));
 }
 
 .experience-match__viewport {
@@ -1122,8 +1156,9 @@ button {
   place-items: center;
   overflow: hidden;
   background:
-    radial-gradient(circle at 50% 16%, rgba(245, 96, 26, 0.08), transparent 28%),
-    linear-gradient(180deg, rgba(9, 9, 18, 0.98), rgba(5, 5, 14, 1));
+    radial-gradient(circle at 20% 0%, rgba(var(--steel-rgb), 0.08), transparent 34%),
+    radial-gradient(circle at 50% 16%, rgba(var(--accent-rgb), 0.1), transparent 28%),
+    linear-gradient(180deg, rgba(18, 22, 26, 0.98), rgba(4, 6, 4, 1));
 }
 
 .experience-match__overlay {
@@ -1187,7 +1222,9 @@ button {
   padding: 4px;
   border-radius: 999px;
   border: 1px solid var(--line-soft);
-  background: rgba(9, 9, 18, 0.62);
+  background:
+    linear-gradient(180deg, rgba(18, 24, 18, 0.76), rgba(10, 14, 10, 0.72)),
+    rgba(var(--steel-rgb), 0.04);
   backdrop-filter: blur(14px);
 }
 
@@ -1195,10 +1232,12 @@ button {
   min-height: 34px;
   min-width: 58px;
   padding: 0 10px;
-  border: 1px solid rgba(245, 96, 26, 0.2);
+  border: 1px solid rgba(var(--accent-rgb), 0.26);
   border-radius: 999px;
   color: var(--muted-strong);
-  background: rgba(8, 8, 18, 0.84);
+  background:
+    linear-gradient(180deg, rgba(17, 23, 17, 0.88), rgba(9, 13, 9, 0.84)),
+    rgba(var(--steel-rgb), 0.04);
   backdrop-filter: blur(14px);
 }
 
@@ -1213,8 +1252,9 @@ button {
   border-radius: 20px;
   border: 1px solid var(--line-soft);
   background:
-    linear-gradient(180deg, rgba(10, 10, 20, 0.84), rgba(7, 7, 16, 0.9)),
-    radial-gradient(circle at top, rgba(245, 96, 26, 0.08), transparent 42%);
+    linear-gradient(180deg, rgba(20, 26, 20, 0.88), rgba(13, 16, 19, 0.92)),
+    radial-gradient(circle at top right, rgba(var(--steel-rgb), 0.08), transparent 42%),
+    radial-gradient(circle at top, rgba(var(--accent-rgb), 0.1), transparent 44%);
   backdrop-filter: blur(18px);
   box-shadow: 0 28px 64px rgba(0, 0, 0, 0.36);
   opacity: 0;
@@ -1243,8 +1283,10 @@ button {
 
 .experience-match__stage[data-info-open="true"] .experience-match__toggle--info,
 .experience-match__stage[data-chat-open="true"] .experience-match__toggle--chat {
-  border-color: rgba(245, 96, 26, 0.44);
-  background: rgba(245, 96, 26, 0.14);
+  border-color: rgba(var(--accent-rgb), 0.44);
+  background:
+    linear-gradient(180deg, rgba(var(--accent-rgb), 0.2), rgba(var(--accent-deep-rgb), 0.12)),
+    rgba(12, 15, 18, 0.9);
   color: var(--text);
 }
 
@@ -1317,7 +1359,7 @@ button {
 }
 
 .experience-match__seat[data-ready="true"] {
-  border-bottom-color: rgba(245, 96, 26, 0.22);
+  border-bottom-color: rgba(var(--accent-rgb), 0.22);
   background: none;
 }
 
@@ -1362,12 +1404,12 @@ button {
 }
 
 .experience-match__chat-entry[data-self="true"] {
-  border-bottom-color: rgba(245, 96, 26, 0.22);
+  border-bottom-color: rgba(var(--accent-rgb), 0.22);
   background: none;
 }
 
 .experience-match__chat-entry[data-system="true"] {
-  border-bottom-color: rgba(245, 96, 26, 0.18);
+  border-bottom-color: rgba(var(--accent-rgb), 0.18);
   background: none;
 }
 
@@ -2475,7 +2517,7 @@ button {
 }
 
 .experience-match__chat-input::placeholder {
-  color: #7f7362;
+  color: var(--muted);
 }
 
 .experience-screen--match canvas {
@@ -2486,13 +2528,13 @@ button {
   max-height: 100%;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  border: 2px solid rgba(245, 96, 26, 0.42);
+  border: 2px solid rgba(var(--accent-rgb), 0.42);
   border-radius: 18px;
-  background: #07070e;
+  background: #040506;
   box-shadow:
-    0 0 0 2px rgba(14, 14, 28, 0.84),
+    0 0 0 2px rgba(17, 20, 24, 0.88),
     0 32px 90px rgba(0, 0, 0, 0.42),
-    0 0 40px rgba(245, 96, 26, 0.12);
+    0 0 48px rgba(var(--accent-rgb), 0.16);
 }
 
 .experience-status {
@@ -2728,16 +2770,18 @@ button {
 /* Gameplay-first match prototype */
 .experience-match__stage {
   background:
-    radial-gradient(circle at 50% 8%, rgba(245, 96, 26, 0.12), transparent 30%),
-    radial-gradient(circle at 50% 100%, rgba(180, 45, 5, 0.08), transparent 34%),
-    linear-gradient(180deg, rgba(9, 9, 18, 0.98), rgba(5, 5, 14, 1));
+    radial-gradient(circle at 16% 0%, rgba(var(--steel-rgb), 0.08), transparent 34%),
+    radial-gradient(circle at 50% 8%, rgba(var(--accent-rgb), 0.14), transparent 30%),
+    radial-gradient(circle at 50% 100%, rgba(var(--accent-deep-rgb), 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(18, 22, 26, 0.98), rgba(4, 6, 4, 1));
 }
 
 .experience-match__viewport {
   padding: 4px;
   background:
-    radial-gradient(circle at 50% 14%, rgba(245, 96, 26, 0.08), transparent 24%),
-    linear-gradient(180deg, rgba(9, 9, 18, 0.98), rgba(5, 5, 14, 1));
+    radial-gradient(circle at 20% 0%, rgba(var(--steel-rgb), 0.08), transparent 34%),
+    radial-gradient(circle at 50% 14%, rgba(var(--accent-rgb), 0.1), transparent 24%),
+    linear-gradient(180deg, rgba(18, 22, 26, 0.98), rgba(4, 6, 4, 1));
 }
 
 .experience-match__overlay {
@@ -3233,7 +3277,7 @@ button {
 }
 
 .experience-screen--landing .experience-character-option[data-selected="true"] {
-  border-bottom-color: rgba(245, 96, 26, 0.28);
+  border-bottom-color: rgba(var(--accent-rgb), 0.28);
 }
 
 .experience-screen--landing .experience-character-option__portrait {
@@ -3308,7 +3352,7 @@ button {
 }
 
 .experience-screen--setup .experience-character-option[data-selected="true"] {
-  border-bottom-color: rgba(245, 96, 26, 0.28);
+  border-bottom-color: rgba(var(--accent-rgb), 0.28);
 }
 
 .experience-screen--setup .experience-character-option__portrait {
@@ -3390,8 +3434,9 @@ button {
   border-radius: 28px;
   border: 1px solid var(--line-soft);
   background:
-    linear-gradient(180deg, rgba(13, 13, 26, 0.9), rgba(8, 8, 18, 0.86)),
-    radial-gradient(circle at 50% 0%, rgba(245, 96, 26, 0.12), transparent 52%);
+    linear-gradient(180deg, rgba(20, 28, 20, 0.92), rgba(10, 14, 10, 0.88)),
+    radial-gradient(circle at top right, rgba(var(--steel-rgb), 0.08), transparent 42%),
+    radial-gradient(circle at 50% 0%, rgba(var(--accent-rgb), 0.14), transparent 52%);
   box-shadow:
     0 24px 64px rgba(0, 0, 0, 0.32),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
@@ -3404,8 +3449,9 @@ button {
   image-rendering: pixelated;
   border-radius: 24px;
   background:
-    radial-gradient(circle at 50% 20%, rgba(245, 96, 26, 0.2), transparent 56%),
-    rgba(10, 10, 20, 0.9);
+    radial-gradient(circle at top, rgba(var(--steel-rgb), 0.12), transparent 42%),
+    radial-gradient(circle at 50% 20%, rgba(var(--accent-rgb), 0.24), transparent 56%),
+    rgba(15, 21, 15, 0.92);
   border: 1px solid var(--line-soft);
 }
 
@@ -3443,7 +3489,9 @@ button {
   height: 56px;
   border-radius: 16px;
   border: 2px solid var(--line-soft);
-  background: rgba(255, 255, 255, 0.03);
+  background:
+    linear-gradient(180deg, rgba(18, 24, 18, 0.76), rgba(9, 13, 9, 0.72)),
+    rgba(var(--steel-rgb), 0.04);
   cursor: pointer;
   overflow: hidden;
   transition:
@@ -3456,14 +3504,14 @@ button {
 }
 
 .experience-character-strip__item:hover {
-  border-color: rgba(245, 96, 26, 0.38);
+  border-color: rgba(var(--accent-rgb), 0.38);
   transform: translateY(-2px);
 }
 
 .experience-character-strip__item[data-selected="true"] {
   border-color: var(--accent);
-  background: rgba(245, 96, 26, 0.1);
-  box-shadow: 0 0 0 1px rgba(245, 96, 26, 0.24);
+  background: rgba(var(--accent-rgb), 0.1);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.24);
 }
 
 .experience-character-strip__portrait {
@@ -3490,7 +3538,7 @@ button {
 
 /* Primary button hover — game-oriented glow */
 .experience-button--primary:hover:not(:disabled) {
-  box-shadow: 0 4px 24px rgba(245, 96, 26, 0.38);
+  box-shadow: 0 6px 28px rgba(var(--accent-rgb), 0.46);
 }
 
 /* Landing actions: primary takes full width */
@@ -3510,11 +3558,12 @@ button {
   padding: clamp(20px, 4vw, 36px);
   border: 1px solid var(--line-soft);
   background:
-    linear-gradient(180deg, rgba(11, 11, 22, 0.88), rgba(7, 7, 16, 0.84)),
-    radial-gradient(circle at 50% 0%, rgba(245, 96, 26, 0.1), transparent 44%);
+    linear-gradient(180deg, rgba(20, 26, 20, 0.9), rgba(12, 15, 18, 0.86)),
+    radial-gradient(circle at top right, rgba(var(--steel-rgb), 0.08), transparent 42%),
+    radial-gradient(circle at 50% 0%, rgba(var(--accent-rgb), 0.14), transparent 44%);
   box-shadow:
     0 28px 90px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(18px);
   border-radius: 36px;
 }
