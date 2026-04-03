@@ -166,20 +166,20 @@ const CANVAS_BACKBUFFER_SCALE = 2;
 const CANVAS_VIEWPORT_PADDING = 32;
 const PLAYER_SPRITE_HEIGHT_SCALE = 1.45;
 const PLAYER_SPRITE_MAX_WIDTH_SCALE = 1.2;
-const CANVAS_UI_PANEL_BG = "rgba(10, 16, 10, 0.82)";
-const CANVAS_UI_PANEL_BG_STRONG = "rgba(7, 12, 7, 0.92)";
-const CANVAS_UI_PANEL_BG_SOFT = "rgba(14, 20, 14, 0.72)";
-const CANVAS_UI_BORDER = "rgba(168, 255, 56, 0.22)";
-const CANVAS_UI_BORDER_STRONG = "rgba(168, 255, 56, 0.38)";
-const CANVAS_UI_TEXT = "#f0f8f0";
-const CANVAS_UI_MUTED = "#8fa68a";
-const CANVAS_UI_MUTED_SOFT = "rgba(143, 166, 138, 0.68)";
-const CANVAS_UI_GOLD = "#a8ff38";
-const CANVAS_UI_GOLD_BRIGHT = "#c8ff72";
-const CANVAS_UI_GOLD_SOFT = "rgba(168, 255, 56, 0.14)";
-const CANVAS_UI_SUCCESS = "#c8ffb2";
+const CANVAS_UI_PANEL_BG = "rgba(8, 8, 16, 0.82)";
+const CANVAS_UI_PANEL_BG_STRONG = "rgba(6, 6, 12, 0.92)";
+const CANVAS_UI_PANEL_BG_SOFT = "rgba(12, 12, 20, 0.72)";
+const CANVAS_UI_BORDER = "rgba(0, 229, 160, 0.22)";
+const CANVAS_UI_BORDER_STRONG = "rgba(0, 229, 160, 0.38)";
+const CANVAS_UI_TEXT = "#f0f4f8";
+const CANVAS_UI_MUTED = "#6b7a8d";
+const CANVAS_UI_MUTED_SOFT = "rgba(107, 122, 141, 0.68)";
+const CANVAS_UI_GOLD = "#00e5a0";
+const CANVAS_UI_GOLD_BRIGHT = "#5dffc8";
+const CANVAS_UI_GOLD_SOFT = "rgba(0, 229, 160, 0.14)";
+const CANVAS_UI_SUCCESS = "#5dffc8";
 const CANVAS_UI_DANGER = "#ff5f57";
-const CANVAS_UI_SHADOW = "rgba(4, 8, 4, 0.9)";
+const CANVAS_UI_SHADOW = "rgba(2, 2, 8, 0.9)";
 
 function createEmptyDirectionalSprites(): DirectionalSprites {
   return {
@@ -2962,26 +2962,26 @@ export class GameApp {
     const frameHeight = arenaHeight + 20;
 
     const gradient = c.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    gradient.addColorStop(0, "#0e1a0c");
-    gradient.addColorStop(0.38, "#080e07");
-    gradient.addColorStop(1, "#050805");
+    gradient.addColorStop(0, "#0a0a12");
+    gradient.addColorStop(0.38, "#07070e");
+    gradient.addColorStop(1, "#050508");
     c.fillStyle = gradient;
     c.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     const mist = c.createRadialGradient(CANVAS_WIDTH - 92, 84, 18, CANVAS_WIDTH - 92, 84, 214);
-    mist.addColorStop(0, "rgba(120, 220, 80, 0.10)");
-    mist.addColorStop(0.4, "rgba(60, 140, 30, 0.07)");
-    mist.addColorStop(1, "rgba(8, 16, 6, 0)");
+    mist.addColorStop(0, "rgba(0, 229, 160, 0.08)");
+    mist.addColorStop(0.4, "rgba(0, 168, 112, 0.05)");
+    mist.addColorStop(1, "rgba(5, 5, 12, 0)");
     c.fillStyle = mist;
     c.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     const floorGlow = c.createLinearGradient(0, arenaBottom - 24, 0, CANVAS_HEIGHT);
-    floorGlow.addColorStop(0, "rgba(10, 20, 8, 0)");
-    floorGlow.addColorStop(1, "rgba(4, 8, 4, 0.92)");
+    floorGlow.addColorStop(0, "rgba(0, 20, 16, 0)");
+    floorGlow.addColorStop(1, "rgba(2, 2, 8, 0.92)");
     c.fillStyle = floorGlow;
     c.fillRect(0, arenaBottom - 24, CANVAS_WIDTH, CANVAS_HEIGHT - arenaBottom + 24);
 
-    c.fillStyle = "rgba(8, 14, 8, 0.76)";
+    c.fillStyle = "rgba(6, 6, 14, 0.76)";
     c.beginPath();
     c.moveTo(0, arenaY - 10);
     c.lineTo(arenaX - 2, arenaY + 44);
@@ -2998,10 +2998,10 @@ export class GameApp {
     c.closePath();
     c.fill();
 
-    c.fillStyle = "rgba(6, 10, 6, 0.5)";
+    c.fillStyle = "rgba(4, 4, 10, 0.5)";
     c.fillRect(frameX + 4, frameY + 14, frameWidth - 8, frameHeight - 4);
 
-    c.fillStyle = "rgba(168, 255, 56, 0.10)";
+    c.fillStyle = "rgba(0, 229, 160, 0.08)";
     c.beginPath();
     c.moveTo(frameX, frameY + 4);
     c.lineTo(frameX + frameWidth, frameY + 4);
@@ -3010,7 +3010,7 @@ export class GameApp {
     c.closePath();
     c.fill();
 
-    c.strokeStyle = "rgba(168, 255, 56, 0.16)";
+    c.strokeStyle = "rgba(0, 229, 160, 0.16)";
     c.lineWidth = 1;
     c.strokeRect(frameX + 0.5, frameY + 0.5, frameWidth - 1, frameHeight - 1);
 
@@ -3019,7 +3019,7 @@ export class GameApp {
     c.ellipse(CANVAS_WIDTH - 84, arenaBottom + 16, 104, 76, -0.35, 0, Math.PI * 2);
     c.fill();
 
-    c.fillStyle = "rgba(6, 10, 6, 0.34)";
+    c.fillStyle = "rgba(4, 4, 10, 0.34)";
     c.beginPath();
     c.moveTo(24, arenaY + 54);
     c.lineTo(56, arenaY + 120);
@@ -3028,7 +3028,7 @@ export class GameApp {
     c.closePath();
     c.fill();
 
-    c.strokeStyle = "rgba(168, 255, 80, 0.05)";
+    c.strokeStyle = "rgba(0, 229, 160, 0.04)";
     c.lineWidth = 2;
     for (let i = 0; i < 6; i += 1) {
       c.beginPath();
