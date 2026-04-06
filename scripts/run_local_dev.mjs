@@ -114,11 +114,11 @@ const vite = spawnManaged("frontend", [
   "--host",
   "127.0.0.1",
   "--port",
-  "5173",
+  "5174",
 ]);
 children.push(vite);
 attachExit("frontend", vite);
 
 console.log("Dev local pronto:");
-console.log("  Frontend: http://127.0.0.1:5173");
+console.log("  Frontend: http://127.0.0.1:5174");
 console.log("  Worker:   http://127.0.0.1:8787");

@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "properties": {
+    "direction": { "type": ["string", "null"], "enum": ["up", "down", "left", "right", null] },
+    "placeBomb":  { "type": "boolean" },
+    "detonate":   { "type": "boolean" },
+    "useSkill":   { "type": "boolean" },
+    "reason":     { "type": "string", "maxLength": 120 }
+  },
+  "required": ["direction", "placeBomb", "detonate", "useSkill", "reason"],
+  "additionalProperties": false
+}

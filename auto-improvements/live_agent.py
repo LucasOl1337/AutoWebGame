@@ -24,11 +24,19 @@ OPENROUTER_API_KEY      for OpenRouter provider
 
 import json
 import os
+import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+# Force UTF-8 so log output doesn't crash on Windows cp1252 consoles
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 try:
     from model_manager import call_model, compact_line
@@ -43,10 +51,11 @@ AGENT_ID = os.environ.get("AGENT_BOT_ID", "bot-default")
 PLAYER_ID = str(os.environ.get("AGENT_PLAYER_ID", "1"))
 POLL_INTERVAL = float(os.environ.get("AGENT_POLL_INTERVAL_SEC", "0.25"))
 IDLE_INTERVAL = float(os.environ.get("AGENT_IDLE_INTERVAL_SEC", "1.0"))
-PROVIDER = compact_line(os.environ.get("AGENT_PROVIDER", "claude"))
+PROVIDER = compact_line(os.environ.get("AGENT_PROVIDER", "openai_codex"))
 MODEL = compact_line(os.environ.get("AGENT_MODEL", ""))
 REASONING_EFFORT = compact_line(os.environ.get("CODEX_REASONING_EFFORT", ""))
 CODEX_HOME = os.environ.get("CODEX_HOME", "").strip()
+CODEX_HOME_CHAIN_JSON = os.environ.get("AGENT_CODEX_HOME_CHAIN_JSON", "").strip()
 OPENROUTER_API_KEY_ENV = os.environ.get("OPENROUTER_API_KEY_ENV_VAR", "OPENROUTER_API_KEY")
 OPENROUTER_BASE_URL = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
 
@@ -66,6 +75,32 @@ def player_id_label() -> str:
 
 def now_ms() -> int:
     return int(time.time() * 1000)
+
+
+def _load_codex_home_chain() -> list[str]:
+    homes: list[str] = []
+    seen: set[str] = set()
+
+    def _push(value: str) -> None:
+        value = compact_line(value)
+        if not value or value in seen:
+            return
+        homes.append(value)
+        seen.add(value)
+
+    if CODEX_HOME:
+        _push(CODEX_HOME)
+    if CODEX_HOME_CHAIN_JSON:
+        try:
+            payload = json.loads(CODEX_HOME_CHAIN_JSON)
+            if isinstance(payload, list):
+                for item in payload:
+                    if isinstance(item, str):
+                        _push(item)
+        except json.JSONDecodeError:
+            for item in CODEX_HOME_CHAIN_JSON.split("||"):
+                _push(item)
+    return homes
 
 
 # ---------------------------------------------------------------------------
@@ -138,6 +173,15 @@ def _fmt_flame(f: dict[str, Any]) -> str:
     return f"flame tile=({tile.get('x')},{tile.get('y')}) rem={f.get('remainingMs')}ms"
 
 
+def _tile_distance(a: dict[str, Any] | None, b: dict[str, Any] | None) -> int:
+    if not isinstance(a, dict) or not isinstance(b, dict):
+        return 999
+    try:
+        return abs(int(a.get("x", 0)) - int(b.get("x", 0))) + abs(int(a.get("y", 0)) - int(b.get("y", 0)))
+    except (TypeError, ValueError):
+        return 999
+
+
 def build_prompt(state: dict[str, Any]) -> str:
     players = state.get("players", [])
     bombs = state.get("bombs", [])
@@ -148,6 +192,15 @@ def build_prompt(state: dict[str, Any]) -> str:
     me = next((p for p in (players or []) if str(p.get("id")) == PLAYER_ID), None)
     if me is None:
         return f"No data for player {PLAYER_ID}. Return idle: {{\"direction\":null,\"placeBomb\":false,\"detonate\":false,\"useSkill\":false,\"reason\":\"no_self_state\"}}"
+    me_tile = me.get("tile", {}) if isinstance(me, dict) else {}
+    nearby_bombs = sorted(
+        [b for b in (bombs or []) if isinstance(b, dict)],
+        key=lambda b: _tile_distance(me_tile, b.get("tile", {})),
+    )[:6]
+    nearby_flames = sorted(
+        [f for f in (flames or []) if isinstance(f, dict)],
+        key=lambda f: _tile_distance(me_tile, f.get("tile", {})),
+    )[:8]
 
     lines = [
         f"Tick: {state.get('tick', 0)} | Phase: {state.get('phase')} | Score: {json.dumps(score)}",
@@ -158,18 +211,18 @@ def build_prompt(state: dict[str, Any]) -> str:
     for p in (players or []):
         lines.append("  " + _fmt_player(p))
 
-    if bombs:
-        lines.append("\nBombs:")
-        for b in bombs[:12]:
+    if nearby_bombs:
+        lines.append("\nNearest bombs:")
+        for b in nearby_bombs:
             lines.append("  " + _fmt_bomb(b))
 
-    if flames:
-        lines.append("\nActive flames:")
-        for f in flames[:20]:
+    if nearby_flames:
+        lines.append("\nNearest flames:")
+        for f in nearby_flames:
             lines.append("  " + _fmt_flame(f))
 
     lines.append(f"\nYou are: {_fmt_player(me)}")
-    lines.append(f"\nDecide the next action for P{PLAYER_ID}. Return JSON only.")
+    lines.append(f"\nDecide the next action for P{PLAYER_ID}. Be decisive and low-latency. Return JSON only.")
     return "\n".join(lines)
 
 
@@ -218,6 +271,72 @@ def parse_decision(raw: str) -> dict[str, Any] | None:
 
 
 # ---------------------------------------------------------------------------
+# Codex call helpers (session-aware, mirrors The-Last-Arrow architecture)
+# ---------------------------------------------------------------------------
+
+def _codex_new(prompt: str, *, codex_home: str = "") -> tuple[str | None, str | None, str]:
+    """Start a new Codex session. Returns (text, session_id, status)."""
+    if PROVIDER != "openai_codex":
+        text, status = call_model(
+            prompt, SYSTEM_PROMPT,
+            provider=PROVIDER, model=MODEL, reasoning_effort=REASONING_EFFORT,
+            codex_home=codex_home or CODEX_HOME,
+            openrouter_api_key_env=OPENROUTER_API_KEY_ENV,
+            openrouter_base_url=OPENROUTER_BASE_URL,
+            max_tokens=120, timeout=45.0,
+        )
+        return text, None, status
+
+    # openai_codex: use the low-level new-session call that returns thread_id
+    try:
+        from model_manager import _call_codex_new
+    except ImportError:
+        from auto_improvements.model_manager import _call_codex_new  # type: ignore
+
+    return _call_codex_new(
+        prompt, SYSTEM_PROMPT,
+        model=MODEL, reasoning_effort=REASONING_EFFORT,
+        codex_home=codex_home or CODEX_HOME, timeout=45.0,
+    )
+
+
+def _codex_resume(session_id: str, prompt: str, *, codex_home: str = "") -> tuple[str | None, str]:
+    """Resume an existing Codex session. Returns (text, status)."""
+    try:
+        from model_manager import _call_codex_resume
+    except ImportError:
+        from auto_improvements.model_manager import _call_codex_resume  # type: ignore
+
+    return _call_codex_resume(
+        session_id, prompt,
+        model=MODEL, reasoning_effort=REASONING_EFFORT,
+        codex_home=codex_home or CODEX_HOME, timeout=45.0,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Warmup — establishes Codex session before the first match tick
+# ---------------------------------------------------------------------------
+
+WARMUP_PROMPT = (
+    "This is a warm-up turn before a live Bomberman match.\n"
+    "Return a default aggressive opening move: move right, do not place bomb.\n"
+    f"You will be controlling player {PLAYER_ID}.\n"
+)
+
+
+def run_warmup(*, codex_home: str = "") -> tuple[str | None, str | None]:
+    """Run a warmup Codex call. Returns (session_id, warmup_decision_raw)."""
+    log("warmup: starting Codex session...")
+    raw, session_id, status = _codex_new(WARMUP_PROMPT, codex_home=codex_home)
+    if status == "ok" and raw:
+        log(f"warmup OK  session={str(session_id or '')[:12]}  raw={raw[:60]}")
+        return session_id, raw
+    log(f"warmup FAILED: {status}")
+    return None, None
+
+
+# ---------------------------------------------------------------------------
 # Main agent loop
 # ---------------------------------------------------------------------------
 
@@ -228,11 +347,70 @@ class LiveAgent:
         self.match_start_tick = 0
         self.decisions_this_match = 0
         self.running = True
+        self._codex_session_id: str | None = None
+        # Background thread so Codex calls don't block the poll loop
+        self._ai_thread: threading.Thread | None = None
+        self._ai_busy = False
+        self._ai_lock = threading.Lock()
+        self._ai_retry_at_ms = 0
+        self._last_model_error = ""
+        self._codex_homes = _load_codex_home_chain()
+        self._codex_home_index = 0
+
+    def _is_ai_busy(self) -> bool:
+        with self._ai_lock:
+            return self._ai_busy
+
+    def _current_codex_home(self) -> str:
+        if self._codex_homes:
+            return self._codex_homes[self._codex_home_index]
+        return CODEX_HOME
+
+    def _current_codex_home_label(self) -> str:
+        home = self._current_codex_home()
+        if not home:
+            return "(default)"
+        try:
+            return Path(home).name or home
+        except OSError:
+            return home
+
+    def _rotate_codex_home(self) -> bool:
+        if PROVIDER != "openai_codex" or len(self._codex_homes) < 2:
+            return False
+        old_index = self._codex_home_index
+        self._codex_home_index = (self._codex_home_index + 1) % len(self._codex_homes)
+        if self._codex_home_index == old_index:
+            return False
+        self._codex_session_id = None
+        self._ai_retry_at_ms = now_ms() + 1000
+        log(f"rotating Codex account -> {self._current_codex_home_label()}")
+        return True
 
     def run(self) -> None:
-        log(f"starting — provider={PROVIDER} model={MODEL or '(default)'} player={PLAYER_ID}")
+        log(
+            f"starting  provider={PROVIDER} model={MODEL or '(default)'}  "
+            f"player={PLAYER_ID} codexHome={self._current_codex_home_label()}"
+        )
         send_heartbeat()
         heartbeat_at = now_ms()
+
+        # Warmup: establish Codex session and post a default decision immediately
+        session_id, warmup_raw = run_warmup(codex_home=self._current_codex_home())
+        if PROVIDER == "openai_codex" and not session_id and not warmup_raw and len(self._codex_homes) > 1:
+            for _ in range(len(self._codex_homes) - 1):
+                if not self._rotate_codex_home():
+                    break
+                session_id, warmup_raw = run_warmup(codex_home=self._current_codex_home())
+                if session_id or warmup_raw:
+                    self._ai_retry_at_ms = 0
+                    break
+        self._codex_session_id = session_id
+        if warmup_raw:
+            d = parse_decision(warmup_raw)
+            if d:
+                _http_post("/decision", d)
+                log(f"warmup decision posted: {d['direction']}  {d['reason'][:50]}")
 
         while self.running:
             try:
@@ -253,7 +431,9 @@ class LiveAgent:
                 if phase == "match" and self.last_phase != "match":
                     self.match_start_tick = tick
                     self.decisions_this_match = 0
-                    log("match started")
+                    log("=" * 55)
+                    log(f"  MATCH STARTED  player={PLAYER_ID}  session={str(self._codex_session_id or 'new')[:12]}")
+                    log("=" * 55)
 
                 # Detect match end
                 if phase == "match-result" and self.last_phase == "match":
@@ -270,7 +450,11 @@ class LiveAgent:
                     continue
 
                 self.last_tick = tick
-                self._process_tick(state, tick)
+
+                # Fire AI call in background; skip tick if previous is still running.
+                # The last decision (25s TTL) keeps the bot moving while we wait.
+                if not self._is_ai_busy() and now_ms() >= self._ai_retry_at_ms:
+                    self._fire_ai_call(state, tick)
 
             except KeyboardInterrupt:
                 self.running = False
@@ -280,33 +464,64 @@ class LiveAgent:
 
         log("stopped")
 
-    def _process_tick(self, state: dict[str, Any], tick: int) -> None:
+    def _fire_ai_call(self, state: dict[str, Any], tick: int) -> None:
+        """Start an async AI call in a daemon thread."""
         prompt = build_prompt(state)
-        raw, status = call_model(
-            prompt,
-            SYSTEM_PROMPT,
-            provider=PROVIDER,
-            model=MODEL,
-            reasoning_effort=REASONING_EFFORT,
-            codex_home=CODEX_HOME,
-            openrouter_api_key_env=OPENROUTER_API_KEY_ENV,
-            openrouter_base_url=OPENROUTER_BASE_URL,
-            max_tokens=120,
-            timeout=8.0,
-        )
+        session_id = self._codex_session_id
+        codex_home = self._current_codex_home()
 
-        if status != "ok" or raw is None:
-            log(f"model error tick={tick} status={status}")
-            return
+        def _worker() -> None:
+            new_session_id: str | None = None
+            if session_id and PROVIDER == "openai_codex":
+                raw, status = _codex_resume(session_id, prompt, codex_home=codex_home)
+            else:
+                raw, new_session_id, status = _codex_new(prompt, codex_home=codex_home)
 
-        decision = parse_decision(raw)
-        if decision is None:
-            log(f"parse failed tick={tick} raw={raw[:80]}")
-            return
+            with self._ai_lock:
+                self._ai_busy = False
+                if new_session_id:
+                    self._codex_session_id = new_session_id
 
-        _http_post("/decision", decision)
-        self.decisions_this_match += 1
-        log(f"tick={tick} dir={decision['direction']} bomb={decision['placeBomb']} reason={decision['reason'][:50]}")
+            if status != "ok" or raw is None:
+                self._handle_model_error(status, tick)
+                return
+
+            decision = parse_decision(raw)
+            if decision is None:
+                log(f"parse failed tick={tick:>5} raw={raw[:80]}")
+                return
+
+            self._last_model_error = ""
+            self._ai_retry_at_ms = 0
+            _http_post("/decision", decision)
+            self.decisions_this_match += 1
+            arrow = {"up": "^", "down": "v", "left": "<", "right": ">"}.get(
+                str(decision["direction"] or ""), "."
+            )
+            bomb_flag = "BOMB" if decision["placeBomb"] else "    "
+            det_flag  = "DET " if decision["detonate"] else "    "
+            log(f"tick={tick:>5} | {arrow} {bomb_flag} {det_flag}| {decision['reason'][:60]}")
+
+        with self._ai_lock:
+            self._ai_busy = True
+        t = threading.Thread(target=_worker, daemon=True, name=f"ai-p{PLAYER_ID}-t{tick}")
+        self._ai_thread = t
+        t.start()
+
+    def _handle_model_error(self, status: str, tick: int) -> None:
+        status_l = status.lower()
+        retry_ms = 0
+        if "usage limit" in status_l or "rate limit" in status_l or "try again at" in status_l:
+            if self._rotate_codex_home():
+                retry_ms = 1000
+            else:
+                retry_ms = 30_000
+            self._ai_retry_at_ms = max(self._ai_retry_at_ms, now_ms() + retry_ms)
+
+        suffix = f" retry_in={retry_ms // 1000}s" if retry_ms else ""
+        if status != self._last_model_error or retry_ms:
+            log(f"model error tick={tick:>5} status={status}{suffix}")
+        self._last_model_error = status
 
     def _on_match_ended(self, state: dict[str, Any]) -> None:
         players = state.get("players", [])
@@ -324,7 +539,10 @@ class LiveAgent:
             "tick": state.get("tick", 0),
         }
         append_event(event)
-        log(f"match ended won={won} decisions={self.decisions_this_match}")
+        result = "WON" if won else "LOST"
+        log(f"{'-' * 55}")
+        log(f"  {result}  decisions={self.decisions_this_match}  survivors={len(survivors)}")
+        log(f"{'-' * 55}")
 
 
 def main() -> int:

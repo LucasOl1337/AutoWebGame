@@ -27,6 +27,9 @@ __pycache__/
 claude.md
 tmp-*.png
 .tmp-*.png
+.tmp-*
+.claude/
+.wrangler-dry-run/
 remote-*.html
 commit-msg.txt
 

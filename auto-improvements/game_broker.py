@@ -35,7 +35,7 @@ except ModuleNotFoundError:
 BROKER_HOST = os.environ.get("BROKER_HOST", "127.0.0.1")
 BROKER_PORT = int(os.environ.get("BROKER_PORT", "8766"))
 REPORT_INTERVAL_SECONDS = float(os.environ.get("BROKER_REPORT_INTERVAL_SEC", "1.0"))
-CORS_ORIGINS = os.environ.get("BROKER_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+CORS_ORIGINS = os.environ.get("BROKER_CORS_ORIGINS", "http://localhost:5174,http://127.0.0.1:5174,http://localhost:5173,http://127.0.0.1:5173")
 
 
 def now_ms() -> int:
@@ -92,9 +92,20 @@ def _cors_origin(request_origin: str) -> str:
 # ---------------------------------------------------------------------------
 # Request handler
 # ---------------------------------------------------------------------------
+_BENIGN_ERRORS = (ConnectionAbortedError, BrokenPipeError, ConnectionResetError)
+
+
 class BrokerHandler(BaseHTTPRequestHandler):
     def log_message(self, _format: str, *_args: Any) -> None:  # silence default logs
         pass
+
+    def handle_error(self, request: Any, client_address: Any) -> None:  # type: ignore[override]
+        """Suppress noisy browser-disconnect errors (ConnectionAbortedError etc.)."""
+        import sys as _sys
+        exc = _sys.exc_info()[1]
+        if exc is None or isinstance(exc, _BENIGN_ERRORS):
+            return
+        super().handle_error(request, client_address)  # type: ignore[misc]
 
     def _send_json(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
@@ -145,9 +156,14 @@ class BrokerHandler(BaseHTTPRequestHandler):
                 self._handle_get_decision(player_id)
             else:
                 self._send_json(404, {"ok": False, "error": "not_found"})
+        except _BENIGN_ERRORS:
+            pass  # browser closed connection early — normal, not an error
         except Exception:
             traceback.print_exc()
-            self._send_json(500, {"ok": False, "error": "internal"})
+            try:
+                self._send_json(500, {"ok": False, "error": "internal"})
+            except Exception:
+                pass
 
     def do_POST(self) -> None:  # noqa: N802
         path = self.path.split("?")[0]
@@ -174,9 +190,14 @@ class BrokerHandler(BaseHTTPRequestHandler):
                 self._handle_trigger_worker(dry_run=False)
             else:
                 self._send_json(404, {"ok": False, "error": "not_found"})
+        except _BENIGN_ERRORS:
+            pass  # browser closed connection early — normal, not an error
         except Exception:
             traceback.print_exc()
-            self._send_json(500, {"ok": False, "error": "internal"})
+            try:
+                self._send_json(500, {"ok": False, "error": "internal"})
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # Handlers

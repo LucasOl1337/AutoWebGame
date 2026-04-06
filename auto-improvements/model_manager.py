@@ -88,8 +88,19 @@ def read_codex_defaults(codex_home: str = "") -> dict[str, str]:
 def discover_codex_homes() -> list[tuple[str, str]]:
     home = Path.home()
     homes: list[tuple[str, str]] = [("", "Inherit ~/.codex default")]
-    if DEFAULT_CODEX_HOME.exists():
-        homes.append((str(DEFAULT_CODEX_HOME), str(DEFAULT_CODEX_HOME)))
+    seen: set[str] = set()
+
+    for candidate in [DEFAULT_CODEX_HOME, *sorted(home.glob(".codex*"))]:
+        try:
+            resolved = str(candidate.resolve())
+        except OSError:
+            continue
+        if resolved in seen or not candidate.is_dir():
+            continue
+        if not ((candidate / "auth.json").exists() or (candidate / "config.toml").exists() or (candidate / ".sandbox-bin" / "codex.exe").exists()):
+            continue
+        homes.append((resolved, resolved))
+        seen.add(resolved)
     return homes
 
 
@@ -107,32 +118,73 @@ def discover_ollama_models(host: str = DEFAULT_OLLAMA_HOST) -> list[tuple[str, s
 # Model call: OpenAI via Codex CLI subprocess
 # ---------------------------------------------------------------------------
 
-def _call_codex(
-    prompt: str,
-    system_prompt: str,
+TOOLS_DIR = Path(__file__).resolve().parent
+_OUTPUT_SCHEMA = TOOLS_DIR / "live_agent_output_schema.json"
+
+
+def _resolve_codex_exe(codex_home: str = "") -> Path | None:
+    """Find codex.exe: explicit home → default home → PATH."""
+    if codex_home:
+        candidate = Path(codex_home) / ".sandbox-bin" / "codex.exe"
+        if candidate.exists():
+            return candidate
+    if DEFAULT_CODEX_EXE.exists():
+        return DEFAULT_CODEX_EXE
+    # Fallback: check PATH
+    try:
+        found = subprocess.check_output(
+            ["where", "codex"] if sys.platform == "win32" else ["which", "codex"],
+            stderr=subprocess.DEVNULL, text=True,
+        ).strip().splitlines()[0]
+        p = Path(found)
+        if p.exists():
+            return p
+    except Exception:
+        pass
+    return None
+
+
+def _parse_codex_json_stream(stdout: str) -> str | None:
+    """Extract the agent_message text from a `codex exec --json` event stream."""
+    final_text = ""
+    for raw_line in stdout.splitlines():
+        raw_line = raw_line.strip()
+        if not raw_line:
+            continue
+        try:
+            event = json.loads(raw_line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("type") == "item.completed":
+            item = event.get("item") or {}
+            if item.get("type") == "agent_message" and item.get("text"):
+                final_text = str(item["text"])
+    return final_text or None
+
+
+def _run_codex_subprocess(
+    cmd: list[str],
     *,
-    model: str = "",
-    reasoning_effort: str = "",
     codex_home: str = "",
     timeout: float = DEFAULT_TURN_TIMEOUT,
-) -> tuple[str | None, str]:
-    exe = str(Path(codex_home) / ".sandbox-bin" / "codex.exe") if codex_home else str(DEFAULT_CODEX_EXE)
-    if not Path(exe).exists():
-        return None, f"codex_exe_not_found:{exe}"
-
-    cmd = [exe, "--approval-policy", "never"]
-    if model:
-        cmd += ["--model", model]
-    if reasoning_effort:
-        cmd += ["--reasoning-effort", reasoning_effort]
-    if system_prompt:
-        cmd += ["--system", system_prompt]
-    cmd += ["-p", prompt]
-
+) -> tuple[str | None, str | None, str]:
+    """
+    Run a codex CLI command and return (text, thread_id, status).
+    text      — agent_message text extracted from JSON event stream, or None
+    thread_id — thread.started id (for session resumption), or None
+    status    — "ok" on success, error string on failure
+    """
     env = os.environ.copy()
     if codex_home:
         env["CODEX_HOME"] = codex_home
     env["PYTHONUNBUFFERED"] = "1"
+
+    creationflags = 0
+    startupinfo = None
+    if os.name == "nt":
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
     try:
         result = subprocess.run(
@@ -143,16 +195,154 @@ def _call_codex(
             errors="replace",
             timeout=timeout,
             env=env,
+            creationflags=creationflags,
+            startupinfo=startupinfo,
         )
     except subprocess.TimeoutExpired:
-        return None, "codex_timeout"
+        return None, None, "codex_timeout"
     except OSError as exc:
-        return None, f"codex_os_error:{exc}"
+        return None, None, f"codex_os_error:{exc}"
 
-    stdout = result.stdout.strip()
-    if result.returncode != 0 or not stdout:
-        return None, f"codex_exit_{result.returncode}"
-    return stdout, "ok"
+    thread_id: str | None = None
+    final_text: str = ""
+    failure_reason: str = ""
+
+    for raw_line in result.stdout.splitlines():
+        raw_line = raw_line.strip()
+        if not raw_line:
+            continue
+        try:
+            event = json.loads(raw_line)
+        except json.JSONDecodeError:
+            continue
+
+        if event.get("type") == "thread.started":
+            thread_id = event.get("thread_id")
+
+        if event.get("type") in ("error", "turn.failed"):
+            failure_reason = str(
+                (event.get("error") or {}).get("message") or event.get("message") or ""
+            ).strip()
+
+        if event.get("type") == "item.completed":
+            item = event.get("item") or {}
+            if item.get("type") == "agent_message" and item.get("text"):
+                final_text = str(item["text"])
+
+    if final_text:
+        return final_text, thread_id, "ok"
+
+    if failure_reason:
+        return None, thread_id, f"codex_error:{failure_reason}"
+
+    raw = result.stdout.strip()
+    if result.returncode == 0 and raw:
+        return raw, thread_id, "ok"
+
+    return None, thread_id, f"codex_exit_{result.returncode}"
+
+
+def _call_codex_new(
+    prompt: str,
+    system_prompt: str,
+    *,
+    model: str = "",
+    reasoning_effort: str = "",
+    codex_home: str = "",
+    timeout: float = DEFAULT_TURN_TIMEOUT,
+) -> tuple[str | None, str | None, str]:
+    """
+    Start a new Codex session. Returns (text, session_id, status).
+    session_id can be used with _call_codex_resume() for faster follow-up calls.
+    """
+    exe = _resolve_codex_exe(codex_home)
+    if exe is None:
+        return None, None, "codex_exe_not_found"
+
+    cmd: list[str] = [str(exe)]
+    if reasoning_effort:
+        cmd.extend(["-c", f'model_reasoning_effort="{reasoning_effort}"'])
+
+    # No --ephemeral: keep the session alive for resumption
+    cmd.extend([
+        "exec",
+        "--json",
+        "--skip-git-repo-check",
+        "--sandbox", "read-only",
+        "--cd", str(TOOLS_DIR),
+    ])
+
+    if model:
+        cmd.extend(["--model", model])
+    if _OUTPUT_SCHEMA.exists():
+        cmd.extend(["--output-schema", str(_OUTPUT_SCHEMA)])
+
+    full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+    cmd.append(full_prompt)
+
+    return _run_codex_subprocess(cmd, codex_home=codex_home, timeout=timeout)
+
+
+def _call_codex_resume(
+    session_id: str,
+    prompt: str,
+    *,
+    model: str = "",
+    reasoning_effort: str = "",
+    codex_home: str = "",
+    timeout: float = DEFAULT_TURN_TIMEOUT,
+) -> tuple[str | None, str]:
+    """
+    Resume an existing Codex session (faster than starting new).
+    Returns (text, status).
+    """
+    exe = _resolve_codex_exe(codex_home)
+    if exe is None:
+        return None, "codex_exe_not_found"
+
+    cmd: list[str] = [str(exe)]
+    if reasoning_effort:
+        cmd.extend(["-c", f'model_reasoning_effort="{reasoning_effort}"'])
+
+    cmd.extend([
+        "exec", "resume", session_id,
+        "--json",
+        "--skip-git-repo-check",
+    ])
+    if model:
+        cmd.extend(["--model", model])
+    cmd.append(prompt)
+
+    text, _, status = _run_codex_subprocess(cmd, codex_home=codex_home, timeout=timeout)
+    return text, status
+
+
+def _call_codex(
+    prompt: str,
+    system_prompt: str,
+    *,
+    model: str = "",
+    reasoning_effort: str = "",
+    codex_home: str = "",
+    timeout: float = DEFAULT_TURN_TIMEOUT,
+    session_id: str = "",
+) -> tuple[str | None, str]:
+    """
+    Unified Codex call. If session_id is given, resumes that session (faster).
+    Otherwise starts a new session. Returns (text, status).
+    """
+    if session_id:
+        return _call_codex_resume(
+            session_id, prompt,
+            model=model, reasoning_effort=reasoning_effort,
+            codex_home=codex_home, timeout=timeout,
+        )
+    text, _, status = _call_codex_new(
+        prompt, system_prompt,
+        model=model, reasoning_effort=reasoning_effort,
+        codex_home=codex_home, timeout=timeout,
+    )
+    return text, status
 
 
 # ---------------------------------------------------------------------------

@@ -15,6 +15,7 @@ from typing import Any
 MEMORY_DIR = Path(__file__).resolve().parent / "bot_memory"
 BOTS_DIR = MEMORY_DIR / "bots"
 ROSTER_PATH = MEMORY_DIR / "roster.json"
+CODEX_ACCOUNTS_PATH = MEMORY_DIR / "codex_accounts.json"
 
 
 def now_iso() -> str:
@@ -44,14 +45,25 @@ def _save_json(path: Path, payload: Any) -> None:
 # ---------------------------------------------------------------------------
 
 DEFAULT_ROSTER: dict[str, Any] = {"bots": [], "updatedAt": ""}
+DEFAULT_CODEX_ACCOUNTS: dict[str, Any] = {"accounts": [], "updatedAt": ""}
+DEFAULT_CODEX_ACCOUNT: dict[str, Any] = {
+    "id": "",
+    "label": "",
+    "codexHome": "",
+    "enabled": True,
+    "validation": {"status": "unvalidated", "message": ""},
+    "createdAt": "",
+    "updatedAt": "",
+}
 
 DEFAULT_PROFILE: dict[str, Any] = {
     "botId": "",
     "displayName": "",
-    "provider": "claude",
+    "provider": "openai_codex",
     "model": "",
     "reasoningEffort": "",
     "codexHome": "",
+    "codexAccountIds": [],
     "ollamaHost": "",
     "openRouterApiKeyEnvVar": "OPENROUTER_API_KEY",
     "openRouterBaseUrl": "https://openrouter.ai/api/v1",
@@ -88,6 +100,7 @@ class BotManager:
     def __init__(self) -> None:
         self._roster: dict[str, Any] = {}
         self._profiles: dict[str, dict[str, Any]] = {}
+        self._codex_accounts: dict[str, dict[str, Any]] = {}
         self.reload()
 
     def reload(self) -> None:
@@ -97,6 +110,15 @@ class BotManager:
             bot_id = str(entry.get("botId", "") or "")
             if bot_id:
                 self._profiles[bot_id] = self._load_profile(bot_id)
+        accounts_data = _load_json(CODEX_ACCOUNTS_PATH, DEFAULT_CODEX_ACCOUNTS)
+        self._codex_accounts = {}
+        for raw in accounts_data.get("accounts", []):
+            if not isinstance(raw, dict):
+                continue
+            account_id = compact_line(str(raw.get("id", "") or ""))
+            if not account_id:
+                continue
+            self._codex_accounts[account_id] = {**deepcopy(DEFAULT_CODEX_ACCOUNT), **raw, "id": account_id}
 
     def _profile_path(self, bot_id: str) -> Path:
         return BOTS_DIR / bot_id / "profile.json"
@@ -113,6 +135,13 @@ class BotManager:
     def _save_roster(self) -> None:
         self._roster["updatedAt"] = now_iso()
         _save_json(ROSTER_PATH, self._roster)
+
+    def _save_codex_accounts(self) -> None:
+        payload = {
+            "accounts": list(self._codex_accounts.values()),
+            "updatedAt": now_iso(),
+        }
+        _save_json(CODEX_ACCOUNTS_PATH, payload)
 
     # ------------------------------------------------------------------
     # Public API
@@ -178,3 +207,73 @@ class BotManager:
         path = BOTS_DIR / bot_id
         path.mkdir(parents=True, exist_ok=True)
         return path
+
+    # ------------------------------------------------------------------
+    # Codex account registry
+    # ------------------------------------------------------------------
+
+    def list_codex_accounts(self) -> list[dict[str, Any]]:
+        return [deepcopy(self._codex_accounts[key]) for key in sorted(self._codex_accounts)]
+
+    def get_codex_account(self, account_id: str) -> dict[str, Any]:
+        account_id = compact_line(account_id)
+        account = self._codex_accounts.get(account_id)
+        if account:
+            return deepcopy(account)
+        return {**deepcopy(DEFAULT_CODEX_ACCOUNT), "id": account_id}
+
+    def create_codex_account(self, account_id: str, *, label: str = "", codex_home: str = "") -> dict[str, Any]:
+        account_id = compact_line(account_id)
+        codex_home = compact_line(codex_home)
+        if not account_id:
+            raise ValueError("account_id is required")
+        account = {
+            **deepcopy(DEFAULT_CODEX_ACCOUNT),
+            "id": account_id,
+            "label": label or account_id,
+            "codexHome": codex_home,
+            "createdAt": now_iso(),
+            "updatedAt": now_iso(),
+        }
+        self._codex_accounts[account_id] = account
+        self._save_codex_accounts()
+        return deepcopy(account)
+
+    def update_codex_account(self, account_id: str, patch: dict[str, Any]) -> dict[str, Any]:
+        account = self.get_codex_account(account_id)
+        account.update(patch)
+        account["id"] = compact_line(str(account.get("id", account_id) or account_id))
+        account["updatedAt"] = now_iso()
+        self._codex_accounts[account["id"]] = account
+        self._save_codex_accounts()
+        return deepcopy(account)
+
+    def delete_codex_account(self, account_id: str) -> None:
+        account_id = compact_line(account_id)
+        if not account_id:
+            return
+        self._codex_accounts.pop(account_id, None)
+        for bot_id, profile in list(self._profiles.items()):
+            account_ids = [str(v) for v in profile.get("codexAccountIds", []) if str(v)]
+            if account_id not in account_ids:
+                continue
+            account_ids = [v for v in account_ids if v != account_id]
+            self.update_profile(bot_id, {"codexAccountIds": account_ids})
+        self._save_codex_accounts()
+
+    def resolve_codex_homes_for_profile(self, profile: dict[str, Any]) -> list[str]:
+        homes: list[str] = []
+        seen: set[str] = set()
+        for account_id in profile.get("codexAccountIds", []) or []:
+            account = self._codex_accounts.get(str(account_id))
+            if not account or not account.get("enabled", True):
+                continue
+            home = compact_line(str(account.get("codexHome", "") or ""))
+            if not home or home in seen:
+                continue
+            homes.append(home)
+            seen.add(home)
+        legacy_home = compact_line(str(profile.get("codexHome", "") or ""))
+        if legacy_home and legacy_home not in seen:
+            homes.append(legacy_home)
+        return homes

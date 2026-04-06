@@ -363,6 +363,7 @@ export class GameApp {
   private automationControlledPlayer: PlayerId = 2;
   private localBotFill = 0;
   private botControlledPlayers: Record<PlayerId, boolean> = createBooleanPlayerRecord(false);
+  private liveBridgePlayers: Record<PlayerId, boolean> = createBooleanPlayerRecord(false);
   private botEnabled = false;
   private botBombCooldownMs = 0;
   private aiBridgeTick = 0;
@@ -957,6 +958,7 @@ export class GameApp {
     if (import.meta.env.DEV) {
       AutoImprovementBridge.enable();
       AutoImprovementBridge.mountDevPanel(this.root.ownerDocument?.body ?? document.body);
+      AutoImprovementBridge.mountSidePanels(this.root.ownerDocument?.body ?? document.body);
     }
     this.syncCanvasDisplaySize();
     this.mode = "menu";
@@ -976,12 +978,12 @@ export class GameApp {
     }
   }
 
-  public startOfflineBotMatch(botFill = 3): void {
+  public startOfflineBotMatch(botFill = 3, mode: LobbyMode = "classic"): void {
     if (this.onlineSession) {
       return;
     }
     this.customPlayerLabels = createPlayerRecord(() => null);
-    this.onlineRoomMode = "classic";
+    this.onlineRoomMode = mode;
     this.mode = "menu";
     this.paused = false;
     this.roundOutcome = null;
@@ -990,6 +992,11 @@ export class GameApp {
     this.endlessRoundWins = createNumberPlayerRecord(0);
     this.applyOfflineBotFill(botFill, false);
     this.startMatch();
+  }
+
+  public setLiveBridgePlayers(playerIds: PlayerId[]): void {
+    const selected = new Set(playerIds);
+    this.liveBridgePlayers = createPlayerRecord((playerId) => selected.has(playerId));
   }
 
   public setOfflinePreferredCharacter(characterIndex: number): void {
@@ -1672,7 +1679,12 @@ export class GameApp {
         }
       }
     }
-    this.botEnabled = this.botControlledPlayers[2];
+    for (const playerId of this.activePlayerIds) {
+      if (this.liveBridgePlayers[playerId]) {
+        this.botControlledPlayers[playerId] = true;
+      }
+    }
+    this.botEnabled = ALL_PLAYER_IDS.some((playerId) => this.botControlledPlayers[playerId]);
     const nextReady = createBooleanPlayerRecord(false);
     nextReady[1] = preserveP1Ready ? this.menuReady[1] : false;
     for (const playerId of this.activePlayerIds) {
@@ -1981,6 +1993,10 @@ export class GameApp {
     return Boolean(this.botControlledPlayers?.[id]) && this.activePlayerIds.includes(id);
   }
 
+  private isLiveBridgeControlled(id: PlayerId): boolean {
+    return Boolean(this.liveBridgePlayers?.[id]) && this.activePlayerIds.includes(id);
+  }
+
   private shouldUseNativeControls(): boolean {
     if (this.onlineSession) {
       return false;
@@ -2001,9 +2017,17 @@ export class GameApp {
   }
 
   private getBotDecision(player: PlayerState): BotDecision {
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV && AutoImprovementBridge.isEnabled && this.isLiveBridgeControlled(player.id)) {
+      // Per-player AI explicitly disabled → stand completely idle (no built-in AI)
+      if (!AutoImprovementBridge.isPlayerEnabled(player.id)) {
+        return botAI_getBotDecision(player, this.createBotContext());
+      }
       const aiDecision = AutoImprovementBridge.getDecision(player.id);
       if (aiDecision) return AutoImprovementBridge.toBotDecision(aiDecision);
+      // Strict / Codex-only mode → stand idle rather than falling back to built-in AI
+      if (AutoImprovementBridge.isStrictMode) {
+        return { direction: null, placeBomb: false, detonate: false };
+      }
     }
     return botAI_getBotDecision(player, this.createBotContext());
   }

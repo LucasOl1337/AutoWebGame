@@ -51,6 +51,7 @@
     "test:bomb-hit-window": "npm run compile:esm && node tests/bomb-hit-window-check.mjs",
     "test:bomb-chain": "npm run compile:esm && node tests/bomb-chain-reaction-check.mjs",
     "test:bomb-push": "npm run compile:esm && node tests/bomb-push-check.mjs",
+    "test:autobot-codex-e2e": "node tests/autobot-codex-e2e.mjs",
     "test:shield": "npm run compile:esm && node tests/shield-powerup-check.mjs",
     "test:powerup-hud": "npm run compile:esm && node tests/powerup-hud-slots-check.mjs",
     "test:powerup-drop-rate": "npm run compile:esm && node tests/powerup-drop-rate-check.mjs",

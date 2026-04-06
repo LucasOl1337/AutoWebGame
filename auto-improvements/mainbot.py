@@ -28,6 +28,17 @@ from urllib.error import URLError
 from urllib.request import urlopen
 import json
 
+try:
+    from bot_manager import BotManager
+except ModuleNotFoundError:
+    from auto_improvements.bot_manager import BotManager
+
+# Force UTF-8 so any stray emoji in log output won't crash on cp1252 consoles
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 
 ROOT = Path(__file__).resolve().parent
 GAME_ROOT = ROOT.parent
@@ -74,6 +85,7 @@ class ManagedProcess:
         self.stop()
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
+        env["PYTHONIOENCODING"] = "utf-8"   # prevent charmap crash on emoji output
         env.update(self.env_overrides)
 
         creationflags = 0
@@ -185,13 +197,27 @@ def open_report_console() -> None:
     script_path = ROOT / "report_console.py"
     if not script_path.exists():
         return
-    command = (
-        f'Start-Process cmd.exe -ArgumentList @("/k", "title BombaPVP AutoBot Dashboard && '
-        f'python \\"{script_path}\\"") -WorkingDirectory \\"{ROOT}\\"'
+    subprocess.Popen(
+        [sys.executable, str(script_path)],
+        cwd=str(ROOT),
+        creationflags=subprocess.CREATE_NEW_CONSOLE,
     )
-    subprocess.run(
-        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
-        check=False, capture_output=True,
+
+
+def open_agent_log_console(title: str, log_path: Path) -> None:
+    """Open a new console window that tails a live-agent log file in real time."""
+    if os.name != "nt":
+        return
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.touch(exist_ok=True)
+    # Use powershell Get-Content -Wait to tail the file live
+    ps_cmd = (
+        f"$host.UI.RawUI.WindowTitle = '{title}'; "
+        f"Get-Content -Path '{log_path}' -Wait -Tail 40"
+    )
+    subprocess.Popen(
+        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd],
+        creationflags=subprocess.CREATE_NEW_CONSOLE,
     )
 
 
@@ -204,6 +230,7 @@ class MainBot:
         self.with_live_agents = with_live_agents
         self.with_insights = with_insights
         self.with_manager = with_manager
+        self.bot_manager = BotManager()
 
         logs = ROOT / "logs"
 
@@ -227,8 +254,10 @@ class MainBot:
         time.sleep(1.0)
 
         if self.with_live_agents:
+            self.bot_manager.reload()
+            # Hybrid mode: Codex controls only P1.
+            # P2, P3 and P4 remain on the native bot.
             self._start_live_agent("1", player_id="1")
-            self._start_live_agent("2", player_id="2")
 
         if self.with_insights:
             logs = ROOT / "logs"
@@ -248,18 +277,50 @@ class MainBot:
             )
             self.manager_proc.start()
 
-        open_report_console()
+        # Open monitoring consoles unless suppressed (bot_menu.py manages them when
+        # launching via the menu so it can avoid duplicates).
+        if os.environ.get("MAINBOT_NO_CONSOLES", "") != "1":
+            open_report_console()
+            if self.with_live_agents:
+                logs = ROOT / "logs"
+                open_agent_log_console("🤖 Live Agent P1", logs / "live_agent_p1.log")
+            open_agent_log_console("🔌 Broker Log", ROOT / "logs" / "broker.log")
 
     def _start_live_agent(self, slot: str, player_id: str) -> None:
         logs = ROOT / "logs"
+        bot_id = f"bot-p{player_id}"
+        profile = self.bot_manager.ensure_bot(bot_id, display_name=f"Bot P{player_id}")
+        provider = str(profile.get("provider", "openai_codex") or "openai_codex")
+        model_name = str(profile.get("model", "") or "")
+        reasoning_effort = str(profile.get("reasoningEffort", "") or "")
+        if not model_name and provider == "openai_codex":
+            model_name = "gpt-5.4-mini"
+        if not reasoning_effort and provider == "openai_codex":
+            reasoning_effort = "low"
+        codex_homes = self.bot_manager.resolve_codex_homes_for_profile(profile)
+        env_overrides = {
+            "AGENT_PLAYER_ID": player_id,
+            "AGENT_BOT_ID": bot_id,
+            "AGENT_PROVIDER": provider,
+            "AGENT_MODEL": model_name,
+            "CODEX_REASONING_EFFORT": reasoning_effort,
+            "AGENT_POLL_INTERVAL_SEC": "0.10",
+            "AGENT_IDLE_INTERVAL_SEC": "0.20",
+            "OLLAMA_HOST": str(profile.get("ollamaHost", "") or ""),
+            "OPENROUTER_API_KEY_ENV_VAR": str(profile.get("openRouterApiKeyEnvVar", "OPENROUTER_API_KEY") or "OPENROUTER_API_KEY"),
+            "OPENROUTER_BASE_URL": str(profile.get("openRouterBaseUrl", "https://openrouter.ai/api/v1") or "https://openrouter.ai/api/v1"),
+        }
+        if codex_homes:
+            env_overrides["CODEX_HOME"] = codex_homes[0]
+            env_overrides["AGENT_CODEX_HOME_CHAIN_JSON"] = json.dumps(codex_homes)
+        elif str(profile.get("codexHome", "") or ""):
+            env_overrides["CODEX_HOME"] = str(profile.get("codexHome", "") or "")
+
         proc = ManagedProcess(
             f"live-agent-p{player_id}",
             [sys.executable, str(ROOT / "live_agent.py")],
             logs / f"live_agent_p{player_id}.log",
-            env_overrides={
-                "AGENT_PLAYER_ID": player_id,
-                "AGENT_BOT_ID": f"bot-p{player_id}",
-            },
+            env_overrides=env_overrides,
         )
         proc.start()
         self.live_agents[slot] = proc
@@ -335,7 +396,7 @@ class MainBot:
                 for e in events[-5:]:
                     print(f"  [{e.get('type','?')}] {json.dumps({k:v for k,v in e.items() if k not in ('timestamp','timestampMs','savedAt')})[:80]}")
         else:
-            print("Waiting for game telemetry... (start the game at http://localhost:5173)")
+            print("Waiting for game telemetry... (start the game at http://127.0.0.1:5174)")
 
         print()
         print("Broker log:")
