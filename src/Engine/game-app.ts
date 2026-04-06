@@ -84,6 +84,7 @@ import {
   getBotDecision as botAI_getBotDecision,
   getStableBotDirection as botAI_getStableBotDirection,
 } from "./bot-ai";
+import { AutoImprovementBridge } from "./auto-improvement-bridge";
 import type { SkillContext } from "../ultimate/skill-system";
 import {
   createDefaultPlayerSkillState,
@@ -364,6 +365,7 @@ export class GameApp {
   private botControlledPlayers: Record<PlayerId, boolean> = createBooleanPlayerRecord(false);
   private botEnabled = false;
   private botBombCooldownMs = 0;
+  private aiBridgeTick = 0;
   private botCommittedDirection: Record<PlayerId, Direction | null> = createDirectionPlayerRecord(null);
   private botPendingReverseDirection: Record<PlayerId, Direction | null> = createDirectionPlayerRecord(null);
   private botPendingReverseFrames: Record<PlayerId, number> = createNumberPlayerRecord(0);
@@ -952,6 +954,10 @@ export class GameApp {
     }
     void this.soundManager.loadSounds(SFX_MANIFEST);
     this.root.appendChild(this.canvas);
+    if (import.meta.env.DEV) {
+      AutoImprovementBridge.enable();
+      AutoImprovementBridge.mountDevPanel(this.root.ownerDocument?.body ?? document.body);
+    }
     this.syncCanvasDisplaySize();
     this.mode = "menu";
     this.registerWindowHooks();
@@ -1551,6 +1557,22 @@ export class GameApp {
     } else {
       this.cachedDangerMap = null;
     }
+
+    if (import.meta.env.DEV) {
+      this.aiBridgeTick++;
+      AutoImprovementBridge.pushTelemetry({
+        tick: this.aiBridgeTick,
+        phase: this.mode,
+        players: Object.values(this.players),
+        bombs: this.bombs,
+        flames: this.flames,
+        matchScore: this.score,
+        suddenDeath: {
+          active: this.suddenDeathActive,
+          index: this.suddenDeathIndex,
+        },
+      });
+    }
   }
 
   private updateMatchResult(deltaMs: number): void {
@@ -1979,6 +2001,10 @@ export class GameApp {
   }
 
   private getBotDecision(player: PlayerState): BotDecision {
+    if (import.meta.env.DEV) {
+      const aiDecision = AutoImprovementBridge.getDecision(player.id);
+      if (aiDecision) return AutoImprovementBridge.toBotDecision(aiDecision);
+    }
     return botAI_getBotDecision(player, this.createBotContext());
   }
 
