@@ -10,7 +10,7 @@ This agent:
 
 Environment variables
 ---------------------
-BROKER_BASE             http://127.0.0.1:8765  (default)
+BROKER_BASE             http://127.0.0.1:8766  (default)
 AGENT_BOT_ID            bot-default
 AGENT_PLAYER_ID         1
 AGENT_PROVIDER          claude | openai_codex | openrouter | ollama
@@ -38,7 +38,7 @@ except ModuleNotFoundError:
     from auto_improvements.memory import append_event, append_match
 
 
-BROKER_BASE = os.environ.get("BROKER_BASE", "http://127.0.0.1:8765").rstrip("/")
+BROKER_BASE = os.environ.get("BROKER_BASE", "http://127.0.0.1:8766").rstrip("/")
 AGENT_ID = os.environ.get("AGENT_BOT_ID", "bot-default")
 PLAYER_ID = str(os.environ.get("AGENT_PLAYER_ID", "1"))
 POLL_INTERVAL = float(os.environ.get("AGENT_POLL_INTERVAL_SEC", "0.25"))

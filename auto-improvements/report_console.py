@@ -26,7 +26,7 @@ except ModuleNotFoundError:
     from auto_improvements.memory import count_matches, load_insights, pending_tasks, MEMORY_DIR
 
 
-BROKER_BASE = os.environ.get("BROKER_BASE", "http://127.0.0.1:8765").rstrip("/")
+BROKER_BASE = os.environ.get("BROKER_BASE", "http://127.0.0.1:8766").rstrip("/")
 REFRESH_SECONDS = float(os.environ.get("CONSOLE_REFRESH_SEC", "1.0"))
 
 

@@ -101,7 +101,7 @@ def stop_mainbot_stack() -> None:
         Get-CimInstance Win32_Process |
             Where-Object { $_.CommandLine -match $match } |
             ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-        Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction SilentlyContinue |
+        Get-NetTCPConnection -LocalPort 8766 -State Listen -ErrorAction SilentlyContinue |
             Select-Object -ExpandProperty OwningProcess -Unique |
             Where-Object { $_ -gt 0 } |
             ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }

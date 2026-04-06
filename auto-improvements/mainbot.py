@@ -31,7 +31,7 @@ import json
 
 ROOT = Path(__file__).resolve().parent
 GAME_ROOT = ROOT.parent
-BROKER_BASE = os.environ.get("BROKER_BASE", "http://127.0.0.1:8765").rstrip("/")
+BROKER_BASE = os.environ.get("BROKER_BASE", "http://127.0.0.1:8766").rstrip("/")
 REFRESH_SECONDS = float(os.environ.get("MAINBOT_REFRESH_SECONDS", "2.0"))
 STALL_RESTART_SECONDS = float(os.environ.get("MAINBOT_STALL_RESTART_SEC", "30"))
 
@@ -168,7 +168,7 @@ def kill_existing_stack() -> None:
         Get-CimInstance Win32_Process |
             Where-Object { $_.CommandLine -match $match } |
             ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-        Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction SilentlyContinue |
+        Get-NetTCPConnection -LocalPort 8766 -State Listen -ErrorAction SilentlyContinue |
             Select-Object -ExpandProperty OwningProcess -Unique |
             Where-Object { $_ -gt 0 } |
             ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }

@@ -33,7 +33,7 @@ except ModuleNotFoundError:
 
 
 BROKER_HOST = os.environ.get("BROKER_HOST", "127.0.0.1")
-BROKER_PORT = int(os.environ.get("BROKER_PORT", "8765"))
+BROKER_PORT = int(os.environ.get("BROKER_PORT", "8766"))
 REPORT_INTERVAL_SECONDS = float(os.environ.get("BROKER_REPORT_INTERVAL_SEC", "1.0"))
 CORS_ORIGINS = os.environ.get("BROKER_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 

@@ -30,7 +30,7 @@ import type {
 } from "../Gameplay/types";
 import type { BotDecision } from "./bot-ai";
 
-const BROKER_BASE = "http://127.0.0.1:8765";
+const BROKER_BASE = "http://127.0.0.1:8766";
 const TELEMETRY_THROTTLE_MS = 200;
 const DECISION_TTL_MS = 1200;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
