@@ -32,6 +32,7 @@ tmp-*.png
 .wrangler-dry-run/
 remote-*.html
 commit-msg.txt
+preview-*.png
 
 # IDE
 .vscode/
