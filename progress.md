@@ -143,3 +143,16 @@ TODOs / suggestions:
 - 2026-04-01: removida a distorcao nao uniforme do render; agora a escala interna voltou a ser uniforme e o canvas visivel passa a considerar a altura real do conteudo para crescer mais na largura.
 
 - 2026-04-01: arena deixou de ser centralizada verticalmente; agora fica ancorada logo abaixo da HUD para cortar o bloco morto superior e liberar mais escala horizontal.
+- 2026-04-13: added a new `suddenDeathAlarm` SFX asset and hooked it to local + online sudden-death starts.
+- Validation passed with `npm run compile:esm`, `node tests/sudden-death-check.mjs`, `npm run test:online-audio`, and `npm run build`.
+- 2026-04-13: added a sudden-death warning meter to the HUD in compact and full layouts, with warningLabel and warningProgress exported through render_game_to_text for regression coverage.
+- Validation passed with node tests/sudden-death-check.mjs, npm run test:online-audio, and npm run build.
+
+- 2026-04-13: added a dedicated round-end sound cue (`roundEnd`) so every round resolution now gets immediate audio feedback in local and online play.
+- The new asset lives at `public/Assets/SoundEffects/round_end.wav` and was synthesized locally, with a mirrored source copy in `CustomSFX/BASE/round_end.wav`.
+- Local finish flow now plays `roundEnd` on any resolved round; online guests also hear the same cue when `roundOutcome` appears in the authoritative stream.
+- Validation passed with `npm run build`, `npm run test:online-audio`, and `npm run test:round-outcome`.
+
+Next agent:
+- If the cue feels too strong in browser playtest, lower `roundEnd` volume first before touching the match-win fanfare.
+- If you keep adding round-state audio, preserve the current split: `roundEnd` for round resolution and `matchWin` for final match closure.

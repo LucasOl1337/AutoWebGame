@@ -122,6 +122,8 @@ interface OnlineAudioTransitionArgs {
   previousBombs: BombState[];
   previousFlames: FlameState[];
   previousMatchWinner: PlayerId | null;
+  previousRoundOutcome: RoundOutcome | null;
+  previousSuddenDeathActive: boolean;
   next: {
     bombs: BombState[];
     flames: FlameState[];
@@ -145,6 +147,8 @@ export function playOnlineAudioTransition({
   previousBombs,
   previousFlames,
   previousMatchWinner,
+  previousRoundOutcome,
+  previousSuddenDeathActive,
   next,
   didCollectRemotePowerUp,
   playSound,
@@ -176,8 +180,14 @@ export function playOnlineAudioTransition({
   if (newFlames > 0) {
     playSound("flames");
   }
+  if (!previousRoundOutcome && next.roundOutcome) {
+    playSound("roundEnd");
+  }
   if (next.powerUps && didCollectRemotePowerUp(next.powerUps)) {
     playSound("powerCollect");
+  }
+  if (!previousSuddenDeathActive && next.suddenDeathActive) {
+    playSound("suddenDeathAlarm");
   }
   if (!previousMatchWinner && next.matchWinner) {
     playSound("matchWin");

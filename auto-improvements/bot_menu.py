@@ -25,6 +25,7 @@ try:
     from bot_manager import BotManager, PLAYSTYLE_PRESETS, AGGRESSION_PRESETS
     from model_manager import (
         PROVIDER_PRESETS, REASONING_PRESETS, CLAUDE_MODEL_PRESETS,
+        build_openai_codex_model_options,
         compact_line, probe_model, discover_codex_homes, discover_ollama_models,
         DEFAULT_OLLAMA_HOST,
     )
@@ -36,6 +37,7 @@ except ModuleNotFoundError:
     from auto_improvements.bot_manager import BotManager, PLAYSTYLE_PRESETS, AGGRESSION_PRESETS
     from auto_improvements.model_manager import (
         PROVIDER_PRESETS, REASONING_PRESETS, CLAUDE_MODEL_PRESETS,
+        build_openai_codex_model_options,
         compact_line, probe_model, discover_codex_homes, discover_ollama_models,
         DEFAULT_OLLAMA_HOST,
     )
@@ -56,6 +58,7 @@ BROKER_BASE = f"http://127.0.0.1:{BROKER_PORT}"
 
 # npm command (Windows needs npm.cmd)
 NPM = "npm.cmd" if os.name == "nt" else "npm"
+_SPAWNED_CONSOLE_PROCS: list[subprocess.Popen[Any]] = []
 
 
 # ---------------------------------------------------------------------------
@@ -75,6 +78,27 @@ def red(t: str) -> str:    return f"\x1b[91m{t}\x1b[0m"
 def yellow(t: str) -> str: return f"\x1b[93m{t}\x1b[0m"
 def cyan(t: str) -> str:   return f"\x1b[96m{t}\x1b[0m"
 def bold(t: str) -> str:   return f"\x1b[1m{t}\x1b[0m"
+
+
+def _track_console_proc(proc: subprocess.Popen[Any] | None) -> subprocess.Popen[Any] | None:
+    if proc is not None:
+        _SPAWNED_CONSOLE_PROCS.append(proc)
+    return proc
+
+
+def close_spawned_consoles() -> None:
+    for proc in list(_SPAWNED_CONSOLE_PROCS):
+        if proc.poll() is not None:
+            continue
+        try:
+            proc.terminate()
+            proc.wait(timeout=2)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+    _SPAWNED_CONSOLE_PROCS.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -228,12 +252,12 @@ def run_codex_login() -> None:
         return
     print("Opening Codex OAuth login — follow the browser prompt...")
     if os.name == "nt":
-        subprocess.Popen(
+        _track_console_proc(subprocess.Popen(
             [str(exe), "login"],
             creationflags=subprocess.CREATE_NEW_CONSOLE,
-        )
+        ))
     else:
-        subprocess.Popen([str(exe), "login"])
+        _track_console_proc(subprocess.Popen([str(exe), "login"]))
 
 
 def _profile_codex_homes(manager: BotManager, profile: dict[str, Any]) -> list[str]:
@@ -243,6 +267,71 @@ def _profile_codex_homes(manager: BotManager, profile: dict[str, Any]) -> list[s
 def _profile_primary_codex_home(manager: BotManager, profile: dict[str, Any]) -> str:
     homes = _profile_codex_homes(manager, profile)
     return homes[0] if homes else str(profile.get("codexHome", "") or "")
+
+
+def _choose_model_for_profile(manager: BotManager, profile: dict[str, Any]) -> str | None:
+    provider = str(profile.get("provider", "openai_codex") or "openai_codex")
+    current_model = str(profile.get("model", "") or "")
+
+    if provider == "openai_codex":
+        options = build_openai_codex_model_options(_profile_primary_codex_home(manager, profile))
+        selected = choose_single("Select Codex model", options + [("__custom__", "Custom (type below)")], current_model)
+        if selected is None:
+            return None
+        if selected == "__custom__":
+            return compact_line(input("Codex model name: "))
+        return selected
+
+    if provider == "claude":
+        options = [(m, label) for m, label in CLAUDE_MODEL_PRESETS]
+        selected = choose_single("Select Claude model", options + [("__custom__", "Custom (type below)")], current_model)
+        if selected is None:
+            return None
+        if selected == "__custom__":
+            return compact_line(input("Claude model name: "))
+        return selected
+
+    if provider == "ollama":
+        options = discover_ollama_models(str(profile.get("ollamaHost", DEFAULT_OLLAMA_HOST) or DEFAULT_OLLAMA_HOST))
+        selected = choose_single("Select Ollama model", options + [("__custom__", "Custom (type below)")], current_model)
+        if selected is None:
+            return None
+        if selected == "__custom__":
+            return compact_line(input("Ollama model name: "))
+        return selected
+
+    entered = compact_line(input(f"Model name [{current_model or 'default'}]: "))
+    return entered if entered else current_model
+
+
+def _model_validation_patch(profile: dict[str, Any], message: str, *, provider: str | None = None, requested_model: str | None = None) -> dict[str, Any]:
+    return {
+        "status": "unvalidated",
+        "message": message,
+        "provider": provider if provider is not None else str(profile.get("provider", "") or ""),
+        "requestedModel": requested_model if requested_model is not None else str(profile.get("model", "") or ""),
+    }
+
+
+def quick_set_codex_model(manager: BotManager, bot_id: str = "bot-p1") -> None:
+    profile = manager.ensure_bot(bot_id, display_name="Bot P1")
+    if str(profile.get("provider", "openai_codex") or "openai_codex") != "openai_codex":
+        profile = manager.update_profile(bot_id, {"provider": "openai_codex"})
+    selected = _choose_model_for_profile(manager, profile)
+    if selected is None:
+        return
+    manager.update_profile(bot_id, {
+        "provider": "openai_codex",
+        "model": selected,
+        "modelValidation": _model_validation_patch(
+            profile,
+            "Codex model changed",
+            provider="openai_codex",
+            requested_model=selected,
+        ),
+    })
+    print(f"Codex model for {bot_id} set to: {selected or '(inherit from config)'}")
+    pause()
 
 
 def run_environment_check(*, test_codex_live: bool = False) -> dict[str, Any]:
@@ -278,16 +367,16 @@ def print_env_check(checks: dict[str, Any]) -> None:
 def start_vite_window() -> None:
     """Open a new console running npm run dev:frontend."""
     if os.name == "nt":
-        subprocess.Popen(
+        _track_console_proc(subprocess.Popen(
             [NPM, "run", "dev:frontend"],
             cwd=str(GAME_ROOT),
             creationflags=subprocess.CREATE_NEW_CONSOLE,
-        )
+        ))
     else:
-        subprocess.Popen(
+        _track_console_proc(subprocess.Popen(
             [NPM, "run", "dev:frontend"],
             cwd=str(GAME_ROOT),
-        )
+        ))
 
 
 def start_mainbot_window(args: list[str] | None = None) -> None:
@@ -296,9 +385,9 @@ def start_mainbot_window(args: list[str] | None = None) -> None:
     # Tell mainbot not to open its own console windows — bot_menu handles that
     env["MAINBOT_NO_CONSOLES"] = "1"
     if os.name == "nt":
-        subprocess.Popen(cmd, cwd=str(ROOT), creationflags=subprocess.CREATE_NEW_CONSOLE, env=env)
+        _track_console_proc(subprocess.Popen(cmd, cwd=str(ROOT), creationflags=subprocess.CREATE_NEW_CONSOLE, env=env))
     else:
-        subprocess.Popen(cmd, cwd=str(ROOT), env=env)
+        _track_console_proc(subprocess.Popen(cmd, cwd=str(ROOT), env=env))
 
 
 def _open_log_tail(title: str, log_path: Path) -> None:
@@ -311,10 +400,10 @@ def _open_log_tail(title: str, log_path: Path) -> None:
         f"$host.UI.RawUI.WindowTitle = '{title}'; "
         f"Get-Content -Path '{log_path}' -Wait -Tail 50"
     )
-    subprocess.Popen(
+    _track_console_proc(subprocess.Popen(
         ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd],
         creationflags=subprocess.CREATE_NEW_CONSOLE,
-    )
+    ))
 
 
 def open_all_log_consoles() -> None:
@@ -322,13 +411,19 @@ def open_all_log_consoles() -> None:
     logs = ROOT / "logs"
     report_script = ROOT / "report_console.py"
     if report_script.exists() and os.name == "nt":
-        subprocess.Popen(
+        _track_console_proc(subprocess.Popen(
             [sys.executable, str(report_script)],
             cwd=str(ROOT),
             creationflags=subprocess.CREATE_NEW_CONSOLE,
-        )
+        ))
     _open_log_tail("🤖 Live Agent P1", logs / "live_agent_p1.log")
     _open_log_tail("🔌 Broker Log", logs / "broker.log")
+
+
+def close_all_and_exit() -> int:
+    close_spawned_consoles()
+    stop_mainbot_stack()
+    return 0
 
 
 def stop_mainbot_stack() -> None:
@@ -677,16 +772,28 @@ def manage_bot_profile(manager: BotManager, bot_id: str | None = None) -> None:
         elif choice == "1":
             selected = choose_single("Select provider", PROVIDER_PRESETS, str(profile.get("provider", "claude")))
             if selected:
-                patch = {"provider": selected, "model": "", "modelValidation": {"status": "unvalidated", "message": "Provider changed"}}
+                patch = {
+                    "provider": selected,
+                    "model": "",
+                    "modelValidation": _model_validation_patch(
+                        profile,
+                        "Provider changed",
+                        provider=selected,
+                        requested_model="",
+                    ),
+                }
         elif choice == "2":
-            current_model = str(profile.get("model", "") or "")
-            options = [(m, label) for m, label in CLAUDE_MODEL_PRESETS]
-            options.append(("", "Custom (type below)"))
-            selected = choose_single("Select Claude model", options, current_model)
+            selected = _choose_model_for_profile(manager, profile)
             if selected is not None:
-                if selected == "":
-                    selected = compact_line(input("Model name: "))
-                patch = {"model": selected, "modelValidation": {"status": "unvalidated", "message": "Model changed"}}
+                patch = {
+                    "model": selected,
+                    "modelValidation": _model_validation_patch(
+                        profile,
+                        "Model changed",
+                        provider=str(profile.get("provider", "") or ""),
+                        requested_model=selected,
+                    ),
+                }
         elif choice == "3":
             clear_screen()
             print("Validating model...")
@@ -725,14 +832,20 @@ def manage_bot_profile(manager: BotManager, bot_id: str | None = None) -> None:
             if selected_ids is not None:
                 patch = {
                     "codexAccountIds": selected_ids,
-                    "modelValidation": {"status": "unvalidated", "message": "Codex fallback accounts changed"},
+                    "modelValidation": _model_validation_patch(
+                        profile,
+                        "Codex fallback accounts changed",
+                    ),
                 }
         elif choice == "9":
             current = str(profile.get("codexHome", "") or "")
             entered = compact_line(input(f"Legacy CODEX_HOME [{current or 'none'}]: "))
             patch = {
                 "codexHome": entered if entered else current,
-                "modelValidation": {"status": "unvalidated", "message": "Legacy CODEX_HOME changed"},
+                "modelValidation": _model_validation_patch(
+                    profile,
+                    "Legacy CODEX_HOME changed",
+                ),
             }
 
         if patch:
@@ -863,10 +976,12 @@ def main() -> int:
         print("1. Start AutoBot stack only (broker + agents + consoles)")
         print("2. Start — broker + insights only (no live agents)")
         print("3. Stop AutoBot stack")
+        print("X. Close all opened consoles + stop stack + exit")
         print("V. Start Vite dev frontend only")
         print("B. Open game in browser")
         print()
         print(bold("=== CONFIGURATION ==="))
+        print("M. Quick Codex model for P1")
         print("4. Configure bot")
         print("5. Create bot")
         print("A. Manage Codex OAuth accounts")
@@ -916,6 +1031,9 @@ def main() -> int:
             stop_mainbot_stack()
             print("Stack stopped.")
             pause()
+        elif choice == "x":
+            print("Closing spawned consoles and stopping stack...")
+            return close_all_and_exit()
         elif choice == "v":
             if _vite_online():
                 print(green(f"Vite already running on :{VITE_PORT}"))
@@ -930,6 +1048,8 @@ def main() -> int:
                 open_game_browser()
                 print(f"Browser opened → {GAME_URL}")
             pause()
+        elif choice == "m":
+            quick_set_codex_model(manager, "bot-p1")
         elif choice == "4":
             manage_bot_profile(manager)
         elif choice == "5":

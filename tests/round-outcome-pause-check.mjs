@@ -76,6 +76,10 @@ const assets = {
 };
 
 const game = new GameApp(root, assets);
+const sounds = [];
+game.soundManager.playOneShot = (key) => {
+  sounds.push(key);
+};
 game.start();
 
 emit("keydown", keyEvent("KeyE"));
@@ -94,6 +98,7 @@ emit("keyup", keyEvent("Escape"));
 
 window.advanceTime(2_200);
 const afterEsc = JSON.parse(window.render_game_to_text());
+const roundEndPlayed = sounds.includes("roundEnd");
 
 const report = {
   before: {
@@ -108,12 +113,15 @@ const report = {
     roundOutcome: afterEsc.match.roundOutcome,
     round: afterEsc.match.round,
   },
+  sounds,
+  roundEndPlayed,
   pass:
     beforeEsc.match.roundOutcome !== null &&
     afterEsc.mode === "match" &&
     afterEsc.match.round === 2 &&
     !afterEsc.match.paused &&
-    afterEsc.match.roundOutcome === null,
+    afterEsc.match.roundOutcome === null &&
+    roundEndPlayed,
 };
 
 console.log(JSON.stringify(report, null, 2));

@@ -192,3 +192,26 @@ If the complaint is about fairness, route control, or spawn flow, work in:
 - [src/game/arena.ts](C:\Users\user\Desktop\AutoWebGame\src\game\arena.ts)
 
 Do not patch all three subsystems at once unless the evidence clearly requires it.
+
+## 2026-04-13 Auto-Improvements Pass
+
+- Fixed the bot profile contract in `auto-improvements/bot_menu.py`: provider/model changes now keep full `modelValidation` metadata instead of dropping `provider` and `requestedModel`.
+- Updated `auto-improvements/bot_memory/bots/bot-p1/profile.json` to restore the missing validation fields for the current P1 profile.
+- Validation passed with `python -m py_compile auto-improvements/bot_menu.py auto-improvements/bot_manager.py auto-improvements/live_agent.py auto-improvements/model_manager.py auto-improvements/game_broker.py auto-improvements/mainbot.py`.
+
+Next agent:
+
+- If you keep working in automation tooling, check whether any other profile-edit paths or reports still assume partial `modelValidation` objects.
+- Otherwise, resume the broader game/workflow work from the most recent active notes in `progress.md`.
+
+## 2026-04-13 Sudden Death Warning Meter
+
+- Added a sudden-death warning meter to both HUD layouts so the countdown now has a readable fill bar, not just text.
+- `render_game_to_text` now exposes `match.suddenDeath.warningLabel` and `warningProgress`, which keeps the phase state observable in tests.
+- The sudden-death regression now covers the warning-state snapshot before activation and the active-state snapshot after collapse begins.
+- Validation passed with `node tests/sudden-death-check.mjs`, `npm run test:online-audio`, and `npm run build`.
+
+Next agent:
+
+- If you keep polishing match UX, consider applying the same meter treatment to other phase-based warnings so the HUD reads faster at a glance.
+- If you keep working in automation tooling, keep the `modelValidation` fix in mind and avoid reintroducing partial profile writes.

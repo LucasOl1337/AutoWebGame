@@ -5,8 +5,10 @@ export type SfxKey =
   | "bombExplode"
   | "flames"
   | "matchStart"
+  | "roundEnd"
   | "matchWin"
-  | "powerCollect";
+  | "powerCollect"
+  | "suddenDeathAlarm";
 
 interface SoundDefinition {
   url: string;
@@ -23,6 +25,7 @@ const MASTER_VOLUME = 0.5;
 const SFX_PLAYBACK_POLICIES: Partial<Record<SfxKey, SoundPlaybackPolicy>> = {
   bombExplode: { minIntervalMs: 140 },
   flames: { minIntervalMs: 110 },
+  suddenDeathAlarm: { minIntervalMs: 1200 },
 };
 
 export const SFX_MANIFEST: Partial<Record<SfxKey, SoundManifestEntry>> = {
@@ -30,8 +33,10 @@ export const SFX_MANIFEST: Partial<Record<SfxKey, SoundManifestEntry>> = {
   bombExplode: { url: assetUrl("/Assets/SoundEffects/bomb_explode_default.mp3"), volume: 0.84 * MASTER_VOLUME },
   flames: { url: assetUrl("/Assets/SoundEffects/flames.mp3"), volume: 0.74 * MASTER_VOLUME },
   matchStart: { url: assetUrl("/Assets/SoundEffects/match_start.mp3"), volume: 0.84 * 0.2 * MASTER_VOLUME },
+  roundEnd: { url: assetUrl("/Assets/SoundEffects/round_end.wav"), volume: 0.76 * MASTER_VOLUME },
   matchWin: { url: assetUrl("/Assets/SoundEffects/match_win.mp3"), volume: 0.9 * MASTER_VOLUME },
   powerCollect: { url: assetUrl("/Assets/SoundEffects/powerup_collect.mp3"), volume: 0.68 * MASTER_VOLUME },
+  suddenDeathAlarm: { url: assetUrl("/Assets/SoundEffects/sudden_death_alarm.wav"), volume: 0.8 * MASTER_VOLUME },
 };
 
 export class SoundManager {

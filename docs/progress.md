@@ -1132,3 +1132,24 @@ Validacao 2026-03-29 bomb explode default-only
 Validacao 2026-03-29 online local-bomb audio suppression
 - `npm run build` (pass)
 - `npm run test:online-audio` (pass)
+
+2026-04-13 auto-improvements contract pass
+- Fixed the bot profile `modelValidation` contract in `auto-improvements/bot_menu.py` so provider/model changes keep `provider` and `requestedModel`.
+- Restored the missing validation metadata in `auto-improvements/bot_memory/bots/bot-p1/profile.json` for the current P1 profile.
+- Validation passed with `python -m py_compile auto-improvements/bot_menu.py auto-improvements/bot_manager.py auto-improvements/live_agent.py auto-improvements/model_manager.py auto-improvements/game_broker.py auto-improvements/mainbot.py`.
+
+2026-04-13 sudden death audio pass
+- Added a new local SFX asset at `public/Assets/SoundEffects/sudden_death_alarm.wav`, synthesized as a short alarm/rumble cue for the sudden-death phase.
+- `SoundManager` now exposes `suddenDeathAlarm`, and both local and online sudden-death transitions play it once when the phase starts.
+- Online audio bridge now mirrors the same cue for guests on the authoritative `suddenDeathActive` transition.
+- Tests extended so `tests/sudden-death-check.mjs` verifies the local trigger and `tests/online-audio-bridge-check.mjs` verifies both playback and the manifest path.
+
+Validation 2026-04-13 audio
+- `npm run compile:esm` (pass)
+- `node tests/sudden-death-check.mjs` (pass)
+- `npm run test:online-audio` (pass)
+- `npm run build` (pass)
+
+TODOs / suggestions:
+- If the alarm feels too aggressive in browser playtest, lower `SFX_MANIFEST.suddenDeathAlarm.volume` or soften the generated waveform envelope.
+- Consider a second, softer closure-impact cue later if the sudden-death spiral needs more moment-to-moment feedback.

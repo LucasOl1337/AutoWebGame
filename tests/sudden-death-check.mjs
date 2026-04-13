@@ -1,4 +1,9 @@
 Object.defineProperty(globalThis, "navigator", { value: { webdriver: true }, configurable: true });
+globalThis.HTMLElement = class {
+  constructor() {
+    this.dataset = { fullscreen: "true" };
+  }
+};
 
 const noop = () => {};
 const fakeCtx = {
@@ -30,6 +35,7 @@ const fakeCanvas = {
   style: {},
   setAttribute: noop,
   getContext: () => fakeCtx,
+  closest: () => new globalThis.HTMLElement(),
   requestFullscreen: async () => {},
 };
 
@@ -60,6 +66,11 @@ const assets = {
 
 const game = new GameApp(root, assets);
 game.startMatch();
+const sounds = [];
+game.soundManager.playOneShot = (key) => {
+  sounds.push(key);
+};
+const renderGameToText = () => game.renderGameToText();
 
 const path = game.suddenDeathPath;
 const pathReady = Array.isArray(path) && path.length > 40;
@@ -72,6 +83,8 @@ game.arena.powerUps.push(injectedPowerUp);
 
 const breakableBefore = game.arena.breakable.has(firstKey);
 const suddenDeathStartMs = ROUND_DURATION_MS - 40_000;
+game.roundTimeMs = suddenDeathStartMs + 20_000;
+const suddenDeathWarningState = JSON.parse(renderGameToText()).match.suddenDeath;
 game.roundTimeMs = suddenDeathStartMs + 1_000;
 game.updateSuddenDeath(900);
 
@@ -87,6 +100,7 @@ game.players[1].spawnProtectionMs = 0;
 game.roundTimeMs = suddenDeathStartMs;
 game.updateSuddenDeath(900);
 game.updateVisualEffects(340);
+const suddenDeathActiveState = JSON.parse(renderGameToText()).match.suddenDeath;
 
 const suddenDeathActive = game.suddenDeathActive === true;
 const progressed = game.suddenDeathIndex > 0;
@@ -95,13 +109,16 @@ const closedAtFirst = game.suddenDeathClosedTiles.has(firstKey) && game.arena.so
 const breakableCleared = !game.arena.breakable.has(firstKey);
 const powerUpRevealed = injectedPowerUp.revealed === true;
 const playerCrushed = game.players[1].alive === false;
+const suddenDeathAlarmPlayed = sounds.includes("suddenDeathAlarm");
 
 const report = {
   pathReady,
   pathLength: path.length,
   firstTile,
   breakableBefore,
+  suddenDeathWarningState,
   suddenDeathStillWaiting,
+  suddenDeathActiveState,
   suddenDeathActive,
   progressed,
   closureQueued,
@@ -109,6 +126,7 @@ const report = {
   breakableCleared,
   powerUpRevealed,
   playerCrushed,
+  suddenDeathAlarmPlayed,
 };
 
 console.log(JSON.stringify(report, null, 2));
@@ -116,7 +134,11 @@ console.log(JSON.stringify(report, null, 2));
 if (
   !pathReady
   || !breakableBefore
+  || suddenDeathWarningState.warningLabel !== 'SD 20s'
+  || suddenDeathWarningState.warningProgress !== 50
   || !suddenDeathStillWaiting
+  || suddenDeathActiveState.warningLabel !== 'SUDDEN DEATH'
+  || suddenDeathActiveState.warningProgress !== 100
   || !suddenDeathActive
   || !progressed
   || !closureQueued
@@ -124,6 +146,7 @@ if (
   || !breakableCleared
   || !powerUpRevealed
   || !playerCrushed
+  || !suddenDeathAlarmPlayed
 ) {
   process.exit(1);
 }

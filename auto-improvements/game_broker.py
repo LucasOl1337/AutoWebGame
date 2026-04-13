@@ -253,7 +253,10 @@ class BrokerHandler(BaseHTTPRequestHandler):
             _latest_telemetry_at_ms = now_ms()
             _telemetry_tick = tick
             _last_phase = new_phase
+            match_started = prev_phase != "match" and new_phase == "match"
             match_ended = prev_phase == "match" and new_phase == "match-result"
+            if match_started or match_ended:
+                _latest_decisions.clear()
 
         if match_ended:
             _on_match_ended(body)

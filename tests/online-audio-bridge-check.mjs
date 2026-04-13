@@ -48,6 +48,7 @@ globalThis.window = {
 };
 
 const { GameApp } = await import("../output/esm/Engine/game-app.js");
+const { SFX_MANIFEST } = await import("../output/esm/Engine/sound-manager.js");
 
 const emptySprites = {
   up: null,
@@ -394,8 +395,17 @@ const expected = [
   "bombPlace",
   "bombExplode",
   "flames",
+  "roundEnd",
   "powerCollect",
+  "suddenDeathAlarm",
 ];
+
+const suddenDeathAlarm = SFX_MANIFEST.suddenDeathAlarm;
+const roundEnd = SFX_MANIFEST.roundEnd;
+const suddenDeathAlarmManifestPass = !Array.isArray(suddenDeathAlarm)
+  && suddenDeathAlarm?.url.endsWith("sudden_death_alarm.wav");
+const roundEndManifestPass = !Array.isArray(roundEnd)
+  && roundEnd?.url.endsWith("round_end.wav");
 
 game.applyOnlineFrame({
   serverTimeMs: 150,
@@ -432,9 +442,11 @@ const pass = placementCalls.length === 1
   && idSwapCalls.length === 0
   && pendingRollbackCalls.length === 0
   && expected.every((key) => calls.includes(key))
+  && roundEndManifestPass
+  && suddenDeathAlarmManifestPass
   && calls.includes("matchWin");
 
-console.log(JSON.stringify({ placementCalls, idSwapCalls, pendingRollbackCalls, calls, expected, pass }, null, 2));
+console.log(JSON.stringify({ placementCalls, idSwapCalls, pendingRollbackCalls, calls, expected, suddenDeathAlarmManifestPass, roundEndManifestPass, pass }, null, 2));
 
 if (!pass) {
   process.exit(1);

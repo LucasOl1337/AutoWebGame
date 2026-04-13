@@ -625,14 +625,17 @@ export class GameApp {
 
   public applyOnlineSnapshot(snapshot: OnlineGameSnapshot): void {
     const previousMode = this.mode;
+    const previousSuddenDeathActive = this.suddenDeathActive;
     this.onlineRoomMode = snapshot.roomMode ?? "classic";
     this.baseArenaDefinition = snapshot.arena;
     this.playOnlineAudioTransition({
       bombs: snapshot.bombs,
       flames: snapshot.flames,
       players: snapshot.players,
+      previousRoundOutcome: this.roundOutcome,
       roundOutcome: snapshot.roundOutcome,
       matchWinner: snapshot.matchWinner,
+      previousSuddenDeathActive,
       suddenDeathActive: snapshot.suddenDeathActive,
       breakableTiles: snapshot.breakableTiles,
       powerUps: snapshot.powerUps,
@@ -713,13 +716,16 @@ export class GameApp {
 
   public applyOnlineFrame(frame: OnlineGameFrame): void {
     const previousMode = this.mode;
+    const previousSuddenDeathActive = this.suddenDeathActive;
     this.onlineRoomMode = frame.roomMode ?? "classic";
     this.playOnlineAudioTransition({
       bombs: frame.bombs,
       flames: frame.flames,
       players: frame.players,
+      previousRoundOutcome: this.roundOutcome,
       roundOutcome: frame.roundOutcome,
       matchWinner: frame.matchWinner,
+      previousSuddenDeathActive,
       suddenDeathActive: frame.suddenDeathActive,
     });
     this.mode = frame.mode;
@@ -826,8 +832,10 @@ export class GameApp {
     bombs: BombState[];
     flames: FlameState[];
     players: Record<PlayerId, PlayerState>;
+    previousRoundOutcome: RoundOutcome | null;
     roundOutcome: RoundOutcome | null;
     matchWinner: PlayerId | null;
+    previousSuddenDeathActive: boolean;
     suddenDeathActive: boolean;
     breakableTiles?: string[];
     powerUps?: PowerUpState[];
@@ -841,6 +849,8 @@ export class GameApp {
       previousBombs: this.bombs,
       previousFlames: this.flames,
       previousMatchWinner: this.matchWinner,
+      previousRoundOutcome: next.previousRoundOutcome,
+      previousSuddenDeathActive: next.previousSuddenDeathActive,
       next,
       didCollectRemotePowerUp: (powerUps) => this.didCollectRemotePowerUp(powerUps),
       playSound: (name) => this.soundManager.playOneShot(name),
@@ -2726,6 +2736,7 @@ export class GameApp {
     if (!this.suddenDeathActive && this.roundTimeMs <= SUDDEN_DEATH_START_MS) {
       this.suddenDeathActive = true;
       this.suddenDeathTickMs = 0;
+      this.soundManager.playOneShot("suddenDeathAlarm");
     }
 
     if (!this.suddenDeathActive || this.suddenDeathPath.length === 0 || this.suddenDeathIndex >= this.suddenDeathPath.length) {
@@ -2907,6 +2918,7 @@ export class GameApp {
     const clinchesMatch = this.onlineRoomMode !== "endless" && winner
       ? this.score[winner] + 1 >= TARGET_WINS
       : false;
+    this.soundManager.playOneShot("roundEnd");
     if (clinchesMatch) {
       this.soundManager.playOneShot("matchWin");
     }
@@ -3236,6 +3248,7 @@ export class GameApp {
     const rightPlayers = this.activePlayerIds.filter((playerId) => playerId === 2 || playerId === 4);
     const centerWidth = Math.min(FULLSCREEN_HUD_CENTER_WIDTH, CANVAS_WIDTH - 240);
     const centerX = Math.round((CANVAS_WIDTH - centerWidth) / 2);
+    const suddenDeathHud = this.getSuddenDeathHudState();
     const sideWidth = Math.max(140, Math.floor((centerX - 14) / Math.max(1, leftPlayers.length || 1)));
     const rightStartX = centerX + centerWidth + 10;
     const rightAvailable = Math.max(0, CANVAS_WIDTH - rightStartX - 10);
@@ -3279,15 +3292,19 @@ export class GameApp {
     );
     this.ctx.font = "600 6px Inter";
     if (!this.roundOutcome) {
-      const suddenDeathText = this.suddenDeathActive
-        ? "SUDDEN DEATH"
-        : `SD ${Math.ceil(Math.max(0, this.roundTimeMs - SUDDEN_DEATH_START_MS) / 1000)}s`;
       this.drawHudText(
-        suddenDeathText,
+        suddenDeathHud.label,
         centerX + centerWidth / 2,
         25,
-        this.suddenDeathActive ? CANVAS_UI_DANGER : CANVAS_UI_MUTED,
+        suddenDeathHud.active ? CANVAS_UI_DANGER : CANVAS_UI_MUTED,
         CANVAS_UI_SHADOW,
+      );
+      this.drawSuddenDeathMeter(
+        centerX + 8,
+        28,
+        centerWidth - 16,
+        suddenDeathHud.progress,
+        suddenDeathHud.active,
       );
     }
   }
@@ -3349,20 +3366,23 @@ export class GameApp {
       CANVAS_UI_SHADOW,
     );
     if (!this.roundOutcome) {
+      const suddenDeathHud = this.getSuddenDeathHudState();
       this.ctx.textAlign = "center";
       this.ctx.font = "700 8px Inter";
-      if (this.suddenDeathActive) {
-        this.drawHudText("SUDDEN DEATH", 240, HUD_HEIGHT - 18, CANVAS_UI_DANGER, CANVAS_UI_SHADOW);
-      } else {
-        const untilSuddenDeath = Math.max(0, this.roundTimeMs - SUDDEN_DEATH_START_MS);
-        this.drawHudText(
-          `SD ${Math.ceil(untilSuddenDeath / 1000)}s`,
-          240,
-          HUD_HEIGHT - 18,
-          CANVAS_UI_MUTED,
-          CANVAS_UI_SHADOW,
-        );
-      }
+      this.drawHudText(
+        suddenDeathHud.label,
+        240,
+        HUD_HEIGHT - 18,
+        suddenDeathHud.active ? CANVAS_UI_DANGER : CANVAS_UI_MUTED,
+        CANVAS_UI_SHADOW,
+      );
+      this.drawSuddenDeathMeter(
+        CANVAS_WIDTH / 2 - 80,
+        HUD_HEIGHT - 12,
+        160,
+        suddenDeathHud.progress,
+        suddenDeathHud.active,
+      );
     }
   }
 
@@ -4694,6 +4714,40 @@ export class GameApp {
     this.ctx.fillText(text, x, y);
   }
 
+  private getSuddenDeathHudState(): { label: string; progress: number; active: boolean } {
+    if (this.suddenDeathActive) {
+      return {
+        label: "SUDDEN DEATH",
+        progress: 1,
+        active: true,
+      };
+    }
+
+    const remainingMs = Math.max(0, this.roundTimeMs - SUDDEN_DEATH_START_MS);
+    const progress = SUDDEN_DEATH_ELAPSED_MS > 0
+      ? 1 - (remainingMs / SUDDEN_DEATH_ELAPSED_MS)
+      : 1;
+
+    return {
+      label: `SD ${Math.ceil(remainingMs / 1000)}s`,
+      progress: Math.max(0, Math.min(1, progress)),
+      active: false,
+    };
+  }
+
+  private drawSuddenDeathMeter(x: number, y: number, width: number, progress: number, active: boolean): void {
+    const meterWidth = Math.max(24, Math.round(width));
+    const meterHeight = 4;
+    const fillWidth = Math.max(2, Math.round((meterWidth - 2) * Math.max(0, Math.min(1, progress))));
+
+    this.ctx.fillStyle = "rgba(5, 4, 8, 0.72)";
+    this.ctx.fillRect(x, y, meterWidth, meterHeight);
+    this.ctx.fillStyle = active ? CANVAS_UI_DANGER : CANVAS_UI_GOLD;
+    this.ctx.fillRect(x + 1, y + 1, fillWidth, meterHeight - 2);
+    this.ctx.strokeStyle = active ? CANVAS_UI_DANGER : CANVAS_UI_BORDER;
+    this.ctx.strokeRect(x + 0.5, y + 0.5, meterWidth - 1, meterHeight - 1);
+  }
+
   private renderMatchResult(): void {
     const copy = SITE_COPY[this.language].canvas;
     this.drawCenterOverlay(
@@ -4737,6 +4791,7 @@ export class GameApp {
         tile: { ...effect.tile },
         elapsedMs: Math.round(effect.elapsedMs),
       }));
+    const suddenDeathHud = this.getSuddenDeathHudState();
 
     const payload = {
       mode: this.mode,
@@ -4758,6 +4813,8 @@ export class GameApp {
           progress: this.suddenDeathPath.length > 0
             ? Math.round((this.suddenDeathIndex / this.suddenDeathPath.length) * 1000) / 10
             : 0,
+          warningLabel: suddenDeathHud.label,
+          warningProgress: Math.round(suddenDeathHud.progress * 1000) / 10,
           closedTiles: Array.from(this.suddenDeathClosedTiles)
             .slice(0, 48)
             .map((key) => this.parseTileKey(key)),

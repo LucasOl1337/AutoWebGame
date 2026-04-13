@@ -59,6 +59,8 @@ OPENAI_CODEX_MODEL_PRESETS = [
     "gpt-5.4",
     "gpt-5.4-mini",
     "gpt-5.3-codex",
+    "gpt-5.2-codex",
+    "gpt-5.1-codex-mini",
 ]
 
 
@@ -112,6 +114,17 @@ def discover_ollama_models(host: str = DEFAULT_OLLAMA_HOST) -> list[tuple[str, s
         return []
     models = data.get("models", []) if isinstance(data, dict) else []
     return [(m.get("name", ""), m.get("name", "")) for m in models if isinstance(m, dict) and m.get("name")]
+
+
+def build_openai_codex_model_options(codex_home: str = "") -> list[tuple[str, str]]:
+    defaults = read_codex_defaults(codex_home)
+    models: list[str] = []
+    if defaults["model"]:
+        models.append(defaults["model"])
+    for model in OPENAI_CODEX_MODEL_PRESETS:
+        if model not in models:
+            models.append(model)
+    return [("", "Inherit from local Codex config")] + [(model, model) for model in models]
 
 
 # ---------------------------------------------------------------------------

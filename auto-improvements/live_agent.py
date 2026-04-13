@@ -63,6 +63,28 @@ TOOLS_DIR = Path(__file__).resolve().parent
 SYSTEM_PROMPT = (TOOLS_DIR / "live_agent_system_prompt.txt").read_text(encoding="utf-8").strip()
 
 VALID_DIRECTIONS = {"up", "down", "left", "right"}
+DIR_STEP: dict[str, tuple[int, int]] = {
+    "up": (0, -1),
+    "down": (0, 1),
+    "left": (-1, 0),
+    "right": (1, 0),
+}
+ACCOUNT_FAILURE_THRESHOLD = 3
+_QUOTA_OR_AUTH_ERROR_KEYWORDS = (
+    "rate_limit",
+    "rate limit",
+    "quota",
+    "429",
+    "insufficient_quota",
+    "billing",
+    "auth",
+    "unauthorized",
+    "401",
+    "403",
+    "token limit",
+    "usage limit",
+    "try again at",
+)
 
 
 def log(msg: str) -> None:
@@ -100,7 +122,27 @@ def _load_codex_home_chain() -> list[str]:
         except json.JSONDecodeError:
             for item in CODEX_HOME_CHAIN_JSON.split("||"):
                 _push(item)
+    default_home = Path.home() / ".codex"
+    _push(str(default_home))
+    for entry in sorted(Path.home().glob(".codex*")):
+        if not entry.is_dir():
+            continue
+        if not (
+            (entry / "auth.json").exists()
+            or (entry / "config.toml").exists()
+            or (entry / ".sandbox-bin" / "codex.exe").exists()
+        ):
+            continue
+        _push(str(entry))
+    codex2 = Path.home() / ".codex2"
+    if codex2.exists():
+        _push(str(codex2))
     return homes
+
+
+def _is_quota_or_auth_error(status: str) -> bool:
+    lowered = compact_line(status).lower()
+    return any(keyword in lowered for keyword in _QUOTA_OR_AUTH_ERROR_KEYWORDS)
 
 
 # ---------------------------------------------------------------------------
@@ -173,6 +215,15 @@ def _fmt_flame(f: dict[str, Any]) -> str:
     return f"flame tile=({tile.get('x')},{tile.get('y')}) rem={f.get('remainingMs')}ms"
 
 
+def _fmt_enemy(me_tile: dict[str, Any], p: dict[str, Any]) -> str:
+    tile = p.get("tile", {})
+    return (
+        f"P{p.get('id')} tile=({tile.get('x')},{tile.get('y')}) "
+        f"d={_tile_distance(me_tile, tile)} alive={p.get('alive')} "
+        f"bombs={p.get('activeBombs')}/{p.get('maxBombs')} flame={p.get('flameRange')}"
+    )
+
+
 def _tile_distance(a: dict[str, Any] | None, b: dict[str, Any] | None) -> int:
     if not isinstance(a, dict) or not isinstance(b, dict):
         return 999
@@ -180,6 +231,81 @@ def _tile_distance(a: dict[str, Any] | None, b: dict[str, Any] | None) -> int:
         return abs(int(a.get("x", 0)) - int(b.get("x", 0))) + abs(int(a.get("y", 0)) - int(b.get("y", 0)))
     except (TypeError, ValueError):
         return 999
+
+
+def _tile_key(tile: dict[str, Any] | None) -> tuple[int, int]:
+    if not isinstance(tile, dict):
+        return (0, 0)
+    try:
+        return int(tile.get("x", 0)), int(tile.get("y", 0))
+    except (TypeError, ValueError):
+        return (0, 0)
+
+
+def _player_state(state: dict[str, Any], player_id: str) -> dict[str, Any] | None:
+    players = state.get("players", [])
+    return next((p for p in (players or []) if str(p.get("id")) == player_id), None)
+
+
+def _current_life_active(state: dict[str, Any]) -> bool:
+    me = _player_state(state, PLAYER_ID)
+    return bool(me and me.get("alive") and me.get("active"))
+
+
+def _local_fast_decision(state: dict[str, Any]) -> dict[str, Any] | None:
+    me = _player_state(state, PLAYER_ID)
+    if not me or not me.get("alive") or not me.get("active"):
+        return None
+
+    me_tile = me.get("tile", {})
+    mx, my = _tile_key(me_tile)
+    bombs = [b for b in (state.get("bombs") or []) if isinstance(b, dict)]
+    flames = [f for f in (state.get("flames") or []) if isinstance(f, dict)]
+    enemies = [
+        p for p in (state.get("players") or [])
+        if isinstance(p, dict) and str(p.get("id")) != PLAYER_ID and p.get("alive") and p.get("active")
+    ]
+    nearest_enemy = min(enemies, key=lambda p: _tile_distance(me_tile, p.get("tile", {})), default=None)
+    threat_tiles = {_tile_key(f.get("tile", {})) for f in flames}
+    close_bombs = [b for b in bombs if _tile_distance(me_tile, b.get("tile", {})) <= 2]
+    immediate_danger = bool(threat_tiles or close_bombs)
+
+    best_direction: str | None = None
+    best_score = -10**9
+    for direction, (dx, dy) in DIR_STEP.items():
+        candidate = {"x": mx + dx, "y": my + dy}
+        score = 0
+        if _tile_key(candidate) in threat_tiles:
+            score -= 1000
+        for bomb in close_bombs:
+            score += _tile_distance(candidate, bomb.get("tile", {})) * 25
+        if nearest_enemy is not None:
+            enemy_tile = nearest_enemy.get("tile", {})
+            enemy_dist = _tile_distance(candidate, enemy_tile)
+            score += (-enemy_dist * 12) if not immediate_danger else 0
+        if direction == str(me.get("direction", "")):
+            score += 3
+        if score > best_score:
+            best_score = score
+            best_direction = direction
+
+    place_bomb = False
+    if not immediate_danger and nearest_enemy is not None:
+        enemy_dist = _tile_distance(me_tile, nearest_enemy.get("tile", {}))
+        bomb_here = any(_tile_distance(me_tile, b.get("tile", {})) == 0 for b in bombs)
+        if enemy_dist <= 1 and not bomb_here and int(me.get("activeBombs", 0) or 0) < int(me.get("maxBombs", 0) or 0):
+            place_bomb = True
+
+    reason = "Immediate evasive bootstrap" if immediate_danger else "Fast bootstrap pressure"
+    return {
+        "playerId": PLAYER_ID,
+        "botId": AGENT_ID,
+        "direction": best_direction,
+        "placeBomb": place_bomb,
+        "detonate": False,
+        "useSkill": False,
+        "reason": reason,
+    }
 
 
 def build_prompt(state: dict[str, Any]) -> str:
@@ -193,6 +319,11 @@ def build_prompt(state: dict[str, Any]) -> str:
     if me is None:
         return f"No data for player {PLAYER_ID}. Return idle: {{\"direction\":null,\"placeBomb\":false,\"detonate\":false,\"useSkill\":false,\"reason\":\"no_self_state\"}}"
     me_tile = me.get("tile", {}) if isinstance(me, dict) else {}
+    living_enemies = [
+        p for p in (players or [])
+        if isinstance(p, dict) and str(p.get("id")) != PLAYER_ID and p.get("alive")
+    ]
+    nearest_enemies = sorted(living_enemies, key=lambda p: _tile_distance(me_tile, p.get("tile", {})))[:3]
     nearby_bombs = sorted(
         [b for b in (bombs or []) if isinstance(b, dict)],
         key=lambda b: _tile_distance(me_tile, b.get("tile", {})),
@@ -201,15 +332,34 @@ def build_prompt(state: dict[str, Any]) -> str:
         [f for f in (flames or []) if isinstance(f, dict)],
         key=lambda f: _tile_distance(me_tile, f.get("tile", {})),
     )[:8]
+    nearest_enemy_distance = _tile_distance(me_tile, nearest_enemies[0].get("tile", {})) if nearest_enemies else 999
+    close_bomb_threats = [
+        b for b in nearby_bombs
+        if _tile_distance(me_tile, b.get("tile", {})) <= 2 and int(b.get("fuseMs", 99999) or 99999) <= 2200
+    ]
+    close_flame_threats = [f for f in nearby_flames if _tile_distance(me_tile, f.get("tile", {})) <= 1]
+    immediate_danger = bool(close_bomb_threats or close_flame_threats)
 
     lines = [
         f"Tick: {state.get('tick', 0)} | Phase: {state.get('phase')} | Score: {json.dumps(score)}",
         f"Sudden death: {sudden_death.get('active', False)}",
+        (
+            "Tactical summary: "
+            f"nearestEnemy={nearest_enemy_distance} "
+            f"bombThreats={len(close_bomb_threats)} "
+            f"flameThreats={len(close_flame_threats)} "
+            f"immediateDanger={immediate_danger}"
+        ),
         "",
         "Players:",
     ]
     for p in (players or []):
         lines.append("  " + _fmt_player(p))
+
+    if nearest_enemies:
+        lines.append("\nNearest enemies:")
+        for p in nearest_enemies:
+            lines.append("  " + _fmt_enemy(me_tile, p))
 
     if nearby_bombs:
         lines.append("\nNearest bombs:")
@@ -222,7 +372,11 @@ def build_prompt(state: dict[str, Any]) -> str:
             lines.append("  " + _fmt_flame(f))
 
     lines.append(f"\nYou are: {_fmt_player(me)}")
-    lines.append(f"\nDecide the next action for P{PLAYER_ID}. Be decisive and low-latency. Return JSON only.")
+    lines.append(
+        f"\nDecide the next action for P{PLAYER_ID}. "
+        "Survive immediate danger first; otherwise pressure the nearest enemy and create trap bombs when close. "
+        "Be decisive and low-latency. Return JSON only."
+    )
     return "\n".join(lines)
 
 
@@ -356,6 +510,12 @@ class LiveAgent:
         self._last_model_error = ""
         self._codex_homes = _load_codex_home_chain()
         self._codex_home_index = 0
+        self._account_consecutive_failures = 0
+        self._round_epoch = 0
+        self._life_epoch = 0
+        self._latest_state: dict[str, Any] = {}
+        self._latest_state_lock = threading.Lock()
+        self._was_alive_in_match = False
 
     def _is_ai_busy(self) -> bool:
         with self._ai_lock:
@@ -375,23 +535,44 @@ class LiveAgent:
         except OSError:
             return home
 
-    def _rotate_codex_home(self) -> bool:
+    def _rotate_codex_home(self, reason: str = "") -> bool:
         if PROVIDER != "openai_codex" or len(self._codex_homes) < 2:
             return False
+        old_home = self._current_codex_home_label()
         old_index = self._codex_home_index
         self._codex_home_index = (self._codex_home_index + 1) % len(self._codex_homes)
         if self._codex_home_index == old_index:
             return False
         self._codex_session_id = None
+        self._account_consecutive_failures = 0
         self._ai_retry_at_ms = now_ms() + 1000
-        log(f"rotating Codex account -> {self._current_codex_home_label()}")
+        suffix = f" | reason={reason}" if reason else ""
+        log(f"[auth-fallback] rotating Codex account: {old_home} -> {self._current_codex_home_label()}{suffix}")
         return True
+
+    def _set_latest_state(self, state: dict[str, Any]) -> None:
+        with self._latest_state_lock:
+            self._latest_state = state
+
+    def _get_latest_state(self) -> dict[str, Any]:
+        with self._latest_state_lock:
+            return dict(self._latest_state)
+
+    def _post_bootstrap_decision(self, state: dict[str, Any], *, reason: str) -> None:
+        decision = _local_fast_decision(state)
+        if not decision:
+            return
+        decision["reason"] = f"{reason}: {decision['reason']}"[:120]
+        _http_post("/decision", decision)
+        log(f"bootstrap | {decision['direction'] or '.'} | {decision['reason']}")
 
     def run(self) -> None:
         log(
             f"starting  provider={PROVIDER} model={MODEL or '(default)'}  "
             f"player={PLAYER_ID} codexHome={self._current_codex_home_label()}"
         )
+        if PROVIDER == "openai_codex":
+            log(f"[auth-fallback] available Codex homes: {self._codex_homes or ['(default)']}")
         send_heartbeat()
         heartbeat_at = now_ms()
 
@@ -399,7 +580,7 @@ class LiveAgent:
         session_id, warmup_raw = run_warmup(codex_home=self._current_codex_home())
         if PROVIDER == "openai_codex" and not session_id and not warmup_raw and len(self._codex_homes) > 1:
             for _ in range(len(self._codex_homes) - 1):
-                if not self._rotate_codex_home():
+                if not self._rotate_codex_home("warmup_failed"):
                     break
                 session_id, warmup_raw = run_warmup(codex_home=self._current_codex_home())
                 if session_id or warmup_raw:
@@ -426,23 +607,42 @@ class LiveAgent:
                 tick = int(body.get("tick", -1) or -1)
                 state = body.get("state") or {}
                 phase = str(state.get("phase", "") or "")
+                self._set_latest_state(state)
+                me_alive = _current_life_active(state)
 
                 # Detect match start
                 if phase == "match" and self.last_phase != "match":
+                    self._round_epoch += 1
                     self.match_start_tick = tick
                     self.decisions_this_match = 0
+                    self._codex_session_id = None
+                    self._was_alive_in_match = me_alive
+                    if me_alive:
+                        self._life_epoch += 1
+                        self._post_bootstrap_decision(state, reason="Round start")
                     log("=" * 55)
                     log(f"  MATCH STARTED  player={PLAYER_ID}  session={str(self._codex_session_id or 'new')[:12]}")
                     log("=" * 55)
 
                 # Detect match end
                 if phase == "match-result" and self.last_phase == "match":
+                    self._round_epoch += 1
+                    self._was_alive_in_match = False
                     self._on_match_ended(state)
 
                 self.last_phase = phase
 
                 if phase != "match":
                     time.sleep(IDLE_INTERVAL)
+                    continue
+
+                if me_alive and not self._was_alive_in_match:
+                    self._life_epoch += 1
+                    self._post_bootstrap_decision(state, reason="Respawn")
+                self._was_alive_in_match = me_alive
+
+                if not me_alive:
+                    time.sleep(POLL_INTERVAL)
                     continue
 
                 if tick == self.last_tick:
@@ -469,6 +669,9 @@ class LiveAgent:
         prompt = build_prompt(state)
         session_id = self._codex_session_id
         codex_home = self._current_codex_home()
+        request_round_epoch = self._round_epoch
+        request_life_epoch = self._life_epoch
+        request_alive = _current_life_active(state)
 
         def _worker() -> None:
             new_session_id: str | None = None
@@ -486,12 +689,28 @@ class LiveAgent:
                 self._handle_model_error(status, tick)
                 return
 
+            latest_state = self._get_latest_state()
+            if request_round_epoch != self._round_epoch or request_life_epoch != self._life_epoch:
+                log(f"discard stale response tick={tick:>5} round={request_round_epoch}->{self._round_epoch} life={request_life_epoch}->{self._life_epoch}")
+                return
+            if request_alive and not _current_life_active(latest_state):
+                log(f"discard stale response tick={tick:>5} reason=life_inactive")
+                return
+
             decision = parse_decision(raw)
             if decision is None:
                 log(f"parse failed tick={tick:>5} raw={raw[:80]}")
                 return
 
+            if _current_life_active(latest_state) and "dead" in str(decision.get("reason", "")).lower():
+                log(f"discard dead response tick={tick:>5} while player is alive")
+                bootstrap = _local_fast_decision(latest_state)
+                if bootstrap:
+                    _http_post("/decision", bootstrap)
+                return
+
             self._last_model_error = ""
+            self._account_consecutive_failures = 0
             self._ai_retry_at_ms = 0
             _http_post("/decision", decision)
             self.decisions_this_match += 1
@@ -511,16 +730,24 @@ class LiveAgent:
     def _handle_model_error(self, status: str, tick: int) -> None:
         status_l = status.lower()
         retry_ms = 0
-        if "usage limit" in status_l or "rate limit" in status_l or "try again at" in status_l:
-            if self._rotate_codex_home():
-                retry_ms = 1000
-            else:
-                retry_ms = 30_000
-            self._ai_retry_at_ms = max(self._ai_retry_at_ms, now_ms() + retry_ms)
+        self._account_consecutive_failures += 1
+        should_rotate = _is_quota_or_auth_error(status) or self._account_consecutive_failures >= ACCOUNT_FAILURE_THRESHOLD
+
+        if should_rotate and self._rotate_codex_home(status):
+            retry_ms = 1000
+        elif _is_quota_or_auth_error(status):
+            retry_ms = 30_000
+        elif "timeout" in status_l:
+            retry_ms = 3000
+        else:
+            retry_ms = 1500
+
+        self._ai_retry_at_ms = max(self._ai_retry_at_ms, now_ms() + retry_ms)
 
         suffix = f" retry_in={retry_ms // 1000}s" if retry_ms else ""
+        rotate_suffix = f" fails={self._account_consecutive_failures}" if PROVIDER == "openai_codex" else ""
         if status != self._last_model_error or retry_ms:
-            log(f"model error tick={tick:>5} status={status}{suffix}")
+            log(f"model error tick={tick:>5} status={status}{rotate_suffix}{suffix}")
         self._last_model_error = status
 
     def _on_match_ended(self, state: dict[str, Any]) -> None:

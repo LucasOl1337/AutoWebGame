@@ -31,7 +31,7 @@ import type {
 import type { BotDecision } from "./bot-ai";
 
 const BROKER_BASE = "http://127.0.0.1:8766";
-const TELEMETRY_THROTTLE_MS = 200;
+const TELEMETRY_THROTTLE_MS = 75;
 const DECISION_TTL_MS = 25000; // Codex takes ~20-30s per call; hold decisions until next one arrives
 const HEALTH_CHECK_INTERVAL_MS = 5000;
 
