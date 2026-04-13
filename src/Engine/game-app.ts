@@ -965,7 +965,7 @@ export class GameApp {
     }
     void this.soundManager.loadSounds(SFX_MANIFEST);
     this.root.appendChild(this.canvas);
-    if (import.meta.env.DEV) {
+    if (import.meta.env?.DEV) {
       AutoImprovementBridge.enable();
       AutoImprovementBridge.mountDevPanel(this.root.ownerDocument?.body ?? document.body);
       AutoImprovementBridge.mountSidePanels(this.root.ownerDocument?.body ?? document.body);
@@ -1575,7 +1575,7 @@ export class GameApp {
       this.cachedDangerMap = null;
     }
 
-    if (import.meta.env.DEV) {
+    if (import.meta.env?.DEV) {
       this.aiBridgeTick++;
       AutoImprovementBridge.pushTelemetry({
         tick: this.aiBridgeTick,
@@ -2027,7 +2027,7 @@ export class GameApp {
   }
 
   private getBotDecision(player: PlayerState): BotDecision {
-    if (import.meta.env.DEV && AutoImprovementBridge.isEnabled && this.isLiveBridgeControlled(player.id)) {
+    if (import.meta.env?.DEV && AutoImprovementBridge.isEnabled && this.isLiveBridgeControlled(player.id)) {
       // Per-player AI explicitly disabled → stand completely idle (no built-in AI)
       if (!AutoImprovementBridge.isPlayerEnabled(player.id)) {
         return botAI_getBotDecision(player, this.createBotContext());
