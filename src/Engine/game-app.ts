@@ -4737,15 +4737,58 @@ export class GameApp {
 
   private drawSuddenDeathMeter(x: number, y: number, width: number, progress: number, active: boolean): void {
     const meterWidth = Math.max(24, Math.round(width));
-    const meterHeight = 4;
-    const fillWidth = Math.max(2, Math.round((meterWidth - 2) * Math.max(0, Math.min(1, progress))));
+    const meterHeight = active ? 6 : 5;
+    const clampedProgress = Math.max(0, Math.min(1, progress));
+    const fillWidth = Math.max(2, Math.round((meterWidth - 2) * clampedProgress));
+    const pulse = active
+      ? 0.55 + (Math.sin((this.roundTimeMs + this.suddenDeathTickMs) / 120) + 1) * 0.225
+      : 0.28 + clampedProgress * 0.42;
 
-    this.ctx.fillStyle = "rgba(5, 4, 8, 0.72)";
+    this.ctx.save();
+    this.ctx.fillStyle = active
+      ? `rgba(255, 95, 87, ${0.1 + pulse * 0.12})`
+      : `rgba(0, 229, 160, ${0.05 + clampedProgress * 0.08})`;
+    this.ctx.fillRect(x - 1, y - 1, meterWidth + 2, meterHeight + 2);
+
+    const baseGradient = this.ctx.createLinearGradient(x, y, x, y + meterHeight);
+    if (active) {
+      baseGradient.addColorStop(0, "rgba(44, 12, 16, 0.96)");
+      baseGradient.addColorStop(1, "rgba(16, 6, 8, 0.96)");
+    } else {
+      baseGradient.addColorStop(0, "rgba(15, 12, 10, 0.94)");
+      baseGradient.addColorStop(1, "rgba(7, 6, 9, 0.94)");
+    }
+    this.ctx.fillStyle = baseGradient;
     this.ctx.fillRect(x, y, meterWidth, meterHeight);
-    this.ctx.fillStyle = active ? CANVAS_UI_DANGER : CANVAS_UI_GOLD;
+
+    this.ctx.globalAlpha = active ? 0.28 + pulse * 0.2 : 0.18 + clampedProgress * 0.12;
+    this.ctx.fillStyle = active ? "rgba(255, 210, 204, 0.34)" : "rgba(174, 255, 233, 0.26)";
+    for (let offset = 2; offset < meterWidth - 2; offset += 6) {
+      this.ctx.fillRect(x + offset, y + 1, 2, meterHeight - 2);
+    }
+    this.ctx.globalAlpha = 1;
+
+    const fillGradient = this.ctx.createLinearGradient(x, y, x + fillWidth, y);
+    if (active) {
+      fillGradient.addColorStop(0, "rgba(255, 208, 203, 0.98)");
+      fillGradient.addColorStop(0.58, "rgba(255, 95, 87, 0.98)");
+      fillGradient.addColorStop(1, "rgba(189, 31, 55, 0.98)");
+    } else {
+      fillGradient.addColorStop(0, "rgba(95, 255, 200, 0.96)");
+      fillGradient.addColorStop(0.6, "rgba(0, 229, 160, 0.96)");
+      fillGradient.addColorStop(1, "rgba(0, 161, 122, 0.96)");
+    }
+    this.ctx.fillStyle = fillGradient;
     this.ctx.fillRect(x + 1, y + 1, fillWidth, meterHeight - 2);
-    this.ctx.strokeStyle = active ? CANVAS_UI_DANGER : CANVAS_UI_BORDER;
+
+    if (fillWidth > 2) {
+      this.ctx.fillStyle = active ? "rgba(255, 255, 255, 0.26)" : "rgba(255, 255, 255, 0.22)";
+      this.ctx.fillRect(x + fillWidth - 1, y + 1, 1, meterHeight - 2);
+    }
+
+    this.ctx.strokeStyle = active ? `rgba(255, 95, 87, ${0.6 + pulse * 0.2})` : "rgba(0, 229, 160, 0.58)";
     this.ctx.strokeRect(x + 0.5, y + 0.5, meterWidth - 1, meterHeight - 1);
+    this.ctx.restore();
   }
 
   private renderMatchResult(): void {

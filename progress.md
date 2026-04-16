@@ -1,5 +1,8 @@
 Original prompt: Uma coisa que tÃƒÂ¡ faltando ÃƒÂ© na nossa tela de inÃƒÂ­cio, alÃƒÂ©m da partida rÃƒÂ¡pida e entrar em um lobby, tambÃƒÂ©m pode ter o botÃƒÂ£o partida contra bots, ÃƒÂ© um sistema que jÃƒÂ¡ existe dentro do jogo, entÃƒÂ£o ÃƒÂ© sÃƒÂ³ vocÃƒÂª clicar no botÃƒÂ£o partida contra bots, que aÃƒÂ­ jÃƒÂ¡ vai comeÃƒÂ§ar uma partida com bots. AÃƒÂ­ pode colocar pra default ter trÃƒÂªs bots inimigos e ÃƒÂ© isso mesmo. Agora, alÃƒÂ©m disso, na hora que vocÃƒÂª clica em partida rÃƒÂ¡pida, ÃƒÂ s vezes vocÃƒÂª tÃƒÂ¡ esperando porque nÃƒÂ£o tem mais pessoas na fila, certo? EntÃƒÂ£o coloca pra opÃƒÂ§ÃƒÂ£o de ficar Coloca a opÃƒÂ§ÃƒÂ£o para na tela de quando vocÃƒÂª compra jogar e estÃƒÂ¡ esperando mais pessoas, mostrar tipo uma lista de quantas pessoas estÃƒÂ£o online do lado assim, tipo o ID do jogador, pra ele saber, por exemplo, quantos estÃƒÂ£o on, se tÃƒÂ¡ sÃƒÂ³ ele, se tem mais gente pra entrar.
 
+- 2026-04-16: polished the sudden-death HUD meter so it reads more like an arcade alert strip, with a brighter glow, segmented fill, and stronger active-state contrast in both compact and full match layouts.
+- Validation passed with `npm run build` and `node tests/sudden-death-check.mjs`.
+
 - Adicionado CTA `Partida contra bots` na landing e bridge para iniciar partida offline com 3 bots direto do `OnlineSessionClient`.
 - PreferÃƒÂªncia de personagem da casca online agora sincroniza com o `GameApp` offline.
 - Estendido o protocolo online para incluir `onlinePlayers` em `hello`, `lobby-list` e `quick-match-state`.
@@ -69,7 +72,8 @@ TODOs / sugestões:
 - O playtest de UI ficou parcialmente bloqueado por um overlay de reconexão na landing. A captura visual ainda mostrou o crocodilo, mas vale repetir o fluxo completo menu -> escolher crocodilo -> partida assim que o overlay online não interferir.
 
 - Refatorado src/app/skill-system.ts para virar uma camada fina de roteamento, com a l�gica de ult separada por personagem em src/app/characters/.
-- Novos m�dulos: shared.ts, anni-skill.ts, killer-bee-skill.ts, 
+- Novos m�dulos: shared.ts, 
+anni-skill.ts, killer-bee-skill.ts, 
 ico-skill.ts, crocodilo-skill.ts.
 - Mantido o contrato do online exatamente no mesmo formato; o Worker e o reconciler continuam recebendo os mesmos campos de snapshot/frame, sem payload extra por causa da modularizacao.
 - A API publica antiga do skill-system foi preservada via re-export para evitar quebrar chamadas existentes e testes.
@@ -107,9 +111,11 @@ TODOs / sugest�es:
 - Rodar playtest visual comparando rcane-citadel e erdant-ruins para decidir se a variante verde mant�m contraste suficiente contra chamas, danger overlay e pickups.
 - Assim que o job defe7f7-b965-4422-8275-5606eff7e502 concluir, revisar os PNGs e decidir se skyfoundry-bastion entra como terceiro tema integrado.- skyfoundry-bastion foi gerado no PixelLab (defe7f7-b965-4422-8275-5606eff7e502), revisado visualmente e promovido como terceiro tema integrado em public/assets/tiles/themes/skyfoundry-bastion/.
 - Capturas de compara��o salvas em output/playwright/arena-default-theme.png, output/playwright/arena-verdant-theme.png e output/playwright/arena-skyfoundry-theme.png.- Tema padr�o trocado para 	ournament-clean, renderizado proceduralmente com fam�lias de cor separadas: piso frio/neutro, parede estrutural escura, crate quente, e acentos reservados para spawn/portal.
-- src/app/arena-theme-library.ts, src/app/assets.ts e src/app/game-app.ts agora suportam enderMode por tema, permitindo misturar temas sprite e procedural.
+- src/app/arena-theme-library.ts, src/app/assets.ts e src/app/game-app.ts agora suportam 
+enderMode por tema, permitindo misturar temas sprite e procedural.
 - Screenshot atual do novo visual salvo em output/playwright/arena-tournament-clean.png.
-- PixelLab crocodilo pack concluido em 2026-03-30 com reathing-idle, walk, unning-8-frames, ireball, cross-punch e alling-back-death para o personagem d083c3dc-7162-4391-8628-6adde0b8d8d6.
+- PixelLab crocodilo pack concluido em 2026-03-30 com reathing-idle, walk, 
+unning-8-frames, ireball, cross-punch e alling-back-death para o personagem d083c3dc-7162-4391-8628-6adde0b8d8d6.
 - Rodado PIXELLAB_CHARACTER_IDS=d083c3dc-7162-4391-8628-6adde0b8d8d6 npm run sync:pixellab; manifest do crocodilo agora marca idle/walk/run/cast/attack/death = true e os frames foram copiados para public/assets/characters/d083c3dc-7162-4391-8628-6adde0b8d8d6/.
 - Validacao concluida com 
 pm run build, 
