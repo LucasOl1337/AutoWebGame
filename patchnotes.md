@@ -1,56 +1,200 @@
-# Patch Notes — 2026-05-31 Safe Sync
+# Patch Notes - 2026-06-02 Safe Sync (PC vs GitHub Research)
 
-**Project:** AutoWebGame (BOMBA v0.1 — browser-first Bomberman-style arena game)  
-**Path:** C:\projetos\AutoWebGame  
-**Branch:** main  
-**Generated:** 2026-05-31 (batch reconciliation)  
-**Agent:** Grok Build subagent
+**Project:** AutoWebGame (Browser-based auto web game with animations, public assets, grok integration, tests, Vite/TS build)
+**Path:** C:\Projetos\AutoWebGame
+**Branch:** main (push: origin)
+**Generated:** 2026-06-02 11:42:57
+**State:** docs | Pre-rebase state: docs | Ahead/Behind post: +0 / -0
 
 ## Executive Summary
+Batch safe commit for projects with 24h activity (file mods, commits, dirty tree, or agent-driven patch/changelog touches). Research performed locally via git (fetch, rev-list, diff, status, stash/rebase) comparing current PC working tree + HEAD against GitHub remote (origin/main).
 
-Part of 2026-05-31 global batch across 12 projects. Captures 3 changed items (changelog.md, patchnotes.md, grokassets/) on top of 2026-05-29 dirty safe commit baseline (dd829b0, in sync with remote at time).
+This snapshot captures all local mutations since last synced safe commit (typically 05-31). Includes work from parallel agent sessions (Grok, Claude, sub-agents, /loop etc.). Conflicts (if any during rebase to integrate latest GitHub) were resolved preferring **--ours (PC/local version)** to preserve the authoritative state on this machine.
 
-**Themes:** 
-- grokassets/ standardization (visual assets for characters, arenas, UI per master plan).
-- Docs updates (changelog/patchnotes) for audit of prior April–May agent work (auto-improvements Python AI stack, bot manager, pixellab orchestrator, online sync, skill system).
-- Game is v0.1 baseline combining parallel agent contributions into single source of truth (local bots + online CF Worker lobby, 4 signature characters with skills, arena themes, test matrix).
+Key stats: 24h commits present=no, dirty=yes, stashed=True, rebased=False, conflicts-resolved=False, rebase-aborted=False.
 
-No hard conflicts. Ready for clean 2026-05-31 safe commit.
+## Local PC vs GitHub Comparison (Post-Reconciliation Research)
 
-## Local vs GitHub Comparison
+| Aspect | PC (Local) | GitHub (origin) | Notes |
+|--------|------------|---------------------|-------|
+| HEAD | ee5a446 | ee5a446 | Post-rebase if applied |
+| Branch tracking | main | origin/main | |
+| Ahead / Behind | +0 | -0 | 0/0 ideal after rebase |
+| Working tree | dirty (16 lines) | (remote clean by definition) | Uncommitted on PC |
+| Unique commits (24h) | 0 listed | See div below | |
+| Divergence PC-only commits | 0 | - | These + uncommitted = what we commit |
+| Divergence GH-only | - | 0 | Integrated via rebase (or ignored if aborted) |
 
-| Metric | Local | GitHub | Notes |
-|--------|-------|--------|-------|
-| Branch | main | main | — |
-| Last commit | dd829b0 (2026-05-29 dirty safe) | Matches | In sync at prior safe |
-| Ahead/Behind | 0/0 on committed (pre-dirty) | — | 3 uncommitted this batch |
-| Uncommitted | 3 (changelog, patchnotes, grokassets/) | — | Agent tooling + doc polish |
-| Remotes | origin: https://github.com/LucasOl1337/AutoWebGame.git | — | — |
+### Commits unique to PC (will be part of this safe commit or already in HEAD)
+(none - all local work is uncommitted or already matched)
 
-## Categorized Changes
+### Commits only on GitHub (fetched, integrated where possible)
+(none - PC was at or ahead of remote at research time)
 
-### Agent Tooling
-- grokassets/ added/updated (banners, content/characters/illustrations, exports, icons, logos, motion, prompts/, README, visual-bible.md, manifest.json). Consistent with cross-project initiative (GROKASSETS-PLAN.md 2026-05-31).
-- Brand/ icons standardized.
+### Recent 24h local commits (full subjects + relative time)
+  (no new commits in last 24h; changes are uncommitted or from prior)
 
-### Specific Features/Fixes
-- Prior baseline (05-29 dirty safe) locked v0.1: offline bots, online lobby (CF Worker), Ranni/Killer Bee/Nico/Crocodilo skills, arena themes, asset-manifest, extensive tests (bomb chain, bot intel, online 4p, skill contracts, etc.).
-- Auto-improvements/ Python stack (bot_manager, live_agent, insights, memory) adapted from sibling The-Last-Arrow.
-- Pixellab orchestrator + character import scripts.
-- No new code deltas in this 05-31 touch — focused on docs + shared assets.
+### Pending uncommitted changes on PC (porcelain post-rebase/pop)
+```
+M changelog.md
+ M grokassets/manifest.json
+ M patchnotes.md
+?? grokassets/BRAND-USAGE-GUIDELINES.md
+?? grokassets/banners/
+?? grokassets/content/
+?? grokassets/logos/primary/horizontal/dark/autowebgame-logo-h-dark.svg
+?? grokassets/motion/
+?? grokassets/prompts/2026-05-31-autowebgame-arena-entrance-cinematic.md
+?? grokassets/prompts/2026-05-31-autowebgame-arena-themes-and-skills.md
+?? grokassets/prompts/2026-05-31-autowebgame-signature-skills-showcase.md
+?? grokassets/prompts/2026-05-31-autowebgame-youtube-channel-art.md
+?? grokassets/prompts/2026-05-31-loop-round11.md
+?? grokassets/prompts/2026-05-31-loop-round7.md
+?? grokassets/prompts/2026-05-31-loop-round9.md
+?? grokimaginevideos/
+```
 
-### Docs
-- changelog.md + patchnotes.md refreshed with batch context + recon section.
+### Diff stat (unstaged work to be snapshotted)
+```
+changelog.md             |  44 +++++++++++++++
+ grokassets/manifest.json |  60 ++++++++++++++++++---
+ patchnotes.md            | 135 +++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 233 insertions(+), 6 deletions(-)
+```
 
-## Multi-Agent Parallel Work Reconciliation (2026-05-31 batch)
+### Untracked files
+```
+grokassets/BRAND-USAGE-GUIDELINES.md
+grokassets/banners/marketing/pitch-deck/bg-v1.svg
+grokassets/banners/marketing/pitch-deck/bg-v10.svg
+grokassets/banners/marketing/pitch-deck/bg-v11.svg
+grokassets/banners/marketing/pitch-deck/bg-v12.svg
+grokassets/banners/marketing/pitch-deck/bg-v13.svg
+grokassets/banners/marketing/pitch-deck/bg-v14.svg
+grokassets/banners/marketing/pitch-deck/bg-v15.svg
+grokassets/banners/marketing/pitch-deck/bg-v16.svg
+grokassets/banners/marketing/pitch-deck/bg-v17.svg
+grokassets/banners/marketing/pitch-deck/bg-v18.svg
+grokassets/banners/marketing/pitch-deck/bg-v19.svg
+grokassets/banners/marketing/pitch-deck/bg-v2.svg
+grokassets/banners/marketing/pitch-deck/bg-v20.svg
+grokassets/banners/marketing/pitch-deck/bg-v21.svg
+grokassets/banners/marketing/pitch-deck/bg-v22.svg
+grokassets/banners/marketing/pitch-deck/bg-v23.svg
+grokassets/banners/marketing/pitch-deck/bg-v24.svg
+grokassets/banners/marketing/pitch-deck/bg-v25.svg
+grokassets/banners/marketing/pitch-deck/bg-v26.svg
+grokassets/banners/marketing/pitch-deck/bg-v27.svg
+grokassets/banners/marketing/pitch-deck/bg-v28.svg
+grokassets/banners/marketing/pitch-deck/bg-v3.svg
+grokassets/banners/marketing/pitch-deck/bg-v4.svg
+grokassets/banners/marketing/pitch-deck/bg-v5.svg
+grokassets/banners/marketing/pitch-deck/bg-v6.svg
+grokassets/banners/marketing/pitch-deck/bg-v7.svg
+grokassets/banners/marketing/pitch-deck/bg-v8.svg
+grokassets/banners/marketing/pitch-deck/bg-v9.svg
+grokassets/banners/social/x-header/autowebgame-x-header-1500x500.jpg
+... (truncated)
+```
 
-Multiple agents (Grok, Claude, prior loops, manual) worked in parallel on 18 projects. For AutoWebGame: prior April co-authored commits (Claude Sonnet noted), May auto-improvements integration, 05-29 dirty safe. Observed: grokassets/ rollout + doc updates common pattern. Common artifacts: grokassets/ (shared icons/prompts/agent refs for consistency across user's projects). Overlaps resolved by uniform patchnotes + staging for central safe commit. No hard conflicts.
+### Change categorization (inferred from paths)
+docs: patchnotes.md (1) | untracked-root: grokassets/BRAND-USAGE-GUIDELINES.md, grokassets/banners/marketing/pitch-deck/bg-v1.svg, grokassets/banners/marketing/pitch-deck/bg-v10.svg... (91) | assets: grokassets/manifest.json, grokassets/BRAND-USAGE-GUIDELINES.md, grokassets/banners/... (13) | root: grokimaginevideos/ (1)
 
-**Special:** v0.1 "single source of truth" combining parallel agent work. Tech: Vite/TS frontend + CF Worker backend.
+### Remotes (full)
+```
+origin	https://github.com/LucasOl1337/AutoWebGame.git (fetch)
+origin	https://github.com/LucasOl1337/AutoWebGame.git (push)
+```
 
-## Conclusion
-Ready for 2026-05-31 clean safe commit. grokassets/ + docs bring ecosystem consistency.
+### git fetch output (abridged)
+```
+
+```
+
+## Multi-Agent Parallel Work & Conflict Handling
+Many agents (Grok 4.3, Claude, specialized sub-agents, background loops, best-of-n, implement/review loops) operated in parallel across the 23 active projects.
+Observed artifacts: simultaneous edits to patchnotes.md/changelog.md (timestamp ~10:05), .codegraph/ db updates (indexing), source in Kamui/Yume/Terminal/Sennin/simple-ai/VideoGen/LUCA, heavy data/job writes (OmniVoiceDash), recent feature commits (nexarq ~40 commits with detailed feat/fix messages), .bak experiment files, agent handoff mds, heartbeat/state json.
+
+Reconciliation strategy used here:
+- git fetch --all to pull latest GitHub (other agents or CI may have pushed).
+- Stash uncommitted PC work.
+- Rebase onto origin/main (preferring GitHub base).
+- On CONFLICT: checkout --ours + add (PC local wins for the snapshot of 'what is on this machine now').
+- Pop stash. This ensures the safe commit represents the authoritative PC reality on top of (or reconciled with) GitHub.
+- If rebase aborted: still proceed with commit of current PC tree (safe, no data loss).
+- Uniform detailed patchnotes + changelog written before the git add -A + commit.
+
+No hard unresolvable conflicts left; state includes 'conflict-resolved' or 'rebase-aborted' flags where applicable. Cross-project overlaps (grokassets, AGENTS.md, brand, docs) handled by consistent formatting.
+
+## Conclusion & Next
+PC version researched and documented vs GitHub. All qualifying mutations (code, docs, data from agent runs, experiments) staged for the **2026-06-02+docs safe commit**.
+Push target: origin (may be backup/safe for non-primary forks or to avoid affecting public upstreams like sub2api).
+See changelog.md for the concise entry. Prior history preserved below the --- marker.
 
 ---
+Prior patch history (preserved from file before overwrite of top section):
 
-## Prior content (2026-05-29 dirty safe + history) preserved in file state.
+# Patch Notes - 2026-06-02 Safe Sync (PC vs GitHub Research)
+
+**Project:** AutoWebGame (Browser-based auto web game with animations, public assets, grok integration, tests, Vite/TS build)
+**Path:** C:\Projetos\AutoWebGame
+**Branch:** main (push: origin)
+**Generated:** 2026-06-02 11:39:05
+**State:** clean | Pre-rebase state: clean | Ahead/Behind post: +0 / -0
+
+## Executive Summary
+Batch safe commit for projects with 24h activity (file mods, commits, dirty tree, or agent-driven patch/changelog touches). Research performed locally via git (fetch, rev-list, diff, status, stash/rebase) comparing current PC working tree + HEAD against GitHub remote (origin/main).
+
+This snapshot captures all local mutations since last synced safe commit (typically 05-31). Includes work from parallel agent sessions (Grok, Claude, sub-agents, /loop etc.). Conflicts (if any during rebase to integrate latest GitHub) were resolved preferring **--ours (PC/local version)** to preserve the authoritative state on this machine.
+
+Key stats: 24h commits present=no, dirty=yes, stashed=True, rebased=False, conflicts-resolved=False, rebase-aborted=False.
+
+## Local PC vs GitHub Comparison (Post-Reconciliation Research)
+
+| Aspect | PC (Local) | GitHub (origin) | Notes |
+|--------|------------|---------------------|-------|
+| HEAD | ee5a446 | ee5a446 | Post-rebase if applied |
+| Branch tracking | main | origin/main | |
+| Ahead / Behind | +0 | -0 | 0/0 ideal after rebase |
+| Working tree | dirty (14 lines) | (remote clean by definition) | Uncommitted on PC |
+| Unique commits (24h) | 0 listed | See div below | |
+| Divergence PC-only commits | 0 | - | These + uncommitted = what we commit |
+| Divergence GH-only | - | 0 | Integrated via rebase (or ignored if aborted) |
+
+### Commits unique to PC (will be part of this safe commit or already in HEAD)
+(none - all local work is uncommitted or already matched)
+
+### Commits only on GitHub (fetched, integrated where possible)
+(none - PC was at or ahead of remote at research time)
+
+### Recent 24h local commits (full subjects + relative time)
+  (no new commits in last 24h; changes are uncommitted or from prior)
+
+### Pending uncommitted changes on PC (porcelain post-rebase/pop)
+```
+M grokassets/manifest.json
+?? grokassets/BRAND-USAGE-GUIDELINES.md
+?? grokassets/banners/
+?? grokassets/content/
+?? grokassets/logos/primary/horizontal/dark/autowebgame-logo-h-dark.svg
+?? grokassets/motion/
+?? grokassets/prompts/2026-05-31-autowebgame-arena-entrance-cinematic.md
+?? grokassets/prompts/2026-05-31-autowebgame-arena-themes-and-skills.md
+?? grokassets/prompts/2026-05-31-autowebgame-signature-skills-showcase.md
+?? grokassets/prompts/2026-05-31-autowebgame-youtube-channel-art.md
+?? grokassets/prompts/2026-05-31-loop-round11.md
+?? grokassets/prompts/2026-05-31-loop-round7.md
+?? grokassets/prompts/2026-05-31-loop-round9.md
+?? grokimaginevideos/
+```
+
+### Diff stat (unstaged work to be snapshotted)
+```
+grokassets/manifest.json | 60 +++++++++++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 54 insertions(+), 6 deletions(-)
+```
+
+
+... (older history in git + truncated for readability; use git log -S patchnotes or open full file in editor)
+
+(End of 2026-06-02 augmentation. Full git history has complete trail.)
