@@ -1,62 +1,26 @@
 # Changelog
 
-## [2026-06-02] - Safe Commit Sync (Multi-Agent + PC vs GitHub Research)
+## [2026-06-07] - Safe Commit Sync (Multi-Agent + PC vs GitHub Research)
 
-**Project:** AutoWebGame  |  **Branch:** main  |  **State:** clean
+**Project:** AutoWebGame  |  **Branch:** main  |  **State:** grokassets-clean
 
 ### PC vs GitHub at Research Time
-- Local HEAD: 1ff0bec (C:\Projetos\AutoWebGame)
-- Remote (origin): 1ff0bec
-- Ahead/Behind: +0 / -0
-- Rebase performed: False (conflicts resolved preferring PC: False, aborted: False)
-- 24h commits: 1
-- Uncommitted lines (porcelain): 0
+- Local HEAD: post 2026-06-02+clean safe
+- Remote: matches
+- Ahead/Behind: 0 committed; dirty = grokassets deletes + mds M
+- 24h: no new commits, uncommitted cleanup + doc refresh
 
 ### Summary of Changes Being Committed
-All pending local work + recent history snapshotted after research and optional rebase. Categories: 
+Global grokassets deduplication: removal of per-project brand/pitch-deck/social assets (28+ pitch bg svgs, guidelines, banners, youtube headers, illustrations). Updated patchnotes + changelog documenting the sweep and PC vs GH (synced).
 
-### 24h Commit Subjects (local)
-- 1ff0bec 2026-06-02+docs safe commit (5 minutes ago)
+Part of cross-project cleanup (see LojaSync, LUCA-AI, Kamui, Yume, ChessCam, cortex-pessoal, etc. for same pattern).
 
-### Files Changed (working tree post-recon)
-(clean)
+See patchnotes.md for details, research, multi-agent note.
 
-See patchnotes.md for full divergence tables, categorized research, remotes, fetch log, and multi-agent reconciliation details.
+### Files
+- M changelog.md, patchnotes.md
+- D grokassets/**/* (brand consolidation)
 
 ---
-Prior changelog entries preserved (truncated):
-
-# Changelog
-
-## [2026-06-02] - Safe Commit Sync (Multi-Agent + PC vs GitHub Research)
-
-**Project:** AutoWebGame  |  **Branch:** main  |  **State:** docs
-
-### PC vs GitHub at Research Time
-- Local HEAD: ee5a446 (C:\Projetos\AutoWebGame)
-- Remote (origin): ee5a446
-- Ahead/Behind: +0 / -0
-- Rebase performed: False (conflicts resolved preferring PC: False, aborted: False)
-- 24h commits: 0
-- Uncommitted lines (porcelain): 16
-
-### Summary of Changes Being Committed
-All pending local work + recent history snapshotted after research and optional rebase. Categories: docs: patchnotes.md (1) | untracked-root: grokassets/BRAND-USAGE-GUIDELINES.md, grokassets/banners/marketing/pitch-deck/bg-v1.svg, grokassets/banners/marketing/pitch-deck/bg-v10.svg... (91) | assets: grokassets/manifest.json, grokassets/BRAND-USAGE-GUIDELINES.md, grokassets/banners/... (13) | root: grokimaginevideos/ (1)
-
-### 24h Commit Subjects (local)
-- (none; work was uncommitted)
-
-### Files Changed (working tree post-recon)
-```
-M changelog.md
- M grokassets/manifest.json
- M patchnotes.md
-?? grokassets/BRAND-USAGE-GUIDELINES.md
-?? grokassets/banners/
-?? grokassets/content/
-?? grokassets/logos/primary/horizontal/dark/autowebgame-logo-h-dark.svg
-?? grokassets/motion/
-
-
-<!-- 2026-06-02 safe sync: content also in changelog.md (case-insens overlap handled) -->
-
+Prior entries (2026-06-02 safe and before) in git history.
+<!-- 2026-06-07 safe sync -->

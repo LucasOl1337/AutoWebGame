@@ -41,7 +41,6 @@ Auto-generated high-quality marketing videos and motion assets for the BOMBA are
 - All assets follow the official AutoWebGame / BOMBA visual bible (tournament-clean base + arcane/verdant/skyfoundry themes, character personality, high readability, joyful skill-based arena combat).
 - Brand colors: crisp high-contrast tournament palette with character-specific accents (purples/magentas for arcane, greens for verdant, etc.).
 - Videos and stills are ready for YouTube channel, landing page, pitch decks, social campaigns, and app store creatives.
-- Existing motion assets in `grokassets/motion/` (e.g. arena entrance cinematic) complement this library.
 
 Next execution of the loop will process the next project in the queue (cortex-pessoal).
 
