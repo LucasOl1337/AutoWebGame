@@ -41,3 +41,6 @@ preview-*.png
 # OS files
 .DS_Store
 Thumbs.db
+
+# Codegraph automation artifacts (SQLite + visualization)
+.codegraph/
