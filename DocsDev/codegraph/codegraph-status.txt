@@ -1,0 +1,42 @@
+CodeGraph inventory status
+Generated at: 2026-06-25T22:16:45-03:00
+Repository: C:\Projetos\AutoWebGame
+CodeGraph CLI version: 0.9.4
+
+Setup performed:
+- Read README.md from the repository.
+- AGENTS.md and CLAUDE.md were not present in the repository before this run.
+- Read C:\Users\user\Desktop\codegraph\README.md and C:\Users\user\Desktop\codegraph\CLAUDE.md.
+- .codegraph/ already existed, so the index was synchronized with `codegraph sync .`.
+- Sync result: already up to date.
+- MCP CodeGraph tools were available and used for structural context.
+
+Index status:
+- Files indexed: 124
+- Total nodes: 3,157
+- Total edges: 7,226
+- Database size: 6.00 MB
+- Backend: node:sqlite built-in, full WAL + FTS5
+- Journal mode: wal
+- Status: OK, index is up to date
+
+Nodes by kind:
+- constant: 1,102
+- function: 664
+- method: 635
+- import: 303
+- variable: 181
+- file: 123
+- interface: 102
+- type_alias: 30
+- class: 17
+
+Files by language:
+- javascript: 68
+- typescript: 35
+- python: 20
+- yaml: 1
+
+Notes:
+- Unsupported/static assets such as CSS, HTML, images, JSON manifests and binary assets are not represented as CodeGraph source files unless imported through supported code.
+- node_modules, .git and common build artifacts were not used for the inventory.

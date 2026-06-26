@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AutoWebGame CodeGraph Inventory</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fb;
+      --panel: #ffffff;
+      --ink: #17202a;
+      --muted: #647084;
+      --line: #ccd5e2;
+      --frontend: #2364aa;
+      --game: #198754;
+      --online: #9a5b00;
+      --backend: #a02c44;
+      --tools: #596070;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+    }
+    header {
+      padding: 24px 28px 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+    h1 { margin: 0 0 6px; font-size: 28px; letter-spacing: 0; }
+    p { margin: 0; color: var(--muted); line-height: 1.5; }
+    main { padding: 22px 28px 32px; }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 18px;
+      align-items: start;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .panel h2 {
+      margin: 0;
+      padding: 14px 16px;
+      font-size: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .graph-wrap { padding: 10px; overflow: auto; }
+    svg { min-width: 1080px; max-width: 100%; height: auto; display: block; }
+    .node rect { fill: #fff; stroke-width: 2; rx: 7; }
+    .node text { font-size: 13px; fill: var(--ink); }
+    .node .small { font-size: 11px; fill: var(--muted); }
+    .frontend rect { stroke: var(--frontend); }
+    .game rect { stroke: var(--game); }
+    .online rect { stroke: var(--online); }
+    .backend rect { stroke: var(--backend); }
+    .tools rect { stroke: var(--tools); }
+    .edge { stroke: #8c98a8; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    .edge.backend { stroke: var(--backend); }
+    .edge.online { stroke: var(--online); }
+    .edge.game { stroke: var(--game); }
+    .legend { padding: 14px 16px; display: grid; gap: 10px; }
+    .legend a, .links a { color: var(--frontend); text-decoration: none; }
+    .legend a:hover, .links a:hover { text-decoration: underline; }
+    .chip { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); }
+    .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+    .links { padding: 14px 16px; display: grid; gap: 8px; border-top: 1px solid var(--line); }
+    .meta { padding: 14px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; line-height: 1.45; }
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+      main { padding: 16px; }
+      header { padding: 20px 16px 12px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AutoWebGame CodeGraph Inventory</h1>
+    <p>Mapa visual autocontido dos modulos e fluxos principais identificados em 2026-06-25.</p>
+  </header>
+  <main>
+    <div class="layout">
+      <section class="panel">
+        <h2>Fluxos principais</h2>
+        <div class="graph-wrap">
+          <svg viewBox="0 0 1120 720" role="img" aria-label="Grafo dos modulos principais">
+            <defs>
+              <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+                <path d="M2,2 L10,6 L2,10 Z" fill="#8c98a8"></path>
+              </marker>
+            </defs>
+
+            <path class="edge frontend" d="M170 100 C235 100 255 150 320 150"></path>
+            <path class="edge game" d="M500 150 C570 150 595 140 665 140"></path>
+            <path class="edge game" d="M500 150 C570 185 600 220 670 245"></path>
+            <path class="edge game" d="M500 150 C580 260 590 365 670 430"></path>
+            <path class="edge online" d="M500 150 C555 75 625 65 705 90"></path>
+            <path class="edge online" d="M855 90 C910 90 925 145 980 145"></path>
+            <path class="edge backend" d="M980 200 C940 270 880 310 800 335"></path>
+            <path class="edge backend" d="M800 380 C720 360 645 330 500 205"></path>
+            <path class="edge online" d="M705 335 C635 320 565 250 500 205"></path>
+            <path class="edge game" d="M500 205 C570 525 610 565 680 590"></path>
+            <path class="edge backend" d="M980 200 C985 305 985 400 985 505"></path>
+            <path class="edge backend" d="M910 555 C840 555 785 535 720 500"></path>
+            <path class="edge game" d="M320 205 C245 255 225 325 160 380"></path>
+            <path class="edge game" d="M320 205 C240 430 235 515 170 590"></path>
+
+            <a href="../../src/UiLayouts/main.ts" class="node frontend">
+              <g transform="translate(30 64)">
+                <rect width="140" height="72"></rect>
+                <text x="14" y="28">Bootstrap Vite</text>
+                <text class="small" x="14" y="50">main.ts / index</text>
+              </g>
+            </a>
+            <a href="../../src/NetCode/session-client.ts" class="node online">
+              <g transform="translate(320 110)">
+                <rect width="180" height="96"></rect>
+                <text x="14" y="26">OnlineSessionClient</text>
+                <text class="small" x="14" y="49">landing, lobby, setup</text>
+                <text class="small" x="14" y="68">websocket, chat, i18n</text>
+              </g>
+            </a>
+            <a href="../../src/Engine/game-app.ts" class="node game">
+              <g transform="translate(670 300)">
+                <rect width="170" height="96"></rect>
+                <text x="14" y="26">GameApp</text>
+                <text class="small" x="14" y="49">simulation + canvas</text>
+                <text class="small" x="14" y="68">input, bots, bombs</text>
+              </g>
+            </a>
+            <a href="../../src/NetCode/protocol.ts" class="node online">
+              <g transform="translate(705 52)">
+                <rect width="150" height="76"></rect>
+                <text x="14" y="28">Protocol</text>
+                <text class="small" x="14" y="50">Client/Server msg</text>
+              </g>
+            </a>
+            <a href="../../worker/index.js" class="node backend">
+              <g transform="translate(980 110)">
+                <rect width="130" height="90"></rect>
+                <text x="14" y="28">GlobalLobby</text>
+                <text class="small" x="14" y="50">Durable Object</text>
+                <text class="small" x="14" y="68">rooms + matches</text>
+              </g>
+            </a>
+            <a href="../../src/Arenas/arena.ts" class="node game">
+              <g transform="translate(665 102)">
+                <rect width="150" height="76"></rect>
+                <text x="14" y="28">Arena runtime</text>
+                <text class="small" x="14" y="50">tiles, spawns, SD</text>
+              </g>
+            </a>
+            <a href="../../src/ultimate/skill-system.ts" class="node game">
+              <g transform="translate(670 214)">
+                <rect width="170" height="76"></rect>
+                <text x="14" y="28">Skill system</text>
+                <text class="small" x="14" y="50">Ranni/Bee/Nico/Croc</text>
+              </g>
+            </a>
+            <a href="../../src/NetCode/online-sync.ts" class="node online">
+              <g transform="translate(635 410)">
+                <rect width="170" height="90"></rect>
+                <text x="14" y="28">Online sync</text>
+                <text class="small" x="14" y="50">input latch</text>
+                <text class="small" x="14" y="68">snapshot smoothing</text>
+              </g>
+            </a>
+            <a href="../../src/Engine/bot-ai.ts" class="node game">
+              <g transform="translate(680 552)">
+                <rect width="140" height="76"></rect>
+                <text x="14" y="28">Bot AI</text>
+                <text class="small" x="14" y="50">offline fill</text>
+              </g>
+            </a>
+            <a href="../../src/Engine/assets.ts" class="node frontend">
+              <g transform="translate(30 342)">
+                <rect width="150" height="76"></rect>
+                <text x="14" y="28">Assets/Roster</text>
+                <text class="small" x="14" y="50">sprites, manifest</text>
+              </g>
+            </a>
+            <a href="../../src/UiLayouts/i18n.ts" class="node frontend">
+              <g transform="translate(30 552)">
+                <rect width="140" height="76"></rect>
+                <text x="14" y="28">i18n</text>
+                <text class="small" x="14" y="50">PT/EN copy</text>
+              </g>
+            </a>
+            <a href="../../worker/index.js" class="node backend">
+              <g transform="translate(905 505)">
+                <rect width="165" height="90"></rect>
+                <text x="14" y="28">Admin/Telemetry</text>
+                <text class="small" x="14" y="50">arena CRUD</text>
+                <text class="small" x="14" y="68">feedback/events</text>
+              </g>
+            </a>
+            <a href="../../scripts/pixellab_orchestrator.mjs" class="node tools">
+              <g transform="translate(515 610)">
+                <rect width="155" height="76"></rect>
+                <text x="14" y="28">Asset tools</text>
+                <text class="small" x="14" y="50">Pixellab/Airtest</text>
+              </g>
+            </a>
+          </svg>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <h2>Legenda e links</h2>
+        <div class="legend">
+          <span class="chip"><span class="swatch" style="background: var(--frontend)"></span>Frontend/render</span>
+          <span class="chip"><span class="swatch" style="background: var(--game)"></span>Gameplay</span>
+          <span class="chip"><span class="swatch" style="background: var(--online)"></span>Online/client</span>
+          <span class="chip"><span class="swatch" style="background: var(--backend)"></span>Backend/worker</span>
+          <span class="chip"><span class="swatch" style="background: var(--tools)"></span>Ferramentas</span>
+        </div>
+        <div class="links">
+          <a href="inventory.md">Inventario completo</a>
+          <a href="codegraph-context.md">Contexto CodeGraph</a>
+          <a href="codegraph-status.txt">Status do indice</a>
+          <a href="codegraph-files.json">Arquivos indexados JSON</a>
+          <a href="../../README.md">README do projeto</a>
+        </div>
+        <div class="meta">
+          Clique nos blocos do grafo para abrir arquivos relativos ao repositorio. O grafo e manualmente derivado das consultas CodeGraph deste inventario.
+        </div>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>
