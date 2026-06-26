@@ -1,0 +1,103 @@
+{
+  "brand": {
+    "name": "AutoWebGame",
+    "vendor": "BOMBA",
+    "footer": "BROWSER ARENA GAME",
+    "masthead": "NOTAS DA ATUALIZACAO",
+    "footerLeft": "Notas completas no GitHub Releases",
+    "bgGradient": ["#08111F", "#102A33", "#12343A"],
+    "pillGradient": ["#00A37A", "#38BDF8"]
+  },
+  "version": "v0.2.0",
+  "date": "22 de junho de 2026 · Release oficial",
+  "categories": [
+    {
+      "label": "Novidades",
+      "title": "NOVIDADES",
+      "color": "#FBBF24",
+      "items": [
+        {
+          "name": "Lobby online com Worker",
+          "desc": "matchmaking e quick match no Worker",
+          "tag": "ONLINE"
+        },
+        {
+          "name": "Ultimates de personagem",
+          "desc": "Killer Bee, Nico, Ranni e Crocodilo usam skills por contrato",
+          "tag": "SKILLS"
+        },
+        {
+          "name": "Painel de auto-improvements",
+          "desc": "dev panel in-game aciona bots e agentes do fluxo local",
+          "tag": "DEV"
+        }
+      ]
+    },
+    {
+      "label": "Melhorias",
+      "title": "MELHORIAS",
+      "color": "#34D399",
+      "items": [
+        {
+          "name": "Rebrand visual para BOMBA",
+          "desc": "site, icone, topbar e tela inicial usam identidade mint-cyan",
+          "tag": "UI"
+        },
+        {
+          "name": "Audio CustomSFX",
+          "desc": "explosoes, lobby e mix foram trocados para pacote dedicado",
+          "tag": "AUDIO"
+        },
+        {
+          "name": "Rosters data-driven",
+          "desc": "personagens e temas carregam por manifests e bibliotecas",
+          "tag": "DATA"
+        }
+      ]
+    },
+    {
+      "label": "Correcoes",
+      "title": "CORRECOES",
+      "color": "#38BDF8",
+      "items": [
+        {
+          "name": "Audio falso de explosao",
+          "desc": "sons de bomba nao disparam mais durante placement",
+          "tag": "AUDIO"
+        },
+        {
+          "name": "Fluxo de rematch",
+          "desc": "resultado de rodada e rematch online ficam sincronizados",
+          "tag": "ONLINE"
+        },
+        {
+          "name": "Ranni congelada",
+          "desc": "invulnerabilidade durante freeze foi corrigida",
+          "tag": "SKILLS"
+        }
+      ]
+    },
+    {
+      "label": "Sistemas",
+      "title": "SISTEMAS",
+      "color": "#A78BFA",
+      "items": [
+        {
+          "name": "Worker authoritative",
+          "desc": "estado de sala online roda no Worker em worker/",
+          "tag": "SERVER"
+        },
+        {
+          "name": "Broker na porta 8766",
+          "desc": "servico local mudou da 8765 para evitar conflito",
+          "tag": "TOOLS"
+        },
+        {
+          "name": "Artefatos codegraph ignorados",
+          "desc": ".codegraph/ entrou no gitignore para limpar automacoes",
+          "tag": "REPO"
+        }
+      ]
+    }
+  ]
+}
