@@ -1,0 +1,94 @@
+{
+  "brand": {
+    "name": "AutoWebGame",
+    "vendor": "BOMBA",
+    "footer": "BROWSER ARENA GAME",
+    "masthead": "NOTAS DO PATCH",
+    "footerLeft": "Notas completas no GitHub Releases",
+    "bgGradient": ["#07111F", "#102A33", "#15343A"],
+    "pillGradient": ["#00A37A", "#38BDF8"]
+  },
+  "version": "v0.2.1",
+  "date": "6 de julho de 2026 - Patch oficial",
+  "title": "Bot polish, utility drops e estabilidade",
+  "categories": [
+    {
+      "label": "Novidades",
+      "title": "NOVIDADES",
+      "color": "#FBBF24",
+      "items": [
+        {
+          "name": "Utility drops nas crates",
+          "desc": "Shield, Bomb Pass e Kick agora aparecem como powerups reais",
+          "tag": "POWERUPS"
+        },
+        {
+          "name": "Referencia de controles",
+          "desc": "A landing mostra movimento, bomba e ultimate antes da partida",
+          "tag": "UX"
+        }
+      ]
+    },
+    {
+      "label": "Melhorias",
+      "title": "MELHORIAS",
+      "color": "#34D399",
+      "items": [
+        {
+          "name": "Bots mais justos",
+          "desc": "Bots miram oponentes vivos e evitam perseguir alvos protegidos",
+          "tag": "BOTS"
+        },
+        {
+          "name": "Explosoes com variacao",
+          "desc": "O som de explosao alterna variantes sem repetir em sequencia",
+          "tag": "AUDIO"
+        }
+      ]
+    },
+    {
+      "label": "Correcoes",
+      "title": "CORRECOES",
+      "color": "#38BDF8",
+      "items": [
+        {
+          "name": "Input sem travar",
+          "desc": "Teclas seguradas sao limpas quando a aba fica oculta",
+          "tag": "INPUT"
+        },
+        {
+          "name": "Roster com fallback",
+          "desc": "Personagens aprovados carregam mesmo se o manifest publico falhar",
+          "tag": "ASSETS"
+        },
+        {
+          "name": "Clock do Worker",
+          "desc": "Ticks autoritativos nao regridem com amostras de relogio invalidas",
+          "tag": "ONLINE"
+        }
+      ]
+    },
+    {
+      "label": "Sistemas",
+      "title": "SISTEMAS",
+      "color": "#A78BFA",
+      "items": [
+        {
+          "name": "Swarm auditado",
+          "desc": "Trabalho pos-release consolidado da branch local do swarm",
+          "tag": "REPO"
+        },
+        {
+          "name": "Novos testes focados",
+          "desc": "Cobertura para bot target, input visibility e fallback de roster",
+          "tag": "QA"
+        },
+        {
+          "name": "CodeGraph documentado",
+          "desc": "Inventario estrutural local entra como guia de manutencao",
+          "tag": "DOCS"
+        }
+      ]
+    }
+  ]
+}
