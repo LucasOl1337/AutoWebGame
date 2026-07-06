@@ -35,9 +35,13 @@ Object.defineProperty(globalThis, "performance", {
 
 const { SoundManager, SFX_MANIFEST } = await import("../output/esm/Engine/sound-manager.js");
 
+Math.random = () => 0;
+
 const explosionVariants = SFX_MANIFEST.bombExplode;
-const manifestPass = !Array.isArray(explosionVariants)
-  && explosionVariants?.url.endsWith("bomb_explode_default.mp3");
+const manifestPass = Array.isArray(explosionVariants)
+  && explosionVariants.length === 2
+  && explosionVariants[0]?.url.endsWith("bomb_explode_default.mp3")
+  && explosionVariants[1]?.url.endsWith("bomb_explode_main.mp3");
 
 const manager = new SoundManager();
 await manager.loadSounds(SFX_MANIFEST);
@@ -53,13 +57,15 @@ mockNowMs = 200;
 manager.playOneShot("bombExplode");
 await Promise.resolve();
 const antiSpamPass = playedUrls.length === 2;
+const variationPass = playedUrls[1] === "/Assets/SoundEffects/bomb_explode_main.mp3";
 
-const pass = manifestPass && playbackPass && antiSpamPass;
+const pass = manifestPass && playbackPass && antiSpamPass && variationPass;
 
 console.log(JSON.stringify({
   manifestPass,
   playbackPass,
   antiSpamPass,
+  variationPass,
   playedUrls,
   pass,
 }, null, 2));

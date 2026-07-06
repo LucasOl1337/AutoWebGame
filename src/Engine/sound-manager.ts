@@ -30,7 +30,10 @@ const SFX_PLAYBACK_POLICIES: Partial<Record<SfxKey, SoundPlaybackPolicy>> = {
 
 export const SFX_MANIFEST: Partial<Record<SfxKey, SoundManifestEntry>> = {
   bombPlace: { url: assetUrl("/Assets/SoundEffects/bomb_place.mp3"), volume: 0.72 * MASTER_VOLUME },
-  bombExplode: { url: assetUrl("/Assets/SoundEffects/bomb_explode_default.mp3"), volume: 0.84 * MASTER_VOLUME },
+  bombExplode: [
+    { url: assetUrl("/Assets/SoundEffects/bomb_explode_default.mp3"), volume: 0.84 * MASTER_VOLUME },
+    { url: assetUrl("/Assets/SoundEffects/bomb_explode_main.mp3"), volume: 0.78 * MASTER_VOLUME },
+  ],
   flames: { url: assetUrl("/Assets/SoundEffects/flames.mp3"), volume: 0.74 * MASTER_VOLUME },
   matchStart: { url: assetUrl("/Assets/SoundEffects/match_start.mp3"), volume: 0.84 * 0.2 * MASTER_VOLUME },
   roundEnd: { url: assetUrl("/Assets/SoundEffects/round_end.wav"), volume: 0.76 * MASTER_VOLUME },
@@ -42,6 +45,7 @@ export const SFX_MANIFEST: Partial<Record<SfxKey, SoundManifestEntry>> = {
 export class SoundManager {
   private readonly sounds = new Map<SfxKey, HTMLAudioElement[]>();
   private readonly lastPlayAtMs = new Map<SfxKey, number>();
+  private readonly lastVariantIndexByKey = new Map<SfxKey, number>();
   private unlocked = false;
   private unlockTarget: EventTarget | null = null;
 
@@ -103,11 +107,24 @@ export class SoundManager {
       this.lastPlayAtMs.set(key, nowMs);
     }
 
-    const startIndex = variants.length === 1
-      ? 0
-      : Math.floor(Math.random() * variants.length);
+    const startIndex = this.selectVariantIndex(key, variants.length);
 
     void this.playVariantWithFallback(variants, startIndex, gain);
+  }
+
+  private selectVariantIndex(key: SfxKey, variantCount: number): number {
+    if (variantCount <= 1) {
+      this.lastVariantIndexByKey.set(key, 0);
+      return 0;
+    }
+
+    const previousIndex = this.lastVariantIndexByKey.get(key);
+    let nextIndex = Math.floor(Math.random() * variantCount);
+    if (previousIndex !== undefined && nextIndex === previousIndex) {
+      nextIndex = (nextIndex + 1) % variantCount;
+    }
+    this.lastVariantIndexByKey.set(key, nextIndex);
+    return nextIndex;
   }
 
   private async playVariantWithFallback(
