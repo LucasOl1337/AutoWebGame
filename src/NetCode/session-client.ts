@@ -8,6 +8,7 @@ import {
   getInitialSiteLanguage,
   persistSiteLanguage,
   SITE_COPY,
+  type SiteCopy,
   type SiteLanguage,
 } from "../UiLayouts/i18n";
 import type { PlayerAccount } from "./account";
@@ -54,6 +55,10 @@ interface SessionElements {
   languageEnglishButton: HTMLButtonElement;
   screens: Record<ExperienceScreen, HTMLElement>;
   landingMeta: HTMLParagraphElement;
+  landingReturnBrief: HTMLDivElement;
+  landingReturnBriefKicker: HTMLParagraphElement;
+  landingReturnBriefTitle: HTMLParagraphElement;
+  landingReturnBriefBody: HTMLParagraphElement;
   landingAccountTitle: HTMLParagraphElement;
   landingAccountValue: HTMLParagraphElement;
   landingAccountUsernameInput: HTMLInputElement;
@@ -112,9 +117,195 @@ interface SessionElements {
 const LOBBY_MAX_PLAYERS = 4;
 const DEFAULT_LOBBY_TITLE = "BOMBA PVP";
 const WEBSOCKET_OPEN_READY_STATE = 1;
+const SESSION_RETURN_BRIEF_VERSION = 1;
+const SESSION_RETURN_BRIEF_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
+
+export const SESSION_RETURN_BRIEF_STORAGE_KEY = "bomba-session-return-brief";
+export const SESSION_RETURN_BRIEF_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export type SessionReturnMode = "quick-match" | "endless" | "bot-match" | "lobby";
+
+interface SessionReturnBriefBase {
+  version: typeof SESSION_RETURN_BRIEF_VERSION;
+  savedAtMs: number;
+  characterName: string;
+}
+
+export interface SessionEntryReturnBrief extends SessionReturnBriefBase {
+  type: "entry";
+  mode: SessionReturnMode;
+}
+
+export interface SessionMatchResultReturnBrief extends SessionReturnBriefBase {
+  type: "match-result";
+  roomCode: string | null;
+  winner: PlayerId;
+  winnerLabel: string;
+  selfSeat: PlayerId | null;
+  localWon: boolean;
+  roundNumber: number;
+}
+
+export type SessionReturnBrief = SessionEntryReturnBrief | SessionMatchResultReturnBrief;
+
+export interface SessionReturnBriefView {
+  kicker: string;
+  title: string;
+  body: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isSessionReturnMode(value: unknown): value is SessionReturnMode {
+  return value === "quick-match" || value === "endless" || value === "bot-match" || value === "lobby";
+}
+
+function isPlayerId(value: unknown): value is PlayerId {
+  return value === 1 || value === 2 || value === 3 || value === 4;
+}
+
+function isFreshSessionReturnBrief(savedAtMs: number, nowMs: number): boolean {
+  return savedAtMs <= nowMs + SESSION_RETURN_BRIEF_FUTURE_TOLERANCE_MS
+    && nowMs - savedAtMs <= SESSION_RETURN_BRIEF_MAX_AGE_MS;
+}
+
+export function parseStoredSessionReturnBrief(raw: string | null, nowMs = Date.now()): SessionReturnBrief | null {
+  if (!raw) {
+    return null;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  if (!isRecord(parsed)
+    || parsed.version !== SESSION_RETURN_BRIEF_VERSION
+    || typeof parsed.savedAtMs !== "number"
+    || !Number.isFinite(parsed.savedAtMs)
+    || !isFreshSessionReturnBrief(parsed.savedAtMs, nowMs)
+    || typeof parsed.characterName !== "string"
+    || parsed.characterName.trim().length === 0
+  ) {
+    return null;
+  }
+
+  const base = {
+    version: SESSION_RETURN_BRIEF_VERSION,
+    savedAtMs: parsed.savedAtMs,
+    characterName: parsed.characterName,
+  } satisfies SessionReturnBriefBase;
+
+  if (parsed.type === "entry" && isSessionReturnMode(parsed.mode)) {
+    return {
+      ...base,
+      type: "entry",
+      mode: parsed.mode,
+    };
+  }
+
+  if (parsed.type === "match-result"
+    && isPlayerId(parsed.winner)
+    && (parsed.selfSeat === null || isPlayerId(parsed.selfSeat))
+    && typeof parsed.localWon === "boolean"
+    && typeof parsed.roundNumber === "number"
+    && Number.isFinite(parsed.roundNumber)
+    && parsed.roundNumber >= 1
+    && typeof parsed.winnerLabel === "string"
+    && parsed.winnerLabel.trim().length > 0
+    && (parsed.roomCode === null || typeof parsed.roomCode === "string")
+  ) {
+    return {
+      ...base,
+      type: "match-result",
+      roomCode: parsed.roomCode,
+      winner: parsed.winner,
+      winnerLabel: parsed.winnerLabel,
+      selfSeat: parsed.selfSeat,
+      localWon: parsed.localWon,
+      roundNumber: Math.floor(parsed.roundNumber),
+    };
+  }
+
+  return null;
+}
+
+function getSessionReturnModeLabel(copy: SiteCopy, mode: SessionReturnMode): string {
+  switch (mode) {
+    case "quick-match":
+      return copy.landing.returnModeQuickMatch;
+    case "endless":
+      return copy.landing.returnModeEndless;
+    case "bot-match":
+      return copy.landing.returnModeBotMatch;
+    case "lobby":
+      return copy.landing.returnModeLobby;
+    default: {
+      const neverMode: never = mode;
+      return neverMode;
+    }
+  }
+}
+
+export function formatSessionReturnBrief(
+  copy: SiteCopy,
+  brief: SessionReturnBrief,
+  nowMs = Date.now(),
+): SessionReturnBriefView | null {
+  if (!isFreshSessionReturnBrief(brief.savedAtMs, nowMs)) {
+    return null;
+  }
+
+  if (brief.type === "entry") {
+    return {
+      kicker: copy.landing.returnBriefKicker,
+      title: copy.landing.returnBriefEntryTitle(getSessionReturnModeLabel(copy, brief.mode)),
+      body: copy.landing.returnBriefEntryBody(brief.characterName),
+    };
+  }
+
+  const roomLabel = brief.roomCode ? copy.landing.returnBriefRoom(brief.roomCode) : copy.landing.returnBriefOnlineMatch;
+  return {
+    kicker: copy.landing.returnBriefKicker,
+    title: brief.localWon ? copy.landing.returnBriefWinTitle : copy.landing.returnBriefLossTitle(brief.winnerLabel),
+    body: copy.landing.returnBriefResultBody(brief.roundNumber, roomLabel),
+  };
+}
 
 export function canSendLobbyAction(realtimeReady: boolean, socketReadyState: number | null | undefined): boolean {
   return realtimeReady && socketReadyState === WEBSOCKET_OPEN_READY_STATE;
+}
+
+export function normalizeRoomCode(roomCode: string | null | undefined): string {
+  return String(roomCode || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+}
+
+export function readRoomCodeFromUrl(href: string | null | undefined): string | null {
+  if (!href) {
+    return null;
+  }
+  try {
+    const url = new URL(href, "https://example.com/");
+    const roomCode = normalizeRoomCode(url.searchParams.get("room"));
+    return roomCode || null;
+  } catch {
+    return null;
+  }
+}
+
+export function buildRoomInviteUrl(language: SiteLanguage, roomCode: string | null | undefined, href?: string): string {
+  const url = buildLocalizedUrl(language, href);
+  const normalizedRoomCode = normalizeRoomCode(roomCode);
+  if (normalizedRoomCode) {
+    url.searchParams.set("room", normalizedRoomCode);
+  } else {
+    url.searchParams.delete("room");
+  }
+  return url.toString();
 }
 
 export class OnlineSessionClient implements OnlineSessionBridge {
@@ -152,6 +343,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private reconnectingForAccountRefresh = false;
   private realtimeReady = false;
   private currentSessionState: OnlineSessionState | null = null;
+  private sessionReturnBrief: SessionReturnBrief | null = null;
   private readonly telemetry: GrowthTelemetryClient;
   private observedMatchWinner: PlayerId | null = null;
   private readonly language: SiteLanguage;
@@ -161,10 +353,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.roster = roster;
     this.language = getInitialSiteLanguage();
     applyDocumentLanguage(this.language);
-    this.syncLanguageUrl();
+    this.pendingAutoJoinRoom = typeof window === "undefined" ? null : readRoomCodeFromUrl(window.location.href);
+    this.syncLanguageUrl(this.pendingAutoJoinRoom);
     this.app.setLanguage(this.language);
-    this.pendingAutoJoinRoom = null;
     this.preferredCharacterIndex = this.readPreferredCharacterIndex();
+    this.sessionReturnBrief = this.readSessionReturnBrief();
     this.telemetry = new GrowthTelemetryClient();
     this.elements = this.render(root);
     this.canvasObserver = new MutationObserver(() => this.mountCanvas(root));
@@ -385,6 +578,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     });
     this.elements.landingBotMatchButton.addEventListener("click", () => {
       this.app.setOfflinePreferredCharacter(this.preferredCharacterIndex);
+      this.rememberSessionEntry("bot-match");
       this.app.startOfflineBotMatch(3);
       this.setStatus(this.copy.status.botMatchStarted);
       this.renderAll();
@@ -411,6 +605,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.setStatus(this.copy.status.createLobbyUnavailable);
         return;
       }
+      this.rememberSessionEntry("lobby");
       this.setStatus(this.copy.status.creatingLobby);
     });
     this.elements.setupBackButton.addEventListener("click", () => {
@@ -552,7 +747,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       return;
     }
     persistSiteLanguage(language);
-    window.location.assign(buildLocalizedUrl(language).toString());
+    window.location.assign(buildRoomInviteUrl(language, this.currentLobby?.roomCode ?? this.pendingAutoJoinRoom));
   }
 
   private startQuickMatch(): void {
@@ -568,6 +763,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.setStatus(this.copy.status.quickMatchUnavailable);
       return;
     }
+    this.rememberSessionEntry("quick-match");
     this.setStatus(this.copy.status.searchingRoom);
   }
 
@@ -585,6 +781,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.setStatus(this.translate("Modo infinito indisponivel. Reconectando...", "Endless mode is unavailable. Reconnecting..."));
       return;
     }
+    this.rememberSessionEntry("endless");
     this.setStatus(this.translate("Entrando na partida infinita...", "Joining the endless match..."));
   }
 
@@ -640,7 +837,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       return;
     }
     try {
-      await navigator.clipboard.writeText(this.currentLobby.roomCode);
+      await navigator.clipboard.writeText(buildRoomInviteUrl(this.language, this.currentLobby.roomCode));
       this.telemetry.track("invite_copied", {
         context: { roomCode: this.currentLobby.roomCode, screen: this.getScreen() },
       });
@@ -820,6 +1017,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         break;
       case "error":
         this.applySessionState(this.currentSessionState);
+        if (this.pendingAutoJoinRoom) {
+          this.pendingAutoJoinRoom = null;
+          this.updateLocation(null);
+        }
         this.renderAll();
         this.setStatus(message.message);
         break;
@@ -921,6 +1122,22 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     const landingMeta = document.createElement("p");
     landingMeta.className = "experience-hero__meta";
+
+    const landingReturnBrief = document.createElement("div");
+    landingReturnBrief.className = "experience-return-brief";
+    landingReturnBrief.hidden = true;
+    landingReturnBrief.setAttribute("aria-live", "polite");
+
+    const landingReturnBriefKicker = document.createElement("p");
+    landingReturnBriefKicker.className = "experience-return-brief__kicker";
+
+    const landingReturnBriefTitle = document.createElement("p");
+    landingReturnBriefTitle.className = "experience-return-brief__title";
+
+    const landingReturnBriefBody = document.createElement("p");
+    landingReturnBriefBody.className = "experience-return-brief__body";
+
+    landingReturnBrief.append(landingReturnBriefKicker, landingReturnBriefTitle, landingReturnBriefBody);
 
     const landingActions = document.createElement("div");
     landingActions.className = "experience-actions";
@@ -1068,7 +1285,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     });
 
     landingControls.append(landingControlsHeader, landingControlsGrid);
-    landingCopy.append(landingMeta, landingActions, landingControls, landingAccountCard);
+    landingCopy.append(landingMeta, landingReturnBrief, landingActions, landingControls, landingAccountCard);
 
     const landingRoster = document.createElement("div");
     landingRoster.className = "experience-hero__art";
@@ -1419,6 +1636,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         match,
       },
       landingMeta,
+      landingReturnBrief,
+      landingReturnBriefKicker,
+      landingReturnBriefTitle,
+      landingReturnBriefBody,
       landingAccountTitle,
       landingAccountValue,
       landingAccountUsernameInput,
@@ -1599,6 +1820,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
           : this.isLocalFrontendOnlyHost()
             ? this.translate("Conectando backend local. Contra bots continua funcionando.", "Connecting local backend. Bot matches still work.")
             : this.translate("Online indisponivel no momento. Contra bots continua funcionando.", "Online is unavailable right now. Bot matches still work.");
+    this.renderLandingReturnBrief();
     this.elements.landingQuickMatchButton.disabled = pendingEntry || !onlineActionsAvailable;
     this.elements.landingEndlessButton.disabled = pendingEntry || !onlineActionsAvailable;
     this.elements.landingBotMatchButton.disabled = pendingEntry;
@@ -1615,6 +1837,23 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       ? this.translate("Entrando...", "Joining...")
       : this.translate("Partida infinita", "Infinite match");
     this.renderLandingCharacterPicker();
+  }
+
+  private renderLandingReturnBrief(): void {
+    const view = this.sessionReturnBrief
+      ? formatSessionReturnBrief(this.copy, this.sessionReturnBrief)
+      : null;
+    this.elements.landingReturnBrief.hidden = !view;
+    if (!view) {
+      this.elements.landingReturnBriefKicker.textContent = "";
+      this.elements.landingReturnBriefTitle.textContent = "";
+      this.elements.landingReturnBriefBody.textContent = "";
+      return;
+    }
+
+    this.elements.landingReturnBriefKicker.textContent = view.kicker;
+    this.elements.landingReturnBriefTitle.textContent = view.title;
+    this.elements.landingReturnBriefBody.textContent = view.body;
   }
 
   private renderFeedbackDialog(): void {
@@ -1706,6 +1945,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
           this.setStatus(copy.lobbies.joinUnavailable);
           return;
         }
+        this.rememberSessionEntry("lobby");
         this.renderAll();
         this.setStatus(copy.lobbies.entering(this.getLobbyDisplayTitle(lobby)));
       });
@@ -2471,6 +2711,59 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     window.localStorage.setItem("mistbridge-preferred-character-index", String(this.preferredCharacterIndex));
   }
 
+  private readSessionReturnBrief(): SessionReturnBrief | null {
+    if (typeof window === "undefined") {
+      return null;
+    }
+    const brief = parseStoredSessionReturnBrief(window.localStorage.getItem(SESSION_RETURN_BRIEF_STORAGE_KEY));
+    if (!brief) {
+      window.localStorage.removeItem(SESSION_RETURN_BRIEF_STORAGE_KEY);
+    }
+    return brief;
+  }
+
+  private persistSessionReturnBrief(brief: SessionReturnBrief): void {
+    this.sessionReturnBrief = brief;
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(SESSION_RETURN_BRIEF_STORAGE_KEY, JSON.stringify(brief));
+      } catch {
+        // Returning players still get the in-memory brief for the current page.
+      }
+    }
+    this.renderLandingReturnBrief();
+  }
+
+  private rememberSessionEntry(mode: SessionReturnMode): void {
+    this.persistSessionReturnBrief({
+      version: SESSION_RETURN_BRIEF_VERSION,
+      type: "entry",
+      mode,
+      savedAtMs: Date.now(),
+      characterName: this.getCharacter(this.preferredCharacterIndex).name,
+    });
+  }
+
+  private rememberMatchResult(matchWinner: PlayerId, roundNumber: number): void {
+    const selfSeat = this.currentLobby?.selfSeat ?? null;
+    this.persistSessionReturnBrief({
+      version: SESSION_RETURN_BRIEF_VERSION,
+      type: "match-result",
+      roomCode: this.roomCode,
+      winner: matchWinner,
+      winnerLabel: this.getSeatDisplayLabel(matchWinner),
+      selfSeat,
+      localWon: selfSeat === matchWinner,
+      roundNumber,
+      savedAtMs: Date.now(),
+      characterName: this.getCharacter(this.preferredCharacterIndex).name,
+    });
+  }
+
+  private getSeatDisplayLabel(playerId: PlayerId): string {
+    return this.currentLobby?.seats[playerId]?.displayName || `P${playerId}`;
+  }
+
   private setStatus(message: string): void {
     if (this.statusClearTimer !== null) {
       window.clearTimeout(this.statusClearTimer);
@@ -2524,6 +2817,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       return;
     }
     this.observedMatchWinner = matchWinner;
+    this.rememberMatchResult(matchWinner, roundNumber);
     this.telemetry.track("match_ended", {
       context: { roomCode: this.currentLobby?.roomCode ?? null, screen: "match" },
       payload: {
@@ -2536,14 +2830,23 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
   private updateLocation(roomCode: string | null): void {
     const url = buildLocalizedUrl(this.language);
-    void roomCode;
-    url.searchParams.delete("room");
+    const normalizedRoomCode = normalizeRoomCode(roomCode);
+    if (normalizedRoomCode) {
+      url.searchParams.set("room", normalizedRoomCode);
+    } else {
+      url.searchParams.delete("room");
+    }
     window.history.replaceState({}, "", url);
   }
 
-  private syncLanguageUrl(): void {
+  private syncLanguageUrl(roomCode: string | null = null): void {
     const localizedUrl = buildLocalizedUrl(this.language);
-    localizedUrl.searchParams.delete("room");
+    const normalizedRoomCode = normalizeRoomCode(roomCode);
+    if (normalizedRoomCode) {
+      localizedUrl.searchParams.set("room", normalizedRoomCode);
+    } else {
+      localizedUrl.searchParams.delete("room");
+    }
     if (localizedUrl.toString() === window.location.href) {
       return;
     }
