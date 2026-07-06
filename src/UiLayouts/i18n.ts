@@ -82,6 +82,7 @@ export interface SiteCopy {
     readyDisabledQueue: string;
     readyButton: string;
     readyHint: string;
+    reconnectingHint: string;
     startButton: string;
     forceStartButton: string;
     startHint: string;
@@ -144,6 +145,7 @@ export interface SiteCopy {
     roomFilledBeforeEnter: string;
     enteringSeat: (playerId: number) => string;
     readyMarked: string;
+    lobbyActionUnavailable: string;
     inviteCopied: string;
     inviteCopyFailed: string;
     chatUnavailable: string;
@@ -253,6 +255,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       readyDisabledQueue: "Tudo certo. A partida comeca assim que o servidor iniciar o match.",
       readyButton: "Pronto para jogar",
       readyHint: "Seu personagem escolhido ja sera usado na vaga atual.",
+      reconnectingHint: "Reconectando ao lobby. A acao volta assim que o backend responder.",
       startButton: "Comecar partida",
       forceStartButton: "Forcar inicio",
       startHint: "Como lider da sala, voce pode iniciar assim que houver 2 ou mais jogadores.",
@@ -315,6 +318,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       roomFilledBeforeEnter: "Essa sala lotou antes da entrada.",
       enteringSeat: (playerId) => `Entrando na vaga P${playerId}...`,
       readyMarked: "Tudo certo. Sua vaga foi marcada como pronta.",
+      lobbyActionUnavailable: "Conexao do lobby indisponivel. Reconectando...",
       inviteCopied: "Convite copiado.",
       inviteCopyFailed: "Nao foi possivel copiar o convite.",
       chatUnavailable: "Chat indisponivel no momento.",
@@ -422,6 +426,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       readyDisabledQueue: "All set. The match starts as soon as the server launches it.",
       readyButton: "Ready to play",
       readyHint: "Your selected character will be used in this seat.",
+      reconnectingHint: "Reconnecting to the lobby. This action returns when the backend responds.",
       startButton: "Start match",
       forceStartButton: "Force start",
       startHint: "As the room leader, you can start once there are 2 or more players.",
@@ -484,6 +489,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       roomFilledBeforeEnter: "That room filled up before you could enter.",
       enteringSeat: (playerId) => `Joining seat P${playerId}...`,
       readyMarked: "All set. Your seat is now marked ready.",
+      lobbyActionUnavailable: "Lobby connection is unavailable. Reconnecting...",
       inviteCopied: "Invite copied.",
       inviteCopyFailed: "Could not copy the invite.",
       chatUnavailable: "Chat is unavailable right now.",

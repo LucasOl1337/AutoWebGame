@@ -35,6 +35,7 @@
     "test:online-4p": "npm run compile:esm && node tests/online-four-player-check.mjs",
     "test:matchmaking-state": "npm run compile:esm && node tests/matchmaking-session-state-check.mjs",
     "test:lobby-rules": "npm run compile:esm && node tests/lobby-rules-check.mjs",
+    "test:lobby-disconnected-actions": "npm run compile:esm && node tests/lobby-disconnected-actions-check.mjs",
     "test:roster-sync": "npm run compile:esm && node tests/character-roster-manifest-sync-check.mjs",
     "test:server-character-skill": "npm run compile:esm && node tests/server-character-skill-mapping-check.mjs",
     "test:online-character-selection": "npm run compile:esm && node tests/online-character-selection-index-check.mjs",
