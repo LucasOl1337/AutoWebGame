@@ -111,6 +111,11 @@ interface SessionElements {
 
 const LOBBY_MAX_PLAYERS = 4;
 const DEFAULT_LOBBY_TITLE = "BOMBA PVP";
+const WEBSOCKET_OPEN_READY_STATE = 1;
+
+export function canSendLobbyAction(realtimeReady: boolean, socketReadyState: number | null | undefined): boolean {
+  return realtimeReady && socketReadyState === WEBSOCKET_OPEN_READY_STATE;
+}
 
 export class OnlineSessionClient implements OnlineSessionBridge {
   public role: OnlineRole | null = null;
@@ -588,6 +593,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     if (!lobby || lobby.status !== "open") {
       return;
     }
+    if (!this.canSendRealtimeAction()) {
+      this.setStatus(this.copy.status.lobbyActionUnavailable);
+      this.renderAll();
+      return;
+    }
 
     if (!lobby.selfSeat) {
       const firstFreeSeat = this.getFirstAvailableSeat(lobby);
@@ -601,7 +611,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         payload: { seat: firstFreeSeat, characterIndex: this.preferredCharacterIndex },
       });
       this.autoClaimRoomCode = lobby.roomCode;
-        this.send({ type: "claim-seat", seat: firstFreeSeat, characterIndex: this.getPreferredAuthoritativeCharacterIndex() });
+      if (!this.send({ type: "claim-seat", seat: firstFreeSeat, characterIndex: this.getPreferredAuthoritativeCharacterIndex() })) {
+        this.setStatus(this.copy.status.lobbyActionUnavailable);
+        this.renderAll();
+        return;
+      }
       this.setStatus(this.copy.status.enteringSeat(firstFreeSeat));
       return;
     }
@@ -612,7 +626,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         context: { roomCode: lobby.roomCode, screen: "setup" },
         payload: { seat: lobby.selfSeat },
       });
-      this.send({ type: "set-ready", ready: true });
+      if (!this.send({ type: "set-ready", ready: true })) {
+        this.setStatus(this.copy.status.lobbyActionUnavailable);
+        this.renderAll();
+        return;
+      }
       this.setStatus(this.copy.status.readyMarked);
     }
   }
@@ -1762,6 +1780,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const selfSeatId = lobby.selfSeat;
     const selfSeat = selfSeatId ? lobby.seats[selfSeatId] : null;
     const isMatchmakingLobby = lobby.roomKind === "matchmaking";
+    const realtimeActionAvailable = this.canSendRealtimeAction();
     this.elements.setupEyebrow.textContent = lobby.status === "playing"
       ? copy.setup.kickerLive
       : isMatchmakingLobby
@@ -1783,9 +1802,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.elements.setupPrimaryButton.textContent = firstFreeSeat
         ? copy.setup.enterSeat(firstFreeSeat)
         : copy.setup.roomFull;
-      this.elements.setupPrimaryButton.disabled = !firstFreeSeat;
+      this.elements.setupPrimaryButton.disabled = !firstFreeSeat || !realtimeActionAvailable;
       this.elements.setupPrimaryHint.textContent = firstFreeSeat
-        ? copy.setup.enterHint
+        ? realtimeActionAvailable
+          ? copy.setup.enterHint
+          : copy.setup.reconnectingHint
         : copy.setup.roomFilledBeforeEnter;
       return;
     }
@@ -1800,8 +1821,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     }
 
     this.elements.setupPrimaryButton.textContent = copy.setup.readyButton;
-    this.elements.setupPrimaryButton.disabled = false;
-    this.elements.setupPrimaryHint.textContent = copy.setup.readyHint;
+    this.elements.setupPrimaryButton.disabled = !realtimeActionAvailable;
+    this.elements.setupPrimaryHint.textContent = realtimeActionAvailable
+      ? copy.setup.readyHint
+      : copy.setup.reconnectingHint;
   }
 
   private buildSeatStripPlaceholder(): HTMLElement {
@@ -2483,6 +2506,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     }
     this.socket.send(JSON.stringify(payload));
     return true;
+  }
+
+  private canSendRealtimeAction(): boolean {
+    return canSendLobbyAction(this.realtimeReady, this.socket?.readyState);
   }
 
   private isLocalFrontendOnlyHost(): boolean {
