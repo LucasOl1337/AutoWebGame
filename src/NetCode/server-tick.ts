@@ -25,7 +25,8 @@ export function consumeFixedRatePumpSteps(
   const safeMaxSteps = Math.max(1, Math.floor(Number(maxSteps) || 1));
   const safeNowMs = sanitizeNow(nowMs);
   const previousNowMs = sanitizeNow(current.lastUpdateAtMs);
-  const rawElapsedMs = Math.max(0, safeNowMs - previousNowMs);
+  const monotonicNowMs = Math.max(previousNowMs, safeNowMs);
+  const rawElapsedMs = monotonicNowMs - previousNowMs;
   const maxAccumulatedMs = safeStepMs * safeMaxSteps;
   const accumulatorMs = Math.min(
     maxAccumulatedMs,
@@ -35,7 +36,7 @@ export function consumeFixedRatePumpSteps(
 
   return {
     state: {
-      lastUpdateAtMs: safeNowMs,
+      lastUpdateAtMs: monotonicNowMs,
       accumulatorMs: accumulatorMs - steps * safeStepMs,
     },
     steps,
