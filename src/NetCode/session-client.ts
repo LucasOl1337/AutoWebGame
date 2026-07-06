@@ -992,7 +992,65 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       landingFeedbackButton,
     );
     landingActions.append(landingActionsPrimary, landingActionsSecondary);
-    landingCopy.append(landingMeta, landingActions, landingAccountCard);
+
+    const landingControls = document.createElement("section");
+    landingControls.className = "experience-landing-controls";
+    landingControls.setAttribute("aria-label", copy.controls.kicker);
+
+    const landingControlsHeader = document.createElement("div");
+    landingControlsHeader.className = "experience-landing-controls__header";
+
+    const landingControlsTitle = document.createElement("p");
+    landingControlsTitle.className = "experience-landing-controls__title";
+    landingControlsTitle.textContent = copy.landing.localControlsTitle;
+
+    const landingControlsHint = document.createElement("p");
+    landingControlsHint.className = "experience-landing-controls__hint";
+    landingControlsHint.textContent = copy.landing.localControlsHint;
+
+    landingControlsHeader.append(landingControlsTitle, landingControlsHint);
+
+    const landingControlsGrid = document.createElement("div");
+    landingControlsGrid.className = "experience-landing-controls__grid";
+
+    (
+      [
+        {
+          key: this.translate("WASD / Setas", "WASD / Arrows"),
+          label: copy.controls.move,
+          detail: copy.landing.localControlsMove,
+        },
+        { key: "Q", label: copy.controls.bomb, detail: copy.landing.localControlsBomb },
+        {
+          key: this.translate("Espaço", "Space"),
+          label: copy.controls.ultimate,
+          detail: copy.landing.localControlsUltimate,
+        },
+      ] as const
+    ).forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "experience-landing-controls__item";
+
+      const key = document.createElement("span");
+      key.className = "experience-key experience-landing-controls__key";
+      key.textContent = item.key;
+
+      const copyBlock = document.createElement("span");
+      copyBlock.className = "experience-landing-controls__copy";
+
+      const label = document.createElement("strong");
+      label.textContent = item.label;
+
+      const detail = document.createElement("span");
+      detail.textContent = item.detail;
+
+      copyBlock.append(label, detail);
+      row.append(key, copyBlock);
+      landingControlsGrid.append(row);
+    });
+
+    landingControls.append(landingControlsHeader, landingControlsGrid);
+    landingCopy.append(landingMeta, landingActions, landingControls, landingAccountCard);
 
     const landingRoster = document.createElement("div");
     landingRoster.className = "experience-hero__art";

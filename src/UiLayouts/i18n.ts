@@ -39,6 +39,11 @@ export interface SiteCopy {
     feedbackSending: string;
     feedbackThanks: string;
     feedbackError: string;
+    localControlsTitle: string;
+    localControlsHint: string;
+    localControlsMove: string;
+    localControlsBomb: string;
+    localControlsUltimate: string;
   };
   lobbies: {
     kicker: string;
@@ -205,6 +210,11 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedbackSending: "Enviando...",
       feedbackThanks: "Feedback enviado.",
       feedbackError: "Nao foi possivel enviar agora.",
+      localControlsTitle: "Antes da primeira bomba",
+      localControlsHint: "A partida contra bots usa o personagem selecionado ao lado.",
+      localControlsMove: "Mover pelo labirinto",
+      localControlsBomb: "Criar pressao",
+      localControlsUltimate: "Virar a rodada",
     },
     lobbies: {
       kicker: "Salas abertas",
@@ -369,6 +379,11 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedbackSending: "Sending...",
       feedbackThanks: "Feedback sent.",
       feedbackError: "Could not send feedback right now.",
+      localControlsTitle: "Before the first bomb",
+      localControlsHint: "Bot matches use the character selected on the side.",
+      localControlsMove: "Move through the maze",
+      localControlsBomb: "Create pressure",
+      localControlsUltimate: "Turn the round",
     },
     lobbies: {
       kicker: "Open rooms",
