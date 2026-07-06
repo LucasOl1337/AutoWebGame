@@ -311,6 +311,20 @@ interface ArenaRenderMetrics {
   arenaPixelHeight: number;
 }
 
+export interface LocalSessionReturnBrief {
+  mode: LobbyMode;
+  winner: PlayerId | null;
+  winnerName: string | null;
+  reason: RoundOutcome["reason"];
+  roundNumber: number;
+  scoreLine: string;
+  matchComplete: boolean;
+  finishedAtMs: number;
+}
+
+const LOCAL_SESSION_RETURN_BRIEF_STORAGE_KEY = "bomba-local-session-return-brief";
+const LOCAL_SESSION_RETURN_BRIEF_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
 export class GameApp {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -979,6 +993,34 @@ export class GameApp {
 
   public getCurrentMode(): Mode {
     return this.mode;
+  }
+
+  public getLocalSessionReturnBrief(): LocalSessionReturnBrief | null {
+    const storage = this.getLocalStorage();
+    if (!storage) {
+      return null;
+    }
+
+    let parsed: unknown;
+    try {
+      const raw = storage.getItem(LOCAL_SESSION_RETURN_BRIEF_STORAGE_KEY);
+      if (!raw) {
+        return null;
+      }
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+
+    if (!this.isLocalSessionReturnBrief(parsed)) {
+      return null;
+    }
+
+    if (Date.now() - parsed.finishedAtMs > LOCAL_SESSION_RETURN_BRIEF_MAX_AGE_MS) {
+      return null;
+    }
+
+    return parsed;
   }
 
   public setLanguage(language: SiteLanguage): void {
@@ -2935,6 +2977,82 @@ export class GameApp {
       message,
       countdownMs: ROUND_END_DELAY_MS,
     };
+    this.persistLocalSessionReturnBrief(winner, reason, clinchesMatch);
+  }
+
+  private persistLocalSessionReturnBrief(
+    winner: PlayerId | null,
+    reason: RoundOutcome["reason"],
+    matchComplete: boolean,
+  ): void {
+    if (this.onlineSession) {
+      return;
+    }
+    const storage = this.getLocalStorage();
+    if (!storage) {
+      return;
+    }
+
+    const brief: LocalSessionReturnBrief = {
+      mode: this.onlineRoomMode,
+      winner,
+      winnerName: winner ? this.getPlayerBriefName(winner) : null,
+      reason,
+      roundNumber: this.roundNumber,
+      scoreLine: this.buildLocalSessionScoreLine(),
+      matchComplete,
+      finishedAtMs: Date.now(),
+    };
+
+    try {
+      storage.setItem(LOCAL_SESSION_RETURN_BRIEF_STORAGE_KEY, JSON.stringify(brief));
+    } catch {
+      // Returning players should never lose the current match because storage is unavailable.
+    }
+  }
+
+  private getLocalStorage(): Storage | null {
+    if (this.headless || typeof window === "undefined") {
+      return null;
+    }
+    try {
+      return window.localStorage ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private isLocalSessionReturnBrief(value: unknown): value is LocalSessionReturnBrief {
+    if (!value || typeof value !== "object") {
+      return false;
+    }
+    const candidate = value as Partial<LocalSessionReturnBrief>;
+    return (candidate.mode === "classic" || candidate.mode === "endless")
+      && (candidate.winner === null || ALL_PLAYER_IDS.includes(candidate.winner as PlayerId))
+      && (typeof candidate.winnerName === "string" || candidate.winnerName === null)
+      && (candidate.reason === "elimination" || candidate.reason === "timer" || candidate.reason === "double-ko")
+      && typeof candidate.roundNumber === "number"
+      && Number.isFinite(candidate.roundNumber)
+      && candidate.roundNumber >= 1
+      && typeof candidate.scoreLine === "string"
+      && candidate.scoreLine.length > 0
+      && typeof candidate.matchComplete === "boolean"
+      && typeof candidate.finishedAtMs === "number"
+      && Number.isFinite(candidate.finishedAtMs);
+  }
+
+  private buildLocalSessionScoreLine(): string {
+    return this.activePlayerIds
+      .map((playerId) => `${this.getPlayerBriefName(playerId)} ${this.score[playerId]}`)
+      .join(" | ");
+  }
+
+  private getPlayerBriefName(playerId: PlayerId): string {
+    const player = this.players[playerId];
+    if (!player) {
+      return `P${playerId}`;
+    }
+    return player.name === "BOT" ? `BOT P${playerId}` : player.name;
   }
 
   private advanceAfterRound(): void {
@@ -4884,6 +5002,7 @@ export class GameApp {
           reason: this.roundOutcome.reason,
           message: this.roundOutcome.message,
         } : null,
+        returnBrief: this.getLocalSessionReturnBrief(),
       },
       arena: {
         width: this.getArenaGridWidth(),

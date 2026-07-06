@@ -39,6 +39,18 @@ export interface SiteCopy {
     feedbackSending: string;
     feedbackThanks: string;
     feedbackError: string;
+    returnBriefKicker: string;
+    returnBriefEntryTitle: (mode: string) => string;
+    returnBriefEntryBody: (characterName: string) => string;
+    returnBriefWinTitle: string;
+    returnBriefLossTitle: (winnerLabel: string) => string;
+    returnBriefResultBody: (roundNumber: number, roomLabel: string) => string;
+    returnBriefRoom: (roomCode: string) => string;
+    returnBriefOnlineMatch: string;
+    returnModeQuickMatch: string;
+    returnModeEndless: string;
+    returnModeBotMatch: string;
+    returnModeLobby: string;
     localControlsTitle: string;
     localControlsHint: string;
     localControlsMove: string;
@@ -212,6 +224,18 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedbackSending: "Enviando...",
       feedbackThanks: "Feedback enviado.",
       feedbackError: "Nao foi possivel enviar agora.",
+      returnBriefKicker: "Ultima sessao",
+      returnBriefEntryTitle: (mode) => `Ultimo atalho: ${mode}`,
+      returnBriefEntryBody: (characterName) => `Seu personagem ativo era ${characterName}. A selecao fica pronta para a proxima entrada.`,
+      returnBriefWinTitle: "Sua ultima partida terminou em vitoria",
+      returnBriefLossTitle: (winnerLabel) => `Ultima partida vencida por ${winnerLabel}`,
+      returnBriefResultBody: (roundNumber, roomLabel) => `Round ${roundNumber} em ${roomLabel}. Escolha uma entrada abaixo para jogar de novo.`,
+      returnBriefRoom: (roomCode) => `sala ${roomCode}`,
+      returnBriefOnlineMatch: "partida online",
+      returnModeQuickMatch: "partida rapida",
+      returnModeEndless: "partida infinita",
+      returnModeBotMatch: "partida contra bots",
+      returnModeLobby: "lobby manual",
       localControlsTitle: "Antes da primeira bomba",
       localControlsHint: "A partida contra bots usa o personagem selecionado ao lado.",
       localControlsMove: "Mover pelo labirinto",
@@ -383,6 +407,18 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedbackSending: "Sending...",
       feedbackThanks: "Feedback sent.",
       feedbackError: "Could not send feedback right now.",
+      returnBriefKicker: "Last session",
+      returnBriefEntryTitle: (mode) => `Last shortcut: ${mode}`,
+      returnBriefEntryBody: (characterName) => `${characterName} was your active character. The selection is ready for the next entry.`,
+      returnBriefWinTitle: "Your last match ended in a win",
+      returnBriefLossTitle: (winnerLabel) => `Last match won by ${winnerLabel}`,
+      returnBriefResultBody: (roundNumber, roomLabel) => `Round ${roundNumber} in ${roomLabel}. Choose an entry below to play again.`,
+      returnBriefRoom: (roomCode) => `room ${roomCode}`,
+      returnBriefOnlineMatch: "online match",
+      returnModeQuickMatch: "quick match",
+      returnModeEndless: "endless match",
+      returnModeBotMatch: "match vs bots",
+      returnModeLobby: "manual lobby",
       localControlsTitle: "Before the first bomb",
       localControlsHint: "Bot matches use the character selected on the side.",
       localControlsMove: "Move through the maze",
