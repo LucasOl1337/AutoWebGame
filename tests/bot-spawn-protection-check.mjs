@@ -71,20 +71,22 @@ function setPlayerTile(player, tile) {
   player.tile = { ...tile };
 }
 
-setPlayerTile(bot, { x: 5, y: 5 });
-setPlayerTile(enemy, { x: 6, y: 5 });
+setPlayerTile(bot, { x: 8, y: 6 });
+setPlayerTile(enemy, { x: 9, y: 6 });
 game.bombs = [];
 game.flames = [];
 game.arena.breakable = new Set();
 bot.activeBombs = 0;
 bot.maxBombs = 1;
+bot.spawnProtectionMs = 0;
 enemy.spawnProtectionMs = 1500;
 game.botBombCooldownMs = 0;
 
 const noWasteDecision = game.getBotDecision(bot);
-const noWastePass = noWasteDecision.placeBomb === false;
+const noWastePass = noWasteDecision.placeBomb === false
+  && noWasteDecision.direction !== "right";
 
-game.arena.breakable = new Set(["5,6"]);
+game.arena.breakable = new Set(["8,7"]);
 const breakablePressureDecision = game.getBotDecision(bot);
 const breakablePressurePass = breakablePressureDecision.placeBomb === true;
 
@@ -92,6 +94,7 @@ const pass = noWastePass && breakablePressurePass;
 console.log(JSON.stringify({
   noWasteDecision,
   breakablePressureDecision,
+  botSpawnProtectionMs: bot.spawnProtectionMs,
   enemySpawnProtectionMs: enemy.spawnProtectionMs,
   noWastePass,
   breakablePressurePass,

@@ -281,7 +281,7 @@ export function getBotDecision(player: PlayerState, context: BotContext): BotDec
     return { direction: attackPositionTarget, placeBomb: false };
   }
 
-  const chaseEnemy = enemy
+  const chaseEnemy = enemy && enemyVulnerable
     ? findDirectionToNearestTile(
       player,
       (tile) => getTileDistance(tile, enemy.tile) <= 1,
