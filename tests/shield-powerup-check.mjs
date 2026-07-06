@@ -1,4 +1,5 @@
 Object.defineProperty(globalThis, "navigator", { value: { webdriver: false }, configurable: true });
+Object.defineProperty(globalThis, "HTMLElement", { value: class HTMLElement {}, configurable: true });
 
 const noop = () => {};
 const listeners = new Map();
@@ -39,6 +40,8 @@ const fakeCtx = {
   save: noop,
   restore: noop,
   setTransform: noop,
+  translate: noop,
+  scale: noop,
   createLinearGradient: () => ({ addColorStop: noop }),
   createRadialGradient: () => ({ addColorStop: noop }),
 };
@@ -49,6 +52,7 @@ const fakeCanvas = {
   dataset: {},
   style: {},
   setAttribute: noop,
+  closest: () => null,
   getContext: () => fakeCtx,
   requestFullscreen: async () => {},
 };
@@ -74,7 +78,13 @@ const assets = {
   players: { 1: { up: null, down: null, left: null, right: null }, 2: { up: null, down: null, left: null, right: null } },
   floor: { base: null, lane: null, spawn: null },
   props: { wall: null, crate: null, bomb: null, flame: null },
-  powerUps: { "bomb-up": null, "flame-up": null, "speed-up": null, "remote-up": null },
+  powerUps: {
+    "bomb-up": null,
+    "flame-up": null,
+    "speed-up": null,
+    "remote-up": null,
+    "shield-up": null,
+  },
 };
 
 const game = new GameApp(root, assets);

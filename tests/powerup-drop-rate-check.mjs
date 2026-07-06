@@ -1,4 +1,5 @@
 Object.defineProperty(globalThis, "navigator", { value: { webdriver: false }, configurable: true });
+Object.defineProperty(globalThis, "HTMLElement", { value: class HTMLElement {}, configurable: true });
 
 const noop = () => {};
 const listeners = new Map();
@@ -39,6 +40,8 @@ const fakeCtx = {
   save: noop,
   restore: noop,
   setTransform: noop,
+  translate: noop,
+  scale: noop,
   createLinearGradient: () => ({ addColorStop: noop }),
   createRadialGradient: () => ({ addColorStop: noop }),
 };
@@ -49,6 +52,7 @@ const fakeCanvas = {
   dataset: {},
   style: {},
   setAttribute: noop,
+  closest: () => null,
   getContext: () => fakeCtx,
   requestFullscreen: async () => {},
 };
@@ -93,6 +97,14 @@ const breakableCount = game.arena.breakable.size;
 const dropCount = game.arena.powerUps.length;
 const dropRatio = breakableCount > 0 ? dropCount / breakableCount : 0;
 const speedDropCount = game.arena.powerUps.filter((powerUp) => powerUp.type === "speed-up").length;
+const utilityDropTypes = ["shield-up", "bomb-pass-up", "kick-up"];
+const utilityDropCounts = Object.fromEntries(
+  utilityDropTypes.map((type) => [
+    type,
+    game.arena.powerUps.filter((powerUp) => powerUp.type === type).length,
+  ]),
+);
+const hasUtilityDrops = utilityDropTypes.every((type) => utilityDropCounts[type] > 0);
 const hasDenseBreakables = breakableCount >= 24;
 
 const report = {
@@ -100,12 +112,15 @@ const report = {
   dropCount,
   dropRatio: Math.round(dropRatio * 1000) / 1000,
   speedDropCount,
+  utilityDropCounts,
+  hasUtilityDrops,
   hasDenseBreakables,
   pass: (
     hasDenseBreakables
     && dropRatio >= 0.85
     && dropRatio <= 0.95
     && speedDropCount > 0
+    && hasUtilityDrops
   ),
 };
 

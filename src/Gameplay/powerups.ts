@@ -1,7 +1,10 @@
 import {
   KEY_BINDINGS,
+  MAX_BOMB_PASS_LEVEL,
   MAX_BOMBS,
+  MAX_KICK_LEVEL,
   MAX_RANGE,
+  MAX_SHIELD_CHARGES,
   MAX_SPEED_LEVEL,
 } from "../PersonalConfig/config";
 import type { MenuPlayerId, PlayerState, PowerUpType } from "./types";
@@ -45,6 +48,27 @@ const POWER_UP_DEFINITIONS: Record<PowerUpType, PowerUpDefinition> = {
     tint: "#8cd6ff",
     maxLevel: 1,
   },
+  "shield-up": {
+    type: "shield-up",
+    label: "Shield Charge",
+    shortLabel: "G",
+    tint: "#bba7ff",
+    maxLevel: MAX_SHIELD_CHARGES,
+  },
+  "bomb-pass-up": {
+    type: "bomb-pass-up",
+    label: "Bomb Pass",
+    shortLabel: "P",
+    tint: "#f7a8ff",
+    maxLevel: MAX_BOMB_PASS_LEVEL,
+  },
+  "kick-up": {
+    type: "kick-up",
+    label: "Bomb Kick",
+    shortLabel: "K",
+    tint: "#ffbc73",
+    maxLevel: MAX_KICK_LEVEL,
+  },
 };
 
 export const SKILL_POWER_UP_TYPES: readonly SkillPowerUpType[] = [
@@ -52,6 +76,9 @@ export const SKILL_POWER_UP_TYPES: readonly SkillPowerUpType[] = [
   "flame-up",
   "speed-up",
   "remote-up",
+  "shield-up",
+  "bomb-pass-up",
+  "kick-up",
 ];
 
 const CODE_TO_LABEL: Record<string, string> = {
@@ -78,6 +105,12 @@ export function getPowerUpLevel(player: PlayerState, type: PowerUpType): number 
       return player.speedLevel;
     case "remote-up":
       return player.remoteLevel;
+    case "shield-up":
+      return player.shieldCharges;
+    case "bomb-pass-up":
+      return player.bombPassLevel;
+    case "kick-up":
+      return player.kickLevel;
     default: {
       const neverType: never = type;
       return neverType;
@@ -102,6 +135,15 @@ export function applyPowerUpToPlayer(player: PlayerState, type: PowerUpType): vo
       break;
     case "remote-up":
       player.remoteLevel = 1;
+      break;
+    case "shield-up":
+      player.shieldCharges = Math.min(MAX_SHIELD_CHARGES, player.shieldCharges + 1);
+      break;
+    case "bomb-pass-up":
+      player.bombPassLevel = MAX_BOMB_PASS_LEVEL;
+      break;
+    case "kick-up":
+      player.kickLevel = MAX_KICK_LEVEL;
       break;
     default: {
       const neverType: never = type;
@@ -128,6 +170,24 @@ export function getPowerUpPriorityScore(player: PlayerState, type: PowerUpType):
       return 0;
     }
     return 220;
+  }
+  if (type === "shield-up") {
+    if (player.shieldCharges >= MAX_SHIELD_CHARGES) {
+      return 0;
+    }
+    return 210 + (MAX_SHIELD_CHARGES - player.shieldCharges) * 35;
+  }
+  if (type === "bomb-pass-up") {
+    if (player.bombPassLevel >= MAX_BOMB_PASS_LEVEL) {
+      return 0;
+    }
+    return 190;
+  }
+  if (type === "kick-up") {
+    if (player.kickLevel >= MAX_KICK_LEVEL) {
+      return 0;
+    }
+    return 180;
   }
   if (player.speedLevel >= MAX_SPEED_LEVEL) {
     return 0;

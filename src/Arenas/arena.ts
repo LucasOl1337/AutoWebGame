@@ -336,6 +336,9 @@ function createPowerUpsFromBreakables(breakable: Set<string>, config: ArenaRunti
     "flame-up",
     "flame-up",
     "remote-up",
+    "shield-up",
+    "bomb-pass-up",
+    "kick-up",
   ];
   const powerUps: PowerUpState[] = [];
   const breakableKeys = [...breakable].sort();

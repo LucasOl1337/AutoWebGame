@@ -1,4 +1,5 @@
 Object.defineProperty(globalThis, "navigator", { value: { webdriver: false }, configurable: true });
+Object.defineProperty(globalThis, "HTMLElement", { value: class HTMLElement {}, configurable: true });
 
 const noop = () => {};
 const listeners = new Map();
@@ -39,6 +40,8 @@ const fakeCtx = {
   save: noop,
   restore: noop,
   setTransform: noop,
+  translate: noop,
+  scale: noop,
   createLinearGradient: () => ({ addColorStop: noop }),
   createRadialGradient: () => ({ addColorStop: noop }),
 };
@@ -46,8 +49,10 @@ const fakeCtx = {
 const fakeCanvas = {
   width: 0,
   height: 0,
+  dataset: {},
   style: {},
   setAttribute: noop,
+  closest: () => null,
   getContext: () => fakeCtx,
   requestFullscreen: async () => {},
 };
@@ -73,7 +78,15 @@ const assets = {
   players: { 1: { up: null, down: null, left: null, right: null }, 2: { up: null, down: null, left: null, right: null } },
   floor: { base: null, lane: null, spawn: null },
   props: { wall: null, crate: null, bomb: null, flame: null },
-  powerUps: { "bomb-up": null, "flame-up": null, "speed-up": null, "remote-up": null },
+  powerUps: {
+    "bomb-up": null,
+    "flame-up": null,
+    "speed-up": null,
+    "remote-up": null,
+    "shield-up": null,
+    "bomb-pass-up": null,
+    "kick-up": null,
+  },
 };
 
 const game = new GameApp(root, assets);
@@ -92,6 +105,9 @@ p1.spawnProtectionMs = 0;
 game.arena.powerUps = [
   { type: "remote-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
   { type: "flame-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
+  { type: "shield-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
+  { type: "bomb-pass-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
+  { type: "kick-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
 ];
 window.advanceTime(17);
 
@@ -101,11 +117,17 @@ const skillSlots = player?.skillSlots ?? [];
 const bombSlot = skillSlots.find((slot) => slot.type === "bomb-up") ?? null;
 const flameSlot = skillSlots.find((slot) => slot.type === "flame-up") ?? null;
 const remoteSlot = skillSlots.find((slot) => slot.type === "remote-up") ?? null;
+const shieldSlot = skillSlots.find((slot) => slot.type === "shield-up") ?? null;
+const bombPassSlot = skillSlots.find((slot) => slot.type === "bomb-pass-up") ?? null;
+const kickSlot = skillSlots.find((slot) => slot.type === "kick-up") ?? null;
 
 const report = {
   bombSlot,
   flameSlot,
   remoteSlot,
+  shieldSlot,
+  bombPassSlot,
+  kickSlot,
   pass: Boolean(
     bombSlot
       && bombSlot.acquired === false
@@ -121,6 +143,18 @@ const report = {
       && remoteSlot.level === 1
       && remoteSlot.value === "ON"
       && remoteSlot.key === "R"
+      && shieldSlot
+      && shieldSlot.acquired === true
+      && shieldSlot.level === 1
+      && shieldSlot.value === "x1"
+      && bombPassSlot
+      && bombPassSlot.acquired === true
+      && bombPassSlot.level === 1
+      && bombPassSlot.value === "x1"
+      && kickSlot
+      && kickSlot.acquired === true
+      && kickSlot.level === 1
+      && kickSlot.value === "x1"
   ),
 };
 
