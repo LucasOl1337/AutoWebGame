@@ -75,9 +75,13 @@ export class InputManager {
     });
 
     target.addEventListener("blur", () => {
-      this.keysDown.clear();
-      this.pressCounts.clear();
-      this.keyOrder = [];
+      this.clearHeldState();
+    });
+
+    target.document?.addEventListener("visibilitychange", () => {
+      if (target.document.visibilityState === "hidden") {
+        this.clearHeldState();
+      }
     });
   }
 
@@ -141,6 +145,12 @@ export class InputManager {
     return (typeof HTMLInputElement !== "undefined" && target instanceof HTMLInputElement)
       || (typeof HTMLTextAreaElement !== "undefined" && target instanceof HTMLTextAreaElement)
       || (typeof HTMLSelectElement !== "undefined" && target instanceof HTMLSelectElement);
+  }
+
+  private clearHeldState(): void {
+    this.keysDown.clear();
+    this.pressCounts.clear();
+    this.keyOrder = [];
   }
 }
 

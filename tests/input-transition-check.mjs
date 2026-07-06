@@ -1,4 +1,9 @@
 Object.defineProperty(globalThis, "navigator", { value: { webdriver: false }, configurable: true });
+globalThis.HTMLElement = class {
+  constructor() {
+    this.dataset = {};
+  }
+};
 
 const noop = () => {};
 const listeners = new Map();
@@ -34,6 +39,8 @@ const fakeCtx = {
   strokeText: noop,
   save: noop,
   restore: noop,
+  translate: noop,
+  scale: noop,
   setTransform: noop,
   createLinearGradient: () => ({ addColorStop: noop }),
   createRadialGradient: () => ({ addColorStop: noop }),
@@ -45,6 +52,7 @@ const fakeCanvas = {
   style: {},
   setAttribute: noop,
   getContext: () => fakeCtx,
+  closest: () => null,
   requestFullscreen: async () => {},
 };
 
