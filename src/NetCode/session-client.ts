@@ -308,6 +308,57 @@ export function buildRoomInviteUrl(language: SiteLanguage, roomCode: string | nu
   return url.toString();
 }
 
+type ClipboardFallbackEnvironment = {
+  clipboard?: Pick<Clipboard, "writeText"> | null;
+  document?: Document | null;
+};
+
+function getClipboardFallbackEnvironment(): ClipboardFallbackEnvironment {
+  return {
+    clipboard: typeof navigator === "undefined" ? null : (navigator.clipboard ?? null),
+    document: typeof document === "undefined" ? null : document,
+  };
+}
+
+export async function copyTextWithFallback(
+  text: string,
+  environment: ClipboardFallbackEnvironment = getClipboardFallbackEnvironment(),
+): Promise<boolean> {
+  if (environment.clipboard) {
+    try {
+      await environment.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fall through to the legacy path for browsers that expose but reject Clipboard API calls.
+    }
+  }
+
+  const targetDocument = environment.document;
+  if (!targetDocument?.body || typeof targetDocument.execCommand !== "function") {
+    return false;
+  }
+
+  const textarea = targetDocument.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.top = "-9999px";
+  textarea.style.left = "-9999px";
+  textarea.style.opacity = "0";
+
+  targetDocument.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+
+  try {
+    return targetDocument.execCommand("copy");
+  } catch {
+    return false;
+  } finally {
+    textarea.remove();
+  }
+}
+
 export class OnlineSessionClient implements OnlineSessionBridge {
   public role: OnlineRole | null = null;
   public roomCode: string | null = null;
@@ -837,7 +888,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       return;
     }
     try {
-      await navigator.clipboard.writeText(buildRoomInviteUrl(this.language, this.currentLobby.roomCode));
+      const copied = await copyTextWithFallback(buildRoomInviteUrl(this.language, this.currentLobby.roomCode));
+      if (!copied) {
+        this.setStatus(this.copy.status.inviteCopyFailed);
+        return;
+      }
       this.telemetry.track("invite_copied", {
         context: { roomCode: this.currentLobby.roomCode, screen: this.getScreen() },
       });

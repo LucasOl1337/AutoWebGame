@@ -1,5 +1,6 @@
 const {
   buildRoomInviteUrl,
+  copyTextWithFallback,
   normalizeRoomCode,
   readRoomCodeFromUrl,
 } = await import("../output/esm/NetCode/session-client.js");
@@ -43,7 +44,77 @@ const invitePass = ptInvite.pathname === "/play"
   && enInvite.searchParams.get("room") === null
   && enInvite.searchParams.get("utm") === "friend";
 
-const pass = normalizationPass && urlReadPass && invitePass;
+const clipboardWrites = [];
+const clipboardPass = await copyTextWithFallback("https://bomba.test/?room=AB12C", {
+  clipboard: {
+    async writeText(text) {
+      clipboardWrites.push(text);
+    },
+  },
+  document: null,
+});
+
+let fallbackTextarea = null;
+const fallbackDocument = {
+  body: {
+    appendChild(element) {
+      fallbackTextarea = element;
+    },
+  },
+  createElement(tagName) {
+    if (tagName !== "textarea") {
+      throw new Error(`Unexpected element: ${tagName}`);
+    }
+    return {
+      value: "",
+      style: {},
+      setAttribute(name, value) {
+        this[name] = value;
+      },
+      focusCalled: false,
+      selectCalled: false,
+      removed: false,
+      focus() {
+        this.focusCalled = true;
+      },
+      select() {
+        this.selectCalled = true;
+      },
+      remove() {
+        this.removed = true;
+      },
+    };
+  },
+  execCommand(command) {
+    return command === "copy";
+  },
+};
+
+const fallbackPass = await copyTextWithFallback("fallback-link", {
+  clipboard: {
+    async writeText() {
+      throw new Error("blocked");
+    },
+  },
+  document: fallbackDocument,
+});
+
+const unavailablePass = await copyTextWithFallback("no-copy", {
+  clipboard: null,
+  document: null,
+}) === false;
+
+const copyPass = clipboardPass
+  && clipboardWrites[0] === "https://bomba.test/?room=AB12C"
+  && fallbackPass
+  && fallbackTextarea?.value === "fallback-link"
+  && fallbackTextarea?.readonly === "true"
+  && fallbackTextarea?.focusCalled
+  && fallbackTextarea?.selectCalled
+  && fallbackTextarea?.removed
+  && unavailablePass;
+
+const pass = normalizationPass && urlReadPass && invitePass && copyPass;
 
 console.log(JSON.stringify({
   normalizedCases: normalizedCases.map((entry) => ({
@@ -54,6 +125,17 @@ console.log(JSON.stringify({
   invites: {
     pt: ptInvite.toString(),
     en: enInvite.toString(),
+  },
+  copy: {
+    clipboardWrites,
+    fallback: {
+      value: fallbackTextarea?.value,
+      readonly: fallbackTextarea?.readonly,
+      focusCalled: fallbackTextarea?.focusCalled,
+      selectCalled: fallbackTextarea?.selectCalled,
+      removed: fallbackTextarea?.removed,
+    },
+    unavailablePass,
   },
   pass,
 }, null, 2));
