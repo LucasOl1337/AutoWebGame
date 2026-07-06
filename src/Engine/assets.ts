@@ -2,6 +2,7 @@ import type { Direction, PlayerId, PowerUpType } from "../Gameplay/types";
 import { assetUrl } from "./asset-url";
 import type { ArenaThemeDefinition } from "../Arenas/arena-theme-library";
 import { getArenaThemeById, resolveArenaTheme } from "../Arenas/arena-theme-library";
+import { CHARACTER_ROSTER_MANIFEST } from "../Characters/Animations/character-roster-manifest";
 
 export interface DirectionalSprites {
   up: HTMLImageElement | null;
@@ -235,8 +236,12 @@ async function loadCharacterManifest(): Promise<CharacterManifestPayload> {
 
 async function loadCharacterRoster(): Promise<CharacterRosterEntry[]> {
   const manifestPayload = await loadCharacterManifest();
-  const manifestEntries = Array.isArray(manifestPayload.characters) ? manifestPayload.characters : [];
-  const assetVersion = manifestPayload.generatedAt ?? undefined;
+  const publicManifestEntries = Array.isArray(manifestPayload.characters) ? manifestPayload.characters : [];
+  const hasPublicManifest = publicManifestEntries.length > 0;
+  const manifestEntries: CharacterManifestEntry[] = hasPublicManifest
+    ? publicManifestEntries
+    : CHARACTER_ROSTER_MANIFEST;
+  const assetVersion = hasPublicManifest ? manifestPayload.generatedAt ?? undefined : undefined;
   const sortedEntries = manifestEntries
     .map((entry, selectionIndex) => ({ entry, selectionIndex }))
     .sort((left, right) => {
