@@ -47,6 +47,7 @@
     "test:bot-powerup": "npm run compile:esm && node tests/bot-powerup-priority-check.mjs",
     "test:bot-survival": "npm run compile:esm && node tests/bot-survival-10s-check.mjs",
     "test:bot-direction": "npm run compile:esm && node tests/bot-direction-stability-check.mjs",
+    "test:bot-target": "npm run compile:esm && node tests/bot-target-selection-check.mjs",
     "test:bomb-range": "npm run compile:esm && node tests/bomb-range-snapshot-check.mjs",
     "test:bomb-hit-window": "npm run compile:esm && node tests/bomb-hit-window-check.mjs",
     "test:bomb-chain": "npm run compile:esm && node tests/bomb-chain-reaction-check.mjs",

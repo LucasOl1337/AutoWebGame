@@ -189,7 +189,6 @@ game.botBombCooldownMs = 0;
 bot.flameRange = 2;
 const strategicAvoidDecision = game.getBotDecision(bot);
 const strategicAvoidPass = strategicAvoidDecision.placeBomb === false
-  && strategicAvoidDecision.direction !== null
   && strategicAvoidDecision.direction !== "down";
 
 const freshRoundGame = new GameApp(root, assets);

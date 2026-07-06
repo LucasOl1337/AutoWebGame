@@ -91,12 +91,35 @@ function getTileDistance(a: TileCoord, b: TileCoord): number {
   return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 }
 
+function getPriorityEnemy(player: PlayerState, playerTile: TileCoord, context: BotContext): PlayerState | null {
+  let bestEnemy: PlayerState | null = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  for (const playerId of context.activePlayerIds) {
+    if (playerId === player.id) {
+      continue;
+    }
+    const candidate = context.players[playerId];
+    if (!candidate.active || !candidate.alive) {
+      continue;
+    }
+    const protectedPenalty = candidate.spawnProtectionMs > 0 ? 1000 : 0;
+    const score = protectedPenalty + getTileDistance(playerTile, candidate.tile) + candidate.id / 100;
+    if (score < bestScore) {
+      bestScore = score;
+      bestEnemy = candidate;
+    }
+  }
+
+  return bestEnemy;
+}
+
 /**
  * Main bot decision logic
  */
 export function getBotDecision(player: PlayerState, context: BotContext): BotDecision {
-  const enemy = context.players[1];
   const playerTile = getTileFromPosition(player.position);
+  const enemy = getPriorityEnemy(player, playerTile, context);
   const dangerMap = getDangerMap(context);
   const moveDuration = getMoveDuration(player);
   const strategicSafetyWindowMs = moveDuration * BOT_STRATEGIC_MOVE_WINDOW_STEPS + BOT_DANGER_ARRIVAL_BUFFER_MS;
@@ -205,14 +228,20 @@ export function getBotDecision(player: PlayerState, context: BotContext): BotDec
     return { direction: suddenDeathDirection, placeBomb: false };
   }
 
-  const enemyVulnerable = enemy.alive && enemy.spawnProtectionMs <= 0;
+  const enemyVulnerable = Boolean(enemy && enemy.spawnProtectionMs <= 0);
   const openingProtected = player.spawnProtectionMs > 0;
-  const remoteDetonationBomb = getRemoteDetonationBomb(player, enemy, enemyVulnerable, context);
+  const remoteDetonationBomb = enemy
+    ? getRemoteDetonationBomb(player, enemy, enemyVulnerable, context)
+    : null;
   if (remoteDetonationBomb) {
     return { direction: null, placeBomb: false, detonate: true };
   }
-  const adjacentEnemy = enemyVulnerable && getTileDistance(playerTile, enemy.tile) <= 1;
-  const enemyInBombLine = enemyVulnerable && canBombReachTile(playerTile, enemy.tile, player.flameRange, context);
+  const adjacentEnemy = Boolean(enemy && enemyVulnerable && getTileDistance(playerTile, enemy.tile) <= 1);
+  const enemyInBombLine = Boolean(
+    enemy
+    && enemyVulnerable
+    && canBombReachTile(playerTile, enemy.tile, player.flameRange, context),
+  );
   const adjacentBreakable = hasAdjacentBreakable(playerTile, context);
   const shouldDropBomb = !openingProtected
     && (adjacentEnemy || adjacentBreakable || enemyInBombLine)
@@ -236,27 +265,31 @@ export function getBotDecision(player: PlayerState, context: BotContext): BotDec
     return { direction: breakableTarget, placeBomb: false };
   }
 
-  const attackPositionTarget = findNearestReachableTarget(
-    player,
-    (tile) => (
-      enemyVulnerable
-      && canBombReachTile(tile, enemy.tile, player.flameRange, context)
-      && canBotPlaceBombAtTile(player, tile, false, context)
-    ),
-    strategicSafetyWindowMs,
-    context,
-  );
+  const attackPositionTarget = enemy
+    ? findNearestReachableTarget(
+      player,
+      (tile) => (
+        enemyVulnerable
+        && canBombReachTile(tile, enemy.tile, player.flameRange, context)
+        && canBotPlaceBombAtTile(player, tile, false, context)
+      ),
+      strategicSafetyWindowMs,
+      context,
+    )
+    : null;
   if (attackPositionTarget) {
     return { direction: attackPositionTarget, placeBomb: false };
   }
 
-  const chaseEnemy = findDirectionToNearestTile(
-    player,
-    (tile) => getTileDistance(tile, enemy.tile) <= 1,
-    undefined,
-    context,
-    strategicSafetyWindowMs,
-  );
+  const chaseEnemy = enemy
+    ? findDirectionToNearestTile(
+      player,
+      (tile) => getTileDistance(tile, enemy.tile) <= 1,
+      undefined,
+      context,
+      strategicSafetyWindowMs,
+    )
+    : null;
   const patrolDirection = getPatrolDirection(player, dangerMap, moveDuration, context);
   if (chaseEnemy || patrolDirection) {
     return { direction: chaseEnemy ?? patrolDirection, placeBomb: false };
@@ -704,13 +737,14 @@ function getPatrolDirection(
 
   let bestDirection: Direction | null = null;
   let bestScore = Number.POSITIVE_INFINITY;
+  const patrolSafetyWindowMs = moveDuration * BOT_STRATEGIC_MOVE_WINDOW_STEPS + BOT_DANGER_ARRIVAL_BUFFER_MS;
 
   for (const direction of ["up", "right", "left", "down"] as const) {
     const delta = directionDelta[direction];
     const nextTile = { x: playerTile.x + delta.x, y: playerTile.y + delta.y };
     if (
       !isTilePathableForBot(player, nextTile, context)
-      || !isTileSafeForArrival(danger, nextTile, moveDuration)
+      || !isTileSafeForArrivalWithWindow(danger, nextTile, moveDuration, patrolSafetyWindowMs)
     ) {
       continue;
     }
