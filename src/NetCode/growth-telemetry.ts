@@ -207,13 +207,17 @@ export class GrowthTelemetryClient {
   }
 
   private readOrCreateAnonPlayerId(): string {
-    const stored = window.localStorage.getItem(ANON_PLAYER_ID_KEY);
-    if (stored && stored.trim()) {
-      return stored.trim();
+    try {
+      const stored = window.localStorage.getItem(ANON_PLAYER_ID_KEY);
+      if (stored && stored.trim()) {
+        return stored.trim();
+      }
+      const nextId = crypto.randomUUID();
+      window.localStorage.setItem(ANON_PLAYER_ID_KEY, nextId);
+      return nextId;
+    } catch {
+      return crypto.randomUUID();
     }
-    const nextId = crypto.randomUUID();
-    window.localStorage.setItem(ANON_PLAYER_ID_KEY, nextId);
-    return nextId;
   }
 
   private readAttribution(): GrowthTelemetryEventBody["attribution"] {
