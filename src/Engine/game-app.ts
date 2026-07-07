@@ -122,6 +122,8 @@ import {
 import { SITE_COPY, type SiteLanguage } from "../UiLayouts/i18n";
 
 const KICK_SLIDE_MAX_TILES = 3;
+const KICK_FUSE_PENALTY_MS_PER_TILE = 250;
+const KICK_FUSE_MIN_MS = 450;
 const DEMOLITION_COMBO_MIN_CRATES = 2;
 const DEMOLITION_COMBO_DROP_TYPES: readonly SkillPowerUpType[] = [
   "bomb-up",
@@ -2495,7 +2497,7 @@ export class GameApp {
     }
     const delta = directionDelta[direction];
     let targetTile = { ...bomb.tile };
-    let moved = false;
+    let movedTiles = 0;
     for (let step = 0; step < distance; step += 1) {
       const nextTile = this.normalizeTile({ x: targetTile.x + delta.x, y: targetTile.y + delta.y });
       const targetKey = tileKey(nextTile.x, nextTile.y);
@@ -2509,12 +2511,13 @@ export class GameApp {
         break;
       }
       targetTile = nextTile;
-      moved = true;
+      movedTiles += 1;
     }
-    if (!moved) {
+    if (movedTiles <= 0) {
       return false;
     }
     bomb.tile = this.normalizeTile(targetTile);
+    bomb.fuseMs = Math.max(KICK_FUSE_MIN_MS, bomb.fuseMs - movedTiles * KICK_FUSE_PENALTY_MS_PER_TILE);
     bomb.ownerCanPass = false;
     return true;
   }
