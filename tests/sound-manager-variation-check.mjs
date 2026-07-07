@@ -42,6 +42,12 @@ const manifestPass = Array.isArray(explosionVariants)
   && explosionVariants.length === 2
   && explosionVariants[0]?.url.endsWith("bomb_explode_default.mp3")
   && explosionVariants[1]?.url.endsWith("bomb_explode_main.mp3");
+const powerCollectVariants = SFX_MANIFEST.powerCollect;
+const powerCollectManifestPass = Array.isArray(powerCollectVariants)
+  && powerCollectVariants.length === 3
+  && powerCollectVariants[0]?.url.endsWith("powerup_collect.mp3")
+  && powerCollectVariants[1]?.url.endsWith("powerup_collect_bright.mp3")
+  && powerCollectVariants[2]?.url.endsWith("powerup_collect_crystal.mp3");
 
 const manager = new SoundManager();
 await manager.loadSounds(SFX_MANIFEST);
@@ -74,24 +80,30 @@ mockNowMs = 600;
 manager.playOneShot("powerCollect");
 manager.playOneShot("powerCollect");
 await Promise.resolve();
-const powerCollectSameFramePass = playedUrls.filter((url) => url.endsWith("powerup_collect.mp3")).length === 1;
+const powerCollectSameFramePass = playedUrls.filter((url) => url.includes("powerup_collect")).length === 1;
 
 mockNowMs = 681;
 manager.playOneShot("powerCollect");
 await Promise.resolve();
-const powerCollectRecoveryPass = playedUrls.filter((url) => url.endsWith("powerup_collect.mp3")).length === 2;
+const powerCollectUrls = playedUrls.filter((url) => url.includes("powerup_collect"));
+const powerCollectRecoveryPass = powerCollectUrls.length === 2;
+const powerCollectVariationPass = powerCollectUrls[0]?.endsWith("powerup_collect.mp3")
+  && powerCollectUrls[1]?.endsWith("powerup_collect_bright.mp3");
 
 const pass = manifestPass
+  && powerCollectManifestPass
   && playbackPass
   && antiSpamPass
   && variationPass
   && bombPlaceSameFramePass
   && bombPlaceRecoveryPass
   && powerCollectSameFramePass
-  && powerCollectRecoveryPass;
+  && powerCollectRecoveryPass
+  && powerCollectVariationPass;
 
 console.log(JSON.stringify({
   manifestPass,
+  powerCollectManifestPass,
   playbackPass,
   antiSpamPass,
   variationPass,
@@ -99,6 +111,7 @@ console.log(JSON.stringify({
   bombPlaceRecoveryPass,
   powerCollectSameFramePass,
   powerCollectRecoveryPass,
+  powerCollectVariationPass,
   playedUrls,
   pass,
 }, null, 2));

@@ -40,7 +40,11 @@ export const SFX_MANIFEST: Partial<Record<SfxKey, SoundManifestEntry>> = {
   matchStart: { url: assetUrl("/Assets/SoundEffects/match_start.mp3"), volume: 0.84 * 0.2 * MASTER_VOLUME },
   roundEnd: { url: assetUrl("/Assets/SoundEffects/round_end.wav"), volume: 0.76 * MASTER_VOLUME },
   matchWin: { url: assetUrl("/Assets/SoundEffects/match_win.mp3"), volume: 0.9 * MASTER_VOLUME },
-  powerCollect: { url: assetUrl("/Assets/SoundEffects/powerup_collect.mp3"), volume: 0.68 * MASTER_VOLUME },
+  powerCollect: [
+    { url: assetUrl("/Assets/SoundEffects/powerup_collect.mp3"), volume: 0.68 * MASTER_VOLUME },
+    { url: assetUrl("/Assets/SoundEffects/powerup_collect_bright.mp3"), volume: 0.58 * MASTER_VOLUME },
+    { url: assetUrl("/Assets/SoundEffects/powerup_collect_crystal.mp3"), volume: 0.52 * MASTER_VOLUME },
+  ],
   suddenDeathAlarm: { url: assetUrl("/Assets/SoundEffects/sudden_death_alarm.wav"), volume: 0.8 * MASTER_VOLUME },
 };
 
