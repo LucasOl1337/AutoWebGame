@@ -1,5 +1,6 @@
 import type { LobbyMode, LobbySeatOccupantType, LobbyStatus } from "./protocol";
 import type { PlayerId } from "../Gameplay/types";
+import { isPlayableLobbySeat } from "./lobby-rules";
 
 export type OnlineRoomKind = "manual" | "matchmaking" | "endless";
 export type OnlineClientIntent = "idle" | "manual" | "queue_classic" | "queue_endless";
@@ -132,6 +133,9 @@ export function shouldResetPlayingRoom(
     return activePlayerIds.some((playerId) => seats[playerId]?.occupantType === "empty");
   }
 
+  const playableSeatIds = activePlayerIds.filter((playerId) => isPlayableLobbySeat(seats[playerId]));
   const connectedHumanCount = activePlayerIds.filter((playerId) => Boolean(seats[playerId]?.clientId)).length;
-  return connectedHumanCount < 2 || activePlayerIds.some((playerId) => !seats[playerId]?.clientId);
+  return connectedHumanCount < 1
+    || playableSeatIds.length < 2
+    || activePlayerIds.some((playerId) => !isPlayableLobbySeat(seats[playerId]));
 }

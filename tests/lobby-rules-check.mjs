@@ -29,6 +29,13 @@ const soloReady = getLobbySeatSnapshot(createSeats([
   { id: "a", ready: true },
 ]));
 
+const humanBotReady = getLobbySeatSnapshot({
+  1: { clientId: "a", ready: true, occupantType: "human" },
+  2: { clientId: null, ready: true, occupantType: "bot" },
+  3: { clientId: null, ready: false, occupantType: "empty" },
+  4: { clientId: null, ready: false, occupantType: "empty" },
+});
+
 const pass = fullReady.canAutoStart
   && !fullReady.canForceStart
   && duoReady.canForceStart
@@ -36,13 +43,17 @@ const pass = fullReady.canAutoStart
   && !trioMixed.canAutoStart
   && !trioMixed.canForceStart
   && soloReady.occupantCount === 1
-  && !soloReady.minimumPlayersMet;
+  && !soloReady.minimumPlayersMet
+  && humanBotReady.occupantCount === 2
+  && humanBotReady.readySeatIds.includes(2)
+  && humanBotReady.canForceStart;
 
 console.log(JSON.stringify({
   fullReady,
   duoReady,
   trioMixed,
   soloReady,
+  humanBotReady,
   pass,
 }, null, 2));
 
