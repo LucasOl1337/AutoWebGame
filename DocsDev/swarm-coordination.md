@@ -6,7 +6,7 @@ Shared coordination file for recurring Codex swarm sessions. Each session should
 
 | Session | Area | Scope | Files | Status |
 |---------|------|-------|-------|--------|
-| fix-room-code-normalization | Correção de bugs reais | Normalizar codigo de sala manual antes de enviar/validar join | `src/NetCode/session-client.ts`, `src/NetCode/protocol.ts` se necessario, teste focado em `tests/` | active |
+| _none_ | - | - | - | - |
 
 ## Completed work
 
@@ -23,3 +23,5 @@ Shared coordination file for recurring Codex swarm sessions. Each session should
 | fix-lobby-actions-disconnected | Lobby setup actions could remain clickable during a WebSocket error and then show optimistic "joining/ready" feedback even though no message was sent. | Seat/ready actions now require an open realtime socket, show a reconnecting hint while unavailable, and fall back to a reconnecting status if send fails. | `npm run test:lobby-disconnected-actions`; `npm run test:lobby-rules`; `npm run build` | `f544e21` |
 | fix-arena-theme-tilepaths | Sprite arena themes resolved to invalid `aassets...` runtime URLs, so selected sprite themes could silently load default fallback tiles. | `arcane-citadel`, `verdant-ruins` and `skyfoundry-bastion` now point at real `/Assets/TileMaps/themes/...` URLs and have a runtime path regression check. | `npm run compile:esm && node tests/arena-theme-runtime-paths-check.mjs`; `node tests/arena-theme-library-check.mjs`; `npm run build` | `891c74d` |
 | ux-session-return-brief | The landing page forgot the player's last entry/match context after reload, and room sharing copied only a short code. | The landing now shows a localized last-session brief for recent entries/results, local bot results persist through reload, and room invites keep a shareable URL with normalized room code. | `npm run test:session-return-brief`; `npm run test:room-invite-link`; `npm run test:round-outcome`; `npm run build`; `codegraph affected src/NetCode/session-client.ts src/Engine/game-app.ts src/UiLayouts/i18n.ts src/UiLayouts/main.css` | `172cace` |
+| fix-room-code-normalization | Browsers that blocked `navigator.clipboard` made the copied room invite fail even after the room URL was generated. | Invite copying now falls back to a temporary textarea/`execCommand("copy")` path and reports failure only when both copy mechanisms are unavailable. | `npm run test:room-invite-link`; `npm run build` | `de104eb` |
+| powerup-telegraph-polish | Power-up pickups only changed counters and played audio, so players could miss which item they collected during fast rounds. | Recent pickups now tint the player's HUD subtitle, highlight the collected slot for 2.2s, and expose the transient state to render checks. | `npm run test:powerup-hud`; `npm run test:powerup-drop-rate`; `npm run build` | `5f19817` |
