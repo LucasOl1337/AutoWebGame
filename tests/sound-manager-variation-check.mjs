@@ -48,6 +48,9 @@ const powerCollectManifestPass = Array.isArray(powerCollectVariants)
   && powerCollectVariants[0]?.url.endsWith("powerup_collect.mp3")
   && powerCollectVariants[1]?.url.endsWith("powerup_collect_bright.mp3")
   && powerCollectVariants[2]?.url.endsWith("powerup_collect_crystal.mp3");
+const shieldBlock = SFX_MANIFEST.shieldBlock;
+const shieldBlockManifestPass = !Array.isArray(shieldBlock)
+  && shieldBlock?.url.endsWith("shield_block_deflect.mp3");
 
 const manager = new SoundManager();
 await manager.loadSounds(SFX_MANIFEST);
@@ -90,8 +93,20 @@ const powerCollectRecoveryPass = powerCollectUrls.length === 2;
 const powerCollectVariationPass = powerCollectUrls[0]?.endsWith("powerup_collect.mp3")
   && powerCollectUrls[1]?.endsWith("powerup_collect_bright.mp3");
 
+mockNowMs = 800;
+manager.playOneShot("shieldBlock");
+manager.playOneShot("shieldBlock");
+await Promise.resolve();
+const shieldBlockSameFramePass = playedUrls.filter((url) => url.endsWith("shield_block_deflect.mp3")).length === 1;
+
+mockNowMs = 961;
+manager.playOneShot("shieldBlock");
+await Promise.resolve();
+const shieldBlockRecoveryPass = playedUrls.filter((url) => url.endsWith("shield_block_deflect.mp3")).length === 2;
+
 const pass = manifestPass
   && powerCollectManifestPass
+  && shieldBlockManifestPass
   && playbackPass
   && antiSpamPass
   && variationPass
@@ -99,11 +114,14 @@ const pass = manifestPass
   && bombPlaceRecoveryPass
   && powerCollectSameFramePass
   && powerCollectRecoveryPass
-  && powerCollectVariationPass;
+  && powerCollectVariationPass
+  && shieldBlockSameFramePass
+  && shieldBlockRecoveryPass;
 
 console.log(JSON.stringify({
   manifestPass,
   powerCollectManifestPass,
+  shieldBlockManifestPass,
   playbackPass,
   antiSpamPass,
   variationPass,
@@ -112,6 +130,8 @@ console.log(JSON.stringify({
   powerCollectSameFramePass,
   powerCollectRecoveryPass,
   powerCollectVariationPass,
+  shieldBlockSameFramePass,
+  shieldBlockRecoveryPass,
   playedUrls,
   pass,
 }, null, 2));

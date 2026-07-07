@@ -1,6 +1,6 @@
 # Mapa de audio
 
-Atualizado em 2026-07-07 pelo loop `audio-variant-powerup-pickup`.
+Atualizado em 2026-07-07 pelo loop `audio-shield-block-deflect-rerun`.
 
 Fontes varridas: `src/Engine/sound-manager.ts`, disparos locais em `src/Engine/game-app.ts`,
 ponte online em `src/NetCode/online-sync.ts` e assets em `public/Assets/SoundEffects`.
@@ -14,7 +14,7 @@ ponte online em `src/NetCode/online-sync.ts` e assets em `public/Assets/SoundEff
 | `roundEnd` | Round resolve com vencedor ou double KO | `round_end.wav` | unico | Pode virar voz/anuncio PT/EN em sessao futura. |
 | `matchWin` | Vitoria de partida completa | `match_win.mp3` | unico | Pode virar fanfarra com variantes ou anuncio localizado. |
 | `powerCollect` | Jogador coleta qualquer powerup localmente; convidado online observa powerup coletado | `powerup_collect.mp3`, `powerup_collect_bright.mp3`, `powerup_collect_crystal.mp3` | ok | Esta sessao integrou variantes com volumes compensados por clip. |
+| `shieldBlock` | Escudo absorve hit localmente; convidado online observa `shieldCharges` cair e `flameGuardMs` subir | `shield_block_deflect.mp3` | ok | SFX curto de deflexao gerado e integrado nesta sessao. |
 | `suddenDeathAlarm` | Sudden death fica ativo | `sudden_death_alarm.wav` | unico | Intervalo minimo alto para nao martelar o jogador. |
 | Quebra de crate | Crate e destruida e animacao `crateBreakAnimations` aparece | nenhum | mudo | Evento perceptivel, mas sem `SfxKey` dedicado hoje. |
 | Jogador derrotado | `killPlayer` inicia animacao de morte | nenhum dedicado | mudo | O round pode tocar `roundEnd`, mas a derrota individual nao tem som proprio. |
-| Escudo bloqueia dano | `shieldCharges` absorve hit antes de matar o jogador | nenhum | mudo | Candidato forte para SFX curto de bloqueio/deflexao. |

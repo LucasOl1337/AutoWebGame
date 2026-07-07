@@ -876,6 +876,7 @@ export class GameApp {
       suppressLocalBombAudio: this.hasPendingLocalBombAudioSuppression(),
       previousBombs: this.bombs,
       previousFlames: this.flames,
+      previousPlayers: this.players,
       previousMatchWinner: this.matchWinner,
       previousRoundOutcome: next.previousRoundOutcome,
       previousSuddenDeathActive: next.previousSuddenDeathActive,
@@ -2997,6 +2998,7 @@ export class GameApp {
     if (player.shieldCharges > 0) {
       player.shieldCharges -= 1;
       player.flameGuardMs = SHIELD_GUARD_MS;
+      this.soundManager.playOneShot("shieldBlock");
       return false;
     }
     if (this.onlineRoomMode === "endless" && attackerId && attackerId !== player.id) {

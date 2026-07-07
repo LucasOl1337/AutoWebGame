@@ -121,6 +121,7 @@ interface OnlineAudioTransitionArgs {
   suppressLocalBombAudio: boolean;
   previousBombs: BombState[];
   previousFlames: FlameState[];
+  previousPlayers: Record<PlayerId, PlayerState>;
   previousMatchWinner: PlayerId | null;
   previousRoundOutcome: RoundOutcome | null;
   previousSuddenDeathActive: boolean;
@@ -146,6 +147,7 @@ export function playOnlineAudioTransition({
   suppressLocalBombAudio,
   previousBombs,
   previousFlames,
+  previousPlayers,
   previousMatchWinner,
   previousRoundOutcome,
   previousSuddenDeathActive,
@@ -180,6 +182,9 @@ export function playOnlineAudioTransition({
   if (newFlames > 0) {
     playSound("flames");
   }
+  if (didShieldBlock(previousPlayers, next.players)) {
+    playSound("shieldBlock");
+  }
   if (!previousRoundOutcome && next.roundOutcome) {
     playSound("roundEnd");
   }
@@ -196,6 +201,26 @@ export function playOnlineAudioTransition({
 
 function getBombAudioKey(bomb: BombState): string {
   return `${bomb.ownerId}:${tileKey(bomb.tile.x, bomb.tile.y)}`;
+}
+
+function didShieldBlock(
+  previousPlayers: Record<PlayerId, PlayerState>,
+  nextPlayers: Record<PlayerId, PlayerState>,
+): boolean {
+  for (const id of [1, 2, 3, 4] as PlayerId[]) {
+    const previous = previousPlayers[id];
+    const next = nextPlayers[id];
+    if (
+      previous
+      && next
+      && next.alive
+      && previous.shieldCharges > next.shieldCharges
+      && next.flameGuardMs > previous.flameGuardMs
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function pushOnlineRenderSample(

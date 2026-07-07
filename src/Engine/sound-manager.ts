@@ -8,6 +8,7 @@ export type SfxKey =
   | "roundEnd"
   | "matchWin"
   | "powerCollect"
+  | "shieldBlock"
   | "suddenDeathAlarm";
 
 interface SoundDefinition {
@@ -27,6 +28,7 @@ const SFX_PLAYBACK_POLICIES: Partial<Record<SfxKey, SoundPlaybackPolicy>> = {
   bombExplode: { minIntervalMs: 140 },
   flames: { minIntervalMs: 110 },
   powerCollect: { minIntervalMs: 80 },
+  shieldBlock: { minIntervalMs: 160 },
   suddenDeathAlarm: { minIntervalMs: 1200 },
 };
 
@@ -45,6 +47,7 @@ export const SFX_MANIFEST: Partial<Record<SfxKey, SoundManifestEntry>> = {
     { url: assetUrl("/Assets/SoundEffects/powerup_collect_bright.mp3"), volume: 0.58 * MASTER_VOLUME },
     { url: assetUrl("/Assets/SoundEffects/powerup_collect_crystal.mp3"), volume: 0.52 * MASTER_VOLUME },
   ],
+  shieldBlock: { url: assetUrl("/Assets/SoundEffects/shield_block_deflect.mp3"), volume: 0.64 * MASTER_VOLUME },
   suddenDeathAlarm: { url: assetUrl("/Assets/SoundEffects/sudden_death_alarm.wav"), volume: 0.8 * MASTER_VOLUME },
 };
 

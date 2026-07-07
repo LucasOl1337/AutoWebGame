@@ -11,12 +11,18 @@ const expectedPowerCollectFiles = [
   "powerup_collect_bright.mp3",
   "powerup_collect_crystal.mp3",
 ];
+const expectedSingleFiles = [
+  "shield_block_deflect.mp3",
+];
 
 const powerCollect = SFX_MANIFEST.powerCollect;
 const manifestPass = Array.isArray(powerCollect)
   && powerCollect.length === expectedPowerCollectFiles.length
   && expectedPowerCollectFiles.every((filename, index) => (
     powerCollect[index]?.url === `/Assets/SoundEffects/${filename}`
+  ))
+  && expectedSingleFiles.every((filename) => (
+    SFX_MANIFEST.shieldBlock?.url === `/Assets/SoundEffects/${filename}`
   ));
 
 function probeAudio(filePath) {
@@ -60,7 +66,7 @@ function probeAudio(filePath) {
   };
 }
 
-const assets = expectedPowerCollectFiles.map((filename) => {
+const assets = [...expectedPowerCollectFiles, ...expectedSingleFiles].map((filename) => {
   const filePath = path.join(repoRoot, "public", "Assets", "SoundEffects", filename);
   return {
     filename,
