@@ -386,6 +386,7 @@ export class GameApp {
   private roundOutcome: RoundOutcome | null = null;
   private matchWinner: PlayerId | null = null;
   private matchResultCooldownMs = 0;
+  private autoPausedForHiddenTab = false;
   private onlineRoomMode: LobbyMode = "classic";
   private endlessKills: MatchScore = createNumberPlayerRecord(0);
   private endlessRoundWins: MatchScore = createNumberPlayerRecord(0);
@@ -646,6 +647,7 @@ export class GameApp {
     this.mode = "match";
     this.matchWinner = null;
     this.paused = false;
+    this.autoPausedForHiddenTab = false;
     this.roundOutcome = null;
     this.menuReady = createBooleanPlayerRecord(false);
     for (const playerId of this.activePlayerIds) {
@@ -712,6 +714,7 @@ export class GameApp {
     this.roundNumber = snapshot.roundNumber;
     this.roundTimeMs = snapshot.roundTimeMs;
     this.paused = snapshot.paused;
+    this.autoPausedForHiddenTab = false;
     this.roundOutcome = snapshot.roundOutcome
       ? { ...snapshot.roundOutcome }
       : null;
@@ -777,6 +780,7 @@ export class GameApp {
     this.roundNumber = frame.roundNumber;
     this.roundTimeMs = frame.roundTimeMs;
     this.paused = frame.paused;
+    this.autoPausedForHiddenTab = false;
     this.roundOutcome = frame.roundOutcome ? { ...frame.roundOutcome } : null;
     this.matchWinner = frame.matchWinner;
     this.animationClockMs = frame.animationClockMs;
@@ -835,6 +839,7 @@ export class GameApp {
     this.roundNumber = 1;
     this.matchWinner = null;
     this.paused = false;
+    this.autoPausedForHiddenTab = false;
     this.roundOutcome = null;
     this.botBombCooldownMs = 0;
     this.botCommittedDirection = createDirectionPlayerRecord(null);
@@ -929,6 +934,7 @@ export class GameApp {
     this.clearOnlinePeer();
     this.mode = "menu";
     this.paused = false;
+    this.autoPausedForHiddenTab = false;
   }
 
   public returnToMenu(): void {
@@ -939,6 +945,7 @@ export class GameApp {
     this.resetToLobbyState();
     this.mode = "menu";
     this.paused = false;
+    this.autoPausedForHiddenTab = false;
     if (!this.headless) {
       this.render();
     }
@@ -1119,6 +1126,10 @@ export class GameApp {
 
   private registerWindowHooks(): void {
     window.addEventListener("resize", this.syncCanvasDisplaySize);
+    window.addEventListener("blur", this.handleWindowInactive);
+    if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+      document.addEventListener("visibilitychange", this.handleDocumentVisibilityChange);
+    }
     this.soundManager.bindUnlock(window);
     window.render_game_to_text = () => this.renderGameToText();
     window.advanceTime = (ms: number) => {
@@ -1129,6 +1140,26 @@ export class GameApp {
       this.render();
       this.input.endFrame();
     };
+  }
+
+  private readonly handleWindowInactive = (): void => {
+    this.pauseLocalMatchForHiddenTab();
+  };
+
+  private readonly handleDocumentVisibilityChange = (): void => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      this.pauseLocalMatchForHiddenTab();
+    }
+  };
+
+  private pauseLocalMatchForHiddenTab(): void {
+    if (this.onlineSession || this.mode !== "match" || this.roundOutcome || this.paused) {
+      return;
+    }
+    this.paused = true;
+    this.autoPausedForHiddenTab = true;
+    this.input.clearPresses();
+    this.render();
   }
 
   private readonly syncCanvasDisplaySize = (): void => {
@@ -1582,6 +1613,7 @@ export class GameApp {
   private updateMatch(deltaMs: number): void {
     if (!this.roundOutcome && this.input.consumePress("Escape")) {
       this.paused = !this.paused;
+      this.autoPausedForHiddenTab = false;
     }
 
     if (!this.onlineSession) {
@@ -1817,6 +1849,7 @@ export class GameApp {
     this.roundTimeMs = ROUND_DURATION_MS;
     this.roundOutcome = null;
     this.paused = false;
+    this.autoPausedForHiddenTab = false;
     this.botBombCooldownMs = 0;
     this.botCommittedDirection = createDirectionPlayerRecord(null);
     this.botPendingReverseDirection = createDirectionPlayerRecord(null);
@@ -5066,6 +5099,7 @@ export class GameApp {
         score: this.score,
         remainingMs: Math.round(this.roundTimeMs),
         paused: this.paused,
+        autoPausedForHiddenTab: this.autoPausedForHiddenTab,
         menuReady: this.menuReady,
         matchResultChoice: this.matchResultChoice,
         botEnabled: this.botEnabled,
