@@ -29,6 +29,7 @@
     "test:menu-bot-fill": "npm run compile:esm && node tests/menu-bot-fill-check.mjs",
     "test:input-alias": "npm run compile:esm && node tests/local-input-alias-check.mjs",
     "test:input-visibility": "npm run compile:esm && node tests/input-visibility-clear-check.mjs",
+    "test:local-match-chrome": "npm run compile:esm && node tests/local-match-chrome-check.mjs",
     "test:input": "npm run compile:esm && node tests/input-transition-check.mjs",
     "test:arena-runtime": "npm run compile:esm && node tests/arena-runtime-contract-check.mjs",
     "test:spawn": "npm run compile:esm && node tests/spawn-escape-check.mjs",
