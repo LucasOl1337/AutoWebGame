@@ -1261,14 +1261,45 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     const landingCopy = document.createElement("div");
     landingCopy.className = "experience-hero__copy";
-    landingCopy.innerHTML = `
-      <p class="experience-kicker">${copy.landing.kicker}</p>
-      <h1>BOMBA PVP</h1>
-      <p class="experience-hero__lead">${copy.landing.lead}</p>
-    `;
+
+    const landingKicker = document.createElement("p");
+    landingKicker.className = "experience-kicker";
+    landingKicker.textContent = copy.landing.kicker;
+
+    const landingReleaseBadge = document.createElement("span");
+    landingReleaseBadge.className = "experience-release-badge";
+    landingReleaseBadge.textContent = copy.landing.releaseBadge;
+
+    const landingTitle = document.createElement("h1");
+    landingTitle.textContent = "BOMBA PVP";
+
+    const landingLead = document.createElement("p");
+    landingLead.className = "experience-hero__lead";
+    landingLead.textContent = copy.landing.lead;
+
+    landingCopy.append(landingKicker, landingReleaseBadge, landingTitle, landingLead);
 
     const landingMeta = document.createElement("p");
     landingMeta.className = "experience-hero__meta";
+
+    const landingReleaseNotes = document.createElement("section");
+    landingReleaseNotes.className = "experience-release-notes";
+    landingReleaseNotes.setAttribute("aria-label", copy.landing.releaseTitle);
+
+    const landingReleaseTitle = document.createElement("p");
+    landingReleaseTitle.className = "experience-release-notes__title";
+    landingReleaseTitle.textContent = copy.landing.releaseTitle;
+
+    const landingReleaseList = document.createElement("ul");
+    landingReleaseList.className = "experience-release-notes__list";
+
+    copy.landing.releaseItems.forEach((releaseItem) => {
+      const item = document.createElement("li");
+      item.textContent = releaseItem;
+      landingReleaseList.appendChild(item);
+    });
+
+    landingReleaseNotes.append(landingReleaseTitle, landingReleaseList);
 
     const landingReturnBrief = document.createElement("div");
     landingReturnBrief.className = "experience-return-brief";
@@ -1475,6 +1506,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     landingControls.append(landingControlsHeader, landingControlsGrid);
     landingCopy.append(
       landingMeta,
+      landingReleaseNotes,
       landingReturnBrief,
       landingActions,
       landingBotIntensity,

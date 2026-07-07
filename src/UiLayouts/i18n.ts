@@ -31,6 +31,9 @@ export interface SiteCopy {
     feedback: string;
     searching: string;
     meta: (queuedRooms: number, onlineUsers: number) => string;
+    releaseBadge: string;
+    releaseTitle: string;
+    releaseItems: readonly string[];
     feedbackTitle: string;
     feedbackPrompt: string;
     feedbackPlaceholder: string;
@@ -226,6 +229,13 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedback: "Dar feedback",
       searching: "Procurando a melhor sala para voce entrar.",
       meta: (queuedRooms, onlineUsers) => `${queuedRooms} salas abertas agora | ${onlineUsers} jogadores online`,
+      releaseBadge: "v0.2.2 no ar",
+      releaseTitle: "Novidades do patch",
+      releaseItems: [
+        "Escolha 1, 2 ou 3 bots antes da partida local.",
+        "Aviso de rodada, DANGER e pickup recente aparecem no combate.",
+        "Convites, lobby, teclado e salvamento local ficaram mais resistentes.",
+      ],
       feedbackTitle: "Conte o que achou",
       feedbackPrompt: "Escreva qualquer coisa que possa melhorar o jogo. Pode ser curta ou detalhada.",
       feedbackPlaceholder: "Ex: a navegação da home ficou boa, mas eu senti falta de um atalho para voltar...",
@@ -435,6 +445,13 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedback: "Leave feedback",
       searching: "Looking for the best room for you.",
       meta: (queuedRooms, onlineUsers) => `${queuedRooms} open rooms right now | ${onlineUsers} players online`,
+      releaseBadge: "v0.2.2 live",
+      releaseTitle: "Patch highlights",
+      releaseItems: [
+        "Choose 1, 2, or 3 bots before a local match.",
+        "Round cue, DANGER, and recent pickup feedback now show in combat.",
+        "Invites, lobby actions, keyboard flow, and local saves are more resilient.",
+      ],
       feedbackTitle: "Tell us what you think",
       feedbackPrompt: "Write anything that could improve the game. Short or detailed is fine.",
       feedbackPlaceholder: "Example: the home flow feels good, but I wanted a faster way back...",
