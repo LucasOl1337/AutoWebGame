@@ -1,4 +1,4 @@
-# Swarm coordination
+﻿# Swarm coordination
 
 Shared coordination file for recurring Codex swarm sessions. Each session should claim a small, valuable, disjoint scope before editing and append evidence before closing.
 
@@ -6,12 +6,13 @@ Shared coordination file for recurring Codex swarm sessions. Each session should
 
 | Session | Area | Scope | Files | Status |
 |---------|------|-------|-------|--------|
-| fix-bot-invite-start-readiness | Correção de bugs reais | Corrigir readiness/start de lobby manual com bots/convidados se houver caminho quebrado | `src/NetCode/lobby-rules.ts`, `src/NetCode/matchmaking.ts`, testes relacionados | active |
 
 ## Completed work
 
 | Session | Before | After | Evidence | Commit |
 |---------|--------|-------|----------|--------|
+| fix-bot-invite-start-readiness | Classic lobby readiness and server restart logic treated only seats with `clientId` as playable, so ready bot seats could be ignored or reset out of a human+bot match. | Playable lobby seats now include bot occupants; classic start/restart passes `botPlayerIds` to the authoritative match while still requiring at least one connected human. | `npm run test:lobby-rules`; `npm run test:matchmaking-state`; `npm run compile:esm` + `node tests/endless-room-lifecycle-check.mjs`; `npm run build`; `node --check worker/index.js`; `codegraph affected src/NetCode/lobby-rules.ts src/NetCode/matchmaking.ts worker/index.js` | `269b30e` |
+| ux-arena-theme-picker | Arena themes were only discoverable through manual `?arenaTheme=` URLs, and the bootstrap could keep the active arena theme instead of honoring the URL override. | The landing page now shows localized arena theme choices that preserve current URL params; the selected theme overrides the arena before assets/game boot so bot matches start with that board look. | `npm run test:arena-theme-selection`; `npm run test:touch-focus-css`; `npm run build`; `git diff --check -- src/Arenas/arena-theme-selection.ts src/UiLayouts/main.ts src/NetCode/session-client.ts src/UiLayouts/i18n.ts src/UiLayouts/main.css tests/arena-theme-selection-check.mjs package.json DocsDev/swarm-coordination.md`; `codegraph affected src/Arenas/arena-theme-selection.ts src/UiLayouts/main.ts src/NetCode/session-client.ts src/UiLayouts/i18n.ts src/UiLayouts/main.css tests/arena-theme-selection-check.mjs`; `codegraph status .` | `3c3d1c4` |
 | ux-telemetry-storage-fallback | Telemetry startup could throw when localStorage was blocked, preventing the client from loading in restrictive browsers. | Telemetry now falls back to an in-memory anonymous UUID and still flushes session events by beacon. | `npm run compile:esm`; `node tests/growth-telemetry-storage-check.mjs`; `npm run build`; `codegraph affected src/NetCode/growth-telemetry.ts` | `401a86d` |
 | bomb-explosion-sfx-variation | Bomb explosions always used the same `bomb_explode_default.mp3` clip, so repeated blasts sounded identical. | Explosion SFX now uses the existing default/main variants and avoids replaying the same variant back-to-back when alternatives exist. | `npm run compile:esm && node tests/sound-manager-variation-check.mjs`; `npm run build` | `04d5bff` |
 | server-tick-monotonic-clock | Backward or invalid Worker clock samples could rewind the authoritative match tick clock and make the next pump over-catch-up. | The tick pump now clamps samples to a monotonic timestamp, preserving normal catch-up without bursts after clock regressions. | `npm run test:server-tick`; `npm run build` | `4e5f52c` |
