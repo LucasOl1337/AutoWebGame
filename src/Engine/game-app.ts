@@ -1653,6 +1653,10 @@ export class GameApp {
       return;
     }
 
+    if (this.handleLocalMatchResultInput()) {
+      return;
+    }
+
     this.matchResultCooldownMs = Math.max(0, this.matchResultCooldownMs - deltaMs);
     if (this.matchResultCooldownMs > 0) {
       return;
@@ -1663,6 +1667,22 @@ export class GameApp {
       return;
     }
     this.returnToMenu();
+  }
+
+  private handleLocalMatchResultInput(): boolean {
+    if (this.input.consumePress("Escape")) {
+      this.matchResultChoice[1] = "lobby";
+      this.returnToMenu();
+      return true;
+    }
+
+    if (this.input.consumePress("Enter") || this.input.consumePress("Space")) {
+      this.matchResultChoice[1] = "rematch";
+      this.startMatch();
+      return true;
+    }
+
+    return false;
   }
 
   private handleReadyInput(readyState: Record<PlayerId, boolean>): void {
@@ -4995,7 +5015,11 @@ export class GameApp {
         subtitle: copy.rematchSummary,
         footer: this.onlineSession
           ? scoreSummary
-          : `${scoreSummary} | ${copy.nextMatchCue(this.getRoundedCountdownSeconds(this.matchResultCooldownMs))}`,
+          : [
+              scoreSummary,
+              copy.nextMatchCue(this.getRoundedCountdownSeconds(this.matchResultCooldownMs)),
+              `${copy.pressToSelect("Enter/Space")} | Esc: ${copy.backToLobby}`,
+            ].join(" | "),
       };
     }
 
