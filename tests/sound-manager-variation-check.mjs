@@ -59,13 +59,46 @@ await Promise.resolve();
 const antiSpamPass = playedUrls.length === 2;
 const variationPass = playedUrls[1] === "/Assets/SoundEffects/bomb_explode_main.mp3";
 
-const pass = manifestPass && playbackPass && antiSpamPass && variationPass;
+mockNowMs = 400;
+manager.playOneShot("bombPlace");
+manager.playOneShot("bombPlace");
+await Promise.resolve();
+const bombPlaceSameFramePass = playedUrls.filter((url) => url.endsWith("bomb_place.mp3")).length === 1;
+
+mockNowMs = 446;
+manager.playOneShot("bombPlace");
+await Promise.resolve();
+const bombPlaceRecoveryPass = playedUrls.filter((url) => url.endsWith("bomb_place.mp3")).length === 2;
+
+mockNowMs = 600;
+manager.playOneShot("powerCollect");
+manager.playOneShot("powerCollect");
+await Promise.resolve();
+const powerCollectSameFramePass = playedUrls.filter((url) => url.endsWith("powerup_collect.mp3")).length === 1;
+
+mockNowMs = 681;
+manager.playOneShot("powerCollect");
+await Promise.resolve();
+const powerCollectRecoveryPass = playedUrls.filter((url) => url.endsWith("powerup_collect.mp3")).length === 2;
+
+const pass = manifestPass
+  && playbackPass
+  && antiSpamPass
+  && variationPass
+  && bombPlaceSameFramePass
+  && bombPlaceRecoveryPass
+  && powerCollectSameFramePass
+  && powerCollectRecoveryPass;
 
 console.log(JSON.stringify({
   manifestPass,
   playbackPass,
   antiSpamPass,
   variationPass,
+  bombPlaceSameFramePass,
+  bombPlaceRecoveryPass,
+  powerCollectSameFramePass,
+  powerCollectRecoveryPass,
   playedUrls,
   pass,
 }, null, 2));
