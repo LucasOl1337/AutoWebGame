@@ -91,6 +91,7 @@ interface SessionElements {
   landingRoster: HTMLDivElement;
   feedbackDialog: HTMLDivElement;
   feedbackTextarea: HTMLTextAreaElement;
+  feedbackCounter: HTMLParagraphElement;
   feedbackSendButton: HTMLButtonElement;
   feedbackCancelButton: HTMLButtonElement;
   feedbackStatus: HTMLParagraphElement;
@@ -937,14 +938,23 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.closeFeedbackDialog();
       }
     });
-    this.elements.feedbackSendButton.addEventListener("click", () => {
-      void this.submitFeedback();
-    });
-    this.elements.feedbackTextarea.addEventListener("keydown", (event) => {
+    this.elements.feedbackDialog.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
         this.closeFeedbackDialog();
-      } else if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      }
+    });
+    this.elements.feedbackSendButton.addEventListener("click", () => {
+      void this.submitFeedback();
+    });
+    this.elements.feedbackTextarea.addEventListener("input", () => {
+      if (!this.feedbackRequestPending) {
+        this.elements.feedbackStatus.textContent = "";
+      }
+      this.renderFeedbackDialog();
+    });
+    this.elements.feedbackTextarea.addEventListener("keydown", (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
         event.preventDefault();
         void this.submitFeedback();
       }
@@ -1620,11 +1630,15 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const feedbackDialog = document.createElement("div");
     feedbackDialog.className = "experience-feedback";
     feedbackDialog.hidden = true;
+    feedbackDialog.setAttribute("role", "dialog");
+    feedbackDialog.setAttribute("aria-modal", "true");
+    feedbackDialog.setAttribute("aria-labelledby", "experience-feedback-title");
 
     const feedbackCard = document.createElement("div");
     feedbackCard.className = "experience-feedback__card";
 
     const feedbackTitle = document.createElement("p");
+    feedbackTitle.id = "experience-feedback-title";
     feedbackTitle.className = "experience-feedback__title";
     feedbackTitle.textContent = copy.landing.feedbackTitle;
 
@@ -1637,8 +1651,14 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     feedbackTextarea.rows = 6;
     feedbackTextarea.maxLength = FEEDBACK_MAX_LENGTH;
     feedbackTextarea.placeholder = copy.landing.feedbackPlaceholder;
+    feedbackTextarea.setAttribute("aria-describedby", "experience-feedback-counter experience-feedback-status");
+
+    const feedbackCounter = document.createElement("p");
+    feedbackCounter.id = "experience-feedback-counter";
+    feedbackCounter.className = "experience-feedback__counter";
 
     const feedbackStatus = document.createElement("p");
+    feedbackStatus.id = "experience-feedback-status";
     feedbackStatus.className = "experience-feedback__status";
 
     const feedbackActions = document.createElement("div");
@@ -1655,7 +1675,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     feedbackSendButton.textContent = copy.landing.feedbackSend;
 
     feedbackActions.append(feedbackCancelButton, feedbackSendButton);
-    feedbackCard.append(feedbackTitle, feedbackPrompt, feedbackTextarea, feedbackStatus, feedbackActions);
+    feedbackCard.append(feedbackTitle, feedbackPrompt, feedbackTextarea, feedbackCounter, feedbackStatus, feedbackActions);
     feedbackDialog.append(feedbackCard);
 
     landingHero.append(landingCopy, landingRoster);
@@ -2025,6 +2045,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       landingRoster,
       feedbackDialog,
       feedbackTextarea,
+      feedbackCounter,
       feedbackSendButton,
       feedbackCancelButton,
       feedbackStatus,
@@ -2266,9 +2287,16 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
   private renderFeedbackDialog(): void {
     const copy = this.copy;
+    const messageLength = this.elements.feedbackTextarea.value.trim().length;
+    const remainingCharacters = FEEDBACK_MAX_LENGTH - messageLength;
+    const messageReady = messageLength > 0 && remainingCharacters >= 0;
     this.elements.feedbackDialog.hidden = !this.feedbackDialogOpen;
     this.elements.feedbackTextarea.disabled = this.feedbackRequestPending;
-    this.elements.feedbackSendButton.disabled = this.feedbackRequestPending;
+    this.elements.feedbackCounter.textContent = remainingCharacters >= 0
+      ? copy.landing.feedbackCharactersRemaining(remainingCharacters)
+      : copy.landing.feedbackCharactersOverLimit(Math.abs(remainingCharacters), FEEDBACK_MAX_LENGTH);
+    this.elements.feedbackCounter.classList.toggle("experience-feedback__counter--invalid", remainingCharacters < 0);
+    this.elements.feedbackSendButton.disabled = this.feedbackRequestPending || !messageReady;
     this.elements.feedbackCancelButton.disabled = this.feedbackRequestPending;
     this.elements.feedbackSendButton.textContent = this.feedbackRequestPending
       ? copy.landing.feedbackSending
@@ -2996,11 +3024,13 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     const message = this.elements.feedbackTextarea.value.trim();
     if (!message) {
-      this.elements.feedbackStatus.textContent = this.translate("Escreva alguma coisa antes de enviar.", "Write something before sending.");
+      this.elements.feedbackStatus.textContent = this.copy.landing.feedbackEmpty;
+      this.renderFeedbackDialog();
       return;
     }
     if (message.length > FEEDBACK_MAX_LENGTH) {
       this.elements.feedbackStatus.textContent = this.copy.landing.feedbackTooLong(FEEDBACK_MAX_LENGTH);
+      this.renderFeedbackDialog();
       return;
     }
 

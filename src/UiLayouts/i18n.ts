@@ -41,6 +41,9 @@ export interface SiteCopy {
     feedbackSending: string;
     feedbackThanks: string;
     feedbackError: string;
+    feedbackEmpty: string;
+    feedbackCharactersRemaining: (remaining: number) => string;
+    feedbackCharactersOverLimit: (overLimitBy: number, maxLength: number) => string;
     feedbackTooLong: (maxLength: number) => string;
     returnBriefKicker: string;
     returnBriefEntryTitle: (mode: string) => string;
@@ -241,6 +244,9 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedbackSending: "Enviando...",
       feedbackThanks: "Feedback enviado.",
       feedbackError: "Nao foi possivel enviar agora.",
+      feedbackEmpty: "Escreva alguma coisa antes de enviar.",
+      feedbackCharactersRemaining: (remaining) => `${remaining} ${remaining === 1 ? "caractere restante" : "caracteres restantes"}.`,
+      feedbackCharactersOverLimit: (overLimitBy, maxLength) => `Remova ${overLimitBy} ${overLimitBy === 1 ? "caractere" : "caracteres"} para enviar. Limite: ${maxLength}.`,
       feedbackTooLong: (maxLength) => `Feedback precisa ter ate ${maxLength} caracteres.`,
       returnBriefKicker: "Ultima sessao",
       returnBriefEntryTitle: (mode) => `Ultimo atalho: ${mode}`,
@@ -466,6 +472,9 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedbackSending: "Sending...",
       feedbackThanks: "Feedback sent.",
       feedbackError: "Could not send feedback right now.",
+      feedbackEmpty: "Write something before sending.",
+      feedbackCharactersRemaining: (remaining) => `${remaining} ${remaining === 1 ? "character" : "characters"} remaining.`,
+      feedbackCharactersOverLimit: (overLimitBy, maxLength) => `Remove ${overLimitBy} ${overLimitBy === 1 ? "character" : "characters"} to send. Limit: ${maxLength}.`,
       feedbackTooLong: (maxLength) => `Feedback must be ${maxLength} characters or fewer.`,
       returnBriefKicker: "Last session",
       returnBriefEntryTitle: (mode) => `Last shortcut: ${mode}`,

@@ -772,6 +772,16 @@ button {
   color: var(--muted);
 }
 
+.experience-feedback__counter {
+  margin: -6px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.experience-feedback__counter--invalid {
+  color: var(--danger);
+}
+
 .experience-feedback__status {
   min-height: 1.2em;
   margin: 0;
