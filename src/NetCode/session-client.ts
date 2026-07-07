@@ -280,8 +280,53 @@ export function canSendLobbyAction(realtimeReady: boolean, socketReadyState: num
   return realtimeReady && socketReadyState === WEBSOCKET_OPEN_READY_STATE;
 }
 
-export function normalizeRoomCode(roomCode: string | null | undefined): string {
+function normalizeRoomCodeToken(roomCode: string | null | undefined): string {
   return String(roomCode || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+}
+
+function readNestedRoomCode(value: string, depth = 0): string | null {
+  if (!value || depth > 2) {
+    return null;
+  }
+
+  const candidates = [value];
+  try {
+    const decodedValue = decodeURIComponent(value);
+    if (decodedValue !== value) {
+      candidates.push(decodedValue);
+    }
+  } catch {
+    // Keep the raw value if it is not valid percent-encoded input.
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const url = new URL(candidate, "https://example.com/");
+      const roomQuery = url.searchParams.get("room");
+      if (roomQuery === null) {
+        continue;
+      }
+
+      const nestedRoomCode = readNestedRoomCode(roomQuery, depth + 1);
+      if (nestedRoomCode) {
+        return nestedRoomCode;
+      }
+
+      const normalizedRoomCode = normalizeRoomCodeToken(roomQuery);
+      if (normalizedRoomCode) {
+        return normalizedRoomCode;
+      }
+    } catch {
+      // Non-URL values are handled by the token fallback.
+    }
+  }
+
+  return null;
+}
+
+export function normalizeRoomCode(roomCode: string | null | undefined): string {
+  const rawRoomCode = String(roomCode || "").trim();
+  return readNestedRoomCode(rawRoomCode) ?? normalizeRoomCodeToken(rawRoomCode);
 }
 
 export function readRoomCodeFromUrl(href: string | null | undefined): string | null {
