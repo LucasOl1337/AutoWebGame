@@ -1,3 +1,121 @@
+# Patch Notes - 2026-07-06 v0.2.2 Official Patch
+
+**Project:** AutoWebGame / BOMBA
+**Path:** C:\Projetos\AutoWebGame
+**Branch:** main
+**Generated:** 2026-07-06
+**State:** release candidate for `v0.2.2`
+
+## Executive Summary
+
+Patch `v0.2.2` consolidates the local CODEX/swarm work done after the official `v0.2.1` release. The GitHub cloud state (`origin/main`) was still on `v0.2.1` (`b783537`) while local `main` accumulated 17 code commits before release docs/art generation.
+
+Main themes:
+- Local matches now support selectable bot intensity.
+- Match flow communicates round starts, match-end actions and local shortcuts more clearly.
+- Lobby/invite UX is more resilient around reconnects, pasted URLs and clipboard fallback.
+- HUD feedback is sharper for critical danger and recent power-up pickups.
+- Input, storage, SFX and arena theme paths are more robust.
+
+## Local PC vs GitHub Comparison
+
+| Aspect | PC (Local) | GitHub (origin) | Notes |
+|--------|------------|-----------------|-------|
+| Latest release before patch | `v0.2.1` | `v0.2.1` | GitHub release published 2026-07-06T18:07:52Z. |
+| Branch state before release docs | `main` ahead 17 | `origin/main` at `b783537` | Local included post-release swarm branches. |
+| Integration | Cherry-pick/combined conflict resolution | Not yet pushed at audit time | Overlay and package script conflicts resolved locally. |
+| Working tree after validation | Clean before docs/art edits | Clean remote | Release docs/art are final local additions. |
+
+## Sessions Checked Since v0.2.1
+
+| Session / agent | Evidence checked | Changes found |
+|-----------------|------------------|---------------|
+| CODEX / swarm | `git branch -vv --all`, worktrees, reflog, `v0.2.1..HEAD`, `DocsDev/swarm-coordination.md` | Yes: all code changes in this patch. |
+| Claude | Text search, reflog, local branches and worktrees | No versioned repo changes attributable to Claude after `v0.2.1`. |
+| ZCode | Text search, reflog, local branches and worktrees | No versioned repo changes attributable to ZCode after `v0.2.1`. |
+| Wispr Flow | Text search, reflog, local branches and worktrees | No versioned repo changes attributable to Wispr Flow after `v0.2.1`. |
+
+If Claude, ZCode or Wispr Flow worked outside Git or outside the inspected worktrees, that work did not leave a local versioned trace in this repository.
+
+## Patch Notes Candidate
+
+### Novidades
+
+- **Intensidade local contra bots:** escolha 1, 2 ou 3 bots antes de iniciar a partida local.
+- **Cue de inicio de rodada:** overlay curto orienta o jogador quando a rodada fica ativa.
+- **Atalhos no resultado local:** `Enter`/`Space` reinicia; `Esc` volta ao menu.
+- **Feedback de power-up:** HUD destaca pickups recem coletados.
+
+### Melhorias
+
+- **Lobby mais resiliente:** seat/ready exigem socket aberto e mostram estado de reconnect.
+- **Convites melhores:** copiar convite tem fallback e colar URL completa extrai o codigo correto.
+- **Landing com memoria:** retorno de sessao mostra ultimo contexto de entrada/resultado.
+- **Foco e touch melhores:** controles ganharam foco visivel e tamanho minimo para toque.
+- **Chrome local limpo:** partida local esconde controles online que nao se aplicam.
+
+### Correcoes
+
+- **Input sem scroll:** teclas de jogo nao rolam a pagina quando fora de campos interativos.
+- **Storage seguro:** client e telemetria toleram `localStorage` bloqueado ou parcial.
+- **SFX sem stack:** bomba/pickup nao duplicam audio no mesmo frame.
+- **Temas corrigidos:** sprite themes usam paths runtime validos.
+- **HUD de perigo:** estado `DANGER` aparece para explosao iminente sem atropelar guard/channel/down.
+
+## Validation
+
+Passed:
+- `npm run build`
+- `npm run compile:esm`
+- `node tests/lobby-disconnected-actions-check.mjs`
+- `node tests/arena-theme-runtime-paths-check.mjs`
+- `node tests/session-return-brief-check.mjs`
+- `node tests/session-room-invite-link-check.mjs`
+- `node tests/room-code-entry-normalization-check.mjs`
+- `node tests/touch-focus-css-check.mjs`
+- `node tests/local-match-chrome-check.mjs`
+- `node tests/hud-critical-state-feedback-check.mjs`
+- `node tests/match-result-shortcuts-check.mjs`
+- `node tests/sound-manager-variation-check.mjs`
+- `node tests/growth-telemetry-storage-check.mjs`
+- `node tests/input-page-scroll-check.mjs`
+- `node tests/round-start-cue-check.mjs`
+- `node tests/menu-bot-fill-check.mjs`
+- `node tests/powerup-hud-slots-check.mjs`
+- `node tests/danger-overlay-check.mjs`
+- `node tests/round-outcome-pause-check.mjs`
+- `node tests/lobby-rules-check.mjs`
+- `node tests/matchmaking-session-state-check.mjs`
+- `node tests/online-four-player-check.mjs`
+- `node tests/online-character-selection-index-check.mjs`
+- `node tests/server-character-skill-mapping-check.mjs`
+- `node tests/character-skill-contract-check.mjs`
+- `node tests/online-skill-reconcile-check.mjs`
+- `node tests/bomb-hit-window-check.mjs`
+- `node tests/bomb-chain-reaction-check.mjs`
+- `node tests/powerup-drop-rate-check.mjs`
+- `node tests/shield-powerup-check.mjs`
+- `node tests/player-sprite-render-check.mjs`
+- `node tests/bot-target-selection-check.mjs`
+- `node tests/bot-intel-check.mjs`
+- `node tests/bot-remote-detonation-check.mjs`
+- `node tests/bot-survival-10s-check.mjs`
+- `node tests/bot-opening-discipline-check.mjs`
+- `node tests/bot-powerup-priority-check.mjs`
+- `node tests/bot-spawn-protection-check.mjs`
+- `node tests/character-roster-manifest-fallback-check.mjs`
+- `node tests/character-roster-manifest-sync-check.mjs`
+
+## Files For This Release Prep
+
+- `DocsDev/releases/release-v0.2.2.md`
+- `DocsDev/releases/release-v0.2.2.json`
+- `release-assets/v0.2.2-card.png`
+- `patchnotes.md`
+- `changelog.md`
+
+---
+
 # Patch Notes - 2026-07-06 v0.2.1 Official Patch
 
 **Project:** AutoWebGame / BOMBA

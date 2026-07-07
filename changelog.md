@@ -1,5 +1,35 @@
 # Changelog
 
+## [2026-07-06] - v0.2.2 Official Patch (Arena UX + lobby resilience)
+
+**Project:** AutoWebGame / BOMBA  |  **Branch:** main  |  **State:** v0.2.2 release candidate
+
+### PC vs GitHub at Release Time
+- Local HEAD: 17 code commits ahead of `origin/main` before release docs/art generation.
+- Remote latest release: `v0.2.1`, published on 2026-07-06T18:07:52Z.
+- Local integration: post-`v0.2.1` `swarm/*` work was cherry-picked/combined into `main`; conflicts in overlays/scripts were resolved.
+
+### Summary of Changes Being Released
+- Local bot matches now support selectable 1/2/3 bot intensity.
+- Round start cue, local result shortcuts and clearer next-action overlays improve match flow.
+- Lobby setup actions now require a live socket, and invite copy/join handling is more resilient.
+- Landing can show recent session context; local match chrome hides online-only controls.
+- HUD now flags critical danger and recent power-up pickups.
+- Input handling prevents browser scroll from game keys.
+- Storage and telemetry tolerate blocked/partial localStorage.
+- SFX rate limits prevent same-frame bomb/pickup stacking.
+- Sprite arena theme runtime paths are fixed.
+
+### Multi-Agent Session Audit
+- CODEX/swarm: tracked changes found across local `swarm/*` branches/worktrees and integrated.
+- Claude: no post-`v0.2.1` versioned repo changes found.
+- ZCode: no post-`v0.2.1` versioned repo changes found.
+- Wispr Flow: no post-`v0.2.1` versioned repo changes found.
+
+See `DocsDev/releases/release-v0.2.2.md` and `patchnotes.md` for the release notes and validation list.
+
+---
+
 ## [2026-07-06] - v0.2.1 Official Patch (Bot polish + utility drops)
 
 **Project:** AutoWebGame / BOMBA  |  **Branch:** main  |  **State:** v0.2.1 release candidate

@@ -1,0 +1,128 @@
+{
+  "brand": {
+    "name": "AutoWebGame",
+    "vendor": "BOMBA",
+    "footer": "BROWSER ARENA GAME",
+    "masthead": "NOTAS DO PATCH",
+    "footerLeft": "Notas completas no GitHub Releases",
+    "bgGradient": ["#07111F", "#102A33", "#15343A"],
+    "pillGradient": ["#00C69A", "#38BDF8"]
+  },
+  "version": "v0.2.2",
+  "date": "6 de julho de 2026 - Patch oficial",
+  "title": "UX de arena, lobby resiliente e feedback vivo",
+  "cloud": {
+    "latestReleaseBeforePatch": "v0.2.1",
+    "latestReleasePublishedAtUtc": "2026-07-06T18:07:52Z",
+    "originMainBeforePatch": "b783537",
+    "localAheadBeforeReleaseDocs": 17
+  },
+  "sessions": [
+    {
+      "agent": "CODEX / swarm",
+      "result": "Mudancas versionadas encontradas, auditadas e integradas."
+    },
+    {
+      "agent": "Claude",
+      "result": "Nenhum rastro versionado local apos v0.2.1."
+    },
+    {
+      "agent": "ZCode",
+      "result": "Nenhum rastro versionado local apos v0.2.1."
+    },
+    {
+      "agent": "Wispr Flow",
+      "result": "Nenhum rastro versionado local apos v0.2.1."
+    }
+  ],
+  "categories": [
+    {
+      "label": "Novidades",
+      "title": "NOVIDADES",
+      "color": "#FBBF24",
+      "items": [
+        {
+          "name": "Intensidade local contra bots",
+          "desc": "Escolha 1, 2 ou 3 bots antes da partida local",
+          "tag": "LOCAL"
+        },
+        {
+          "name": "Cue de inicio de rodada",
+          "desc": "Overlay curto orienta retomada apos nova rodada/reset",
+          "tag": "UX"
+        },
+        {
+          "name": "Feedback de power-up",
+          "desc": "HUD destaca pickup coletado recentemente",
+          "tag": "HUD"
+        }
+      ]
+    },
+    {
+      "label": "Melhorias",
+      "title": "MELHORIAS",
+      "color": "#34D399",
+      "items": [
+        {
+          "name": "Lobby resiliente",
+          "desc": "Acoes exigem socket aberto e indicam reconnect",
+          "tag": "ONLINE"
+        },
+        {
+          "name": "Retorno de sessao",
+          "desc": "Landing lembra ultimo contexto de entrada/resultado",
+          "tag": "UX"
+        },
+        {
+          "name": "Foco e touch",
+          "desc": "Controles ganharam foco visivel e alvo minimo",
+          "tag": "A11Y"
+        }
+      ]
+    },
+    {
+      "label": "Correcoes",
+      "title": "CORRECOES",
+      "color": "#38BDF8",
+      "items": [
+        {
+          "name": "Input sem scroll",
+          "desc": "Teclas de jogo nao rolam a pagina fora de campos",
+          "tag": "INPUT"
+        },
+        {
+          "name": "Storage seguro",
+          "desc": "Client tolera storage bloqueado ou parcial",
+          "tag": "STABILITY"
+        },
+        {
+          "name": "SFX sem stack",
+          "desc": "Bomb place e pickup evitam duplicacao no mesmo frame",
+          "tag": "AUDIO"
+        }
+      ]
+    },
+    {
+      "label": "Sistemas",
+      "title": "SISTEMAS",
+      "color": "#A78BFA",
+      "items": [
+        {
+          "name": "Swarm auditado",
+          "desc": "Branches locais revisadas desde v0.2.1",
+          "tag": "REPO"
+        },
+        {
+          "name": "38 checks focados",
+          "desc": "Build, ESM e regressao local passaram",
+          "tag": "QA"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    "release-assets/v0.2.2-card.png",
+    "DocsDev/releases/release-v0.2.2.md",
+    "DocsDev/releases/release-v0.2.2.json"
+  ]
+}
