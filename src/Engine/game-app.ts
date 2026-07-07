@@ -122,6 +122,14 @@ import {
 import { SITE_COPY, type SiteLanguage } from "../UiLayouts/i18n";
 
 const KICK_SLIDE_MAX_TILES = 3;
+const DEMOLITION_COMBO_MIN_CRATES = 2;
+const DEMOLITION_COMBO_DROP_TYPES: readonly SkillPowerUpType[] = [
+  "bomb-up",
+  "flame-up",
+  "speed-up",
+  "shield-up",
+  "short-fuse-up",
+];
 
 declare global {
   interface Window {
@@ -2686,6 +2694,7 @@ export class GameApp {
     this.players[bomb.ownerId].activeBombs = Math.max(0, this.players[bomb.ownerId].activeBombs - 1);
     this.soundManager.playOneShot("bombExplode");
     const flameTiles = new Set<string>();
+    const brokenCrateKeys: string[] = [];
     const range = bomb.flameRange;
     flameTiles.add(tileKey(bomb.tile.x, bomb.tile.y));
 
@@ -2705,10 +2714,13 @@ export class GameApp {
         this.armBombAtTile({ x, y }, queue);
 
         if (this.breakCrateAtKey(key)) {
+          brokenCrateKeys.push(key);
           break;
         }
       }
     }
+
+    this.ensureDemolitionComboDrop(brokenCrateKeys);
 
     flameTiles.forEach((key) => {
       const [xText, yText] = key.split(",");
@@ -2734,6 +2746,42 @@ export class GameApp {
     if (item) {
       item.revealed = true;
     }
+  }
+
+  private ensureDemolitionComboDrop(brokenCrateKeys: string[]): void {
+    if (brokenCrateKeys.length < DEMOLITION_COMBO_MIN_CRATES) {
+      return;
+    }
+
+    const sortedKeys = [...brokenCrateKeys].sort();
+    const brokenKeySet = new Set(sortedKeys);
+    const revealedDropExists = this.arena.powerUps.some((powerUp) => (
+      !powerUp.collected
+      && brokenKeySet.has(tileKey(powerUp.tile.x, powerUp.tile.y))
+    ));
+    if (revealedDropExists) {
+      return;
+    }
+
+    let hash = 0;
+    for (const key of sortedKeys) {
+      for (let index = 0; index < key.length; index += 1) {
+        hash = ((hash * 31) + key.charCodeAt(index)) >>> 0;
+      }
+    }
+
+    const dropKey = sortedKeys[hash % sortedKeys.length];
+    const type = DEMOLITION_COMBO_DROP_TYPES[hash % DEMOLITION_COMBO_DROP_TYPES.length] ?? "speed-up";
+    if (!dropKey) {
+      return;
+    }
+
+    this.arena.powerUps.push({
+      tile: this.parseTileKey(dropKey),
+      type,
+      revealed: true,
+      collected: false,
+    });
   }
 
   private breakCrateAtKey(key: string): boolean {
