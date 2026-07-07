@@ -41,6 +41,7 @@ export interface SiteCopy {
     feedbackSending: string;
     feedbackThanks: string;
     feedbackError: string;
+    feedbackTooLong: (maxLength: number) => string;
     returnBriefKicker: string;
     returnBriefEntryTitle: (mode: string) => string;
     returnBriefEntryBody: (characterName: string) => string;
@@ -240,6 +241,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedbackSending: "Enviando...",
       feedbackThanks: "Feedback enviado.",
       feedbackError: "Nao foi possivel enviar agora.",
+      feedbackTooLong: (maxLength) => `Feedback precisa ter ate ${maxLength} caracteres.`,
       returnBriefKicker: "Ultima sessao",
       returnBriefEntryTitle: (mode) => `Ultimo atalho: ${mode}`,
       returnBriefEntryBody: (characterName) => `Seu personagem ativo era ${characterName}. A selecao fica pronta para a proxima entrada.`,
@@ -464,6 +466,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedbackSending: "Sending...",
       feedbackThanks: "Feedback sent.",
       feedbackError: "Could not send feedback right now.",
+      feedbackTooLong: (maxLength) => `Feedback must be ${maxLength} characters or fewer.`,
       returnBriefKicker: "Last session",
       returnBriefEntryTitle: (mode) => `Last shortcut: ${mode}`,
       returnBriefEntryBody: (characterName) => `${characterName} was your active character. The selection is ready for the next entry.`,

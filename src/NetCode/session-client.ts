@@ -146,6 +146,7 @@ export const SESSION_RETURN_BRIEF_STORAGE_KEY = "bomba-session-return-brief";
 export const SESSION_RETURN_BRIEF_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 export const BOT_MATCH_FILL_STORAGE_KEY = "bomba-bot-match-fill";
 export const BOT_MATCH_FILL_OPTIONS = [1, 2, 3] as const;
+export const FEEDBACK_MAX_LENGTH = 2000;
 
 export type BotMatchFill = typeof BOT_MATCH_FILL_OPTIONS[number];
 
@@ -1634,6 +1635,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const feedbackTextarea = document.createElement("textarea");
     feedbackTextarea.className = "experience-feedback__textarea";
     feedbackTextarea.rows = 6;
+    feedbackTextarea.maxLength = FEEDBACK_MAX_LENGTH;
     feedbackTextarea.placeholder = copy.landing.feedbackPlaceholder;
 
     const feedbackStatus = document.createElement("p");
@@ -2995,6 +2997,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const message = this.elements.feedbackTextarea.value.trim();
     if (!message) {
       this.elements.feedbackStatus.textContent = this.translate("Escreva alguma coisa antes de enviar.", "Write something before sending.");
+      return;
+    }
+    if (message.length > FEEDBACK_MAX_LENGTH) {
+      this.elements.feedbackStatus.textContent = this.copy.landing.feedbackTooLong(FEEDBACK_MAX_LENGTH);
       return;
     }
 
