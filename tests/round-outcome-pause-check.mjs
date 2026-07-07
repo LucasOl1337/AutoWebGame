@@ -107,8 +107,12 @@ window.advanceTime(2_200);
 const afterEsc = JSON.parse(window.render_game_to_text());
 const roundEndPlayed = sounds.includes("roundEnd");
 const beforeOverlay = beforeEsc.match.centerOverlay;
+const afterOverlay = afterEsc.match.centerOverlay;
 const overlayShowsScore = beforeOverlay?.footer?.includes("Placar: P1 1 - P2 0") === true;
 const overlayShowsNextAction = beforeOverlay?.footer?.includes("Proxima rodada em") === true;
+const nextRoundCueVisible = afterOverlay?.title === "RODADA 2"
+  && afterOverlay?.subtitle === "Acao liberada."
+  && afterEsc.match.roundStartCue.active === true;
 
 const report = {
   before: {
@@ -123,12 +127,14 @@ const report = {
     paused: afterEsc.match.paused,
     roundOutcome: afterEsc.match.roundOutcome,
     round: afterEsc.match.round,
-    centerOverlay: afterEsc.match.centerOverlay,
+    centerOverlay: afterOverlay,
+    roundStartCue: afterEsc.match.roundStartCue,
   },
   sounds,
   roundEndPlayed,
   overlayShowsScore,
   overlayShowsNextAction,
+  nextRoundCueVisible,
   pass:
     beforeEsc.match.roundOutcome !== null &&
     overlayShowsScore &&
@@ -137,7 +143,7 @@ const report = {
     afterEsc.match.round === 2 &&
     !afterEsc.match.paused &&
     afterEsc.match.roundOutcome === null &&
-    afterEsc.match.centerOverlay === null &&
+    nextRoundCueVisible &&
     roundEndPlayed,
 };
 

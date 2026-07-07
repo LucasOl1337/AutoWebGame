@@ -2912,11 +2912,41 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     return ((index % total) + total) % total;
   }
 
-  private readPreferredCharacterIndex(): number {
+  private readStorageItem(key: string): string | null {
     if (typeof window === "undefined") {
-      return 0;
+      return null;
     }
-    const stored = window.localStorage.getItem("mistbridge-preferred-character-index");
+    try {
+      return window.localStorage?.getItem?.(key) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private writeStorageItem(key: string, value: string): void {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage?.setItem?.(key, value);
+    } catch {
+      // Persistence is a convenience; blocked storage should not break play.
+    }
+  }
+
+  private removeStorageItem(key: string): void {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage?.removeItem?.(key);
+    } catch {
+      // Ignore blocked or partial storage implementations.
+    }
+  }
+
+  private readPreferredCharacterIndex(): number {
+    const stored = this.readStorageItem("mistbridge-preferred-character-index");
     const value = Number(stored);
     if (Number.isNaN(value)) {
       return 0;
@@ -2925,24 +2955,15 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   }
 
   private persistPreferredCharacterIndex(): void {
-    if (typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem("mistbridge-preferred-character-index", String(this.preferredCharacterIndex));
+    this.writeStorageItem("mistbridge-preferred-character-index", String(this.preferredCharacterIndex));
   }
 
   private readBotMatchFill(): BotMatchFill {
-    if (typeof window === "undefined") {
-      return DEFAULT_BOT_MATCH_FILL;
-    }
-    return parseStoredBotMatchFill(window.localStorage.getItem(BOT_MATCH_FILL_STORAGE_KEY));
+    return parseStoredBotMatchFill(this.readStorageItem(BOT_MATCH_FILL_STORAGE_KEY));
   }
 
   private persistBotMatchFill(): void {
-    if (typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem(BOT_MATCH_FILL_STORAGE_KEY, String(this.botMatchFill));
+    this.writeStorageItem(BOT_MATCH_FILL_STORAGE_KEY, String(this.botMatchFill));
   }
 
   private selectBotMatchFill(fill: BotMatchFill): void {
@@ -2955,25 +2976,16 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   }
 
   private readSessionReturnBrief(): SessionReturnBrief | null {
-    if (typeof window === "undefined") {
-      return null;
-    }
-    const brief = parseStoredSessionReturnBrief(window.localStorage.getItem(SESSION_RETURN_BRIEF_STORAGE_KEY));
+    const brief = parseStoredSessionReturnBrief(this.readStorageItem(SESSION_RETURN_BRIEF_STORAGE_KEY));
     if (!brief) {
-      window.localStorage.removeItem(SESSION_RETURN_BRIEF_STORAGE_KEY);
+      this.removeStorageItem(SESSION_RETURN_BRIEF_STORAGE_KEY);
     }
     return brief;
   }
 
   private persistSessionReturnBrief(brief: SessionReturnBrief): void {
     this.sessionReturnBrief = brief;
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.setItem(SESSION_RETURN_BRIEF_STORAGE_KEY, JSON.stringify(brief));
-      } catch {
-        // Returning players still get the in-memory brief for the current page.
-      }
-    }
+    this.writeStorageItem(SESSION_RETURN_BRIEF_STORAGE_KEY, JSON.stringify(brief));
     this.renderLandingReturnBrief();
   }
 
