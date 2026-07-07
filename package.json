@@ -64,6 +64,7 @@
     "test:ranni-ult": "npm run compile:esm && node tests/ranni-ult-ice-blink-check.mjs",
     "test:sprite-trim": "npm run compile:esm && node tests/sprite-trim-cache-check.mjs",
     "test:round-outcome": "npm run compile:esm && node tests/round-outcome-pause-check.mjs",
+    "test:round-start-cue": "npm run compile:esm && node tests/round-start-cue-check.mjs",
     "test:remote": "npm run compile:esm && node tests/remote-detonation-check.mjs",
     "test:pixellab-roster": "node tests/pixellab-roster-check.mjs",
     "test:pixellab-orchestrator": "node tests/pixellab-orchestrator-check.mjs",
