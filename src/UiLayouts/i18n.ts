@@ -1,5 +1,7 @@
 export type SiteLanguage = "pt" | "en";
 
+import { readLocalStorageItem, writeLocalStorageItem } from "./browser-storage";
+
 export const SITE_LANGUAGE_STORAGE_KEY = "bomba-site-language";
 
 export interface SiteCopy {
@@ -641,11 +643,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
 };
 
 export function getStoredSiteLanguage(): SiteLanguage | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  const stored = window.localStorage.getItem(SITE_LANGUAGE_STORAGE_KEY);
-  return normalizeSiteLanguage(stored);
+  return normalizeSiteLanguage(readLocalStorageItem(SITE_LANGUAGE_STORAGE_KEY));
 }
 
 export function getPathSiteLanguage(pathname?: string): SiteLanguage | null {
@@ -682,10 +680,7 @@ export function getInitialSiteLanguage(): SiteLanguage {
 }
 
 export function persistSiteLanguage(language: SiteLanguage): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  window.localStorage.setItem(SITE_LANGUAGE_STORAGE_KEY, language);
+  writeLocalStorageItem(SITE_LANGUAGE_STORAGE_KEY, language);
 }
 
 export function normalizeSiteLanguage(value: string | null | undefined): SiteLanguage | null {

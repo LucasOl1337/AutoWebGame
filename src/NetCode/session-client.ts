@@ -9,6 +9,11 @@ import { assetUrl } from "../Engine/asset-url";
 import { ALL_PLAYER_IDS } from "../Gameplay/types";
 import type { Mode, PlayerId } from "../Gameplay/types";
 import {
+  readLocalStorageItem,
+  removeLocalStorageItem,
+  writeLocalStorageItem,
+} from "../UiLayouts/browser-storage";
+import {
   applyDocumentLanguage,
   buildLocalizedUrl,
   getInitialSiteLanguage,
@@ -145,6 +150,7 @@ export const BOT_MATCH_FILL_OPTIONS = [1, 2, 3] as const;
 export type BotMatchFill = typeof BOT_MATCH_FILL_OPTIONS[number];
 
 const DEFAULT_BOT_MATCH_FILL: BotMatchFill = 3;
+const PREFERRED_CHARACTER_STORAGE_KEY = "mistbridge-preferred-character-index";
 
 export type SessionReturnMode = "quick-match" | "endless" | "bot-match" | "lobby";
 
@@ -3100,10 +3106,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   }
 
   private readPreferredCharacterIndex(): number {
-    if (typeof window === "undefined") {
-      return 0;
-    }
-    const stored = window.localStorage.getItem("mistbridge-preferred-character-index");
+    const stored = readLocalStorageItem(PREFERRED_CHARACTER_STORAGE_KEY);
     const value = Number(stored);
     if (Number.isNaN(value)) {
       return 0;
@@ -3112,24 +3115,15 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   }
 
   private persistPreferredCharacterIndex(): void {
-    if (typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem("mistbridge-preferred-character-index", String(this.preferredCharacterIndex));
+    writeLocalStorageItem(PREFERRED_CHARACTER_STORAGE_KEY, String(this.preferredCharacterIndex));
   }
 
   private readBotMatchFill(): BotMatchFill {
-    if (typeof window === "undefined") {
-      return DEFAULT_BOT_MATCH_FILL;
-    }
-    return parseStoredBotMatchFill(window.localStorage.getItem(BOT_MATCH_FILL_STORAGE_KEY));
+    return parseStoredBotMatchFill(readLocalStorageItem(BOT_MATCH_FILL_STORAGE_KEY));
   }
 
   private persistBotMatchFill(): void {
-    if (typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem(BOT_MATCH_FILL_STORAGE_KEY, String(this.botMatchFill));
+    writeLocalStorageItem(BOT_MATCH_FILL_STORAGE_KEY, String(this.botMatchFill));
   }
 
   private selectBotMatchFill(fill: BotMatchFill): void {
@@ -3142,25 +3136,16 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   }
 
   private readSessionReturnBrief(): SessionReturnBrief | null {
-    if (typeof window === "undefined") {
-      return null;
-    }
-    const brief = parseStoredSessionReturnBrief(window.localStorage.getItem(SESSION_RETURN_BRIEF_STORAGE_KEY));
+    const brief = parseStoredSessionReturnBrief(readLocalStorageItem(SESSION_RETURN_BRIEF_STORAGE_KEY));
     if (!brief) {
-      window.localStorage.removeItem(SESSION_RETURN_BRIEF_STORAGE_KEY);
+      removeLocalStorageItem(SESSION_RETURN_BRIEF_STORAGE_KEY);
     }
     return brief;
   }
 
   private persistSessionReturnBrief(brief: SessionReturnBrief): void {
     this.sessionReturnBrief = brief;
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.setItem(SESSION_RETURN_BRIEF_STORAGE_KEY, JSON.stringify(brief));
-      } catch {
-        // Returning players still get the in-memory brief for the current page.
-      }
-    }
+    writeLocalStorageItem(SESSION_RETURN_BRIEF_STORAGE_KEY, JSON.stringify(brief));
     this.renderLandingReturnBrief();
   }
 

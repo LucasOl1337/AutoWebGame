@@ -42,6 +42,7 @@
     "test:room-code-enter-submit": "npm run compile:esm && node tests/room-code-enter-submit-check.mjs",
     "test:account-username": "npm run compile:esm && node tests/account-username-validation-check.mjs",
     "test:match-result-shortcuts": "npm run compile:esm && node tests/match-result-shortcuts-check.mjs",
+    "test:ui-storage-fallback": "npm run compile:esm && node tests/ui-storage-fallback-check.mjs",
     "test:touch-focus-css": "node tests/touch-focus-css-check.mjs",
     "test:roster-sync": "npm run compile:esm && node tests/character-roster-manifest-sync-check.mjs",
     "test:server-character-skill": "npm run compile:esm && node tests/server-character-skill-mapping-check.mjs",
