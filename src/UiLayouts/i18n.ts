@@ -165,6 +165,10 @@ export interface SiteCopy {
     matchWinner: (name: string) => string;
     matchComplete: string;
     rematchSummary: string;
+    scoreSummary: (score: string) => string;
+    nextRoundCue: (seconds: number) => string;
+    matchResultCue: (seconds: number) => string;
+    nextMatchCue: (seconds: number) => string;
     rematchYes: string;
     backToLobby: string;
     choiceLocked: string;
@@ -336,6 +340,10 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       matchWinner: (name) => `${name} venceu a partida!`,
       matchComplete: "Partida encerrada",
       rematchSummary: "Proxima partida iniciando automaticamente...",
+      scoreSummary: (score) => `Placar: ${score}`,
+      nextRoundCue: (seconds) => `Proxima rodada em ${seconds}s`,
+      matchResultCue: (seconds) => `Resultado final em ${seconds}s`,
+      nextMatchCue: (seconds) => `Nova partida em ${seconds}s`,
       rematchYes: "Sim",
       backToLobby: "Voltar ao lobby",
       choiceLocked: "Escolha travada",
@@ -505,6 +513,10 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       matchWinner: (name) => `${name} wins the match!`,
       matchComplete: "Match complete",
       rematchSummary: "Next match starting automatically...",
+      scoreSummary: (score) => `Score: ${score}`,
+      nextRoundCue: (seconds) => `Next round in ${seconds}s`,
+      matchResultCue: (seconds) => `Final result in ${seconds}s`,
+      nextMatchCue: (seconds) => `New match in ${seconds}s`,
       rematchYes: "Yes",
       backToLobby: "Back to lobby",
       choiceLocked: "Choice locked",
