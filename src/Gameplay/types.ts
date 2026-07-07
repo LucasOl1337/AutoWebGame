@@ -53,6 +53,8 @@ export interface PlayerState {
   shortFuseLevel: number;
   flameGuardMs: number;
   spawnProtectionMs: number;
+  perfectStartWindowMs?: number;
+  perfectStartBoostMs?: number;
   skill: PlayerSkillState;
 }
 

@@ -158,6 +158,9 @@ const SKILL_FRAME_MS = 100;
 const DEATH_FRAME_MS = 90;
 const CRATE_BREAK_DURATION_MS = 220;
 const SPAWN_PROTECTION_MS = 2200;
+const PERFECT_START_WINDOW_MS = 320;
+const PERFECT_START_BOOST_MS = 640;
+const PERFECT_START_SPEED_MULTIPLIER = 1.35;
 const SUDDEN_DEATH_ELAPSED_MS = 40_000;
 const SUDDEN_DEATH_START_MS = ROUND_DURATION_MS - SUDDEN_DEATH_ELAPSED_MS;
 const SUDDEN_DEATH_TICK_MS = 800;
@@ -1456,6 +1459,7 @@ export class GameApp {
   ): boolean {
     player.spawnProtectionMs = Math.max(0, player.spawnProtectionMs - deltaMs);
     player.flameGuardMs = Math.max(0, player.flameGuardMs - deltaMs);
+    this.updatePerfectStartBurst(player, input.direction, deltaMs);
     this.syncPlayerSkill(player);
     this.advancePlayerSkillTimers(player, deltaMs);
 
@@ -1966,6 +1970,8 @@ export class GameApp {
       shortFuseLevel: 0,
       flameGuardMs: 0,
       spawnProtectionMs: SPAWN_PROTECTION_MS,
+      perfectStartWindowMs: PERFECT_START_WINDOW_MS,
+      perfectStartBoostMs: 0,
       skill: createDefaultPlayerSkillState(null),
     };
   }
@@ -2222,7 +2228,24 @@ export class GameApp {
   }
 
   private getMoveSpeed(player: PlayerState): number {
-    return TILE_SIZE / (this.getMoveDuration(player) / 1000);
+    const speed = TILE_SIZE / (this.getMoveDuration(player) / 1000);
+    return (player.perfectStartBoostMs ?? 0) > 0
+      ? speed * PERFECT_START_SPEED_MULTIPLIER
+      : speed;
+  }
+
+  private updatePerfectStartBurst(player: PlayerState, direction: Direction | null, deltaMs: number): void {
+    const windowMs = Math.max(0, player.perfectStartWindowMs ?? 0);
+    const boostMs = Math.max(0, player.perfectStartBoostMs ?? 0);
+
+    if (direction && windowMs > 0 && boostMs <= 0) {
+      player.perfectStartWindowMs = 0;
+      player.perfectStartBoostMs = PERFECT_START_BOOST_MS;
+      return;
+    }
+
+    player.perfectStartWindowMs = Math.max(0, windowMs - deltaMs);
+    player.perfectStartBoostMs = Math.max(0, boostMs - deltaMs);
   }
 
   private getStableBotDirection(
