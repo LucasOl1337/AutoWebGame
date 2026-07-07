@@ -256,9 +256,19 @@ button {
 
 .experience-button:focus-visible,
 .experience-character-option:focus-visible,
-.experience-room-card:focus-visible {
+.experience-character-strip__item:focus-visible,
+.experience-language-switcher__option:focus-visible,
+.experience-match__toggle:focus-visible,
+.experience-room-card:focus-visible,
+.experience-account__input:focus-visible,
+.experience-feedback__textarea:focus-visible,
+.experience-match__chat-input:focus-visible {
   outline: 2px solid rgba(var(--accent-rgb), 0.82);
   outline-offset: 2px;
+}
+
+.experience-language-switcher:focus-within {
+  opacity: 1;
 }
 
 .experience-button--primary {
@@ -3772,5 +3782,29 @@ button {
 
   .experience-screen--landing .experience-landing-controls__key {
     min-width: 74px;
+  }
+}
+
+@media (any-pointer: coarse) {
+  .experience-button,
+  .experience-language-switcher__option,
+  .experience-match__toggle,
+  .experience-match__chat-input {
+    min-height: 44px;
+  }
+
+  .experience-language-switcher__option,
+  .experience-match__toggle {
+    min-width: 44px;
+  }
+
+  .experience-match__stage[data-fullscreen="true"] .experience-match__actions .experience-button,
+  .experience-match__stage[data-fullscreen="true"] .experience-match__toggle {
+    min-height: 44px;
+  }
+
+  .experience-character-strip__item {
+    width: 60px;
+    height: 60px;
   }
 }
