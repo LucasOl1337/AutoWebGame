@@ -121,6 +121,8 @@ import {
 } from "../NetCode/online-sync";
 import { SITE_COPY, type SiteLanguage } from "../UiLayouts/i18n";
 
+const KICK_SLIDE_MAX_TILES = 3;
+
 declare global {
   interface Window {
     render_game_to_text?: () => string;
@@ -2445,7 +2447,7 @@ export class GameApp {
     const fromTile = this.getTileFromPosition(player.position);
     const delta = directionDelta[direction];
     const bombTile = this.normalizeTile({ x: fromTile.x + delta.x, y: fromTile.y + delta.y });
-    return this.tryPushBombAtTile(bombTile, direction, 1);
+    return this.tryPushBombAtTile(bombTile, direction, KICK_SLIDE_MAX_TILES);
   }
 
   private findBombAtTile(tile: TileCoord): BombState | null {
@@ -2461,19 +2463,24 @@ export class GameApp {
     }
     const delta = directionDelta[direction];
     let targetTile = { ...bomb.tile };
+    let moved = false;
     for (let step = 0; step < distance; step += 1) {
       const nextTile = this.normalizeTile({ x: targetTile.x + delta.x, y: targetTile.y + delta.y });
       const targetKey = tileKey(nextTile.x, nextTile.y);
       if (this.arena.solid.has(targetKey) || this.arena.breakable.has(targetKey)) {
-        return false;
+        break;
       }
       if (this.bombs.some((item) => item.id !== bomb.id && item.tile.x === nextTile.x && item.tile.y === nextTile.y)) {
-        return false;
+        break;
       }
       if (this.hasPlayerOnTile(nextTile)) {
-        return false;
+        break;
       }
       targetTile = nextTile;
+      moved = true;
+    }
+    if (!moved) {
+      return false;
     }
     bomb.tile = this.normalizeTile(targetTile);
     bomb.ownerCanPass = false;

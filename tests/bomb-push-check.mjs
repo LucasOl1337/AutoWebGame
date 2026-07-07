@@ -115,10 +115,10 @@ function resetPlayers() {
 }
 
 function clearLane() {
-  game.arena.breakable.delete(tileKey(3, 1));
-  game.arena.breakable.delete(tileKey(4, 1));
-  game.arena.solid.delete(tileKey(3, 1));
-  game.arena.solid.delete(tileKey(4, 1));
+  for (const x of [3, 4, 5, 6]) {
+    game.arena.breakable.delete(tileKey(x, 1));
+    game.arena.solid.delete(tileKey(x, 1));
+  }
 }
 
 function pressRight(framesMs = 140) {
@@ -146,13 +146,25 @@ game.bombs = [
 ];
 pressRight();
 
-const kickPushesBomb = game.bombs[0]?.tile.x === 4 && game.bombs[0]?.tile.y === 1;
+const kickPushesBomb = game.bombs[0]?.tile.x > 3 && game.bombs[0]?.tile.y === 1;
+const kickSlidesBomb = game.bombs[0]?.tile.x === 6 && game.bombs[0]?.tile.y === 1;
+
+resetPlayers();
+clearLane();
+p1.kickLevel = 1;
+game.arena.breakable.add(tileKey(5, 1));
+game.bombs = [
+  { id: 3, ownerId: 2, tile: { x: 3, y: 1 }, fuseMs: 1500, ownerCanPass: false, flameRange: 1 },
+];
+pressRight();
+
+const kickStopsBeforeCrate = game.bombs[0]?.tile.x === 4 && game.bombs[0]?.tile.y === 1;
 
 resetPlayers();
 clearLane();
 p1.bombPassLevel = 1;
 game.bombs = [
-  { id: 3, ownerId: 2, tile: { x: 3, y: 1 }, fuseMs: 1500, ownerCanPass: false, flameRange: 1 },
+  { id: 4, ownerId: 2, tile: { x: 3, y: 1 }, fuseMs: 1500, ownerCanPass: false, flameRange: 1 },
 ];
 pressRight(260);
 
@@ -163,6 +175,8 @@ const report = {
   blockedByDefault,
   bombStayedStill,
   kickPushesBomb,
+  kickSlidesBomb,
+  kickStopsBeforeCrate,
   bombPassTraverses,
   passDoesNotPushBomb,
   playerX: p1.position.x,
@@ -171,6 +185,14 @@ const report = {
 
 console.log(JSON.stringify(report, null, 2));
 
-if (!blockedByDefault || !bombStayedStill || !kickPushesBomb || !bombPassTraverses || !passDoesNotPushBomb) {
+if (
+  !blockedByDefault
+  || !bombStayedStill
+  || !kickPushesBomb
+  || !kickSlidesBomb
+  || !kickStopsBeforeCrate
+  || !bombPassTraverses
+  || !passDoesNotPushBomb
+) {
   process.exit(1);
 }
