@@ -17,8 +17,13 @@ import {
   type SiteCopy,
   type SiteLanguage,
 } from "../UiLayouts/i18n";
-import type { PlayerAccount } from "./account";
-import { validateUsername } from "./account";
+import type { PlayerAccount, UsernameValidationResult } from "./account";
+import {
+  USERNAME_ALLOWED_PATTERN_SOURCE,
+  USERNAME_MAX_LENGTH,
+  USERNAME_MIN_LENGTH,
+  validateUsername,
+} from "./account";
 import type { OnlineSessionState } from "./matchmaking";
 import type {
   LobbyState,
@@ -385,6 +390,46 @@ export function buildRoomInviteUrl(language: SiteLanguage, roomCode: string | nu
     url.searchParams.delete("room");
   }
   return url.toString();
+}
+
+export function formatUsernameInputTitle(language: SiteLanguage): string {
+  return language === "pt"
+    ? `Use ${USERNAME_MIN_LENGTH} a ${USERNAME_MAX_LENGTH} caracteres: letras, numeros e underscore.`
+    : `Use ${USERNAME_MIN_LENGTH}-${USERNAME_MAX_LENGTH} characters: letters, numbers, and underscore.`;
+}
+
+export function formatUsernameValidationMessage(validation: UsernameValidationResult, language: SiteLanguage): string {
+  if (validation.ok) {
+    return "";
+  }
+  switch (validation.reason) {
+    case "too-short":
+      return language === "pt"
+        ? `Use pelo menos ${USERNAME_MIN_LENGTH} caracteres.`
+        : `Use at least ${USERNAME_MIN_LENGTH} characters.`;
+    case "too-long":
+      return language === "pt"
+        ? `Use no maximo ${USERNAME_MAX_LENGTH} caracteres.`
+        : `Use at most ${USERNAME_MAX_LENGTH} characters.`;
+    case "invalid-characters":
+      return language === "pt"
+        ? "Use apenas letras, numeros e underscore."
+        : "Use only letters, numbers, and underscore.";
+    default:
+      return language === "pt" ? "Username invalido." : "Invalid username.";
+  }
+}
+
+export function applyUsernameInputConstraints(
+  input: Pick<HTMLInputElement, "autocomplete" | "maxLength" | "minLength" | "pattern" | "spellcheck" | "title">,
+  language: SiteLanguage,
+): void {
+  input.minLength = USERNAME_MIN_LENGTH;
+  input.maxLength = USERNAME_MAX_LENGTH;
+  input.pattern = USERNAME_ALLOWED_PATTERN_SOURCE;
+  input.title = formatUsernameInputTitle(language);
+  input.autocomplete = "username";
+  input.spellcheck = false;
 }
 
 type ClipboardFallbackEnvironment = {
@@ -1350,10 +1395,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const landingAccountUsernameInput = document.createElement("input");
     landingAccountUsernameInput.className = "experience-account__input";
     landingAccountUsernameInput.type = "text";
-    landingAccountUsernameInput.maxLength = 16;
     landingAccountUsernameInput.placeholder = this.translate("Seu username", "Your username");
-    landingAccountUsernameInput.autocomplete = "off";
-    landingAccountUsernameInput.spellcheck = false;
+    applyUsernameInputConstraints(landingAccountUsernameInput, this.language);
 
     const landingAccountPrimaryButton = document.createElement("button");
     landingAccountPrimaryButton.className = "experience-button experience-button--primary";
@@ -2239,6 +2282,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.elements.landingAccountPrimaryButton.disabled = this.accountRequestPending || loggedIn || !onlineActionsAvailable;
     this.elements.landingAccountSecondaryButton.disabled = this.accountRequestPending || !onlineActionsAvailable;
     this.elements.landingAccountUsernameInput.placeholder = this.translate("Seu username", "Your username");
+    applyUsernameInputConstraints(this.elements.landingAccountUsernameInput, this.language);
 
     if (loggedIn && account) {
       this.elements.landingAccountTitle.textContent = this.translate("Conta ativa", "Active account");
@@ -2848,7 +2892,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     }
     const validation = validateUsername(this.elements.landingAccountUsernameInput.value);
     if (!validation.ok) {
-      this.setStatus(validation.message ?? this.translate("Username invalido.", "Invalid username."));
+      this.setStatus(formatUsernameValidationMessage(validation, this.language));
       return;
     }
 
