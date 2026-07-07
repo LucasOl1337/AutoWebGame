@@ -39,6 +39,7 @@
     "test:lobby-disconnected-actions": "npm run compile:esm && node tests/lobby-disconnected-actions-check.mjs",
     "test:session-return-brief": "npm run compile:esm && node tests/session-return-brief-check.mjs",
     "test:room-invite-link": "npm run compile:esm && node tests/session-room-invite-link-check.mjs",
+    "test:room-code-enter-submit": "npm run compile:esm && node tests/room-code-enter-submit-check.mjs",
     "test:match-result-shortcuts": "npm run compile:esm && node tests/match-result-shortcuts-check.mjs",
     "test:touch-focus-css": "node tests/touch-focus-css-check.mjs",
     "test:roster-sync": "npm run compile:esm && node tests/character-roster-manifest-sync-check.mjs",

@@ -7,6 +7,7 @@ export type GrowthTelemetryEventName =
   | "lobby_list_opened"
   | "lobby_create_clicked"
   | "lobby_join_clicked"
+  | "lobby_code_join_submitted"
   | "lobby_joined"
   | "seat_claim_clicked"
   | "ready_clicked"

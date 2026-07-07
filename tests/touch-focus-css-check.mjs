@@ -11,6 +11,7 @@ const focusSelectors = [
   ".experience-room-card:focus-visible",
   ".experience-account__input:focus-visible",
   ".experience-feedback__textarea:focus-visible",
+  ".experience-room-code__input:focus-visible",
   ".experience-match__chat-input:focus-visible",
 ];
 
@@ -20,6 +21,7 @@ const coarsePointerSelectors = [
   ".experience-button",
   ".experience-language-switcher__option",
   ".experience-match__toggle",
+  ".experience-room-code__input",
   ".experience-match__chat-input",
   ".experience-match__stage[data-fullscreen=\"true\"] .experience-match__actions .experience-button",
   ".experience-match__stage[data-fullscreen=\"true\"] .experience-match__toggle",

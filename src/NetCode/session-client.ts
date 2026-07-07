@@ -86,6 +86,10 @@ interface SessionElements {
   feedbackStatus: HTMLParagraphElement;
   lobbyListBackButton: HTMLButtonElement;
   lobbyListCreateButton: HTMLButtonElement;
+  lobbyCodeForm: HTMLFormElement;
+  lobbyCodeInput: HTMLInputElement;
+  lobbyCodeSubmitButton: HTMLButtonElement;
+  lobbyCodeHint: HTMLParagraphElement;
   lobbyListCount: HTMLParagraphElement;
   lobbyListList: HTMLDivElement;
   setupBackButton: HTMLButtonElement;
@@ -352,6 +356,11 @@ function readNestedRoomCode(value: string, depth = 0): string | null {
 export function normalizeRoomCode(roomCode: string | null | undefined): string {
   const rawRoomCode = String(roomCode || "").trim();
   return readNestedRoomCode(rawRoomCode) ?? normalizeRoomCodeToken(rawRoomCode);
+}
+
+export function resolveManualLobbyJoinCode(roomCode: string | null | undefined): string | null {
+  const normalizedRoomCode = normalizeRoomCode(roomCode);
+  return normalizedRoomCode || null;
 }
 
 export function readRoomCodeFromUrl(href: string | null | undefined): string | null {
@@ -752,6 +761,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.rememberSessionEntry("lobby");
       this.setStatus(this.copy.status.creatingLobby);
     });
+    this.elements.lobbyCodeForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      this.joinLobbyFromCodeEntry();
+    });
     this.elements.setupBackButton.addEventListener("click", () => {
       if (this.currentLobby) {
         this.leaveCurrentLobby();
@@ -927,6 +940,28 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     }
     this.rememberSessionEntry("endless");
     this.setStatus(this.translate("Entrando na partida infinita...", "Joining the endless match..."));
+  }
+
+  private joinLobbyFromCodeEntry(): void {
+    const roomCode = resolveManualLobbyJoinCode(this.elements.lobbyCodeInput.value);
+    if (!roomCode) {
+      this.setStatus(this.copy.lobbies.joinCodeEmpty);
+      this.elements.lobbyCodeInput.focus();
+      return;
+    }
+
+    this.telemetry.track("lobby_code_join_submitted", {
+      context: { roomCode, screen: "lobby-list" },
+      payload: { entryLength: this.elements.lobbyCodeInput.value.length },
+    });
+    if (!this.send({ type: "join-lobby", roomCode })) {
+      this.setStatus(this.copy.lobbies.joinUnavailable);
+      return;
+    }
+    this.pendingAutoJoinRoom = roomCode;
+    this.rememberSessionEntry("lobby");
+    this.renderAll();
+    this.setStatus(this.copy.lobbies.entering(roomCode));
   }
 
   private handleSetupPrimaryAction(): void {
@@ -1603,10 +1638,51 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const lobbyListCount = document.createElement("p");
     lobbyListCount.className = "experience-room-list__count";
 
+    const lobbyCodeForm = document.createElement("form");
+    lobbyCodeForm.className = "experience-room-code";
+    lobbyCodeForm.noValidate = true;
+
+    const lobbyCodeCopy = document.createElement("div");
+    lobbyCodeCopy.className = "experience-room-code__copy";
+
+    const lobbyCodeLabel = document.createElement("label");
+    lobbyCodeLabel.className = "experience-room-code__label";
+    lobbyCodeLabel.htmlFor = "experience-room-code-input";
+    lobbyCodeLabel.textContent = copy.lobbies.joinCodeTitle;
+
+    const lobbyCodeHint = document.createElement("p");
+    lobbyCodeHint.className = "experience-room-code__hint";
+    lobbyCodeHint.id = "experience-room-code-hint";
+    lobbyCodeHint.textContent = copy.lobbies.joinCodeHint;
+
+    lobbyCodeCopy.append(lobbyCodeLabel, lobbyCodeHint);
+
+    const lobbyCodeActions = document.createElement("div");
+    lobbyCodeActions.className = "experience-room-code__actions";
+
+    const lobbyCodeInput = document.createElement("input");
+    lobbyCodeInput.className = "experience-room-code__input";
+    lobbyCodeInput.id = "experience-room-code-input";
+    lobbyCodeInput.name = "roomCode";
+    lobbyCodeInput.type = "text";
+    lobbyCodeInput.autocomplete = "off";
+    lobbyCodeInput.inputMode = "text";
+    lobbyCodeInput.spellcheck = false;
+    lobbyCodeInput.placeholder = copy.lobbies.joinCodePlaceholder;
+    lobbyCodeInput.setAttribute("aria-describedby", lobbyCodeHint.id);
+
+    const lobbyCodeSubmitButton = document.createElement("button");
+    lobbyCodeSubmitButton.className = "experience-button experience-button--secondary";
+    lobbyCodeSubmitButton.type = "submit";
+    lobbyCodeSubmitButton.textContent = copy.lobbies.joinCodeButton;
+
+    lobbyCodeActions.append(lobbyCodeInput, lobbyCodeSubmitButton);
+    lobbyCodeForm.append(lobbyCodeCopy, lobbyCodeActions);
+
     const lobbyListList = document.createElement("div");
     lobbyListList.className = "experience-room-list";
 
-    lobbyList.append(lobbyHeader, lobbyListCount, lobbyListList);
+    lobbyList.append(lobbyHeader, lobbyCodeForm, lobbyListCount, lobbyListList);
 
     const setup = document.createElement("section");
     setup.className = "experience-screen experience-screen--setup";
@@ -1903,6 +1979,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       feedbackStatus,
       lobbyListBackButton,
       lobbyListCreateButton,
+      lobbyCodeForm,
+      lobbyCodeInput,
+      lobbyCodeSubmitButton,
+      lobbyCodeHint,
       lobbyListCount,
       lobbyListList,
       setupBackButton,
@@ -2194,6 +2274,12 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
   private renderLobbyList(): void {
     const copy = this.copy;
+    const manualJoinDisabled = !this.realtimeReady;
+    this.elements.lobbyCodeInput.disabled = manualJoinDisabled;
+    this.elements.lobbyCodeSubmitButton.disabled = manualJoinDisabled;
+    this.elements.lobbyCodeHint.textContent = manualJoinDisabled
+      ? copy.lobbies.joinCodeUnavailableHint
+      : copy.lobbies.joinCodeHint;
     this.elements.lobbyListCount.textContent = this.lobbies.length === 0
       ? copy.lobbies.emptyCount
       : copy.lobbies.count(this.lobbies.length);

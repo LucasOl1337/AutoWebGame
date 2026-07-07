@@ -262,6 +262,7 @@ button {
 .experience-room-card:focus-visible,
 .experience-account__input:focus-visible,
 .experience-feedback__textarea:focus-visible,
+.experience-room-code__input:focus-visible,
 .experience-match__chat-input:focus-visible {
   outline: 2px solid rgba(var(--accent-rgb), 0.82);
   outline-offset: 2px;
@@ -939,6 +940,65 @@ button {
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+
+.experience-room-code {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.82fr);
+  gap: 14px;
+  align-items: center;
+  padding: 0 0 18px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.experience-room-code__copy {
+  display: grid;
+  gap: 5px;
+}
+
+.experience-room-code__label {
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 1.06rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.experience-room-code__hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.experience-room-code__actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.experience-room-code__input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.experience-room-code__input::placeholder {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.experience-room-code__input:disabled {
+  opacity: 0.52;
 }
 
 .experience-panel__title {
@@ -2953,6 +3013,11 @@ button {
     justify-items: start;
   }
 
+  .experience-room-code,
+  .experience-room-code__actions {
+    grid-template-columns: 1fr;
+  }
+
   .experience-panel__actions,
   .experience-actions,
   .experience-match__actions {
@@ -3959,6 +4024,7 @@ button {
   .experience-button,
   .experience-language-switcher__option,
   .experience-match__toggle,
+  .experience-room-code__input,
   .experience-match__chat-input {
     min-height: 44px;
   }

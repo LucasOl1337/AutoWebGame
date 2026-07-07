@@ -69,6 +69,12 @@ export interface SiteCopy {
     kicker: string;
     title: string;
     create: string;
+    joinCodeTitle: string;
+    joinCodeHint: string;
+    joinCodeUnavailableHint: string;
+    joinCodePlaceholder: string;
+    joinCodeButton: string;
+    joinCodeEmpty: string;
     emptyCount: string;
     count: (count: number) => string;
     emptyBody: string;
@@ -289,6 +295,12 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       kicker: "Salas abertas",
       title: "Escolha um lobby para entrar",
       create: "Criar lobby",
+      joinCodeTitle: "Entrar por codigo",
+      joinCodeHint: "Cole um codigo ou link de convite e pressione Enter.",
+      joinCodeUnavailableHint: "Reconectando ao lobby. A entrada por codigo volta em instantes.",
+      joinCodePlaceholder: "Codigo ou link da sala",
+      joinCodeButton: "Entrar",
+      joinCodeEmpty: "Cole um codigo ou convite valido para entrar.",
       emptyCount: "Nenhum lobby aberto no momento.",
       count: (count) => `${count} lobbies publicos disponiveis`,
       emptyBody: "Nenhuma sala aberta agora. Crie um lobby novo ou volte para partida rapida.",
@@ -496,6 +508,12 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       kicker: "Open rooms",
       title: "Choose a lobby to join",
       create: "Create lobby",
+      joinCodeTitle: "Join by code",
+      joinCodeHint: "Paste a room code or invite link and press Enter.",
+      joinCodeUnavailableHint: "Reconnecting to the lobby. Code entry returns in a moment.",
+      joinCodePlaceholder: "Room code or invite link",
+      joinCodeButton: "Join",
+      joinCodeEmpty: "Paste a valid room code or invite to join.",
       emptyCount: "No open lobbies right now.",
       count: (count) => `${count} public lobbies available`,
       emptyBody: "No room is open right now. Create a new lobby or go back to quick match.",
