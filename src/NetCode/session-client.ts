@@ -1,4 +1,10 @@
 import type { CharacterRosterEntry } from "../Engine/assets";
+import {
+  ARENA_THEME_LIBRARY,
+  DEFAULT_ARENA_THEME_ID,
+  getArenaThemeById,
+} from "../Arenas/arena-theme-library";
+import { buildArenaThemeUrl } from "../Arenas/arena-theme-selection";
 import { assetUrl } from "../Engine/asset-url";
 import { ALL_PLAYER_IDS } from "../Gameplay/types";
 import type { Mode, PlayerId } from "../Gameplay/types";
@@ -69,6 +75,7 @@ interface SessionElements {
   landingEndlessButton: HTMLButtonElement;
   landingBotMatchButton: HTMLButtonElement;
   landingBotIntensityButtons: HTMLButtonElement[];
+  landingArenaThemeLinks: HTMLAnchorElement[];
   landingLobbyButton: HTMLButtonElement;
   landingFeedbackButton: HTMLButtonElement;
   landingRoster: HTMLDivElement;
@@ -462,10 +469,19 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private readonly telemetry: GrowthTelemetryClient;
   private observedMatchWinner: PlayerId | null = null;
   private readonly language: SiteLanguage;
+  private readonly selectedArenaThemeId: string;
 
-  constructor(root: HTMLElement, app: OnlineGameAppBridge, roster: CharacterRosterEntry[]) {
+  constructor(
+    root: HTMLElement,
+    app: OnlineGameAppBridge,
+    roster: CharacterRosterEntry[],
+    arenaThemeId = DEFAULT_ARENA_THEME_ID,
+  ) {
     this.app = app;
     this.roster = roster;
+    this.selectedArenaThemeId = getArenaThemeById(arenaThemeId)?.id
+      ?? getArenaThemeById(DEFAULT_ARENA_THEME_ID)?.id
+      ?? ARENA_THEME_LIBRARY[0].id;
     this.language = getInitialSiteLanguage();
     applyDocumentLanguage(this.language);
     this.pendingAutoJoinRoom = typeof window === "undefined" ? null : readRoomCodeFromUrl(window.location.href);
@@ -702,6 +718,13 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     for (const button of this.elements.landingBotIntensityButtons) {
       button.addEventListener("click", () => {
         this.selectBotMatchFill(parseStoredBotMatchFill(button.dataset.botFill));
+      });
+    }
+    for (const link of this.elements.landingArenaThemeLinks) {
+      link.addEventListener("click", (event) => {
+        if (link.dataset.active === "true") {
+          event.preventDefault();
+        }
       });
     }
     this.elements.landingFeedbackButton.addEventListener("click", () => {
@@ -1375,6 +1398,51 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     landingBotIntensity.append(landingBotIntensityHeader, landingBotIntensityGroup);
 
+    const landingArenaTheme = document.createElement("section");
+    landingArenaTheme.className = "experience-arena-theme";
+    landingArenaTheme.setAttribute("aria-label", copy.landing.arenaThemeTitle);
+
+    const landingArenaThemeHeader = document.createElement("div");
+    landingArenaThemeHeader.className = "experience-arena-theme__header";
+
+    const landingArenaThemeTitle = document.createElement("p");
+    landingArenaThemeTitle.className = "experience-arena-theme__title";
+    landingArenaThemeTitle.textContent = copy.landing.arenaThemeTitle;
+
+    const landingArenaThemeHint = document.createElement("p");
+    landingArenaThemeHint.className = "experience-arena-theme__hint";
+    landingArenaThemeHint.textContent = copy.landing.arenaThemeHint;
+
+    landingArenaThemeHeader.append(landingArenaThemeTitle, landingArenaThemeHint);
+
+    const landingArenaThemeList = document.createElement("div");
+    landingArenaThemeList.className = "experience-arena-theme__options";
+    landingArenaThemeList.setAttribute("role", "list");
+
+    const landingArenaThemeLinks = ARENA_THEME_LIBRARY.map((theme) => {
+      const link = document.createElement("a");
+      link.className = "experience-arena-theme__option";
+      link.dataset.themeId = theme.id;
+      link.href = buildArenaThemeUrl(theme.id, typeof window === "undefined" ? null : window.location.href);
+      link.setAttribute("role", "listitem");
+
+      const label = document.createElement("strong");
+      label.textContent = theme.name;
+
+      const detail = document.createElement("span");
+      detail.textContent = copy.landing.arenaThemeSummary(theme.id, theme.summary);
+
+      const activeBadge = document.createElement("em");
+      activeBadge.className = "experience-arena-theme__badge";
+      activeBadge.textContent = copy.landing.arenaThemeActive;
+
+      link.append(label, detail, activeBadge);
+      landingArenaThemeList.append(link);
+      return link;
+    });
+
+    landingArenaTheme.append(landingArenaThemeHeader, landingArenaThemeList);
+
     const landingLobbyButton = document.createElement("button");
     landingLobbyButton.className = "experience-button experience-button--secondary";
     landingLobbyButton.type = "button";
@@ -1456,6 +1524,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       landingReturnBrief,
       landingActions,
       landingBotIntensity,
+      landingArenaTheme,
       landingControls,
       landingAccountCard,
     );
@@ -1823,6 +1892,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       landingEndlessButton,
       landingBotMatchButton,
       landingBotIntensityButtons,
+      landingArenaThemeLinks,
       landingLobbyButton,
       landingFeedbackButton,
       landingRoster,
@@ -2014,6 +2084,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       ? this.translate("Entrando...", "Joining...")
       : this.translate("Partida infinita", "Infinite match");
     this.renderBotMatchIntensity();
+    this.renderArenaThemePicker();
     this.renderLandingCharacterPicker();
   }
 
@@ -2023,6 +2094,25 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       const active = fill === this.botMatchFill;
       button.dataset.active = active ? "true" : "false";
       button.setAttribute("aria-pressed", active ? "true" : "false");
+    }
+  }
+
+  private renderArenaThemePicker(): void {
+    const href = typeof window === "undefined" ? null : window.location.href;
+    for (const link of this.elements.landingArenaThemeLinks) {
+      const themeId = link.dataset.themeId ?? "";
+      const active = themeId === this.selectedArenaThemeId;
+      link.dataset.active = active ? "true" : "false";
+      link.href = buildArenaThemeUrl(themeId, href);
+      if (active) {
+        link.setAttribute("aria-current", "true");
+      } else {
+        link.removeAttribute("aria-current");
+      }
+      const badge = link.querySelector<HTMLElement>(".experience-arena-theme__badge");
+      if (badge) {
+        badge.hidden = !active;
+      }
     }
   }
 

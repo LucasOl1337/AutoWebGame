@@ -504,7 +504,8 @@ button {
   border-top: 1px solid var(--line-soft);
 }
 
-.experience-bot-intensity {
+.experience-bot-intensity,
+.experience-arena-theme {
   display: grid;
   gap: 10px;
   max-width: 640px;
@@ -513,17 +514,21 @@ button {
   border-top: 1px solid var(--line-soft);
 }
 
-.experience-bot-intensity__header {
+.experience-bot-intensity__header,
+.experience-arena-theme__header {
   display: grid;
   gap: 3px;
 }
 
 .experience-bot-intensity__title,
-.experience-bot-intensity__hint {
+.experience-bot-intensity__hint,
+.experience-arena-theme__title,
+.experience-arena-theme__hint {
   margin: 0;
 }
 
-.experience-bot-intensity__title {
+.experience-bot-intensity__title,
+.experience-arena-theme__title {
   color: var(--muted-strong);
   font-size: 0.82rem;
   font-weight: 900;
@@ -531,19 +536,22 @@ button {
   text-transform: uppercase;
 }
 
-.experience-bot-intensity__hint {
+.experience-bot-intensity__hint,
+.experience-arena-theme__hint {
   color: var(--muted);
   font-size: 0.86rem;
   line-height: 1.35;
 }
 
-.experience-bot-intensity__options {
+.experience-bot-intensity__options,
+.experience-arena-theme__options {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
-.experience-bot-intensity__option {
+.experience-bot-intensity__option,
+.experience-arena-theme__option {
   min-width: 0;
   min-height: 58px;
   display: grid;
@@ -553,6 +561,7 @@ button {
   border: 1px solid var(--line-soft);
   border-radius: 14px;
   color: var(--muted);
+  text-decoration: none;
   text-align: left;
   background: rgba(255, 255, 255, 0.03);
   cursor: pointer;
@@ -563,7 +572,8 @@ button {
     color 160ms ease;
 }
 
-.experience-bot-intensity__option:hover:not(:disabled) {
+.experience-bot-intensity__option:hover:not(:disabled),
+.experience-arena-theme__option:hover {
   transform: translateY(-1px);
   border-color: rgba(var(--accent-rgb), 0.45);
   background: rgba(var(--accent-rgb), 0.08);
@@ -574,12 +584,14 @@ button {
   opacity: 0.62;
 }
 
-.experience-bot-intensity__option:focus-visible {
+.experience-bot-intensity__option:focus-visible,
+.experience-arena-theme__option:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 
-.experience-bot-intensity__option[data-active="true"] {
+.experience-bot-intensity__option[data-active="true"],
+.experience-arena-theme__option[data-active="true"] {
   border-color: rgba(var(--accent-rgb), 0.74);
   color: var(--text);
   background:
@@ -588,21 +600,46 @@ button {
 }
 
 .experience-bot-intensity__option strong,
-.experience-bot-intensity__option span {
+.experience-bot-intensity__option span,
+.experience-arena-theme__option strong,
+.experience-arena-theme__option span {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.experience-bot-intensity__option strong {
+.experience-bot-intensity__option strong,
+.experience-arena-theme__option strong {
   font-size: 0.84rem;
   font-weight: 900;
   line-height: 1.1;
 }
 
-.experience-bot-intensity__option span {
+.experience-bot-intensity__option span,
+.experience-arena-theme__option span {
   color: var(--muted);
   font-size: 0.76rem;
   line-height: 1.18;
+}
+
+.experience-arena-theme__option {
+  position: relative;
+  min-height: 72px;
+}
+
+.experience-arena-theme__badge {
+  justify-self: start;
+  margin-top: 1px;
+  color: var(--accent);
+  font-style: normal;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.experience-arena-theme__badge[hidden] {
+  display: none;
 }
 
 .experience-landing-controls__header {
@@ -3426,7 +3463,8 @@ button {
   max-width: 660px;
 }
 
-.experience-screen--landing .experience-landing-controls {
+.experience-screen--landing .experience-landing-controls,
+.experience-screen--landing .experience-arena-theme {
   max-width: 680px;
 }
 
@@ -3830,7 +3868,8 @@ button {
     padding-top: 10px;
   }
 
-  .experience-screen--landing .experience-bot-intensity {
+  .experience-screen--landing .experience-bot-intensity,
+  .experience-screen--landing .experience-arena-theme {
     gap: 7px;
     padding-top: 10px;
   }
@@ -3854,16 +3893,19 @@ button {
     line-height: 1.22;
   }
 
-  .experience-screen--landing .experience-bot-intensity__title {
+  .experience-screen--landing .experience-bot-intensity__title,
+  .experience-screen--landing .experience-arena-theme__title {
     font-size: 0.74rem;
   }
 
-  .experience-screen--landing .experience-bot-intensity__hint {
+  .experience-screen--landing .experience-bot-intensity__hint,
+  .experience-screen--landing .experience-arena-theme__hint {
     font-size: 0.76rem;
     line-height: 1.22;
   }
 
-  .experience-screen--landing .experience-bot-intensity__option {
+  .experience-screen--landing .experience-bot-intensity__option,
+  .experience-screen--landing .experience-arena-theme__option {
     min-height: 48px;
     padding: 8px 10px;
   }
@@ -3885,6 +3927,8 @@ button {
 @media (max-height: 700px) and (min-width: 1081px) {
   .experience-screen--landing .experience-return-brief__body,
   .experience-screen--landing .experience-bot-intensity__hint,
+  .experience-screen--landing .experience-arena-theme__hint,
+  .experience-screen--landing .experience-arena-theme__option span,
   .experience-screen--landing .experience-landing-controls__hint,
   .experience-screen--landing .experience-landing-controls__copy span {
     display: none;
@@ -3892,7 +3936,8 @@ button {
 }
 
 @media (max-width: 760px) {
-  .experience-screen--landing .experience-bot-intensity__options {
+  .experience-screen--landing .experience-bot-intensity__options,
+  .experience-screen--landing .experience-arena-theme__options {
     grid-template-columns: 1fr;
   }
 

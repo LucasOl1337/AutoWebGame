@@ -55,6 +55,10 @@ export interface SiteCopy {
     botIntensityHint: string;
     botIntensityOptionLabel: (botCount: number) => string;
     botIntensityOptionDetail: (botCount: number) => string;
+    arenaThemeTitle: string;
+    arenaThemeHint: string;
+    arenaThemeActive: string;
+    arenaThemeSummary: (themeId: string, fallback: string) => string;
     localControlsTitle: string;
     localControlsHint: string;
     localControlsMove: string;
@@ -260,6 +264,21 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
         }
         return "3 bots, sala cheia";
       },
+      arenaThemeTitle: "Tema da arena",
+      arenaThemeHint: "Escolha o visual antes de entrar contra bots. A pagina recarrega com os assets certos.",
+      arenaThemeActive: "ativo",
+      arenaThemeSummary: (themeId, fallback) => {
+        const summaries: Record<string, string> = {
+          "tournament-clean": "Pedra clara e limpa para ler rotas e explosoes rapido.",
+          "arcane-citadel": "Fortaleza azul-cinza com runas discretas e rotas frias.",
+          "verdant-ruins": "Ruinas com musgo e pedra quente para uma arena de aventura.",
+          "skyfoundry-bastion": "Muralha metalica com rotas ambar e silhuetas pesadas.",
+          "royal-marble": "Marmore claro, estrutura azul-marinho e detalhes dourados contidos.",
+          "glacier-sanctum": "Santuario gelado de baixo ruido, com selos frios e crates quentes.",
+          "obsidian-garden": "Arena vulcanica escura com pontos jade e alto contraste.",
+        };
+        return summaries[themeId] ?? fallback;
+      },
       localControlsTitle: "Antes da primeira bomba",
       localControlsHint: "A partida contra bots usa o personagem selecionado ao lado.",
       localControlsMove: "Mover pelo labirinto",
@@ -463,6 +482,10 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
         }
         return "3 bots, full room";
       },
+      arenaThemeTitle: "Arena theme",
+      arenaThemeHint: "Choose the board look before entering bots. The page reloads with the right assets.",
+      arenaThemeActive: "active",
+      arenaThemeSummary: (_themeId, fallback) => fallback,
       localControlsTitle: "Before the first bomb",
       localControlsHint: "Bot matches use the character selected on the side.",
       localControlsMove: "Move through the maze",

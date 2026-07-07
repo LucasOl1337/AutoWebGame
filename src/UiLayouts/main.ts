@@ -1,5 +1,6 @@
 import "./main.css";
 import { fetchActiveArenaDefinition } from "../Arenas/arena";
+import { applyArenaThemeSelection } from "../Arenas/arena-theme-selection";
 import { loadGameAssets } from "../Engine/assets";
 import { GameApp } from "../Engine/game-app";
 import { OnlineSessionClient } from "../NetCode/session-client";
@@ -10,10 +11,13 @@ if (!root) {
   throw new Error("#app root not found");
 }
 
-const activeArena = await fetchActiveArenaDefinition();
+const activeArena = applyArenaThemeSelection(
+  await fetchActiveArenaDefinition(),
+  window.location.href,
+);
 const assets = await loadGameAssets(activeArena.themeId);
 const game = new GameApp(root, assets, activeArena);
-new OnlineSessionClient(root, game, assets.characterRoster ?? []);
+new OnlineSessionClient(root, game, assets.characterRoster ?? [], activeArena.themeId);
 game.start();
 
 if (import.meta.env.DEV) {
