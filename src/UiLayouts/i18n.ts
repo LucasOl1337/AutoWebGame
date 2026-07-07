@@ -638,8 +638,12 @@ export function getStoredSiteLanguage(): SiteLanguage | null {
   if (typeof window === "undefined") {
     return null;
   }
-  const stored = window.localStorage.getItem(SITE_LANGUAGE_STORAGE_KEY);
-  return normalizeSiteLanguage(stored);
+  try {
+    const stored = window.localStorage?.getItem?.(SITE_LANGUAGE_STORAGE_KEY) ?? null;
+    return normalizeSiteLanguage(stored);
+  } catch {
+    return null;
+  }
 }
 
 export function getPathSiteLanguage(pathname?: string): SiteLanguage | null {
@@ -679,7 +683,11 @@ export function persistSiteLanguage(language: SiteLanguage): void {
   if (typeof window === "undefined") {
     return;
   }
-  window.localStorage.setItem(SITE_LANGUAGE_STORAGE_KEY, language);
+  try {
+    window.localStorage?.setItem?.(SITE_LANGUAGE_STORAGE_KEY, language);
+  } catch {
+    // Language persistence is optional; blocked storage should not prevent play.
+  }
 }
 
 export function normalizeSiteLanguage(value: string | null | undefined): SiteLanguage | null {
