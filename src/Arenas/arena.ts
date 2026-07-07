@@ -337,6 +337,7 @@ function createPowerUpsFromBreakables(breakable: Set<string>, config: ArenaRunti
     "flame-up",
     "remote-up",
     "shield-up",
+    "short-fuse-up",
     "bomb-pass-up",
     "kick-up",
   ];

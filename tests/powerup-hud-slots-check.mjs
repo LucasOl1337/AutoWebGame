@@ -86,6 +86,7 @@ const assets = {
     "shield-up": null,
     "bomb-pass-up": null,
     "kick-up": null,
+    "short-fuse-up": null,
   },
 };
 
@@ -108,6 +109,7 @@ game.arena.powerUps = [
   { type: "shield-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
   { type: "bomb-pass-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
   { type: "kick-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
+  { type: "short-fuse-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
 ];
 window.advanceTime(17);
 
@@ -120,6 +122,7 @@ const remoteSlot = skillSlots.find((slot) => slot.type === "remote-up") ?? null;
 const shieldSlot = skillSlots.find((slot) => slot.type === "shield-up") ?? null;
 const bombPassSlot = skillSlots.find((slot) => slot.type === "bomb-pass-up") ?? null;
 const kickSlot = skillSlots.find((slot) => slot.type === "kick-up") ?? null;
+const shortFuseSlot = skillSlots.find((slot) => slot.type === "short-fuse-up") ?? null;
 
 const report = {
   bombSlot,
@@ -128,6 +131,7 @@ const report = {
   shieldSlot,
   bombPassSlot,
   kickSlot,
+  shortFuseSlot,
   pass: Boolean(
     bombSlot
       && bombSlot.acquired === false
@@ -155,6 +159,10 @@ const report = {
       && kickSlot.acquired === true
       && kickSlot.level === 1
       && kickSlot.value === "x1"
+      && shortFuseSlot
+      && shortFuseSlot.acquired === true
+      && shortFuseSlot.level === 1
+      && shortFuseSlot.value === "x1"
   ),
 };
 

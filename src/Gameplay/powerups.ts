@@ -1,4 +1,5 @@
 import {
+  BOMB_FUSE_MS,
   KEY_BINDINGS,
   MAX_BOMB_PASS_LEVEL,
   MAX_BOMBS,
@@ -10,6 +11,9 @@ import {
 import type { MenuPlayerId, PlayerState, PowerUpType } from "./types";
 
 export type SkillPowerUpType = PowerUpType;
+const MAX_SHORT_FUSE_LEVEL = 2;
+const SHORT_FUSE_STEP_MS = 350;
+const MIN_SHORT_FUSE_MS = 1_200;
 
 export interface PowerUpDefinition {
   type: PowerUpType;
@@ -69,6 +73,13 @@ const POWER_UP_DEFINITIONS: Record<PowerUpType, PowerUpDefinition> = {
     tint: "#ffbc73",
     maxLevel: MAX_KICK_LEVEL,
   },
+  "short-fuse-up": {
+    type: "short-fuse-up",
+    label: "Short Fuse",
+    shortLabel: "Q",
+    tint: "#ff5eea",
+    maxLevel: MAX_SHORT_FUSE_LEVEL,
+  },
 };
 
 export const SKILL_POWER_UP_TYPES: readonly SkillPowerUpType[] = [
@@ -79,6 +90,7 @@ export const SKILL_POWER_UP_TYPES: readonly SkillPowerUpType[] = [
   "shield-up",
   "bomb-pass-up",
   "kick-up",
+  "short-fuse-up",
 ];
 
 const CODE_TO_LABEL: Record<string, string> = {
@@ -111,6 +123,8 @@ export function getPowerUpLevel(player: PlayerState, type: PowerUpType): number 
       return player.bombPassLevel;
     case "kick-up":
       return player.kickLevel;
+    case "short-fuse-up":
+      return player.shortFuseLevel;
     default: {
       const neverType: never = type;
       return neverType;
@@ -144,6 +158,9 @@ export function applyPowerUpToPlayer(player: PlayerState, type: PowerUpType): vo
       break;
     case "kick-up":
       player.kickLevel = MAX_KICK_LEVEL;
+      break;
+    case "short-fuse-up":
+      player.shortFuseLevel = Math.min(MAX_SHORT_FUSE_LEVEL, player.shortFuseLevel + 1);
       break;
     default: {
       const neverType: never = type;
@@ -189,10 +206,23 @@ export function getPowerUpPriorityScore(player: PlayerState, type: PowerUpType):
     }
     return 180;
   }
+  if (type === "short-fuse-up") {
+    if (player.shortFuseLevel >= MAX_SHORT_FUSE_LEVEL) {
+      return 0;
+    }
+    return 200 + (MAX_SHORT_FUSE_LEVEL - player.shortFuseLevel) * 30;
+  }
   if (player.speedLevel >= MAX_SPEED_LEVEL) {
     return 0;
   }
   return 120 + (MAX_SPEED_LEVEL - player.speedLevel) * 25;
+}
+
+export function getBombFuseMsForPlayer(player: PlayerState): number {
+  return Math.max(
+    MIN_SHORT_FUSE_MS,
+    BOMB_FUSE_MS - player.shortFuseLevel * SHORT_FUSE_STEP_MS,
+  );
 }
 
 export function formatControlKey(code: string): string {

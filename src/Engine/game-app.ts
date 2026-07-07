@@ -64,6 +64,7 @@ import {
 import {
   applyPowerUpToPlayer,
   formatControlKey,
+  getBombFuseMsForPlayer,
   getPowerUpDefinition,
   getPowerUpLevel,
   type SkillPowerUpType,
@@ -1960,6 +1961,7 @@ export class GameApp {
       shieldCharges: 0,
       bombPassLevel: 0,
       kickLevel: 0,
+      shortFuseLevel: 0,
       flameGuardMs: 0,
       spawnProtectionMs: SPAWN_PROTECTION_MS,
       skill: createDefaultPlayerSkillState(null),
@@ -2599,7 +2601,7 @@ export class GameApp {
       id: this.nextBombId,
       ownerId: player.id,
       tile: { ...tile },
-      fuseMs: BOMB_FUSE_MS,
+      fuseMs: getBombFuseMsForPlayer(player),
       ownerCanPass: true,
       flameRange: player.flameRange,
     });
@@ -3528,7 +3530,7 @@ export class GameApp {
     const player = this.players[playerId];
     const palette = PLAYER_COLORS[playerId];
     const title = this.getPlayerSlotLabel(playerId);
-    const statLine = `B${player.maxBombs} F${player.flameRange} S${player.speedLevel}`;
+    const statLine = `B${player.maxBombs} F${player.flameRange} S${player.speedLevel} Q${player.shortFuseLevel}`;
     const status = !player.alive
       ? "DOWN"
       : player.skill.phase === "channeling"
@@ -5064,6 +5066,7 @@ export class GameApp {
           shieldCharges: player.shieldCharges,
           bombPassLevel: player.bombPassLevel,
           kickLevel: player.kickLevel,
+          shortFuseLevel: player.shortFuseLevel,
           skillSlots: this.getHudSkillSlots(id).map((slot) => ({
             type: slot.type,
             acquired: slot.acquired,
