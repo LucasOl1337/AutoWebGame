@@ -39,9 +39,9 @@ const fakeCtx = {
   strokeText: noop,
   save: noop,
   restore: noop,
+  setTransform: noop,
   translate: noop,
   scale: noop,
-  setTransform: noop,
   createLinearGradient: () => ({ addColorStop: noop }),
   createRadialGradient: () => ({ addColorStop: noop }),
 };
@@ -49,6 +49,7 @@ const fakeCtx = {
 const fakeCanvas = {
   width: 0,
   height: 0,
+  dataset: {},
   style: {},
   setAttribute: noop,
   closest: () => null,
@@ -70,14 +71,22 @@ globalThis.window = {
 };
 
 const { GameApp } = await import("../output/esm/Engine/game-app.js");
-const { BOMB_FUSE_MS, TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
+const { TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
 
 const root = { appendChild: noop };
 const assets = {
   players: { 1: { up: null, down: null, left: null, right: null }, 2: { up: null, down: null, left: null, right: null } },
   floor: { base: null, lane: null, spawn: null },
   props: { wall: null, crate: null, bomb: null, flame: null },
-  powerUps: { "bomb-up": null, "flame-up": null, "speed-up": null },
+  powerUps: {
+    "bomb-up": null,
+    "flame-up": null,
+    "speed-up": null,
+    "remote-up": null,
+    "shield-up": null,
+    "bomb-pass-up": null,
+    "kick-up": null,
+  },
 };
 
 const game = new GameApp(root, assets);
@@ -91,42 +100,33 @@ window.advanceTime(34);
 const p1 = game.players[1];
 p1.position = { x: 2.5 * TILE_SIZE, y: 3.5 * TILE_SIZE };
 p1.tile = { x: 2, y: 3 };
-p1.flameRange = 2;
+p1.spawnProtectionMs = 0;
 game.placeBomb(p1);
-const placedBomb = game.bombs[0];
 
-const stateWithOverlay = JSON.parse(window.render_game_to_text());
-const overlayEnabledInitially = stateWithOverlay.match.dangerOverlay.enabled === true;
-const overlayDisabledInitially = stateWithOverlay.match.dangerOverlay.enabled === false;
-const dangerTilesInitially = stateWithOverlay.match.dangerOverlay.tiles ?? [];
-const hasBombCenterTile = placedBomb
-  ? dangerTilesInitially.some((item) => (
-    item.x === placedBomb.tile.x
-    && item.y === placedBomb.tile.y
-    && item.etaMs <= BOMB_FUSE_MS
-  ))
-  : false;
+const beforeCritical = JSON.parse(window.render_game_to_text());
+window.advanceTime(850);
+const duringCritical = JSON.parse(window.render_game_to_text());
+p1.flameGuardMs = 500;
+const guardedCritical = JSON.parse(window.render_game_to_text());
 
-emit("keydown", keyEvent("KeyV"));
-emit("keyup", keyEvent("KeyV"));
-window.advanceTime(17);
-
-const stateAfterKeyPress = JSON.parse(window.render_game_to_text());
-const overlayStillDisabled = stateAfterKeyPress.match.dangerOverlay.enabled === false;
-const tilesStillHidden = (stateAfterKeyPress.match.dangerOverlay.tiles ?? []).length === 0;
+const p1Before = beforeCritical.players.find((entry) => entry.id === 1);
+const p1During = duringCritical.players.find((entry) => entry.id === 1);
+const p1Guarded = guardedCritical.players.find((entry) => entry.id === 1);
 
 const report = {
-  overlayEnabledInitially,
-  overlayDisabledInitially,
-  dangerousTileCount: dangerTilesInitially.length,
-  hasBombCenterTile,
-  overlayStillDisabled,
-  tilesStillHidden,
-  pass: !overlayEnabledInitially
-    && overlayDisabledInitially
-    && !hasBombCenterTile
-    && overlayStillDisabled
-    && tilesStillHidden,
+  before: p1Before?.hudStatus ?? null,
+  during: p1During?.hudStatus ?? null,
+  guarded: p1Guarded?.hudStatus ?? null,
+  pass: p1Before?.hudStatus?.label === "LIVE"
+    && p1Before?.hudStatus?.critical === false
+    && p1During?.hudStatus?.label === "DANGER"
+    && p1During?.hudStatus?.tone === "danger"
+    && p1During?.hudStatus?.critical === true
+    && typeof p1During?.hudStatus?.dangerEtaMs === "number"
+    && p1During.hudStatus.dangerEtaMs > 0
+    && p1During.hudStatus.dangerEtaMs <= 1_200
+    && p1Guarded?.hudStatus?.label === "GUARD"
+    && p1Guarded?.hudStatus?.critical === false,
 };
 
 console.log(JSON.stringify(report, null, 2));

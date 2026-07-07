@@ -162,6 +162,7 @@ const SUDDEN_DEATH_FALL_MS = 340;
 const SUDDEN_DEATH_IMPACT_LINGER_MS = 180;
 const SHIELD_GUARD_MS = 600;
 const DANGER_OVERLAY_MAX_ETA_MS = BOMB_FUSE_MS + 600;
+const HUD_CRITICAL_DANGER_MS = 1_200;
 const MATCH_RESULT_RESTART_DELAY_MS = 900;
 const CANVAS_BACKBUFFER_SCALE = 2;
 const CANVAS_VIEWPORT_PADDING = 32;
@@ -288,6 +289,13 @@ interface HudSkillSlot {
   acquired: boolean;
   keyLabel: string | null;
   valueLabel: string;
+}
+
+interface HudPlayerStatus {
+  label: string;
+  tone: "success" | "danger" | "muted";
+  critical: boolean;
+  dangerEtaMs: number | null;
 }
 
 interface CrateBreakAnimation {
@@ -3218,13 +3226,7 @@ export class GameApp {
     const player = this.players[playerId];
     const palette = PLAYER_COLORS[playerId];
     const compactWidth = Math.max(108, width);
-    const status = !player.alive
-      ? "DOWN"
-      : player.skill.phase === "channeling"
-        ? "ICE"
-        : player.flameGuardMs > 0
-          ? "GUARD"
-          : "LIVE";
+    const status = this.getPlayerHudStatus(playerId);
     const scoreText = this.onlineRoomMode === "endless"
       ? `K${this.endlessKills[playerId]} W${this.endlessRoundWins[playerId]}`
       : `W${this.score[playerId]}`;
@@ -3237,7 +3239,7 @@ export class GameApp {
     this.ctx.font = "700 6px Inter";
     this.drawHudText(scoreText, x + 30, y + 7, CANVAS_UI_TEXT, CANVAS_UI_SHADOW);
     this.ctx.textAlign = "right";
-    this.drawHudText(status, x + compactWidth - 6, y + 7, player.alive ? CANVAS_UI_SUCCESS : CANVAS_UI_MUTED_SOFT, CANVAS_UI_SHADOW);
+    this.drawHudText(status.label, x + compactWidth - 6, y + 7, this.getHudStatusColor(status), CANVAS_UI_SHADOW);
     this.ctx.font = "500 6px Inter";
     this.drawHudText(statText, x + compactWidth - 6, y + 14, CANVAS_UI_MUTED, CANVAS_UI_SHADOW);
   }
@@ -3391,13 +3393,7 @@ export class GameApp {
     const palette = PLAYER_COLORS[playerId];
     const title = this.getPlayerSlotLabel(playerId);
     const statLine = `B${player.maxBombs} F${player.flameRange} S${player.speedLevel}`;
-    const status = !player.alive
-      ? "DOWN"
-      : player.skill.phase === "channeling"
-        ? "ICE"
-        : player.flameGuardMs > 0
-          ? "GUARD"
-          : "LIVE";
+    const status = this.getPlayerHudStatus(playerId);
     const compact = width < 230;
     const allSkillSlots = this.getHudSkillSlots(playerId);
     const skillSlots = compact
@@ -3423,17 +3419,19 @@ export class GameApp {
     );
     this.ctx.textAlign = "right";
     this.drawHudText(
-      compact ? statLine : status,
+      compact ? statLine : status.label,
       x + width - 6,
       y + 10,
-      player.alive ? CANVAS_UI_SUCCESS : CANVAS_UI_MUTED_SOFT,
+      compact
+        ? (player.alive ? CANVAS_UI_SUCCESS : CANVAS_UI_MUTED_SOFT)
+        : this.getHudStatusColor(status),
       CANVAS_UI_SHADOW,
     );
     this.drawHudText(
-      compact ? status : statLine,
+      compact ? status.label : statLine,
       x + width - 6,
       y + 18,
-      CANVAS_UI_MUTED,
+      compact ? this.getHudStatusColor(status) : CANVAS_UI_MUTED,
       CANVAS_UI_SHADOW,
     );
     if (this.onlineRoomMode === "endless") {
@@ -3534,6 +3532,57 @@ export class GameApp {
       return formatControlKey(KEY_BINDINGS[playerId as MenuPlayerId].detonate);
     }
     return null;
+  }
+
+  private getPlayerHudStatus(playerId: PlayerId): HudPlayerStatus {
+    const player = this.players[playerId];
+    if (!player.alive) {
+      return { label: "DOWN", tone: "muted", critical: false, dangerEtaMs: null };
+    }
+    if (player.skill.phase === "channeling") {
+      return { label: "ICE", tone: "success", critical: false, dangerEtaMs: null };
+    }
+    if (player.flameGuardMs > 0) {
+      return { label: "GUARD", tone: "success", critical: false, dangerEtaMs: null };
+    }
+
+    const dangerEtaMs = this.getPlayerDangerEtaMs(playerId);
+    if (dangerEtaMs !== null && dangerEtaMs <= HUD_CRITICAL_DANGER_MS) {
+      return {
+        label: "DANGER",
+        tone: "danger",
+        critical: true,
+        dangerEtaMs: Math.max(0, Math.round(dangerEtaMs)),
+      };
+    }
+
+    return { label: "LIVE", tone: "success", critical: false, dangerEtaMs: null };
+  }
+
+  private getHudStatusColor(status: HudPlayerStatus): string {
+    if (status.tone === "danger") {
+      return CANVAS_UI_DANGER;
+    }
+    if (status.tone === "muted") {
+      return CANVAS_UI_MUTED_SOFT;
+    }
+    return CANVAS_UI_SUCCESS;
+  }
+
+  private getPlayerDangerEtaMs(playerId: PlayerId): number | null {
+    if (this.mode !== "match" || this.roundOutcome) {
+      return null;
+    }
+
+    const player = this.players[playerId];
+    if (!player.alive || player.spawnProtectionMs > 0 || player.flameGuardMs > 0) {
+      return null;
+    }
+
+    const tile = this.getTileFromPosition(player.position);
+    const dangerMap = this.cachedDangerMap ?? this.getDangerMap();
+    const etaMs = dangerMap.get(tileKey(tile.x, tile.y));
+    return etaMs === undefined ? null : Math.max(0, etaMs);
   }
 
   private drawHudSkillSlot(x: number, y: number, width: number, height: number, slot: HudSkillSlot): void {
@@ -4917,6 +4966,7 @@ export class GameApp {
             menuOpen: this.characterMenuOpen[id],
           },
           alive: player.alive,
+          hudStatus: this.getPlayerHudStatus(id),
           bombsAvailable: player.maxBombs - player.activeBombs,
           bombCapacity: player.maxBombs,
           flameRange: player.flameRange,
