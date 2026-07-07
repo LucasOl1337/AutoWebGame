@@ -2535,10 +2535,15 @@ export class GameApp {
     const delta = directionDelta[direction];
     let targetTile = { ...bomb.tile };
     let movedTiles = 0;
+    let impactBreakableKey: string | null = null;
     for (let step = 0; step < distance; step += 1) {
       const nextTile = this.normalizeTile({ x: targetTile.x + delta.x, y: targetTile.y + delta.y });
       const targetKey = tileKey(nextTile.x, nextTile.y);
-      if (this.arena.solid.has(targetKey) || this.arena.breakable.has(targetKey)) {
+      if (this.arena.solid.has(targetKey)) {
+        break;
+      }
+      if (this.arena.breakable.has(targetKey)) {
+        impactBreakableKey = targetKey;
         break;
       }
       if (this.bombs.some((item) => item.id !== bomb.id && item.tile.x === nextTile.x && item.tile.y === nextTile.y)) {
@@ -2556,6 +2561,9 @@ export class GameApp {
     bomb.tile = this.normalizeTile(targetTile);
     bomb.fuseMs = Math.max(KICK_FUSE_MIN_MS, bomb.fuseMs - movedTiles * KICK_FUSE_PENALTY_MS_PER_TILE);
     bomb.ownerCanPass = false;
+    if (impactBreakableKey) {
+      this.breakCrateAtKey(impactBreakableKey);
+    }
     return true;
   }
 

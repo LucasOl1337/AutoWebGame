@@ -180,12 +180,27 @@ resetPlayers();
 clearLane();
 p1.kickLevel = 1;
 game.arena.breakable.add(tileKey(5, 1));
+game.arena.powerUps = game.arena.powerUps.filter((powerUp) => powerUp.tile.x !== 5 || powerUp.tile.y !== 1);
+game.arena.powerUps.push({
+  tile: { x: 5, y: 1 },
+  type: "speed-up",
+  revealed: false,
+  collected: false,
+});
 game.bombs = [
   { id: 3, ownerId: 2, tile: { x: 3, y: 1 }, fuseMs: 1500, ownerCanPass: false, flameRange: 1 },
 ];
 pressRight();
 
 const kickStopsBeforeCrate = game.bombs[0]?.tile.x === 4 && game.bombs[0]?.tile.y === 1;
+const kickedBombCracksCrate = !game.arena.breakable.has(tileKey(5, 1));
+const kickedBombRevealsCrateDrop = game.arena.powerUps.some((powerUp) => (
+  powerUp.tile.x === 5
+  && powerUp.tile.y === 1
+  && powerUp.type === "speed-up"
+  && powerUp.revealed
+  && !powerUp.collected
+));
 
 resetPlayers();
 clearLane();
@@ -207,6 +222,8 @@ const report = {
   hotKickScalesWithSlide,
   urgentHotKickFuseFloor,
   kickStopsBeforeCrate,
+  kickedBombCracksCrate,
+  kickedBombRevealsCrateDrop,
   bombPassTraverses,
   passDoesNotPushBomb,
   playerX: p1.position.x,
@@ -224,6 +241,8 @@ if (
   || !hotKickScalesWithSlide
   || !urgentHotKickFuseFloor
   || !kickStopsBeforeCrate
+  || !kickedBombCracksCrate
+  || !kickedBombRevealsCrateDrop
   || !bombPassTraverses
   || !passDoesNotPushBomb
 ) {
