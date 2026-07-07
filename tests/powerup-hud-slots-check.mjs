@@ -120,6 +120,13 @@ const remoteSlot = skillSlots.find((slot) => slot.type === "remote-up") ?? null;
 const shieldSlot = skillSlots.find((slot) => slot.type === "shield-up") ?? null;
 const bombPassSlot = skillSlots.find((slot) => slot.type === "bomb-pass-up") ?? null;
 const kickSlot = skillSlots.find((slot) => slot.type === "kick-up") ?? null;
+const recentPowerUpPickup = player?.recentPowerUpPickup ?? null;
+
+window.advanceTime(2300);
+const expiredState = JSON.parse(window.render_game_to_text());
+const expiredPlayer = expiredState.players.find((entry) => entry.id === 1);
+const expiredRecentPowerUpPickup = expiredPlayer?.recentPowerUpPickup ?? null;
+const expiredRecentSlots = expiredPlayer?.skillSlots?.filter((slot) => slot.recentlyCollected) ?? [];
 
 const report = {
   bombSlot,
@@ -128,33 +135,48 @@ const report = {
   shieldSlot,
   bombPassSlot,
   kickSlot,
+  recentPowerUpPickup,
+  expiredRecentPowerUpPickup,
+  expiredRecentSlotCount: expiredRecentSlots.length,
   pass: Boolean(
     bombSlot
       && bombSlot.acquired === false
       && bombSlot.level === 0
       && bombSlot.value === "x0"
+      && bombSlot.recentlyCollected === false
       && flameSlot
       && flameSlot.acquired === true
       && flameSlot.level === 1
       && flameSlot.value === "x1"
       && flameSlot.key === null
+      && flameSlot.recentlyCollected === true
       && remoteSlot
       && remoteSlot.acquired === true
       && remoteSlot.level === 1
       && remoteSlot.value === "ON"
       && remoteSlot.key === "R"
+      && remoteSlot.recentlyCollected === true
       && shieldSlot
       && shieldSlot.acquired === true
       && shieldSlot.level === 1
       && shieldSlot.value === "x1"
+      && shieldSlot.recentlyCollected === true
       && bombPassSlot
       && bombPassSlot.acquired === true
       && bombPassSlot.level === 1
       && bombPassSlot.value === "x1"
+      && bombPassSlot.recentlyCollected === true
       && kickSlot
       && kickSlot.acquired === true
       && kickSlot.level === 1
       && kickSlot.value === "x1"
+      && kickSlot.recentlyCollected === true
+      && recentPowerUpPickup
+      && recentPowerUpPickup.type === "kick-up"
+      && recentPowerUpPickup.value === "x1"
+      && recentPowerUpPickup.remainingMs > 0
+      && expiredRecentPowerUpPickup === null
+      && expiredRecentSlots.length === 0
   ),
 };
 
