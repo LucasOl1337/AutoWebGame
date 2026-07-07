@@ -145,6 +145,7 @@ const LANE_SNAP_THRESHOLD = TILE_SIZE * 0.45;
 const LANE_LOCK_THRESHOLD = 3;
 const LANE_SETTLE_EPSILON = 0.35;
 const LANE_SNAP_FACTOR = 2.6;
+const ROUND_START_CUE_MS = 1_250;
 const CHARACTER_MENU_KEYS: Record<MenuPlayerId, string> = {
   1: "KeyG",
   2: "KeyK",
@@ -393,6 +394,7 @@ export class GameApp {
   private roundTimeMs = ROUND_DURATION_MS;
   private paused = false;
   private roundOutcome: RoundOutcome | null = null;
+  private roundStartCueMs = 0;
   private matchWinner: PlayerId | null = null;
   private matchResultCooldownMs = 0;
   private onlineRoomMode: LobbyMode = "classic";
@@ -657,6 +659,7 @@ export class GameApp {
     this.matchWinner = null;
     this.paused = false;
     this.roundOutcome = null;
+    this.roundStartCueMs = ROUND_START_CUE_MS;
     this.menuReady = createBooleanPlayerRecord(false);
     for (const playerId of this.activePlayerIds) {
       this.menuReady[playerId] = true;
@@ -665,6 +668,8 @@ export class GameApp {
 
   public applyOnlineSnapshot(snapshot: OnlineGameSnapshot): void {
     const previousMode = this.mode;
+    const previousRoundNumber = this.roundNumber;
+    const previousRoundOutcome = this.roundOutcome;
     const previousSuddenDeathActive = this.suddenDeathActive;
     this.onlineRoomMode = snapshot.roomMode ?? "classic";
     this.baseArenaDefinition = snapshot.arena;
@@ -742,6 +747,14 @@ export class GameApp {
     this.matchResultChoice = createPlayerRecord(() => null);
     this.matchResultCooldownMs = 0;
     this.applyEndlessStats(snapshot.endlessStats);
+    this.syncRoundStartCue(
+      previousMode,
+      previousRoundNumber,
+      previousRoundOutcome,
+      snapshot.mode,
+      snapshot.roundNumber,
+      this.roundOutcome,
+    );
     this.primeCharacterSprites();
     this.resetOnlineRoundBuffers(snapshot.roundNumber);
     this.pushOnlineRenderSample(snapshot.serverTimeMs, snapshot.serverTick, snapshot.players);
@@ -756,6 +769,8 @@ export class GameApp {
 
   public applyOnlineFrame(frame: OnlineGameFrame): void {
     const previousMode = this.mode;
+    const previousRoundNumber = this.roundNumber;
+    const previousRoundOutcome = this.roundOutcome;
     const previousSuddenDeathActive = this.suddenDeathActive;
     this.onlineRoomMode = frame.roomMode ?? "classic";
     this.playOnlineAudioTransition({
@@ -807,6 +822,14 @@ export class GameApp {
     this.setBotPlayers(frame.botPlayerIds ?? []);
     this.nextBombId = frame.nextBombId;
     this.applyEndlessStats(frame.endlessStats);
+    this.syncRoundStartCue(
+      previousMode,
+      previousRoundNumber,
+      previousRoundOutcome,
+      frame.mode,
+      frame.roundNumber,
+      this.roundOutcome,
+    );
     this.primeCharacterSprites();
     this.resetOnlineRoundBuffers(frame.roundNumber);
     this.pushOnlineRenderSample(frame.serverTimeMs, frame.serverTick, frame.players);
@@ -865,7 +888,7 @@ export class GameApp {
       this.botControlledPlayers = createBooleanPlayerRecord(false);
       this.botEnabled = false;
     }
-    this.resetRound();
+    this.resetRound(false);
   }
 
   private playOnlineAudioTransition(next: {
@@ -1291,6 +1314,7 @@ export class GameApp {
     if (this.onlineSession?.role === "guest") {
       this.updateVisualEffects(deltaMs);
       if (this.mode === "match") {
+        this.updateRoundStartCue(deltaMs);
         if (!this.headless) {
           this.captureOnlineLocalInput();
         }
@@ -1620,6 +1644,7 @@ export class GameApp {
       return;
     }
 
+    this.updateRoundStartCue(deltaMs);
     this.roundTimeMs = Math.max(0, this.roundTimeMs - deltaMs);
     this.animationClockMs += deltaMs;
     this.updateVisualEffects(deltaMs);
@@ -1812,7 +1837,7 @@ export class GameApp {
     this.mode = "match";
   }
 
-  private resetRound(): void {
+  private resetRound(showStartCue = true): void {
     this.arena = createArena(this.baseArenaDefinition);
     this.invalidateArenaCache();
     this.players = this.createPlayers();
@@ -1825,6 +1850,7 @@ export class GameApp {
     this.nextBombId = 1;
     this.roundTimeMs = ROUND_DURATION_MS;
     this.roundOutcome = null;
+    this.roundStartCueMs = showStartCue ? ROUND_START_CUE_MS : 0;
     this.paused = false;
     this.botBombCooldownMs = 0;
     this.botCommittedDirection = createDirectionPlayerRecord(null);
@@ -4966,6 +4992,30 @@ export class GameApp {
     }
   }
 
+  private syncRoundStartCue(
+    previousMode: Mode,
+    previousRoundNumber: number,
+    previousRoundOutcome: RoundOutcome | null,
+    nextMode: Mode,
+    nextRoundNumber: number,
+    nextRoundOutcome: RoundOutcome | null,
+  ): void {
+    if (nextMode !== "match" || nextRoundOutcome) {
+      this.roundStartCueMs = 0;
+      return;
+    }
+    if (previousMode !== "match" || previousRoundNumber !== nextRoundNumber || previousRoundOutcome) {
+      this.roundStartCueMs = ROUND_START_CUE_MS;
+    }
+  }
+
+  private updateRoundStartCue(deltaMs: number): void {
+    if (this.roundStartCueMs <= 0 || this.paused || this.roundOutcome) {
+      return;
+    }
+    this.roundStartCueMs = Math.max(0, this.roundStartCueMs - deltaMs);
+  }
+
   private drawHudText(text: string, x: number, y: number, fillColor: string, outlineColor: string): void {
     this.ctx.lineWidth = 1;
     this.ctx.strokeStyle = outlineColor;
@@ -5085,6 +5135,14 @@ export class GameApp {
       };
     }
 
+    if (this.mode === "match" && this.roundStartCueMs > 0) {
+      return {
+        title: copy.roundStartTitle(this.roundNumber),
+        subtitle: copy.roundStartSubtitle,
+        footer: null,
+      };
+    }
+
     if (this.mode === "match-result") {
       const scoreSummary = copy.scoreSummary(this.formatActiveScore());
       return {
@@ -5159,6 +5217,7 @@ export class GameApp {
       }));
     const suddenDeathHud = this.getSuddenDeathHudState();
     const centerOverlay = this.getCenterOverlayState();
+    const copy = SITE_COPY[this.language].canvas;
 
     const payload = {
       mode: this.mode,
@@ -5174,6 +5233,12 @@ export class GameApp {
         activePlayerIds: this.activePlayerIds,
         characterMenuOpen: this.characterMenuOpen,
         centerOverlay,
+        roundStartCue: {
+          active: this.roundStartCueMs > 0,
+          remainingMs: Math.round(this.roundStartCueMs),
+          title: copy.roundStartTitle(this.roundNumber),
+          subtitle: copy.roundStartSubtitle,
+        },
         suddenDeath: {
           active: this.suddenDeathActive,
           startsAtMs: SUDDEN_DEATH_START_MS,

@@ -173,6 +173,8 @@ export interface SiteCopy {
   canvas: {
     pausedTitle: string;
     pausedSubtitle: string;
+    roundStartTitle: (round: number) => string;
+    roundStartSubtitle: string;
     arenaRebooting: string;
     doubleKo: string;
     noPoints: string;
@@ -362,6 +364,8 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
     canvas: {
       pausedTitle: "PAUSADO",
       pausedSubtitle: "Pressione Esc para continuar.",
+      roundStartTitle: (round) => `RODADA ${round}`,
+      roundStartSubtitle: "Acao liberada.",
       arenaRebooting: "Arena reiniciando...",
       doubleKo: "Dois nucleos explodiram.",
       noPoints: "Nenhum ponto foi marcado.",
@@ -549,6 +553,8 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
     canvas: {
       pausedTitle: "PAUSED",
       pausedSubtitle: "Press Esc to resume.",
+      roundStartTitle: (round) => `ROUND ${round}`,
+      roundStartSubtitle: "Action is live.",
       arenaRebooting: "Arena rebooting...",
       doubleKo: "Both cores overloaded.",
       noPoints: "No points awarded.",
