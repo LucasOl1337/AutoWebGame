@@ -1,5 +1,37 @@
 # Changelog
 
+## [2026-07-07] - v0.2.3 Official Patch (Danger, powerups e lobby solido)
+
+**Project:** AutoWebGame / BOMBA  |  **Branch:** main  |  **State:** v0.2.3 release candidate
+
+### PC vs GitHub at Release Time
+- Remote latest release before patch: `v0.2.2`, published on 2026-07-07T02:29:41Z.
+- `origin/main` before patch: `602b5d7e989a6c0238263b40252bee2853903694`.
+- Local integration: `codex-swarm` through `eac1a60` plus i18n storage guard evidence from `1813b99`.
+- Conflicts resolved locally in runtime, UI, docs and tests before release docs/art generation.
+
+### Summary of Changes Being Released
+- Danger adrenaline step gives vulnerable players a small burst when escaping imminent blast tiles.
+- Bomb kick gameplay now includes hot fuse, crate crack and combo reward behavior.
+- Short fuse, perfect start and shield breakaway add more readable tactical power-up feedback.
+- Shield block and power-up collection gained richer SFX and anti-stack handling.
+- Feedback dialog, username guidance, manual room-code entry and arena theme selection are clearer.
+- UI/i18n/session storage and telemetry are guarded against blocked or partial browser APIs.
+- Online input direction is sanitized at the authoritative latch boundary.
+- Character roster loading rejects duplicated/truncated public manifests and falls back to the approved roster.
+- Round-start and round-end overlays were preserved during integration and revalidated.
+
+### Multi-Agent Session Audit
+- CODEX/codex-swarm: tracked changes found across local `swarm/*` branches/worktrees and integrated.
+- CODEX/i18n-storage-guard: dedicated test evidence integrated; runtime behavior covered by shared storage helper.
+- Claude: no post-`v0.2.2` versioned repo changes found.
+- ZCode: no post-`v0.2.2` versioned repo changes found.
+- Wispr Flow: no post-`v0.2.2` versioned repo changes found.
+
+See `DocsDev/releases/release-v0.2.3.md` and `patchnotes.md` for the release notes and validation list.
+
+---
+
 ## [2026-07-06] - v0.2.2 Official Patch (Arena UX + lobby resilience)
 
 **Project:** AutoWebGame / BOMBA  |  **Branch:** main  |  **State:** v0.2.2 release candidate

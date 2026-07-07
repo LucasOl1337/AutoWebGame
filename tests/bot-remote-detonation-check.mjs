@@ -113,16 +113,42 @@ unsafeBot.activeBombs = 1;
 const unsafeDecision = unsafeGame.getBotDecision(unsafeBot);
 const avoidsUnsafeDetonationPass = unsafeDecision.detonate !== true;
 
+const multiBombGame = new GameApp(root, assets);
+multiBombGame.startMatch();
+const multiBombBot = multiBombGame.players[2];
+const multiBombEnemy = multiBombGame.players[1];
+multiBombBot.spawnProtectionMs = 0;
+multiBombEnemy.spawnProtectionMs = 0;
+multiBombBot.remoteLevel = 1;
+multiBombBot.flameRange = 2;
+multiBombBot.maxBombs = 2;
+multiBombGame.flames = [];
+multiBombGame.arena.solid = new Set();
+multiBombGame.arena.breakable = new Set();
+setPlayerTile(multiBombBot, { x: 2, y: 5 });
+setPlayerTile(multiBombEnemy, { x: 7, y: 5 });
+multiBombGame.bombs = [
+  { id: 9001, ownerId: 2, tile: { x: 1, y: 1 }, fuseMs: 1700, ownerCanPass: false, flameRange: 2 },
+  { id: 9002, ownerId: 2, tile: { x: 5, y: 5 }, fuseMs: 1500, ownerCanPass: false, flameRange: 2 },
+];
+multiBombBot.activeBombs = 2;
+
+const multiBombDecision = multiBombGame.getBotDecision(multiBombBot);
+const newerBombDetonationPass = multiBombDecision.detonate === true
+  && multiBombDecision.placeBomb === false;
+
 const report = {
   detonateDecision,
   shouldDetonatePass,
   remoteExplosionPass,
   unsafeDecision,
   avoidsUnsafeDetonationPass,
+  multiBombDecision,
+  newerBombDetonationPass,
 };
 
 console.log(JSON.stringify(report, null, 2));
 
-if (!shouldDetonatePass || !remoteExplosionPass || !avoidsUnsafeDetonationPass) {
+if (!shouldDetonatePass || !remoteExplosionPass || !avoidsUnsafeDetonationPass || !newerBombDetonationPass) {
   process.exit(1);
 }

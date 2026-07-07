@@ -17,6 +17,7 @@ import {
   resolveOnlineSessionState,
   shouldResetPlayingRoom,
 } from "../src/NetCode/matchmaking";
+import { getLobbySeatSnapshot, isPlayableLobbySeat } from "../src/NetCode/lobby-rules";
 import { validateUsername } from "../src/NetCode/account";
 import { mergeSequencedOnlineInputState } from "../src/NetCode/input-latch";
 import { createFixedRatePumpState, consumeFixedRatePumpSteps } from "../src/NetCode/server-tick";
@@ -1224,18 +1225,20 @@ export class GlobalLobby extends DurableObject {
       return;
     }
 
-    const occupiedSeatIds = PLAYER_IDS.filter((seatId) => Boolean(room.seats[seatId].clientId));
-    if (occupiedSeatIds.length < 2) {
-      return;
-    }
-    const allReady = occupiedSeatIds.every((seatId) => room.seats[seatId].ready);
-    if (!allReady) {
+    const seatSnapshot = getLobbySeatSnapshot(room.seats);
+    if (!seatSnapshot.minimumPlayersMet || !seatSnapshot.everyoneReady) {
       return;
     }
 
-    const activePlayerIds = occupiedSeatIds;
-    room.clients = new Set(activePlayerIds.map((seatId) => room.seats[seatId].clientId).filter(Boolean));
-    room.hostClientId = room.seats[activePlayerIds[0]].clientId;
+    const activePlayerIds = seatSnapshot.occupiedSeatIds;
+    const humanSeatIds = activePlayerIds.filter((seatId) => Boolean(room.seats[seatId].clientId));
+    if (humanSeatIds.length === 0) {
+      return;
+    }
+
+    const botPlayerIds = activePlayerIds.filter((seatId) => room.seats[seatId].occupantType === "bot");
+    room.clients = new Set(humanSeatIds.map((seatId) => room.seats[seatId].clientId).filter(Boolean));
+    room.hostClientId = room.seats[humanSeatIds[0]].clientId;
 
     room.status = "playing";
     this.refreshSeatLabels(room);
@@ -1243,7 +1246,7 @@ export class GlobalLobby extends DurableObject {
 
     await this.persistState();
 
-    this.startRoomMatch(room, activePlayerIds, characterSelections);
+    this.startRoomMatch(room, activePlayerIds, characterSelections, { botPlayerIds });
     this.sendMatchStarted(room, activePlayerIds, characterSelections);
     this.appendRoomSystemMessage(room, "Match started. Good luck.");
     await this.persistState();
@@ -2890,20 +2893,22 @@ export class GlobalLobby extends DurableObject {
    * @param {{ activePlayerIds: Array<1 | 2 | 3 | 4>, characterSelections: Record<1 | 2 | 3 | 4, number> }} match
    */
   async restartPlayingMatch(room, match) {
-    const activePlayerIds = match.activePlayerIds.filter((seatId) => Boolean(room.seats[seatId]?.clientId));
-    if (activePlayerIds.length < 2) {
+    const activePlayerIds = match.activePlayerIds.filter((seatId) => isPlayableLobbySeat(room.seats[seatId]));
+    const humanSeatIds = activePlayerIds.filter((seatId) => Boolean(room.seats[seatId]?.clientId));
+    if (activePlayerIds.length < 2 || humanSeatIds.length === 0) {
       await this.resetRoomToLobby(room, "Not enough players to keep auto-starting. Waiting in lobby.");
       return;
     }
 
+    const botPlayerIds = activePlayerIds.filter((seatId) => room.seats[seatId].occupantType === "bot");
     const characterSelections = createSeatMap((seatId) => room.seats[seatId].characterIndex ?? 0);
-    room.clients = new Set(activePlayerIds.map((seatId) => room.seats[seatId].clientId).filter(Boolean));
-    room.hostClientId = room.seats[activePlayerIds[0]].clientId;
+    room.clients = new Set(humanSeatIds.map((seatId) => room.seats[seatId].clientId).filter(Boolean));
+    room.hostClientId = room.seats[humanSeatIds[0]].clientId;
     room.status = "playing";
     this.refreshSeatLabels(room);
     await this.persistState();
 
-    this.startRoomMatch(room, activePlayerIds, characterSelections);
+    this.startRoomMatch(room, activePlayerIds, characterSelections, { botPlayerIds });
     this.sendMatchStarted(room, activePlayerIds, characterSelections);
     this.appendRoomSystemMessage(room, "Champion declared. Next match started automatically.");
     await this.persistState();

@@ -1,7 +1,18 @@
 import type { CharacterRosterEntry } from "../Engine/assets";
+import {
+  ARENA_THEME_LIBRARY,
+  DEFAULT_ARENA_THEME_ID,
+  getArenaThemeById,
+} from "../Arenas/arena-theme-library";
+import { buildArenaThemeUrl } from "../Arenas/arena-theme-selection";
 import { assetUrl } from "../Engine/asset-url";
 import { ALL_PLAYER_IDS } from "../Gameplay/types";
 import type { Mode, PlayerId } from "../Gameplay/types";
+import {
+  readLocalStorageItem,
+  removeLocalStorageItem,
+  writeLocalStorageItem,
+} from "../UiLayouts/browser-storage";
 import {
   applyDocumentLanguage,
   buildLocalizedUrl,
@@ -11,8 +22,13 @@ import {
   type SiteCopy,
   type SiteLanguage,
 } from "../UiLayouts/i18n";
-import type { PlayerAccount } from "./account";
-import { validateUsername } from "./account";
+import type { PlayerAccount, UsernameValidationResult } from "./account";
+import {
+  USERNAME_ALLOWED_PATTERN_SOURCE,
+  USERNAME_MAX_LENGTH,
+  USERNAME_MIN_LENGTH,
+  validateUsername,
+} from "./account";
 import type { OnlineSessionState } from "./matchmaking";
 import type {
   LobbyState,
@@ -40,7 +56,6 @@ interface OnlineGameAppBridge {
   applyOnlineSnapshot(snapshot: OnlineGameSnapshot): void;
   clearOnlinePeer(): void;
   receiveOnlineGuestInput(input: OnlineInputState): void;
-  returnToMenu(): void;
 }
 
 type ExperienceScreen = "landing" | "lobby-list" | "setup" | "match";
@@ -70,16 +85,22 @@ interface SessionElements {
   landingEndlessButton: HTMLButtonElement;
   landingBotMatchButton: HTMLButtonElement;
   landingBotIntensityButtons: HTMLButtonElement[];
+  landingArenaThemeLinks: HTMLAnchorElement[];
   landingLobbyButton: HTMLButtonElement;
   landingFeedbackButton: HTMLButtonElement;
   landingRoster: HTMLDivElement;
   feedbackDialog: HTMLDivElement;
   feedbackTextarea: HTMLTextAreaElement;
+  feedbackCounter: HTMLParagraphElement;
   feedbackSendButton: HTMLButtonElement;
   feedbackCancelButton: HTMLButtonElement;
   feedbackStatus: HTMLParagraphElement;
   lobbyListBackButton: HTMLButtonElement;
   lobbyListCreateButton: HTMLButtonElement;
+  lobbyCodeForm: HTMLFormElement;
+  lobbyCodeInput: HTMLInputElement;
+  lobbyCodeSubmitButton: HTMLButtonElement;
+  lobbyCodeHint: HTMLParagraphElement;
   lobbyListCount: HTMLParagraphElement;
   lobbyListList: HTMLDivElement;
   setupBackButton: HTMLButtonElement;
@@ -126,10 +147,12 @@ export const SESSION_RETURN_BRIEF_STORAGE_KEY = "bomba-session-return-brief";
 export const SESSION_RETURN_BRIEF_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 export const BOT_MATCH_FILL_STORAGE_KEY = "bomba-bot-match-fill";
 export const BOT_MATCH_FILL_OPTIONS = [1, 2, 3] as const;
+export const FEEDBACK_MAX_LENGTH = 2000;
 
 export type BotMatchFill = typeof BOT_MATCH_FILL_OPTIONS[number];
 
 const DEFAULT_BOT_MATCH_FILL: BotMatchFill = 3;
+const PREFERRED_CHARACTER_STORAGE_KEY = "mistbridge-preferred-character-index";
 
 export type SessionReturnMode = "quick-match" | "endless" | "bot-match" | "lobby";
 
@@ -348,6 +371,11 @@ export function normalizeRoomCode(roomCode: string | null | undefined): string {
   return readNestedRoomCode(rawRoomCode) ?? normalizeRoomCodeToken(rawRoomCode);
 }
 
+export function resolveManualLobbyJoinCode(roomCode: string | null | undefined): string | null {
+  const normalizedRoomCode = normalizeRoomCode(roomCode);
+  return normalizedRoomCode || null;
+}
+
 export function readRoomCodeFromUrl(href: string | null | undefined): string | null {
   if (!href) {
     return null;
@@ -370,6 +398,46 @@ export function buildRoomInviteUrl(language: SiteLanguage, roomCode: string | nu
     url.searchParams.delete("room");
   }
   return url.toString();
+}
+
+export function formatUsernameInputTitle(language: SiteLanguage): string {
+  return language === "pt"
+    ? `Use ${USERNAME_MIN_LENGTH} a ${USERNAME_MAX_LENGTH} caracteres: letras, numeros e underscore.`
+    : `Use ${USERNAME_MIN_LENGTH}-${USERNAME_MAX_LENGTH} characters: letters, numbers, and underscore.`;
+}
+
+export function formatUsernameValidationMessage(validation: UsernameValidationResult, language: SiteLanguage): string {
+  if (validation.ok) {
+    return "";
+  }
+  switch (validation.reason) {
+    case "too-short":
+      return language === "pt"
+        ? `Use pelo menos ${USERNAME_MIN_LENGTH} caracteres.`
+        : `Use at least ${USERNAME_MIN_LENGTH} characters.`;
+    case "too-long":
+      return language === "pt"
+        ? `Use no maximo ${USERNAME_MAX_LENGTH} caracteres.`
+        : `Use at most ${USERNAME_MAX_LENGTH} characters.`;
+    case "invalid-characters":
+      return language === "pt"
+        ? "Use apenas letras, numeros e underscore."
+        : "Use only letters, numbers, and underscore.";
+    default:
+      return language === "pt" ? "Username invalido." : "Invalid username.";
+  }
+}
+
+export function applyUsernameInputConstraints(
+  input: Pick<HTMLInputElement, "autocomplete" | "maxLength" | "minLength" | "pattern" | "spellcheck" | "title">,
+  language: SiteLanguage,
+): void {
+  input.minLength = USERNAME_MIN_LENGTH;
+  input.maxLength = USERNAME_MAX_LENGTH;
+  input.pattern = USERNAME_ALLOWED_PATTERN_SOURCE;
+  input.title = formatUsernameInputTitle(language);
+  input.autocomplete = "username";
+  input.spellcheck = false;
 }
 
 type ClipboardFallbackEnvironment = {
@@ -463,10 +531,19 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private readonly telemetry: GrowthTelemetryClient;
   private observedMatchWinner: PlayerId | null = null;
   private readonly language: SiteLanguage;
+  private readonly selectedArenaThemeId: string;
 
-  constructor(root: HTMLElement, app: OnlineGameAppBridge, roster: CharacterRosterEntry[]) {
+  constructor(
+    root: HTMLElement,
+    app: OnlineGameAppBridge,
+    roster: CharacterRosterEntry[],
+    arenaThemeId = DEFAULT_ARENA_THEME_ID,
+  ) {
     this.app = app;
     this.roster = roster;
+    this.selectedArenaThemeId = getArenaThemeById(arenaThemeId)?.id
+      ?? getArenaThemeById(DEFAULT_ARENA_THEME_ID)?.id
+      ?? ARENA_THEME_LIBRARY[0].id;
     this.language = getInitialSiteLanguage();
     applyDocumentLanguage(this.language);
     this.pendingAutoJoinRoom = typeof window === "undefined" ? null : readRoomCodeFromUrl(window.location.href);
@@ -705,6 +782,13 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.selectBotMatchFill(parseStoredBotMatchFill(button.dataset.botFill));
       });
     }
+    for (const link of this.elements.landingArenaThemeLinks) {
+      link.addEventListener("click", (event) => {
+        if (link.dataset.active === "true") {
+          event.preventDefault();
+        }
+      });
+    }
     this.elements.landingFeedbackButton.addEventListener("click", () => {
       this.openFeedbackDialog();
     });
@@ -729,6 +813,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       }
       this.rememberSessionEntry("lobby");
       this.setStatus(this.copy.status.creatingLobby);
+    });
+    this.elements.lobbyCodeForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      this.joinLobbyFromCodeEntry();
     });
     this.elements.setupBackButton.addEventListener("click", () => {
       if (this.currentLobby) {
@@ -764,22 +852,16 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       void this.copyInvite();
     });
     this.elements.matchLeaveButton.addEventListener("click", () => {
-      this.leaveCurrentMatch();
+      this.leaveCurrentLobby();
     });
     this.elements.matchFullscreenButton.addEventListener("click", () => {
       this.setMatchChromeVisible(true);
       void this.toggleMatchFullscreen();
     });
     this.elements.matchInfoToggleButton.addEventListener("click", () => {
-      if (!this.currentLobby) {
-        return;
-      }
       this.setActiveMatchPanel(this.matchInfoPanelOpen ? null : "info");
     });
     this.elements.matchChatToggleButton.addEventListener("click", () => {
-      if (!this.currentLobby) {
-        return;
-      }
       this.setActiveMatchPanel(this.matchChatPanelOpen ? null : "chat");
     });
     this.elements.matchViewport.addEventListener("pointerdown", () => {
@@ -856,14 +938,23 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.closeFeedbackDialog();
       }
     });
-    this.elements.feedbackSendButton.addEventListener("click", () => {
-      void this.submitFeedback();
-    });
-    this.elements.feedbackTextarea.addEventListener("keydown", (event) => {
+    this.elements.feedbackDialog.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
         this.closeFeedbackDialog();
-      } else if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      }
+    });
+    this.elements.feedbackSendButton.addEventListener("click", () => {
+      void this.submitFeedback();
+    });
+    this.elements.feedbackTextarea.addEventListener("input", () => {
+      if (!this.feedbackRequestPending) {
+        this.elements.feedbackStatus.textContent = "";
+      }
+      this.renderFeedbackDialog();
+    });
+    this.elements.feedbackTextarea.addEventListener("keydown", (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
         event.preventDefault();
         void this.submitFeedback();
       }
@@ -911,6 +1002,28 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     }
     this.rememberSessionEntry("endless");
     this.setStatus(this.translate("Entrando na partida infinita...", "Joining the endless match..."));
+  }
+
+  private joinLobbyFromCodeEntry(): void {
+    const roomCode = resolveManualLobbyJoinCode(this.elements.lobbyCodeInput.value);
+    if (!roomCode) {
+      this.setStatus(this.copy.lobbies.joinCodeEmpty);
+      this.elements.lobbyCodeInput.focus();
+      return;
+    }
+
+    this.telemetry.track("lobby_code_join_submitted", {
+      context: { roomCode, screen: "lobby-list" },
+      payload: { entryLength: this.elements.lobbyCodeInput.value.length },
+    });
+    if (!this.send({ type: "join-lobby", roomCode })) {
+      this.setStatus(this.copy.lobbies.joinUnavailable);
+      return;
+    }
+    this.pendingAutoJoinRoom = roomCode;
+    this.rememberSessionEntry("lobby");
+    this.renderAll();
+    this.setStatus(this.copy.lobbies.entering(roomCode));
   }
 
   private handleSetupPrimaryAction(): void {
@@ -984,21 +1097,6 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       context: { roomCode: this.currentLobby?.roomCode ?? null, screen: this.getScreen() },
     });
     this.send({ type: "leave-lobby" });
-  }
-
-  private leaveCurrentMatch(): void {
-    if (this.currentLobby) {
-      this.leaveCurrentLobby();
-      return;
-    }
-    this.matchInfoPanelOpen = false;
-    this.matchChatPanelOpen = false;
-    this.matchChromeVisible = true;
-    this.clearMatchChromeHideTimer();
-    this.idleScreen = "landing";
-    this.app.returnToMenu();
-    this.renderAll();
-    this.setStatus(this.copy.status.returnedHome);
   }
 
   private sendChat(): void {
@@ -1345,10 +1443,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const landingAccountUsernameInput = document.createElement("input");
     landingAccountUsernameInput.className = "experience-account__input";
     landingAccountUsernameInput.type = "text";
-    landingAccountUsernameInput.maxLength = 16;
     landingAccountUsernameInput.placeholder = this.translate("Seu username", "Your username");
-    landingAccountUsernameInput.autocomplete = "off";
-    landingAccountUsernameInput.spellcheck = false;
+    applyUsernameInputConstraints(landingAccountUsernameInput, this.language);
 
     const landingAccountPrimaryButton = document.createElement("button");
     landingAccountPrimaryButton.className = "experience-button experience-button--primary";
@@ -1427,6 +1523,51 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     });
 
     landingBotIntensity.append(landingBotIntensityHeader, landingBotIntensityGroup);
+
+    const landingArenaTheme = document.createElement("section");
+    landingArenaTheme.className = "experience-arena-theme";
+    landingArenaTheme.setAttribute("aria-label", copy.landing.arenaThemeTitle);
+
+    const landingArenaThemeHeader = document.createElement("div");
+    landingArenaThemeHeader.className = "experience-arena-theme__header";
+
+    const landingArenaThemeTitle = document.createElement("p");
+    landingArenaThemeTitle.className = "experience-arena-theme__title";
+    landingArenaThemeTitle.textContent = copy.landing.arenaThemeTitle;
+
+    const landingArenaThemeHint = document.createElement("p");
+    landingArenaThemeHint.className = "experience-arena-theme__hint";
+    landingArenaThemeHint.textContent = copy.landing.arenaThemeHint;
+
+    landingArenaThemeHeader.append(landingArenaThemeTitle, landingArenaThemeHint);
+
+    const landingArenaThemeList = document.createElement("div");
+    landingArenaThemeList.className = "experience-arena-theme__options";
+    landingArenaThemeList.setAttribute("role", "list");
+
+    const landingArenaThemeLinks = ARENA_THEME_LIBRARY.map((theme) => {
+      const link = document.createElement("a");
+      link.className = "experience-arena-theme__option";
+      link.dataset.themeId = theme.id;
+      link.href = buildArenaThemeUrl(theme.id, typeof window === "undefined" ? null : window.location.href);
+      link.setAttribute("role", "listitem");
+
+      const label = document.createElement("strong");
+      label.textContent = theme.name;
+
+      const detail = document.createElement("span");
+      detail.textContent = copy.landing.arenaThemeSummary(theme.id, theme.summary);
+
+      const activeBadge = document.createElement("em");
+      activeBadge.className = "experience-arena-theme__badge";
+      activeBadge.textContent = copy.landing.arenaThemeActive;
+
+      link.append(label, detail, activeBadge);
+      landingArenaThemeList.append(link);
+      return link;
+    });
+
+    landingArenaTheme.append(landingArenaThemeHeader, landingArenaThemeList);
 
     const landingLobbyButton = document.createElement("button");
     landingLobbyButton.className = "experience-button experience-button--secondary";
@@ -1510,6 +1651,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       landingReturnBrief,
       landingActions,
       landingBotIntensity,
+      landingArenaTheme,
       landingControls,
       landingAccountCard,
     );
@@ -1520,11 +1662,15 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const feedbackDialog = document.createElement("div");
     feedbackDialog.className = "experience-feedback";
     feedbackDialog.hidden = true;
+    feedbackDialog.setAttribute("role", "dialog");
+    feedbackDialog.setAttribute("aria-modal", "true");
+    feedbackDialog.setAttribute("aria-labelledby", "experience-feedback-title");
 
     const feedbackCard = document.createElement("div");
     feedbackCard.className = "experience-feedback__card";
 
     const feedbackTitle = document.createElement("p");
+    feedbackTitle.id = "experience-feedback-title";
     feedbackTitle.className = "experience-feedback__title";
     feedbackTitle.textContent = copy.landing.feedbackTitle;
 
@@ -1535,9 +1681,16 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const feedbackTextarea = document.createElement("textarea");
     feedbackTextarea.className = "experience-feedback__textarea";
     feedbackTextarea.rows = 6;
+    feedbackTextarea.maxLength = FEEDBACK_MAX_LENGTH;
     feedbackTextarea.placeholder = copy.landing.feedbackPlaceholder;
+    feedbackTextarea.setAttribute("aria-describedby", "experience-feedback-counter experience-feedback-status");
+
+    const feedbackCounter = document.createElement("p");
+    feedbackCounter.id = "experience-feedback-counter";
+    feedbackCounter.className = "experience-feedback__counter";
 
     const feedbackStatus = document.createElement("p");
+    feedbackStatus.id = "experience-feedback-status";
     feedbackStatus.className = "experience-feedback__status";
 
     const feedbackActions = document.createElement("div");
@@ -1554,7 +1707,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     feedbackSendButton.textContent = copy.landing.feedbackSend;
 
     feedbackActions.append(feedbackCancelButton, feedbackSendButton);
-    feedbackCard.append(feedbackTitle, feedbackPrompt, feedbackTextarea, feedbackStatus, feedbackActions);
+    feedbackCard.append(feedbackTitle, feedbackPrompt, feedbackTextarea, feedbackCounter, feedbackStatus, feedbackActions);
     feedbackDialog.append(feedbackCard);
 
     landingHero.append(landingCopy, landingRoster);
@@ -1588,10 +1741,51 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const lobbyListCount = document.createElement("p");
     lobbyListCount.className = "experience-room-list__count";
 
+    const lobbyCodeForm = document.createElement("form");
+    lobbyCodeForm.className = "experience-room-code";
+    lobbyCodeForm.noValidate = true;
+
+    const lobbyCodeCopy = document.createElement("div");
+    lobbyCodeCopy.className = "experience-room-code__copy";
+
+    const lobbyCodeLabel = document.createElement("label");
+    lobbyCodeLabel.className = "experience-room-code__label";
+    lobbyCodeLabel.htmlFor = "experience-room-code-input";
+    lobbyCodeLabel.textContent = copy.lobbies.joinCodeTitle;
+
+    const lobbyCodeHint = document.createElement("p");
+    lobbyCodeHint.className = "experience-room-code__hint";
+    lobbyCodeHint.id = "experience-room-code-hint";
+    lobbyCodeHint.textContent = copy.lobbies.joinCodeHint;
+
+    lobbyCodeCopy.append(lobbyCodeLabel, lobbyCodeHint);
+
+    const lobbyCodeActions = document.createElement("div");
+    lobbyCodeActions.className = "experience-room-code__actions";
+
+    const lobbyCodeInput = document.createElement("input");
+    lobbyCodeInput.className = "experience-room-code__input";
+    lobbyCodeInput.id = "experience-room-code-input";
+    lobbyCodeInput.name = "roomCode";
+    lobbyCodeInput.type = "text";
+    lobbyCodeInput.autocomplete = "off";
+    lobbyCodeInput.inputMode = "text";
+    lobbyCodeInput.spellcheck = false;
+    lobbyCodeInput.placeholder = copy.lobbies.joinCodePlaceholder;
+    lobbyCodeInput.setAttribute("aria-describedby", lobbyCodeHint.id);
+
+    const lobbyCodeSubmitButton = document.createElement("button");
+    lobbyCodeSubmitButton.className = "experience-button experience-button--secondary";
+    lobbyCodeSubmitButton.type = "submit";
+    lobbyCodeSubmitButton.textContent = copy.lobbies.joinCodeButton;
+
+    lobbyCodeActions.append(lobbyCodeInput, lobbyCodeSubmitButton);
+    lobbyCodeForm.append(lobbyCodeCopy, lobbyCodeActions);
+
     const lobbyListList = document.createElement("div");
     lobbyListList.className = "experience-room-list";
 
-    lobbyList.append(lobbyHeader, lobbyListCount, lobbyListList);
+    lobbyList.append(lobbyHeader, lobbyCodeForm, lobbyListCount, lobbyListList);
 
     const setup = document.createElement("section");
     setup.className = "experience-screen experience-screen--setup";
@@ -1877,16 +2071,22 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       landingEndlessButton,
       landingBotMatchButton,
       landingBotIntensityButtons,
+      landingArenaThemeLinks,
       landingLobbyButton,
       landingFeedbackButton,
       landingRoster,
       feedbackDialog,
       feedbackTextarea,
+      feedbackCounter,
       feedbackSendButton,
       feedbackCancelButton,
       feedbackStatus,
       lobbyListBackButton,
       lobbyListCreateButton,
+      lobbyCodeForm,
+      lobbyCodeInput,
+      lobbyCodeSubmitButton,
+      lobbyCodeHint,
       lobbyListCount,
       lobbyListList,
       setupBackButton,
@@ -1941,11 +2141,6 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
   private renderMatchSurfaceState(): void {
     const isMatchScreen = this.getScreen() === "match";
-    const hasOnlineLobby = Boolean(this.currentLobby);
-    if (!hasOnlineLobby) {
-      this.matchInfoPanelOpen = false;
-      this.matchChatPanelOpen = false;
-    }
     const fullscreenActive = this.isMatchStageFullscreen();
     const chromeHidden = isMatchScreen
       && fullscreenActive
@@ -1956,11 +2151,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.elements.matchStage.dataset.chatOpen = isMatchScreen && this.matchChatPanelOpen ? "true" : "false";
     this.elements.matchStage.dataset.fullscreen = isMatchScreen && fullscreenActive ? "true" : "false";
     this.elements.matchStage.dataset.chromeHidden = chromeHidden ? "true" : "false";
-    this.elements.matchStage.dataset.onlineLobby = hasOnlineLobby ? "true" : "false";
     this.elements.shell.dataset.matchFullscreen = isMatchScreen && fullscreenActive ? "true" : "false";
-    this.elements.matchDock.hidden = !isMatchScreen || !hasOnlineLobby;
-    this.elements.matchInfoToggleButton.hidden = !hasOnlineLobby;
-    this.elements.matchChatToggleButton.hidden = !hasOnlineLobby;
+    this.elements.matchDock.hidden = !isMatchScreen;
     this.elements.matchInfoToggleButton.setAttribute(
       "aria-expanded",
       isMatchScreen && this.matchInfoPanelOpen ? "true" : "false",
@@ -2076,6 +2268,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       ? this.translate("Entrando...", "Joining...")
       : this.translate("Partida infinita", "Infinite match");
     this.renderBotMatchIntensity();
+    this.renderArenaThemePicker();
     this.renderLandingCharacterPicker();
   }
 
@@ -2085,6 +2278,25 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       const active = fill === this.botMatchFill;
       button.dataset.active = active ? "true" : "false";
       button.setAttribute("aria-pressed", active ? "true" : "false");
+    }
+  }
+
+  private renderArenaThemePicker(): void {
+    const href = typeof window === "undefined" ? null : window.location.href;
+    for (const link of this.elements.landingArenaThemeLinks) {
+      const themeId = link.dataset.themeId ?? "";
+      const active = themeId === this.selectedArenaThemeId;
+      link.dataset.active = active ? "true" : "false";
+      link.href = buildArenaThemeUrl(themeId, href);
+      if (active) {
+        link.setAttribute("aria-current", "true");
+      } else {
+        link.removeAttribute("aria-current");
+      }
+      const badge = link.querySelector<HTMLElement>(".experience-arena-theme__badge");
+      if (badge) {
+        badge.hidden = !active;
+      }
     }
   }
 
@@ -2107,9 +2319,16 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
   private renderFeedbackDialog(): void {
     const copy = this.copy;
+    const messageLength = this.elements.feedbackTextarea.value.trim().length;
+    const remainingCharacters = FEEDBACK_MAX_LENGTH - messageLength;
+    const messageReady = messageLength > 0 && remainingCharacters >= 0;
     this.elements.feedbackDialog.hidden = !this.feedbackDialogOpen;
     this.elements.feedbackTextarea.disabled = this.feedbackRequestPending;
-    this.elements.feedbackSendButton.disabled = this.feedbackRequestPending;
+    this.elements.feedbackCounter.textContent = remainingCharacters >= 0
+      ? copy.landing.feedbackCharactersRemaining(remainingCharacters)
+      : copy.landing.feedbackCharactersOverLimit(Math.abs(remainingCharacters), FEEDBACK_MAX_LENGTH);
+    this.elements.feedbackCounter.classList.toggle("experience-feedback__counter--invalid", remainingCharacters < 0);
+    this.elements.feedbackSendButton.disabled = this.feedbackRequestPending || !messageReady;
     this.elements.feedbackCancelButton.disabled = this.feedbackRequestPending;
     this.elements.feedbackSendButton.textContent = this.feedbackRequestPending
       ? copy.landing.feedbackSending
@@ -2131,6 +2350,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.elements.landingAccountPrimaryButton.disabled = this.accountRequestPending || loggedIn || !onlineActionsAvailable;
     this.elements.landingAccountSecondaryButton.disabled = this.accountRequestPending || !onlineActionsAvailable;
     this.elements.landingAccountUsernameInput.placeholder = this.translate("Seu username", "Your username");
+    applyUsernameInputConstraints(this.elements.landingAccountUsernameInput, this.language);
 
     if (loggedIn && account) {
       this.elements.landingAccountTitle.textContent = this.translate("Conta ativa", "Active account");
@@ -2166,6 +2386,12 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
   private renderLobbyList(): void {
     const copy = this.copy;
+    const manualJoinDisabled = !this.realtimeReady;
+    this.elements.lobbyCodeInput.disabled = manualJoinDisabled;
+    this.elements.lobbyCodeSubmitButton.disabled = manualJoinDisabled;
+    this.elements.lobbyCodeHint.textContent = manualJoinDisabled
+      ? copy.lobbies.joinCodeUnavailableHint
+      : copy.lobbies.joinCodeHint;
     this.elements.lobbyListCount.textContent = this.lobbies.length === 0
       ? copy.lobbies.emptyCount
       : copy.lobbies.count(this.lobbies.length);
@@ -2588,8 +2814,6 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private renderMatch(): void {
     const copy = this.copy;
     const lobby = this.currentLobby;
-    const hasOnlineLobby = Boolean(lobby);
-    const isMatchScreen = this.getScreen() === "match";
     this.elements.matchCode.textContent = lobby
       ? lobby.roomMode === "endless"
         ? this.translate("Modo infinito", "Endless mode")
@@ -2610,10 +2834,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
           `${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} jogadores na partida`,
           `${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} players in match`,
         )
-      : copy.match.offlineStatus;
-    this.elements.matchCopyButton.hidden = !hasOnlineLobby;
-    this.elements.matchCopyButton.disabled = !hasOnlineLobby;
-    this.elements.matchLeaveButton.disabled = !isMatchScreen;
+      : copy.match.liveStatus;
+    this.elements.matchCopyButton.disabled = !lobby;
+    this.elements.matchLeaveButton.disabled = !lobby;
   }
 
   private renderMatchRoster(): void {
@@ -2737,7 +2960,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     }
     const validation = validateUsername(this.elements.landingAccountUsernameInput.value);
     if (!validation.ok) {
-      this.setStatus(validation.message ?? this.translate("Username invalido.", "Invalid username."));
+      this.setStatus(formatUsernameValidationMessage(validation, this.language));
       return;
     }
 
@@ -2833,7 +3056,13 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     const message = this.elements.feedbackTextarea.value.trim();
     if (!message) {
-      this.elements.feedbackStatus.textContent = this.translate("Escreva alguma coisa antes de enviar.", "Write something before sending.");
+      this.elements.feedbackStatus.textContent = this.copy.landing.feedbackEmpty;
+      this.renderFeedbackDialog();
+      return;
+    }
+    if (message.length > FEEDBACK_MAX_LENGTH) {
+      this.elements.feedbackStatus.textContent = this.copy.landing.feedbackTooLong(FEEDBACK_MAX_LENGTH);
+      this.renderFeedbackDialog();
       return;
     }
 
@@ -2944,41 +3173,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     return ((index % total) + total) % total;
   }
 
-  private readStorageItem(key: string): string | null {
-    if (typeof window === "undefined") {
-      return null;
-    }
-    try {
-      return window.localStorage?.getItem?.(key) ?? null;
-    } catch {
-      return null;
-    }
-  }
-
-  private writeStorageItem(key: string, value: string): void {
-    if (typeof window === "undefined") {
-      return;
-    }
-    try {
-      window.localStorage?.setItem?.(key, value);
-    } catch {
-      // Persistence is a convenience; blocked storage should not break play.
-    }
-  }
-
-  private removeStorageItem(key: string): void {
-    if (typeof window === "undefined") {
-      return;
-    }
-    try {
-      window.localStorage?.removeItem?.(key);
-    } catch {
-      // Ignore blocked or partial storage implementations.
-    }
-  }
-
   private readPreferredCharacterIndex(): number {
-    const stored = this.readStorageItem("mistbridge-preferred-character-index");
+    const stored = readLocalStorageItem(PREFERRED_CHARACTER_STORAGE_KEY);
     const value = Number(stored);
     if (Number.isNaN(value)) {
       return 0;
@@ -2987,15 +3183,15 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   }
 
   private persistPreferredCharacterIndex(): void {
-    this.writeStorageItem("mistbridge-preferred-character-index", String(this.preferredCharacterIndex));
+    writeLocalStorageItem(PREFERRED_CHARACTER_STORAGE_KEY, String(this.preferredCharacterIndex));
   }
 
   private readBotMatchFill(): BotMatchFill {
-    return parseStoredBotMatchFill(this.readStorageItem(BOT_MATCH_FILL_STORAGE_KEY));
+    return parseStoredBotMatchFill(readLocalStorageItem(BOT_MATCH_FILL_STORAGE_KEY));
   }
 
   private persistBotMatchFill(): void {
-    this.writeStorageItem(BOT_MATCH_FILL_STORAGE_KEY, String(this.botMatchFill));
+    writeLocalStorageItem(BOT_MATCH_FILL_STORAGE_KEY, String(this.botMatchFill));
   }
 
   private selectBotMatchFill(fill: BotMatchFill): void {
@@ -3008,16 +3204,16 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   }
 
   private readSessionReturnBrief(): SessionReturnBrief | null {
-    const brief = parseStoredSessionReturnBrief(this.readStorageItem(SESSION_RETURN_BRIEF_STORAGE_KEY));
+    const brief = parseStoredSessionReturnBrief(readLocalStorageItem(SESSION_RETURN_BRIEF_STORAGE_KEY));
     if (!brief) {
-      this.removeStorageItem(SESSION_RETURN_BRIEF_STORAGE_KEY);
+      removeLocalStorageItem(SESSION_RETURN_BRIEF_STORAGE_KEY);
     }
     return brief;
   }
 
   private persistSessionReturnBrief(brief: SessionReturnBrief): void {
     this.sessionReturnBrief = brief;
-    this.writeStorageItem(SESSION_RETURN_BRIEF_STORAGE_KEY, JSON.stringify(brief));
+    writeLocalStorageItem(SESSION_RETURN_BRIEF_STORAGE_KEY, JSON.stringify(brief));
     this.renderLandingReturnBrief();
   }
 

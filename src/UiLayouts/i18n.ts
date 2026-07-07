@@ -1,5 +1,7 @@
 export type SiteLanguage = "pt" | "en";
 
+import { readLocalStorageItem, writeLocalStorageItem } from "./browser-storage";
+
 export const SITE_LANGUAGE_STORAGE_KEY = "bomba-site-language";
 
 export interface SiteCopy {
@@ -42,6 +44,10 @@ export interface SiteCopy {
     feedbackSending: string;
     feedbackThanks: string;
     feedbackError: string;
+    feedbackEmpty: string;
+    feedbackCharactersRemaining: (remaining: number) => string;
+    feedbackCharactersOverLimit: (overLimitBy: number, maxLength: number) => string;
+    feedbackTooLong: (maxLength: number) => string;
     returnBriefKicker: string;
     returnBriefEntryTitle: (mode: string) => string;
     returnBriefEntryBody: (characterName: string) => string;
@@ -58,6 +64,10 @@ export interface SiteCopy {
     botIntensityHint: string;
     botIntensityOptionLabel: (botCount: number) => string;
     botIntensityOptionDetail: (botCount: number) => string;
+    arenaThemeTitle: string;
+    arenaThemeHint: string;
+    arenaThemeActive: string;
+    arenaThemeSummary: (themeId: string, fallback: string) => string;
     localControlsTitle: string;
     localControlsHint: string;
     localControlsMove: string;
@@ -68,6 +78,12 @@ export interface SiteCopy {
     kicker: string;
     title: string;
     create: string;
+    joinCodeTitle: string;
+    joinCodeHint: string;
+    joinCodeUnavailableHint: string;
+    joinCodePlaceholder: string;
+    joinCodeButton: string;
+    joinCodeEmpty: string;
     emptyCount: string;
     count: (count: number) => string;
     emptyBody: string;
@@ -244,6 +260,10 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedbackSending: "Enviando...",
       feedbackThanks: "Feedback enviado.",
       feedbackError: "Nao foi possivel enviar agora.",
+      feedbackEmpty: "Escreva alguma coisa antes de enviar.",
+      feedbackCharactersRemaining: (remaining) => `${remaining} ${remaining === 1 ? "caractere restante" : "caracteres restantes"}.`,
+      feedbackCharactersOverLimit: (overLimitBy, maxLength) => `Remova ${overLimitBy} ${overLimitBy === 1 ? "caractere" : "caracteres"} para enviar. Limite: ${maxLength}.`,
+      feedbackTooLong: (maxLength) => `Feedback precisa ter ate ${maxLength} caracteres.`,
       returnBriefKicker: "Ultima sessao",
       returnBriefEntryTitle: (mode) => `Ultimo atalho: ${mode}`,
       returnBriefEntryBody: (characterName) => `Seu personagem ativo era ${characterName}. A selecao fica pronta para a proxima entrada.`,
@@ -276,6 +296,21 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
         }
         return "3 bots, sala cheia";
       },
+      arenaThemeTitle: "Tema da arena",
+      arenaThemeHint: "Escolha o visual antes de entrar contra bots. A pagina recarrega com os assets certos.",
+      arenaThemeActive: "ativo",
+      arenaThemeSummary: (themeId, fallback) => {
+        const summaries: Record<string, string> = {
+          "tournament-clean": "Pedra clara e limpa para ler rotas e explosoes rapido.",
+          "arcane-citadel": "Fortaleza azul-cinza com runas discretas e rotas frias.",
+          "verdant-ruins": "Ruinas com musgo e pedra quente para uma arena de aventura.",
+          "skyfoundry-bastion": "Muralha metalica com rotas ambar e silhuetas pesadas.",
+          "royal-marble": "Marmore claro, estrutura azul-marinho e detalhes dourados contidos.",
+          "glacier-sanctum": "Santuario gelado de baixo ruido, com selos frios e crates quentes.",
+          "obsidian-garden": "Arena vulcanica escura com pontos jade e alto contraste.",
+        };
+        return summaries[themeId] ?? fallback;
+      },
       localControlsTitle: "Antes da primeira bomba",
       localControlsHint: "A partida contra bots usa o personagem selecionado ao lado.",
       localControlsMove: "Mover pelo labirinto",
@@ -286,6 +321,12 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       kicker: "Salas abertas",
       title: "Escolha um lobby para entrar",
       create: "Criar lobby",
+      joinCodeTitle: "Entrar por codigo",
+      joinCodeHint: "Cole um codigo ou link de convite e pressione Enter.",
+      joinCodeUnavailableHint: "Reconectando ao lobby. A entrada por codigo volta em instantes.",
+      joinCodePlaceholder: "Codigo ou link da sala",
+      joinCodeButton: "Entrar",
+      joinCodeEmpty: "Cole um codigo ou convite valido para entrar.",
       emptyCount: "Nenhum lobby aberto no momento.",
       count: (count) => `${count} lobbies publicos disponiveis`,
       emptyBody: "Nenhuma sala aberta agora. Crie um lobby novo ou volte para partida rapida.",
@@ -460,6 +501,10 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedbackSending: "Sending...",
       feedbackThanks: "Feedback sent.",
       feedbackError: "Could not send feedback right now.",
+      feedbackEmpty: "Write something before sending.",
+      feedbackCharactersRemaining: (remaining) => `${remaining} ${remaining === 1 ? "character" : "characters"} remaining.`,
+      feedbackCharactersOverLimit: (overLimitBy, maxLength) => `Remove ${overLimitBy} ${overLimitBy === 1 ? "character" : "characters"} to send. Limit: ${maxLength}.`,
+      feedbackTooLong: (maxLength) => `Feedback must be ${maxLength} characters or fewer.`,
       returnBriefKicker: "Last session",
       returnBriefEntryTitle: (mode) => `Last shortcut: ${mode}`,
       returnBriefEntryBody: (characterName) => `${characterName} was your active character. The selection is ready for the next entry.`,
@@ -492,6 +537,10 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
         }
         return "3 bots, full room";
       },
+      arenaThemeTitle: "Arena theme",
+      arenaThemeHint: "Choose the board look before entering bots. The page reloads with the right assets.",
+      arenaThemeActive: "active",
+      arenaThemeSummary: (_themeId, fallback) => fallback,
       localControlsTitle: "Before the first bomb",
       localControlsHint: "Bot matches use the character selected on the side.",
       localControlsMove: "Move through the maze",
@@ -502,6 +551,12 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       kicker: "Open rooms",
       title: "Choose a lobby to join",
       create: "Create lobby",
+      joinCodeTitle: "Join by code",
+      joinCodeHint: "Paste a room code or invite link and press Enter.",
+      joinCodeUnavailableHint: "Reconnecting to the lobby. Code entry returns in a moment.",
+      joinCodePlaceholder: "Room code or invite link",
+      joinCodeButton: "Join",
+      joinCodeEmpty: "Paste a valid room code or invite to join.",
       emptyCount: "No open lobbies right now.",
       count: (count) => `${count} public lobbies available`,
       emptyBody: "No room is open right now. Create a new lobby or go back to quick match.",
@@ -635,11 +690,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
 };
 
 export function getStoredSiteLanguage(): SiteLanguage | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  const stored = window.localStorage.getItem(SITE_LANGUAGE_STORAGE_KEY);
-  return normalizeSiteLanguage(stored);
+  return normalizeSiteLanguage(readLocalStorageItem(SITE_LANGUAGE_STORAGE_KEY));
 }
 
 export function getPathSiteLanguage(pathname?: string): SiteLanguage | null {
@@ -676,10 +727,7 @@ export function getInitialSiteLanguage(): SiteLanguage {
 }
 
 export function persistSiteLanguage(language: SiteLanguage): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  window.localStorage.setItem(SITE_LANGUAGE_STORAGE_KEY, language);
+  writeLocalStorageItem(SITE_LANGUAGE_STORAGE_KEY, language);
 }
 
 export function normalizeSiteLanguage(value: string | null | undefined): SiteLanguage | null {

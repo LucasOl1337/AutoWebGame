@@ -64,6 +64,7 @@ import {
 import {
   applyPowerUpToPlayer,
   formatControlKey,
+  getBombFuseMsForPlayer,
   getPowerUpDefinition,
   getPowerUpLevel,
   type SkillPowerUpType,
@@ -120,11 +121,29 @@ import {
 } from "../NetCode/online-sync";
 import { SITE_COPY, type SiteLanguage } from "../UiLayouts/i18n";
 
+const KICK_SLIDE_MAX_TILES = 3;
+const KICK_FUSE_PENALTY_MS_PER_TILE = 250;
+const KICK_FUSE_MIN_MS = 450;
+const DEMOLITION_COMBO_MIN_CRATES = 2;
+const DEMOLITION_COMBO_DROP_TYPES: readonly SkillPowerUpType[] = [
+  "bomb-up",
+  "flame-up",
+  "speed-up",
+  "shield-up",
+  "short-fuse-up",
+];
+
 declare global {
   interface Window {
     render_game_to_text?: () => string;
     advanceTime?: (ms: number) => void;
   }
+}
+
+interface CenterOverlayState {
+  title: string;
+  subtitle: string;
+  footer: string | null;
 }
 
 const directionDelta: Record<Direction, TileCoord> = {
@@ -133,12 +152,6 @@ const directionDelta: Record<Direction, TileCoord> = {
   left: { x: -1, y: 0 },
   right: { x: 1, y: 0 },
 };
-
-interface CenterOverlayState {
-  title: string;
-  subtitle: string;
-  footer: string | null;
-}
 
 const PLAYER_HITBOX_HALF = TILE_SIZE * 0.5;
 const LANE_SNAP_THRESHOLD = TILE_SIZE * 0.45;
@@ -162,18 +175,22 @@ const SKILL_FRAME_MS = 100;
 const DEATH_FRAME_MS = 90;
 const CRATE_BREAK_DURATION_MS = 220;
 const SPAWN_PROTECTION_MS = 2200;
+const PERFECT_START_WINDOW_MS = 320;
+const PERFECT_START_BOOST_MS = 640;
+const PERFECT_START_SPEED_MULTIPLIER = 1.35;
+const DANGER_ADRENALINE_ETA_MS = 900;
+const DANGER_ADRENALINE_SPEED_MULTIPLIER = 1.18;
 const SUDDEN_DEATH_ELAPSED_MS = 40_000;
 const SUDDEN_DEATH_START_MS = ROUND_DURATION_MS - SUDDEN_DEATH_ELAPSED_MS;
 const SUDDEN_DEATH_TICK_MS = 800;
 const SUDDEN_DEATH_FALL_MS = 340;
 const SUDDEN_DEATH_IMPACT_LINGER_MS = 180;
 const SHIELD_GUARD_MS = 600;
+const SHIELD_BREAKAWAY_BOOST_MS = 520;
 const DANGER_OVERLAY_MAX_ETA_MS = BOMB_FUSE_MS + 600;
-const HUD_CRITICAL_DANGER_MS = 1_200;
 const MATCH_RESULT_RESTART_DELAY_MS = 900;
 const CANVAS_BACKBUFFER_SCALE = 2;
 const CANVAS_VIEWPORT_PADDING = 32;
-const POWER_UP_PICKUP_NOTICE_MS = 2200;
 const PLAYER_SPRITE_HEIGHT_SCALE = 1.45;
 const PLAYER_SPRITE_MAX_WIDTH_SCALE = 1.2;
 const CANVAS_UI_PANEL_BG = "rgba(8, 8, 16, 0.82)";
@@ -297,28 +314,11 @@ interface HudSkillSlot {
   acquired: boolean;
   keyLabel: string | null;
   valueLabel: string;
-  recentlyCollected: boolean;
-  pickupProgress: number;
-}
-
-interface HudPlayerStatus {
-  label: string;
-  tone: "success" | "danger" | "muted";
-  critical: boolean;
-  dangerEtaMs: number | null;
 }
 
 interface CrateBreakAnimation {
   tile: TileCoord;
   elapsedMs: number;
-}
-
-interface PowerUpPickupNotice {
-  playerId: PlayerId;
-  type: SkillPowerUpType;
-  valueLabel: string;
-  elapsedMs: number;
-  remainingMs: number;
 }
 
 interface PlayerDeathAnimationState {
@@ -397,6 +397,7 @@ export class GameApp {
   private roundStartCueMs = 0;
   private matchWinner: PlayerId | null = null;
   private matchResultCooldownMs = 0;
+  private autoPausedForHiddenTab = false;
   private onlineRoomMode: LobbyMode = "classic";
   private endlessKills: MatchScore = createNumberPlayerRecord(0);
   private endlessRoundWins: MatchScore = createNumberPlayerRecord(0);
@@ -413,7 +414,6 @@ export class GameApp {
   private botPendingReverseFrames: Record<PlayerId, number> = createNumberPlayerRecord(0);
   private animationClockMs = 0;
   private crateBreakAnimations: CrateBreakAnimation[] = [];
-  private powerUpPickupNotices: PowerUpPickupNotice[] = [];
   private playerDeathAnimations: Record<PlayerId, PlayerDeathAnimationState | null> = createPlayerRecord(() => null);
   private suddenDeathActive = false;
   private suddenDeathTickMs = SUDDEN_DEATH_TICK_MS;
@@ -658,6 +658,7 @@ export class GameApp {
     this.mode = "match";
     this.matchWinner = null;
     this.paused = false;
+    this.autoPausedForHiddenTab = false;
     this.roundOutcome = null;
     this.roundStartCueMs = ROUND_START_CUE_MS;
     this.menuReady = createBooleanPlayerRecord(false);
@@ -727,9 +728,18 @@ export class GameApp {
     this.roundNumber = snapshot.roundNumber;
     this.roundTimeMs = snapshot.roundTimeMs;
     this.paused = snapshot.paused;
+    this.autoPausedForHiddenTab = false;
     this.roundOutcome = snapshot.roundOutcome
       ? { ...snapshot.roundOutcome }
       : null;
+    this.syncRoundStartCue(
+      previousMode,
+      previousRoundNumber,
+      previousRoundOutcome,
+      snapshot.mode,
+      snapshot.roundNumber,
+      this.roundOutcome,
+    );
     this.matchWinner = snapshot.matchWinner;
     this.animationClockMs = snapshot.animationClockMs;
     this.suddenDeathActive = snapshot.suddenDeathActive;
@@ -747,14 +757,6 @@ export class GameApp {
     this.matchResultChoice = createPlayerRecord(() => null);
     this.matchResultCooldownMs = 0;
     this.applyEndlessStats(snapshot.endlessStats);
-    this.syncRoundStartCue(
-      previousMode,
-      previousRoundNumber,
-      previousRoundOutcome,
-      snapshot.mode,
-      snapshot.roundNumber,
-      this.roundOutcome,
-    );
     this.primeCharacterSprites();
     this.resetOnlineRoundBuffers(snapshot.roundNumber);
     this.pushOnlineRenderSample(snapshot.serverTimeMs, snapshot.serverTick, snapshot.players);
@@ -802,7 +804,16 @@ export class GameApp {
     this.roundNumber = frame.roundNumber;
     this.roundTimeMs = frame.roundTimeMs;
     this.paused = frame.paused;
+    this.autoPausedForHiddenTab = false;
     this.roundOutcome = frame.roundOutcome ? { ...frame.roundOutcome } : null;
+    this.syncRoundStartCue(
+      previousMode,
+      previousRoundNumber,
+      previousRoundOutcome,
+      frame.mode,
+      frame.roundNumber,
+      this.roundOutcome,
+    );
     this.matchWinner = frame.matchWinner;
     this.animationClockMs = frame.animationClockMs;
     this.suddenDeathActive = frame.suddenDeathActive;
@@ -822,14 +833,6 @@ export class GameApp {
     this.setBotPlayers(frame.botPlayerIds ?? []);
     this.nextBombId = frame.nextBombId;
     this.applyEndlessStats(frame.endlessStats);
-    this.syncRoundStartCue(
-      previousMode,
-      previousRoundNumber,
-      previousRoundOutcome,
-      frame.mode,
-      frame.roundNumber,
-      this.roundOutcome,
-    );
     this.primeCharacterSprites();
     this.resetOnlineRoundBuffers(frame.roundNumber);
     this.pushOnlineRenderSample(frame.serverTimeMs, frame.serverTick, frame.players);
@@ -868,6 +871,7 @@ export class GameApp {
     this.roundNumber = 1;
     this.matchWinner = null;
     this.paused = false;
+    this.autoPausedForHiddenTab = false;
     this.roundOutcome = null;
     this.botBombCooldownMs = 0;
     this.botCommittedDirection = createDirectionPlayerRecord(null);
@@ -888,7 +892,7 @@ export class GameApp {
       this.botControlledPlayers = createBooleanPlayerRecord(false);
       this.botEnabled = false;
     }
-    this.resetRound(false);
+    this.resetRound();
   }
 
   private playOnlineAudioTransition(next: {
@@ -911,6 +915,7 @@ export class GameApp {
       suppressLocalBombAudio: this.hasPendingLocalBombAudioSuppression(),
       previousBombs: this.bombs,
       previousFlames: this.flames,
+      previousPlayers: this.players,
       previousMatchWinner: this.matchWinner,
       previousRoundOutcome: next.previousRoundOutcome,
       previousSuddenDeathActive: next.previousSuddenDeathActive,
@@ -961,6 +966,7 @@ export class GameApp {
     this.clearOnlinePeer();
     this.mode = "menu";
     this.paused = false;
+    this.autoPausedForHiddenTab = false;
   }
 
   public returnToMenu(): void {
@@ -971,6 +977,7 @@ export class GameApp {
     this.resetToLobbyState();
     this.mode = "menu";
     this.paused = false;
+    this.autoPausedForHiddenTab = false;
     if (!this.headless) {
       this.render();
     }
@@ -1151,6 +1158,10 @@ export class GameApp {
 
   private registerWindowHooks(): void {
     window.addEventListener("resize", this.syncCanvasDisplaySize);
+    window.addEventListener("blur", this.handleWindowInactive);
+    if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+      document.addEventListener("visibilitychange", this.handleDocumentVisibilityChange);
+    }
     this.soundManager.bindUnlock(window);
     window.render_game_to_text = () => this.renderGameToText();
     window.advanceTime = (ms: number) => {
@@ -1161,6 +1172,26 @@ export class GameApp {
       this.render();
       this.input.endFrame();
     };
+  }
+
+  private readonly handleWindowInactive = (): void => {
+    this.pauseLocalMatchForHiddenTab();
+  };
+
+  private readonly handleDocumentVisibilityChange = (): void => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      this.pauseLocalMatchForHiddenTab();
+    }
+  };
+
+  private pauseLocalMatchForHiddenTab(): void {
+    if (this.onlineSession || this.mode !== "match" || this.roundOutcome || this.paused) {
+      return;
+    }
+    this.paused = true;
+    this.autoPausedForHiddenTab = true;
+    this.input.clearPresses();
+    this.render();
   }
 
   private readonly syncCanvasDisplaySize = (): void => {
@@ -1503,6 +1534,8 @@ export class GameApp {
   ): boolean {
     player.spawnProtectionMs = Math.max(0, player.spawnProtectionMs - deltaMs);
     player.flameGuardMs = Math.max(0, player.flameGuardMs - deltaMs);
+    player.breakawayBoostMs = Math.max(0, (player.breakawayBoostMs ?? 0) - deltaMs);
+    this.updatePerfectStartBurst(player, input.direction, deltaMs);
     this.syncPlayerSkill(player);
     this.advancePlayerSkillTimers(player, deltaMs);
 
@@ -1614,6 +1647,7 @@ export class GameApp {
   private updateMatch(deltaMs: number): void {
     if (!this.roundOutcome && this.input.consumePress("Escape")) {
       this.paused = !this.paused;
+      this.autoPausedForHiddenTab = false;
     }
 
     if (!this.onlineSession) {
@@ -1845,13 +1879,13 @@ export class GameApp {
     this.flames = [];
     this.magicBeams = [];
     this.crateBreakAnimations = [];
-    this.powerUpPickupNotices = [];
     this.playerDeathAnimations = createPlayerRecord(() => null);
     this.nextBombId = 1;
     this.roundTimeMs = ROUND_DURATION_MS;
     this.roundOutcome = null;
     this.roundStartCueMs = showStartCue ? ROUND_START_CUE_MS : 0;
     this.paused = false;
+    this.autoPausedForHiddenTab = false;
     this.botBombCooldownMs = 0;
     this.botCommittedDirection = createDirectionPlayerRecord(null);
     this.botPendingReverseDirection = createDirectionPlayerRecord(null);
@@ -2013,8 +2047,12 @@ export class GameApp {
       shieldCharges: 0,
       bombPassLevel: 0,
       kickLevel: 0,
+      shortFuseLevel: 0,
       flameGuardMs: 0,
       spawnProtectionMs: SPAWN_PROTECTION_MS,
+      perfectStartWindowMs: PERFECT_START_WINDOW_MS,
+      perfectStartBoostMs: 0,
+      breakawayBoostMs: 0,
       skill: createDefaultPlayerSkillState(null),
     };
   }
@@ -2271,7 +2309,42 @@ export class GameApp {
   }
 
   private getMoveSpeed(player: PlayerState): number {
-    return TILE_SIZE / (this.getMoveDuration(player) / 1000);
+    const speed = TILE_SIZE / (this.getMoveDuration(player) / 1000);
+    const hasSpeedBoost = (player.perfectStartBoostMs ?? 0) > 0 || (player.breakawayBoostMs ?? 0) > 0;
+    if (hasSpeedBoost) {
+      return speed * PERFECT_START_SPEED_MULTIPLIER;
+    }
+    return this.hasDangerAdrenalineStep(player)
+      ? speed * DANGER_ADRENALINE_SPEED_MULTIPLIER
+      : speed;
+  }
+
+  private hasDangerAdrenalineStep(player: PlayerState): boolean {
+    if (
+      !player.alive
+      || player.spawnProtectionMs > 0
+      || player.flameGuardMs > 0
+      || this.isPlayerImmuneDuringSkillChannel(player)
+    ) {
+      return false;
+    }
+    const tile = this.getTileFromPosition(player.position);
+    const etaMs = this.getDangerMap().get(tileKey(tile.x, tile.y));
+    return etaMs !== undefined && etaMs > 0 && etaMs <= DANGER_ADRENALINE_ETA_MS;
+  }
+
+  private updatePerfectStartBurst(player: PlayerState, direction: Direction | null, deltaMs: number): void {
+    const windowMs = Math.max(0, player.perfectStartWindowMs ?? 0);
+    const boostMs = Math.max(0, player.perfectStartBoostMs ?? 0);
+
+    if (direction && windowMs > 0 && boostMs <= 0) {
+      player.perfectStartWindowMs = 0;
+      player.perfectStartBoostMs = PERFECT_START_BOOST_MS;
+      return;
+    }
+
+    player.perfectStartWindowMs = Math.max(0, windowMs - deltaMs);
+    player.perfectStartBoostMs = Math.max(0, boostMs - deltaMs);
   }
 
   private getStableBotDirection(
@@ -2496,7 +2569,7 @@ export class GameApp {
     const fromTile = this.getTileFromPosition(player.position);
     const delta = directionDelta[direction];
     const bombTile = this.normalizeTile({ x: fromTile.x + delta.x, y: fromTile.y + delta.y });
-    return this.tryPushBombAtTile(bombTile, direction, 1);
+    return this.tryPushBombAtTile(bombTile, direction, KICK_SLIDE_MAX_TILES);
   }
 
   private findBombAtTile(tile: TileCoord): BombState | null {
@@ -2512,22 +2585,36 @@ export class GameApp {
     }
     const delta = directionDelta[direction];
     let targetTile = { ...bomb.tile };
+    let movedTiles = 0;
+    let impactBreakableKey: string | null = null;
     for (let step = 0; step < distance; step += 1) {
       const nextTile = this.normalizeTile({ x: targetTile.x + delta.x, y: targetTile.y + delta.y });
       const targetKey = tileKey(nextTile.x, nextTile.y);
-      if (this.arena.solid.has(targetKey) || this.arena.breakable.has(targetKey)) {
-        return false;
+      if (this.arena.solid.has(targetKey)) {
+        break;
+      }
+      if (this.arena.breakable.has(targetKey)) {
+        impactBreakableKey = targetKey;
+        break;
       }
       if (this.bombs.some((item) => item.id !== bomb.id && item.tile.x === nextTile.x && item.tile.y === nextTile.y)) {
-        return false;
+        break;
       }
       if (this.hasPlayerOnTile(nextTile)) {
-        return false;
+        break;
       }
       targetTile = nextTile;
+      movedTiles += 1;
+    }
+    if (movedTiles <= 0) {
+      return false;
     }
     bomb.tile = this.normalizeTile(targetTile);
+    bomb.fuseMs = Math.max(KICK_FUSE_MIN_MS, bomb.fuseMs - movedTiles * KICK_FUSE_PENALTY_MS_PER_TILE);
     bomb.ownerCanPass = false;
+    if (impactBreakableKey) {
+      this.breakCrateAtKey(impactBreakableKey);
+    }
     return true;
   }
 
@@ -2652,7 +2739,7 @@ export class GameApp {
       id: this.nextBombId,
       ownerId: player.id,
       tile: { ...tile },
-      fuseMs: BOMB_FUSE_MS,
+      fuseMs: getBombFuseMsForPlayer(player),
       ownerCanPass: true,
       flameRange: player.flameRange,
     });
@@ -2707,6 +2794,7 @@ export class GameApp {
     this.players[bomb.ownerId].activeBombs = Math.max(0, this.players[bomb.ownerId].activeBombs - 1);
     this.soundManager.playOneShot("bombExplode");
     const flameTiles = new Set<string>();
+    const brokenCrateKeys: string[] = [];
     const range = bomb.flameRange;
     flameTiles.add(tileKey(bomb.tile.x, bomb.tile.y));
 
@@ -2726,10 +2814,13 @@ export class GameApp {
         this.armBombAtTile({ x, y }, queue);
 
         if (this.breakCrateAtKey(key)) {
+          brokenCrateKeys.push(key);
           break;
         }
       }
     }
+
+    this.ensureDemolitionComboDrop(brokenCrateKeys);
 
     flameTiles.forEach((key) => {
       const [xText, yText] = key.split(",");
@@ -2755,6 +2846,42 @@ export class GameApp {
     if (item) {
       item.revealed = true;
     }
+  }
+
+  private ensureDemolitionComboDrop(brokenCrateKeys: string[]): void {
+    if (brokenCrateKeys.length < DEMOLITION_COMBO_MIN_CRATES) {
+      return;
+    }
+
+    const sortedKeys = [...brokenCrateKeys].sort();
+    const brokenKeySet = new Set(sortedKeys);
+    const revealedDropExists = this.arena.powerUps.some((powerUp) => (
+      !powerUp.collected
+      && brokenKeySet.has(tileKey(powerUp.tile.x, powerUp.tile.y))
+    ));
+    if (revealedDropExists) {
+      return;
+    }
+
+    let hash = 0;
+    for (const key of sortedKeys) {
+      for (let index = 0; index < key.length; index += 1) {
+        hash = ((hash * 31) + key.charCodeAt(index)) >>> 0;
+      }
+    }
+
+    const dropKey = sortedKeys[hash % sortedKeys.length];
+    const type = DEMOLITION_COMBO_DROP_TYPES[hash % DEMOLITION_COMBO_DROP_TYPES.length] ?? "speed-up";
+    if (!dropKey) {
+      return;
+    }
+
+    this.arena.powerUps.push({
+      tile: this.parseTileKey(dropKey),
+      type,
+      revealed: true,
+      collected: false,
+    });
   }
 
   private breakCrateAtKey(key: string): boolean {
@@ -2791,14 +2918,6 @@ export class GameApp {
   }
 
   private updateVisualEffects(deltaMs: number): void {
-    if (this.powerUpPickupNotices.length > 0) {
-      for (const notice of this.powerUpPickupNotices) {
-        notice.elapsedMs += deltaMs;
-        notice.remainingMs -= deltaMs;
-      }
-      this.powerUpPickupNotices = this.powerUpPickupNotices.filter((notice) => notice.remainingMs > 0);
-    }
-
     if (this.crateBreakAnimations.length > 0) {
       for (const effect of this.crateBreakAnimations) {
         effect.elapsedMs += deltaMs;
@@ -2978,6 +3097,8 @@ export class GameApp {
     if (player.shieldCharges > 0) {
       player.shieldCharges -= 1;
       player.flameGuardMs = SHIELD_GUARD_MS;
+      player.breakawayBoostMs = Math.max(player.breakawayBoostMs ?? 0, SHIELD_BREAKAWAY_BOOST_MS);
+      this.soundManager.playOneShot("shieldBlock");
       return false;
     }
     if (this.onlineRoomMode === "endless" && attackerId && attackerId !== player.id) {
@@ -3016,7 +3137,6 @@ export class GameApp {
         if (powerUp.tile.x === tile.x && powerUp.tile.y === tile.y) {
           powerUp.collected = true;
           applyPowerUpToPlayer(player, powerUp.type);
-          this.addPowerUpPickupNotice(id, powerUp.type);
           this.soundManager.playOneShot("powerCollect");
         }
       }
@@ -3127,6 +3247,20 @@ export class GameApp {
     return this.activePlayerIds
       .map((playerId) => `${this.getPlayerBriefName(playerId)} ${this.score[playerId]}`)
       .join(" | ");
+  }
+
+  private hasMatchWinnerScore(): boolean {
+    return this.activePlayerIds.some((playerId) => this.score[playerId] >= TARGET_WINS);
+  }
+
+  private getRoundedCountdownSeconds(countdownMs: number): number {
+    return Math.max(0, Math.ceil(countdownMs / 1000));
+  }
+
+  private formatActiveScore(): string {
+    return this.activePlayerIds
+      .map((playerId) => `P${playerId} ${this.score[playerId]}`)
+      .join(" - ");
   }
 
   private getPlayerBriefName(playerId: PlayerId): string {
@@ -3418,7 +3552,13 @@ export class GameApp {
     const player = this.players[playerId];
     const palette = PLAYER_COLORS[playerId];
     const compactWidth = Math.max(108, width);
-    const status = this.getPlayerHudStatus(playerId);
+    const status = !player.alive
+      ? "DOWN"
+      : player.skill.phase === "channeling"
+        ? "ICE"
+        : player.flameGuardMs > 0
+          ? "GUARD"
+          : "LIVE";
     const scoreText = this.onlineRoomMode === "endless"
       ? `K${this.endlessKills[playerId]} W${this.endlessRoundWins[playerId]}`
       : `W${this.score[playerId]}`;
@@ -3431,7 +3571,7 @@ export class GameApp {
     this.ctx.font = "700 6px Inter";
     this.drawHudText(scoreText, x + 30, y + 7, CANVAS_UI_TEXT, CANVAS_UI_SHADOW);
     this.ctx.textAlign = "right";
-    this.drawHudText(status.label, x + compactWidth - 6, y + 7, this.getHudStatusColor(status), CANVAS_UI_SHADOW);
+    this.drawHudText(status, x + compactWidth - 6, y + 7, player.alive ? CANVAS_UI_SUCCESS : CANVAS_UI_MUTED_SOFT, CANVAS_UI_SHADOW);
     this.ctx.font = "500 6px Inter";
     this.drawHudText(statText, x + compactWidth - 6, y + 14, CANVAS_UI_MUTED, CANVAS_UI_SHADOW);
   }
@@ -3584,16 +3724,15 @@ export class GameApp {
     const player = this.players[playerId];
     const palette = PLAYER_COLORS[playerId];
     const title = this.getPlayerSlotLabel(playerId);
-    const statLine = `B${player.maxBombs} F${player.flameRange} S${player.speedLevel}`;
-    const status = this.getPlayerHudStatus(playerId);
+    const statLine = `B${player.maxBombs} F${player.flameRange} S${player.speedLevel} Q${player.shortFuseLevel}`;
+    const status = !player.alive
+      ? "DOWN"
+      : player.skill.phase === "channeling"
+        ? "ICE"
+        : player.flameGuardMs > 0
+          ? "GUARD"
+          : "LIVE";
     const compact = width < 230;
-    const recentPickup = this.getLatestPowerUpPickupNotice(playerId);
-    const subtitleText = recentPickup
-      ? this.formatPowerUpPickupNotice(recentPickup, compact ? 8 : 12)
-      : this.shortenCharacterName(this.getCharacterLabel(playerId, compact ? 8 : 12), compact ? 8 : 12);
-    const subtitleColor = recentPickup
-      ? getPowerUpDefinition(recentPickup.type).tint
-      : CANVAS_UI_TEXT;
     const allSkillSlots = this.getHudSkillSlots(playerId);
     const skillSlots = compact
       ? allSkillSlots.filter((slot) => (
@@ -3610,27 +3749,25 @@ export class GameApp {
     this.drawHudText(title, x + 6, y + 10, palette.primary, CANVAS_UI_SHADOW);
     this.ctx.font = "500 6px Inter";
     this.drawHudText(
-      subtitleText,
+      this.shortenCharacterName(this.getCharacterLabel(playerId, compact ? 8 : 12), compact ? 8 : 12),
       x + 6,
       y + 18,
-      subtitleColor,
+      CANVAS_UI_TEXT,
       CANVAS_UI_SHADOW,
     );
     this.ctx.textAlign = "right";
     this.drawHudText(
-      compact ? statLine : status.label,
+      compact ? statLine : status,
       x + width - 6,
       y + 10,
-      compact
-        ? (player.alive ? CANVAS_UI_SUCCESS : CANVAS_UI_MUTED_SOFT)
-        : this.getHudStatusColor(status),
+      player.alive ? CANVAS_UI_SUCCESS : CANVAS_UI_MUTED_SOFT,
       CANVAS_UI_SHADOW,
     );
     this.drawHudText(
-      compact ? status.label : statLine,
+      compact ? status : statLine,
       x + width - 6,
       y + 18,
-      compact ? this.getHudStatusColor(status) : CANVAS_UI_MUTED,
+      CANVAS_UI_MUTED,
       CANVAS_UI_SHADOW,
     );
     if (this.onlineRoomMode === "endless") {
@@ -3698,63 +3835,26 @@ export class GameApp {
   }
 
   private getHudSkillSlots(playerId: PlayerId): HudSkillSlot[] {
-    return SKILL_POWER_UP_TYPES.map((type) => this.getHudSkillSlot(playerId, type));
-  }
-
-  private getHudSkillSlot(playerId: PlayerId, type: SkillPowerUpType): HudSkillSlot {
     const player = this.players[playerId];
     const detonateKeyLabel = this.getDetonateHudKeyLabel(playerId);
-    const rawLevel = getPowerUpLevel(player, type);
-    const level = type === "bomb-up" || type === "flame-up"
-      ? Math.max(0, rawLevel - 1)
-      : rawLevel;
-    const valueLabel = type === "remote-up"
-      ? (level > 0 ? "ON" : "--")
-      : `x${level}`;
-    const pickupNotice = this.getPowerUpPickupNotice(playerId, type);
 
-    return {
-      type,
-      level,
-      acquired: level > 0,
-      keyLabel: type === "remote-up" && level > 0 ? detonateKeyLabel : null,
-      valueLabel,
-      recentlyCollected: Boolean(pickupNotice),
-      pickupProgress: pickupNotice
-        ? Math.max(0, Math.min(1, pickupNotice.remainingMs / POWER_UP_PICKUP_NOTICE_MS))
-        : 0,
-    } satisfies HudSkillSlot;
-  }
+    return SKILL_POWER_UP_TYPES.map((type) => {
+      const rawLevel = getPowerUpLevel(player, type);
+      const level = type === "bomb-up" || type === "flame-up"
+        ? Math.max(0, rawLevel - 1)
+        : rawLevel;
+      const valueLabel = type === "remote-up"
+        ? (level > 0 ? "ON" : "--")
+        : `x${level}`;
 
-  private addPowerUpPickupNotice(playerId: PlayerId, type: SkillPowerUpType): void {
-    const slot = this.getHudSkillSlot(playerId, type);
-    const notice: PowerUpPickupNotice = {
-      playerId,
-      type,
-      valueLabel: slot.valueLabel,
-      elapsedMs: 0,
-      remainingMs: POWER_UP_PICKUP_NOTICE_MS,
-    };
-    this.powerUpPickupNotices = [
-      notice,
-      ...this.powerUpPickupNotices.filter((entry) => !(entry.playerId === playerId && entry.type === type)),
-    ].slice(0, 6);
-  }
-
-  private getLatestPowerUpPickupNotice(playerId: PlayerId): PowerUpPickupNotice | null {
-    return this.powerUpPickupNotices.find((notice) => notice.playerId === playerId) ?? null;
-  }
-
-  private getPowerUpPickupNotice(playerId: PlayerId, type: SkillPowerUpType): PowerUpPickupNotice | null {
-    return this.powerUpPickupNotices.find((notice) => (
-      notice.playerId === playerId && notice.type === type
-    )) ?? null;
-  }
-
-  private formatPowerUpPickupNotice(notice: PowerUpPickupNotice, maxLength: number): string {
-    const definition = getPowerUpDefinition(notice.type);
-    const label = maxLength <= 8 ? definition.shortLabel : definition.label;
-    return this.shortenCharacterName(`+${label} ${notice.valueLabel}`, maxLength);
+      return {
+        type,
+        level,
+        acquired: level > 0,
+        keyLabel: type === "remote-up" && level > 0 ? detonateKeyLabel : null,
+        valueLabel,
+      } satisfies HudSkillSlot;
+    });
   }
 
   private getDetonateHudKeyLabel(playerId: PlayerId): string | null {
@@ -3770,75 +3870,13 @@ export class GameApp {
     return null;
   }
 
-  private getPlayerHudStatus(playerId: PlayerId): HudPlayerStatus {
-    const player = this.players[playerId];
-    if (!player.alive) {
-      return { label: "DOWN", tone: "muted", critical: false, dangerEtaMs: null };
-    }
-    if (player.skill.phase === "channeling") {
-      return { label: "ICE", tone: "success", critical: false, dangerEtaMs: null };
-    }
-    if (player.flameGuardMs > 0) {
-      return { label: "GUARD", tone: "success", critical: false, dangerEtaMs: null };
-    }
-
-    const dangerEtaMs = this.getPlayerDangerEtaMs(playerId);
-    if (dangerEtaMs !== null && dangerEtaMs <= HUD_CRITICAL_DANGER_MS) {
-      return {
-        label: "DANGER",
-        tone: "danger",
-        critical: true,
-        dangerEtaMs: Math.max(0, Math.round(dangerEtaMs)),
-      };
-    }
-
-    return { label: "LIVE", tone: "success", critical: false, dangerEtaMs: null };
-  }
-
-  private getHudStatusColor(status: HudPlayerStatus): string {
-    if (status.tone === "danger") {
-      return CANVAS_UI_DANGER;
-    }
-    if (status.tone === "muted") {
-      return CANVAS_UI_MUTED_SOFT;
-    }
-    return CANVAS_UI_SUCCESS;
-  }
-
-  private getPlayerDangerEtaMs(playerId: PlayerId): number | null {
-    if (this.mode !== "match" || this.roundOutcome) {
-      return null;
-    }
-
-    const player = this.players[playerId];
-    if (!player.alive || player.spawnProtectionMs > 0 || player.flameGuardMs > 0) {
-      return null;
-    }
-
-    const tile = this.getTileFromPosition(player.position);
-    const dangerMap = this.cachedDangerMap ?? this.getDangerMap();
-    const etaMs = dangerMap.get(tileKey(tile.x, tile.y));
-    return etaMs === undefined ? null : Math.max(0, etaMs);
-  }
-
   private drawHudSkillSlot(x: number, y: number, width: number, height: number, slot: HudSkillSlot): void {
     const definition = getPowerUpDefinition(slot.type);
     const tint = slot.acquired ? definition.tint : "rgba(180, 167, 147, 0.4)";
     this.ctx.fillStyle = slot.acquired ? CANVAS_UI_PANEL_BG_STRONG : CANVAS_UI_PANEL_BG_SOFT;
     this.ctx.fillRect(x, y, width, height);
-    if (slot.recentlyCollected) {
-      const pulse = 0.12 + slot.pickupProgress * 0.24;
-      this.ctx.globalAlpha = pulse;
-      this.ctx.fillStyle = definition.tint;
-      this.ctx.fillRect(x, y, width, height);
-      this.ctx.globalAlpha = 1;
-    }
-    this.ctx.strokeStyle = slot.recentlyCollected
-      ? definition.tint
-      : (slot.acquired ? tint : CANVAS_UI_BORDER);
-    this.ctx.lineWidth = slot.recentlyCollected ? 1.5 : 1;
+    this.ctx.strokeStyle = slot.acquired ? tint : CANVAS_UI_BORDER;
     this.ctx.strokeRect(x + 0.5, y + 0.5, Math.max(1, width - 1), Math.max(1, height - 1));
-    this.ctx.lineWidth = 1;
 
     const icon = this.assets.powerUps[slot.type];
     if (icon) {
@@ -5161,20 +5199,6 @@ export class GameApp {
     return null;
   }
 
-  private hasMatchWinnerScore(): boolean {
-    return this.activePlayerIds.some((playerId) => this.score[playerId] >= TARGET_WINS);
-  }
-
-  private getRoundedCountdownSeconds(countdownMs: number): number {
-    return Math.max(0, Math.ceil(countdownMs / 1000));
-  }
-
-  private formatActiveScore(): string {
-    return this.activePlayerIds
-      .map((playerId) => `P${playerId} ${this.score[playerId]}`)
-      .join(" - ");
-  }
-
   private drawCenterOverlay(title: string, subtitle: string, footer: string | null = null): void {
     this.ctx.fillStyle = CANVAS_UI_PANEL_BG_STRONG;
     this.ctx.fillRect(40, 164, CANVAS_WIDTH - 80, 120);
@@ -5226,6 +5250,7 @@ export class GameApp {
         score: this.score,
         remainingMs: Math.round(this.roundTimeMs),
         paused: this.paused,
+        autoPausedForHiddenTab: this.autoPausedForHiddenTab,
         menuReady: this.menuReady,
         matchResultChoice: this.matchResultChoice,
         botEnabled: this.botEnabled,
@@ -5288,7 +5313,6 @@ export class GameApp {
         const player = this.players[id];
         const tile = this.getTileFromPosition(player.position);
         const pixel = this.getPlayerPixelPosition(player);
-        const recentPowerUpPickup = this.getLatestPowerUpPickupNotice(id);
         return {
           id: player.id,
           name: player.name,
@@ -5309,7 +5333,6 @@ export class GameApp {
             menuOpen: this.characterMenuOpen[id],
           },
           alive: player.alive,
-          hudStatus: this.getPlayerHudStatus(id),
           bombsAvailable: player.maxBombs - player.activeBombs,
           bombCapacity: player.maxBombs,
           flameRange: player.flameRange,
@@ -5318,22 +5341,16 @@ export class GameApp {
           shieldCharges: player.shieldCharges,
           bombPassLevel: player.bombPassLevel,
           kickLevel: player.kickLevel,
+          shortFuseLevel: player.shortFuseLevel,
           skillSlots: this.getHudSkillSlots(id).map((slot) => ({
             type: slot.type,
             acquired: slot.acquired,
             level: slot.level,
             value: slot.valueLabel,
             key: slot.keyLabel,
-            recentlyCollected: slot.recentlyCollected,
           })),
-          recentPowerUpPickup: recentPowerUpPickup
-            ? {
-                type: recentPowerUpPickup.type,
-                value: recentPowerUpPickup.valueLabel,
-                remainingMs: Math.round(recentPowerUpPickup.remainingMs),
-              }
-            : null,
           flameGuardMs: Math.round(player.flameGuardMs),
+          breakawayBoostMs: Math.round(player.breakawayBoostMs ?? 0),
           spawnProtectionMs: Math.round(player.spawnProtectionMs),
           skill: {
             id: player.skill.id,

@@ -98,13 +98,16 @@ const dropCount = game.arena.powerUps.length;
 const dropRatio = breakableCount > 0 ? dropCount / breakableCount : 0;
 const speedDropCount = game.arena.powerUps.filter((powerUp) => powerUp.type === "speed-up").length;
 const utilityDropTypes = ["shield-up", "bomb-pass-up", "kick-up"];
+const tacticalDropTypes = ["short-fuse-up"];
 const utilityDropCounts = Object.fromEntries(
-  utilityDropTypes.map((type) => [
+  [...utilityDropTypes, ...tacticalDropTypes].map((type) => [
     type,
     game.arena.powerUps.filter((powerUp) => powerUp.type === type).length,
   ]),
 );
-const hasUtilityDrops = utilityDropTypes.every((type) => utilityDropCounts[type] > 0);
+const hasTacticalDrops = tacticalDropTypes.every((type) => utilityDropCounts[type] > 0);
+const specialDropCount = [...utilityDropTypes, ...tacticalDropTypes]
+  .reduce((total, type) => total + utilityDropCounts[type], 0);
 const hasDenseBreakables = breakableCount >= 24;
 
 const report = {
@@ -113,14 +116,16 @@ const report = {
   dropRatio: Math.round(dropRatio * 1000) / 1000,
   speedDropCount,
   utilityDropCounts,
-  hasUtilityDrops,
+  hasTacticalDrops,
+  specialDropCount,
   hasDenseBreakables,
   pass: (
     hasDenseBreakables
     && dropRatio >= 0.85
     && dropRatio <= 0.95
     && speedDropCount > 0
-    && hasUtilityDrops
+    && specialDropCount >= 8
+    && hasTacticalDrops
   ),
 };
 

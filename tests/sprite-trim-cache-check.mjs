@@ -37,8 +37,16 @@ globalThis.document = {
 const { SpriteTrimCache } = await import("../output/esm/Engine/sprite-trim-cache.js");
 
 const cache = new SpriteTrimCache();
+const lateSprite = { naturalWidth: 0, naturalHeight: 0, width: 0, height: 0 };
 const sprite = { naturalWidth: 4, naturalHeight: 4, width: 4, height: 4 };
 
+const beforeLoad = cache.getBounds(lateSprite);
+lateSprite.naturalWidth = 4;
+lateSprite.naturalHeight = 4;
+lateSprite.width = 4;
+lateSprite.height = 4;
+const afterLoad = cache.getBounds(lateSprite);
+const afterLoadCached = cache.getBounds(lateSprite);
 const first = cache.getBounds(sprite);
 const second = cache.getBounds(sprite);
 
@@ -47,12 +55,22 @@ const pass = Boolean(first)
   && first.y === 1
   && first.width === 2
   && first.height === 2
+  && beforeLoad === null
+  && Boolean(afterLoad)
+  && afterLoad.x === 1
+  && afterLoad.y === 1
+  && afterLoad.width === 2
+  && afterLoad.height === 2
+  && afterLoadCached === afterLoad
   && second === first
-  && getImageDataCalls === 1
+  && getImageDataCalls === 2
   && contextOptions.length === 1
   && contextOptions[0]?.willReadFrequently === true;
 
 console.log(JSON.stringify({
+  beforeLoad,
+  afterLoad,
+  afterLoadCachedMatches: afterLoadCached === afterLoad,
   first,
   secondMatchesFirst: second === first,
   getImageDataCalls,

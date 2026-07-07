@@ -18,7 +18,6 @@ export class SpriteTrimCache {
     const width = sprite.naturalWidth || sprite.width || 0;
     const height = sprite.naturalHeight || sprite.height || 0;
     if (width <= 0 || height <= 0) {
-      this.cache.set(sprite, null);
       return null;
     }
 

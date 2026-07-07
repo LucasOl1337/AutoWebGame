@@ -234,14 +234,30 @@ async function loadCharacterManifest(): Promise<CharacterManifestPayload> {
   }
 }
 
+function isUsablePublicCharacterManifest(entries: CharacterManifestEntry[]): boolean {
+  if (entries.length === 0) {
+    return false;
+  }
+
+  const seenIds = new Set<string>();
+  for (const entry of entries) {
+    if (!entry.id || seenIds.has(entry.id)) {
+      return false;
+    }
+    seenIds.add(entry.id);
+  }
+
+  return CHARACTER_ROSTER_MANIFEST.every((entry) => seenIds.has(entry.id));
+}
+
 async function loadCharacterRoster(): Promise<CharacterRosterEntry[]> {
   const manifestPayload = await loadCharacterManifest();
   const publicManifestEntries = Array.isArray(manifestPayload.characters) ? manifestPayload.characters : [];
-  const hasPublicManifest = publicManifestEntries.length > 0;
-  const manifestEntries: CharacterManifestEntry[] = hasPublicManifest
+  const usePublicManifest = isUsablePublicCharacterManifest(publicManifestEntries);
+  const manifestEntries: CharacterManifestEntry[] = usePublicManifest
     ? publicManifestEntries
     : CHARACTER_ROSTER_MANIFEST;
-  const assetVersion = hasPublicManifest ? manifestPayload.generatedAt ?? undefined : undefined;
+  const assetVersion = usePublicManifest ? manifestPayload.generatedAt ?? undefined : undefined;
   const sortedEntries = manifestEntries
     .map((entry, selectionIndex) => ({ entry, selectionIndex }))
     .sort((left, right) => {

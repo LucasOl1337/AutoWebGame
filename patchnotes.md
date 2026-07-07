@@ -1,3 +1,136 @@
+# Patch Notes - 2026-07-07 v0.2.3 Official Patch
+
+**Project:** AutoWebGame / BOMBA
+**Path:** C:\Projetos\AutoWebGame
+**Branch:** main
+**Generated:** 2026-07-07
+**State:** release candidate for `v0.2.3`
+
+## Executive Summary
+
+Patch `v0.2.3` consolidates local CODEX/swarm work done after the official `v0.2.2` release. The GitHub cloud state (`origin/main`) was synced to `v0.2.2` plus the visible patch-notes commit (`602b5d7`), while local branches/worktrees held new gameplay, UX, audio, roster and storage changes.
+
+Main themes:
+- Bomb and power-up gameplay is more tactical.
+- Shield, danger and round feedback are more readable.
+- Lobby, feedback, username, i18n and storage paths are safer.
+- Roster loading rejects duplicated/truncated public manifests.
+- Online input and telemetry tolerate bad runtime data.
+
+## Local PC vs GitHub Comparison
+
+| Aspect | PC (Local) | GitHub (origin) | Notes |
+|--------|------------|-----------------|-------|
+| Latest release before patch | `v0.2.2` | `v0.2.2` | GitHub release published 2026-07-07T02:29:41Z. |
+| Branch state before release prep | local integration in working tree | `origin/main` at `602b5d7` | `codex-swarm` and i18n worktree were local-only before this patch. |
+| Integration | Manual merge of `codex-swarm` up to `eac1a60` plus i18n test from `1813b99` | Not yet pushed at audit time | Conflicts resolved in GameApp/session/i18n/CSS/tests/package docs. |
+| Working tree after validation | Release docs/art pending final commit | Clean remote | Release docs/art are final additions. |
+
+## Sessions Checked Since v0.2.2
+
+| Session / agent | Evidence checked | Changes found |
+|-----------------|------------------|---------------|
+| CODEX / codex-swarm | `git branch -vv --all`, worktrees, `v0.2.2..codex-swarm`, `DocsDev/swarm-coordination.md` | Yes: gameplay, UX, audio, roster, input, storage and tests. |
+| CODEX / i18n-storage-guard | Dedicated worktree/branch at `1813b99` | Yes: test evidence integrated; code path already covered by shared helper. |
+| Claude | Text search, local branches, worktrees and docs | No post-`v0.2.2` versioned repo changes found. |
+| ZCode | Text search, local branches, worktrees and docs | No post-`v0.2.2` versioned repo changes found. |
+| Wispr Flow | Text search, local branches, worktrees and docs | No post-`v0.2.2` versioned repo changes found. |
+
+If Claude, ZCode or Wispr Flow worked outside Git or outside the inspected worktrees, that work did not leave a local versioned trace in this repository.
+
+## Patch Notes Candidate
+
+### Novidades
+
+- **Adrenalina de perigo:** jogador vulneravel ganha um pequeno boost ao sair de explosao iminente.
+- **Short fuse power-up:** novo upgrade reduz fuse de bombas e aparece no HUD/drop pool.
+- **Perfect start burst:** movimento imediato no inicio da rodada recebe burst curto.
+- **Arena theme picker:** landing permite trocar tema de arena por query/link.
+- **Entrada manual por codigo:** lobby aceita codigo digitado ou URL de convite colada.
+
+### Melhorias
+
+- **Chute de bomba mais tatico:** bomba chutada pode quebrar crate, revelar drop e perde fuse conforme desliza.
+- **Demolition combo:** explosoes que quebram varias crates garantem uma recompensa quando nenhuma dropou.
+- **Escudo mais expressivo:** block toca SFX de deflexao e concede burst de fuga curto.
+- **Feedback dialog:** contador vivo, limite local, envio desabilitado quando invalido e Escape para fechar.
+- **Audio de pickup:** variantes novas de coleta e shield block com protecao anti-stack.
+
+### Correcoes
+
+- **Roster resiliente:** manifesto publico duplicado/truncado cai para roster aprovado.
+- **Storage seguro:** UI, idioma, bot fill, retorno de sessao e telemetry toleram storage bloqueado/parcial.
+- **Telemetry UUID fallback:** `crypto.randomUUID` ausente nao derruba landing.
+- **Input online saneado:** direcoes invalidas em pacotes viram neutro.
+- **Pausa em aba oculta:** partida local para em blur/hidden e preserva tempo/perigo.
+- **Sprite trim late-load:** sprites carregados tarde recalculam bounds em vez de cachear `null`.
+
+## Validation
+
+Passed:
+- `npm run build`
+- `npm run compile:esm`
+- `git diff --check`
+- `node tests/release-visibility-check.mjs`
+- `node tests/sound-manager-variation-check.mjs`
+- `node tests/audio-asset-decode-check.mjs`
+- `node tests/shield-block-sfx-check.mjs`
+- `node tests/online-audio-bridge-check.mjs`
+- `node tests/feedback-dialog-live-counter-check.mjs`
+- `node tests/feedback-length-guard-check.mjs`
+- `node tests/ui-storage-fallback-check.mjs`
+- `node tests/i18n-storage-guard-check.mjs`
+- `node tests/growth-telemetry-uuid-fallback-check.mjs`
+- `node tests/online-input-latching-check.mjs`
+- `node tests/game-visibility-auto-pause-check.mjs`
+- `node tests/room-code-enter-submit-check.mjs`
+- `node tests/account-username-validation-check.mjs`
+- `node tests/arena-theme-selection-check.mjs`
+- `node tests/character-roster-invalid-public-manifest-check.mjs`
+- `node tests/character-roster-manifest-sync-check.mjs`
+- `node tests/player-sprite-render-check.mjs`
+- `node tests/danger-adrenaline-step-check.mjs`
+- `node tests/danger-overlay-check.mjs`
+- `node tests/round-outcome-pause-check.mjs`
+- `node tests/round-start-cue-check.mjs`
+- `node tests/match-result-shortcuts-check.mjs`
+- `node tests/bomb-push-check.mjs`
+- `node tests/bomb-chain-reaction-check.mjs`
+- `node tests/bomb-hit-window-check.mjs`
+- `node tests/demolition-combo-drop-check.mjs`
+- `node tests/short-fuse-powerup-check.mjs`
+- `node tests/perfect-start-burst-check.mjs`
+- `node tests/shield-breakaway-burst-check.mjs`
+- `node tests/shield-powerup-check.mjs`
+- `node tests/powerup-drop-rate-check.mjs`
+- `node tests/powerup-hud-slots-check.mjs`
+- `node tests/lobby-rules-check.mjs`
+- `node tests/matchmaking-session-state-check.mjs`
+- `node tests/online-four-player-check.mjs`
+- `node tests/online-character-selection-index-check.mjs`
+- `node tests/server-character-skill-mapping-check.mjs`
+- `node tests/character-skill-contract-check.mjs`
+- `node tests/online-skill-reconcile-check.mjs`
+- `node tests/server-tick-catchup-check.mjs`
+- `node tests/bot-target-selection-check.mjs`
+- `node tests/bot-intel-check.mjs`
+- `node tests/bot-remote-detonation-check.mjs`
+- `node tests/bot-survival-10s-check.mjs`
+- `node tests/bot-opening-discipline-check.mjs`
+- `node tests/bot-powerup-priority-check.mjs`
+- `node tests/bot-spawn-protection-check.mjs`
+
+## Files For This Release Prep
+
+- `DocsDev/releases/release-v0.2.3.md`
+- `DocsDev/releases/release-v0.2.3.json`
+- `release-assets/v0.2.3-card.png`
+- `release-assets/v0.2.3-card-bg.png`
+- `patchnotes.md`
+- `changelog.md`
+
+---
+
 # Patch Notes - 2026-07-06 v0.2.2 Official Patch
 
 **Project:** AutoWebGame / BOMBA

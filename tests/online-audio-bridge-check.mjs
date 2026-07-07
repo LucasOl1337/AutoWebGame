@@ -395,6 +395,7 @@ const expected = [
   "bombPlace",
   "bombExplode",
   "flames",
+  "shieldBlock",
   "roundEnd",
   "powerCollect",
   "suddenDeathAlarm",
@@ -402,10 +403,13 @@ const expected = [
 
 const suddenDeathAlarm = SFX_MANIFEST.suddenDeathAlarm;
 const roundEnd = SFX_MANIFEST.roundEnd;
+const shieldBlock = SFX_MANIFEST.shieldBlock;
 const suddenDeathAlarmManifestPass = !Array.isArray(suddenDeathAlarm)
   && suddenDeathAlarm?.url.endsWith("sudden_death_alarm.wav");
 const roundEndManifestPass = !Array.isArray(roundEnd)
   && roundEnd?.url.endsWith("round_end.wav");
+const shieldBlockManifestPass = !Array.isArray(shieldBlock)
+  && shieldBlock?.url.endsWith("shield_block_deflect.mp3");
 
 game.applyOnlineFrame({
   serverTimeMs: 150,
@@ -443,10 +447,21 @@ const pass = placementCalls.length === 1
   && pendingRollbackCalls.length === 0
   && expected.every((key) => calls.includes(key))
   && roundEndManifestPass
+  && shieldBlockManifestPass
   && suddenDeathAlarmManifestPass
   && calls.includes("matchWin");
 
-console.log(JSON.stringify({ placementCalls, idSwapCalls, pendingRollbackCalls, calls, expected, suddenDeathAlarmManifestPass, roundEndManifestPass, pass }, null, 2));
+console.log(JSON.stringify({
+  placementCalls,
+  idSwapCalls,
+  pendingRollbackCalls,
+  calls,
+  expected,
+  suddenDeathAlarmManifestPass,
+  roundEndManifestPass,
+  shieldBlockManifestPass,
+  pass,
+}, null, 2));
 
 if (!pass) {
   process.exit(1);

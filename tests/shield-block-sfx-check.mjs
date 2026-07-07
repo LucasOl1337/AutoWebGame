@@ -91,82 +91,67 @@ const assets = {
 };
 
 const game = new GameApp(root, assets);
+const played = [];
+game.soundManager.playOneShot = (key) => {
+  played.push(key);
+};
+
 game.start();
 emit("keydown", keyEvent("KeyE"));
 emit("keyup", keyEvent("KeyE"));
 emit("keydown", keyEvent("KeyP"));
 emit("keyup", keyEvent("KeyP"));
 window.advanceTime(34);
+played.length = 0;
 
 const p1 = game.players[1];
 p1.position = { x: 2.5 * TILE_SIZE, y: 1.5 * TILE_SIZE };
 p1.tile = { x: 2, y: 1 };
 p1.spawnProtectionMs = 0;
+p1.shieldCharges = 1;
+p1.flameGuardMs = 0;
 
-game.arena.powerUps = [
-  { type: "remote-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
-  { type: "flame-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
-  { type: "shield-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
-  { type: "bomb-pass-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
-  { type: "kick-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
-  { type: "short-fuse-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
-];
+game.flames = [{ tile: { x: 2, y: 1 }, remainingMs: 400 }];
+game.resolvePlayerDeathsFromFlames();
 window.advanceTime(17);
 
-const state = JSON.parse(window.render_game_to_text());
-const player = state.players.find((entry) => entry.id === 1);
-const skillSlots = player?.skillSlots ?? [];
-const bombSlot = skillSlots.find((slot) => slot.type === "bomb-up") ?? null;
-const flameSlot = skillSlots.find((slot) => slot.type === "flame-up") ?? null;
-const remoteSlot = skillSlots.find((slot) => slot.type === "remote-up") ?? null;
-const shieldSlot = skillSlots.find((slot) => slot.type === "shield-up") ?? null;
-const bombPassSlot = skillSlots.find((slot) => slot.type === "bomb-pass-up") ?? null;
-const kickSlot = skillSlots.find((slot) => slot.type === "kick-up") ?? null;
-const shortFuseSlot = skillSlots.find((slot) => slot.type === "short-fuse-up") ?? null;
+const shieldBlockCalls = played.filter((key) => key === "shieldBlock");
+const survivedFirstFlame = game.players[1].alive === true;
+const shieldSpentOnHit = game.players[1].shieldCharges === 0;
+const guardWindowActive = (game.players[1].flameGuardMs ?? 0) > 0;
 
-const report = {
-  bombSlot,
-  flameSlot,
-  remoteSlot,
-  shieldSlot,
-  bombPassSlot,
-  kickSlot,
-  shortFuseSlot,
-  pass: Boolean(
-    bombSlot
-      && bombSlot.acquired === false
-      && bombSlot.level === 0
-      && bombSlot.value === "x0"
-      && flameSlot
-      && flameSlot.acquired === true
-      && flameSlot.level === 1
-      && flameSlot.value === "x1"
-      && flameSlot.key === null
-      && remoteSlot
-      && remoteSlot.acquired === true
-      && remoteSlot.level === 1
-      && remoteSlot.value === "ON"
-      && remoteSlot.key === "R"
-      && shieldSlot
-      && shieldSlot.acquired === true
-      && shieldSlot.level === 1
-      && shieldSlot.value === "x1"
-      && bombPassSlot
-      && bombPassSlot.acquired === true
-      && bombPassSlot.level === 1
-      && bombPassSlot.value === "x1"
-      && kickSlot
-      && kickSlot.acquired === true
-      && kickSlot.level === 1
-      && kickSlot.value === "x1"
-      && shortFuseSlot
-      && shortFuseSlot.acquired === true
-      && shortFuseSlot.level === 1
-      && shortFuseSlot.value === "x1"
-  ),
-};
+played.length = 0;
+game.flames = [{ tile: { x: 2, y: 1 }, remainingMs: 400 }];
+game.resolvePlayerDeathsFromFlames();
+window.advanceTime(17);
+const noReplayDuringGuard = !played.includes("shieldBlock");
 
-console.log(JSON.stringify(report, null, 2));
-if (!report.pass) {
+game.players[1].flameGuardMs = 0;
+game.flames = [{ tile: { x: 2, y: 1 }, remainingMs: 400 }];
+game.resolvePlayerDeathsFromFlames();
+window.advanceTime(17);
+const diesWithoutShieldOrGuard = game.players[1].alive === false;
+const noReplayOnDeath = !played.includes("shieldBlock");
+
+const pass = shieldBlockCalls.length === 1
+  && survivedFirstFlame
+  && shieldSpentOnHit
+  && guardWindowActive
+  && noReplayDuringGuard
+  && diesWithoutShieldOrGuard
+  && noReplayOnDeath;
+
+console.log(JSON.stringify({
+  shieldBlockCalls,
+  survivedFirstFlame,
+  shieldSpentOnHit,
+  guardWindowActive,
+  noReplayDuringGuard,
+  diesWithoutShieldOrGuard,
+  noReplayOnDeath,
+  pass,
+}, null, 2));
+
+if (!pass) {
   process.exit(1);
 }

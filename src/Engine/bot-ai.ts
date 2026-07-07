@@ -344,22 +344,6 @@ function canBotPlaceBomb(player: PlayerState, context: BotContext): boolean {
 }
 
 /**
- * Get the oldest bomb owned by a player
- */
-function getOldestOwnedBomb(playerId: PlayerId, context: BotContext): BombState | null {
-  let selectedBomb: BombState | null = null;
-  for (const bomb of context.bombs) {
-    if (bomb.ownerId !== playerId) {
-      continue;
-    }
-    if (!selectedBomb || bomb.id < selectedBomb.id) {
-      selectedBomb = bomb;
-    }
-  }
-  return selectedBomb;
-}
-
-/**
  * Find a bomb suitable for remote detonation
  */
 function getRemoteDetonationBomb(
@@ -368,23 +352,33 @@ function getRemoteDetonationBomb(
   enemyVulnerable: boolean,
   context: BotContext,
 ): BombState | null {
-  if (!player.alive || player.remoteLevel <= 0) {
-    return null;
-  }
-  const remoteBomb = getOldestOwnedBomb(player.id, context);
-  if (!remoteBomb) {
+  if (!player.alive || player.remoteLevel <= 0 || !enemyVulnerable) {
     return null;
   }
 
-  const blastKeys = getBombBlastKeys(remoteBomb.tile, remoteBomb.flameRange, context);
   const playerTile = getTileFromPosition(player.position);
-  if (blastKeys.has(tileKey(playerTile.x, playerTile.y))) {
-    return null;
+  const playerKey = tileKey(playerTile.x, playerTile.y);
+  const enemyKey = tileKey(enemy.tile.x, enemy.tile.y);
+  let selectedBomb: BombState | null = null;
+
+  for (const bomb of context.bombs) {
+    if (bomb.ownerId !== player.id) {
+      continue;
+    }
+    const blastKeys = getBombBlastKeys(bomb.tile, bomb.flameRange, context);
+    if (blastKeys.has(playerKey) || !blastKeys.has(enemyKey)) {
+      continue;
+    }
+    if (
+      !selectedBomb
+      || bomb.fuseMs < selectedBomb.fuseMs
+      || (bomb.fuseMs === selectedBomb.fuseMs && bomb.id < selectedBomb.id)
+    ) {
+      selectedBomb = bomb;
+    }
   }
-  if (enemyVulnerable && blastKeys.has(tileKey(enemy.tile.x, enemy.tile.y))) {
-    return remoteBomb;
-  }
-  return null;
+
+  return selectedBomb;
 }
 
 /**

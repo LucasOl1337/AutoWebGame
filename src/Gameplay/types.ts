@@ -19,7 +19,8 @@ export type PowerUpType =
   | "remote-up"
   | "shield-up"
   | "bomb-pass-up"
-  | "kick-up";
+  | "kick-up"
+  | "short-fuse-up";
 
 export interface TileCoord {
   x: number;
@@ -49,8 +50,12 @@ export interface PlayerState {
   shieldCharges: number;
   bombPassLevel: number;
   kickLevel: number;
+  shortFuseLevel: number;
   flameGuardMs: number;
   spawnProtectionMs: number;
+  perfectStartWindowMs?: number;
+  perfectStartBoostMs?: number;
+  breakawayBoostMs?: number;
   skill: PlayerSkillState;
 }
 

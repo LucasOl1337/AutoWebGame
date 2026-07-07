@@ -35,16 +35,26 @@ const endlessSeatsCorrupted = {
   4: { clientId: null, occupantType: "bot" },
 };
 
+const classicSeatsHumanBot = {
+  1: { clientId: "a", occupantType: "human" },
+  2: { clientId: null, occupantType: "bot" },
+  3: { clientId: null, occupantType: "empty" },
+  4: { clientId: null, occupantType: "empty" },
+};
+
 const classicShouldReset = shouldResetPlayingRoom(classicRoom, classicSeatsWithQuit, [1, 2]);
+const classicHumanBotShouldStayLive = shouldResetPlayingRoom(classicRoom, classicSeatsHumanBot, [1, 2]);
 const endlessSoloShouldStayLive = shouldResetPlayingRoom(endlessRoom, endlessSeatsSolo, [1, 2, 3, 4]);
 const endlessCorruptedShouldReset = shouldResetPlayingRoom(endlessRoom, endlessSeatsCorrupted, [1, 2, 3, 4]);
 
 const pass = classicShouldReset
+  && !classicHumanBotShouldStayLive
   && !endlessSoloShouldStayLive
   && endlessCorruptedShouldReset;
 
 console.log(JSON.stringify({
   classicShouldReset,
+  classicHumanBotShouldStayLive,
   endlessSoloShouldStayLive,
   endlessCorruptedShouldReset,
   pass,

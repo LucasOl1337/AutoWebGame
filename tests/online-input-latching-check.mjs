@@ -40,6 +40,16 @@ const stalePacketIgnored = mergeSequencedOnlineInputState(overwrittenByFalseSame
   sentAtMs: 900,
 });
 
+const invalidDirectionSanitized = mergeSequencedOnlineInputState(stalePacketIgnored, {
+  direction: "sideways",
+  bombPressed: false,
+  detonatePressed: true,
+  skillPressed: false,
+  skillHeld: false,
+  inputSeq: 12,
+  sentAtMs: 1100,
+});
+
 const pass = pressed.bombPressed === true
   && overwrittenByFalseSameTick.bombPressed === true
   && pressed.skillHeld === true
@@ -51,12 +61,16 @@ const pass = pressed.bombPressed === true
   && stalePacketIgnored.bombPressed === overwrittenByFalseSameTick.bombPressed
   && stalePacketIgnored.detonatePressed === overwrittenByFalseSameTick.detonatePressed
   && stalePacketIgnored.skillPressed === overwrittenByFalseSameTick.skillPressed
-  && stalePacketIgnored.skillHeld === overwrittenByFalseSameTick.skillHeld;
+  && stalePacketIgnored.skillHeld === overwrittenByFalseSameTick.skillHeld
+  && invalidDirectionSanitized.direction === null
+  && invalidDirectionSanitized.detonatePressed === true
+  && invalidDirectionSanitized.inputSeq === 12;
 
 console.log(JSON.stringify({
   pressed,
   overwrittenByFalseSameTick,
   stalePacketIgnored,
+  invalidDirectionSanitized,
   pass,
 }, null, 2));
 

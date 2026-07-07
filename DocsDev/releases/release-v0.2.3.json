@@ -1,0 +1,137 @@
+{
+  "brand": {
+    "name": "AutoWebGame",
+    "vendor": "BOMBA",
+    "footer": "BROWSER ARENA GAME",
+    "masthead": "NOTAS DO PATCH",
+    "footerLeft": "Notas completas no GitHub Releases",
+    "bgGradient": ["#05080C", "#071D18", "#1A2D24"],
+    "pillGradient": ["#00E5A0", "#FACC15"]
+  },
+  "version": "v0.2.3",
+  "date": "7 de julho de 2026 - Patch oficial",
+  "title": "Danger, powerups e lobby mais solidos",
+  "cloud": {
+    "latestReleaseBeforePatch": "v0.2.2",
+    "latestReleasePublishedAtUtc": "2026-07-07T02:29:41Z",
+    "originMainBeforePatch": "602b5d7e989a6c0238263b40252bee2853903694",
+    "tagBeforePatch": "210d0c189ce4cd20048d6d5cef4605673d6cb9d8",
+    "localIntegratedBranches": [
+      "codex-swarm@eac1a604d151280336e02f253c2eaf62c1bf75d0",
+      "swarm/i18n-storage-guard-20260707-1600@1813b994e81ff591ec8d044cda78a4cfd2980b4e"
+    ]
+  },
+  "sessions": [
+    {
+      "agent": "CODEX / codex-swarm",
+      "result": "Mudancas versionadas encontradas, auditadas, resolvidas e integradas."
+    },
+    {
+      "agent": "CODEX / i18n-storage-guard",
+      "result": "Teste dedicado integrado; codigo coberto pelo helper compartilhado de storage."
+    },
+    {
+      "agent": "Claude",
+      "result": "Nenhum rastro versionado local apos v0.2.2."
+    },
+    {
+      "agent": "ZCode",
+      "result": "Nenhum rastro versionado local apos v0.2.2."
+    },
+    {
+      "agent": "Wispr Flow",
+      "result": "Nenhum rastro versionado local apos v0.2.2."
+    }
+  ],
+  "categories": [
+    {
+      "label": "Gameplay",
+      "title": "GAMEPLAY",
+      "color": "#FACC15",
+      "items": [
+        {
+          "name": "Adrenalina de perigo",
+          "desc": "Passo extra curto em explosoes iminentes",
+          "tag": "DANGER"
+        },
+        {
+          "name": "Chute de bomba melhor",
+          "desc": "Fuse quente, crate crack e drops de combo",
+          "tag": "BOMB"
+        },
+        {
+          "name": "Short fuse power-up",
+          "desc": "Novo upgrade reduz o fuse de bombas",
+          "tag": "POWERUP"
+        }
+      ]
+    },
+    {
+      "label": "UX",
+      "title": "UX",
+      "color": "#00E5A0",
+      "items": [
+        {
+          "name": "Feedback dialog vivo",
+          "desc": "Contador, limite local e Escape",
+          "tag": "FEEDBACK"
+        },
+        {
+          "name": "Arena theme picker",
+          "desc": "Selecao de tema na landing",
+          "tag": "ARENA"
+        },
+        {
+          "name": "Entrada por codigo",
+          "desc": "Submit aceita codigo ou URL de convite",
+          "tag": "LOBBY"
+        }
+      ]
+    },
+    {
+      "label": "Estabilidade",
+      "title": "ESTABILIDADE",
+      "color": "#38BDF8",
+      "items": [
+        {
+          "name": "Roster resiliente",
+          "desc": "Manifesto duplicado cai no aprovado",
+          "tag": "ASSETS"
+        },
+        {
+          "name": "Storage seguro",
+          "desc": "UI, i18n e telemetry toleram bloqueio",
+          "tag": "STORAGE"
+        },
+        {
+          "name": "Input online saneado",
+          "desc": "Direcao invalida vira neutro",
+          "tag": "ONLINE"
+        }
+      ]
+    },
+    {
+      "label": "QA",
+      "title": "QA",
+      "color": "#A78BFA",
+      "items": [
+        {
+          "name": "Swarm auditado",
+          "desc": "Branches locais revisadas desde v0.2.2",
+          "tag": "REPO"
+        },
+        {
+          "name": "Build e regressao",
+          "desc": "Checks de lobby, online, bots, audio e gameplay passaram",
+          "tag": "TESTS"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    "release-assets/v0.2.3-card.png",
+    "release-assets/v0.2.3-card-bg.png",
+    "DocsDev/releases/release-v0.2.3.md",
+    "DocsDev/releases/release-v0.2.3.json"
+  ]
+}
