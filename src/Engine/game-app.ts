@@ -171,6 +171,8 @@ const SPAWN_PROTECTION_MS = 2200;
 const PERFECT_START_WINDOW_MS = 320;
 const PERFECT_START_BOOST_MS = 640;
 const PERFECT_START_SPEED_MULTIPLIER = 1.35;
+const DANGER_ADRENALINE_ETA_MS = 900;
+const DANGER_ADRENALINE_SPEED_MULTIPLIER = 1.18;
 const SUDDEN_DEATH_ELAPSED_MS = 40_000;
 const SUDDEN_DEATH_START_MS = ROUND_DURATION_MS - SUDDEN_DEATH_ELAPSED_MS;
 const SUDDEN_DEATH_TICK_MS = 800;
@@ -2277,9 +2279,26 @@ export class GameApp {
   private getMoveSpeed(player: PlayerState): number {
     const speed = TILE_SIZE / (this.getMoveDuration(player) / 1000);
     const hasSpeedBoost = (player.perfectStartBoostMs ?? 0) > 0 || (player.breakawayBoostMs ?? 0) > 0;
-    return hasSpeedBoost
-      ? speed * PERFECT_START_SPEED_MULTIPLIER
+    if (hasSpeedBoost) {
+      return speed * PERFECT_START_SPEED_MULTIPLIER;
+    }
+    return this.hasDangerAdrenalineStep(player)
+      ? speed * DANGER_ADRENALINE_SPEED_MULTIPLIER
       : speed;
+  }
+
+  private hasDangerAdrenalineStep(player: PlayerState): boolean {
+    if (
+      !player.alive
+      || player.spawnProtectionMs > 0
+      || player.flameGuardMs > 0
+      || this.isPlayerImmuneDuringSkillChannel(player)
+    ) {
+      return false;
+    }
+    const tile = this.getTileFromPosition(player.position);
+    const etaMs = this.getDangerMap().get(tileKey(tile.x, tile.y));
+    return etaMs !== undefined && etaMs > 0 && etaMs <= DANGER_ADRENALINE_ETA_MS;
   }
 
   private updatePerfectStartBurst(player: PlayerState, direction: Direction | null, deltaMs: number): void {
