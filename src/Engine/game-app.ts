@@ -134,6 +134,12 @@ const directionDelta: Record<Direction, TileCoord> = {
   right: { x: 1, y: 0 },
 };
 
+interface CenterOverlayState {
+  title: string;
+  subtitle: string;
+  footer: string | null;
+}
+
 const PLAYER_HITBOX_HALF = TILE_SIZE * 0.5;
 const LANE_SNAP_THRESHOLD = TILE_SIZE * 0.45;
 const LANE_LOCK_THRESHOLD = 3;
@@ -4857,19 +4863,9 @@ export class GameApp {
   }
 
   private renderMatchOverlay(): void {
-    const copy = SITE_COPY[this.language].canvas;
-    if (this.paused) {
-      this.drawCenterOverlay(copy.pausedTitle, copy.pausedSubtitle);
-      return;
-    }
-
-    if (this.roundOutcome) {
-      const detail = this.roundOutcome.reason === "elimination"
-        ? copy.arenaRebooting
-        : this.roundOutcome.reason === "double-ko"
-          ? copy.doubleKo
-          : copy.noPoints;
-      this.drawCenterOverlay(this.roundOutcome.message, detail);
+    const overlay = this.getCenterOverlayState();
+    if (overlay) {
+      this.drawCenterOverlay(overlay.title, overlay.subtitle, overlay.footer);
     }
   }
 
@@ -4959,14 +4955,68 @@ export class GameApp {
   }
 
   private renderMatchResult(): void {
-    const copy = SITE_COPY[this.language].canvas;
-    this.drawCenterOverlay(
-      this.matchWinner ? copy.matchWinner(this.players[this.matchWinner].name) : copy.matchComplete,
-      copy.rematchSummary,
-    );
+    const overlay = this.getCenterOverlayState();
+    if (overlay) {
+      this.drawCenterOverlay(overlay.title, overlay.subtitle, overlay.footer);
+    }
   }
 
-  private drawCenterOverlay(title: string, subtitle: string): void {
+  private getCenterOverlayState(): CenterOverlayState | null {
+    const copy = SITE_COPY[this.language].canvas;
+    if (this.mode === "match" && this.paused) {
+      return {
+        title: copy.pausedTitle,
+        subtitle: copy.pausedSubtitle,
+        footer: null,
+      };
+    }
+
+    if (this.mode === "match" && this.roundOutcome) {
+      const subtitle = this.roundOutcome.reason === "elimination"
+        ? copy.arenaRebooting
+        : this.roundOutcome.reason === "double-ko"
+          ? copy.doubleKo
+          : copy.noPoints;
+      const seconds = this.getRoundedCountdownSeconds(this.roundOutcome.countdownMs);
+      const nextAction = this.onlineRoomMode !== "endless" && this.hasMatchWinnerScore()
+        ? copy.matchResultCue(seconds)
+        : copy.nextRoundCue(seconds);
+      return {
+        title: this.roundOutcome.message,
+        subtitle,
+        footer: `${copy.scoreSummary(this.formatActiveScore())} | ${nextAction}`,
+      };
+    }
+
+    if (this.mode === "match-result") {
+      const scoreSummary = copy.scoreSummary(this.formatActiveScore());
+      return {
+        title: this.matchWinner ? copy.matchWinner(this.players[this.matchWinner].name) : copy.matchComplete,
+        subtitle: copy.rematchSummary,
+        footer: this.onlineSession
+          ? scoreSummary
+          : `${scoreSummary} | ${copy.nextMatchCue(this.getRoundedCountdownSeconds(this.matchResultCooldownMs))}`,
+      };
+    }
+
+    return null;
+  }
+
+  private hasMatchWinnerScore(): boolean {
+    return this.activePlayerIds.some((playerId) => this.score[playerId] >= TARGET_WINS);
+  }
+
+  private getRoundedCountdownSeconds(countdownMs: number): number {
+    return Math.max(0, Math.ceil(countdownMs / 1000));
+  }
+
+  private formatActiveScore(): string {
+    return this.activePlayerIds
+      .map((playerId) => `P${playerId} ${this.score[playerId]}`)
+      .join(" - ");
+  }
+
+  private drawCenterOverlay(title: string, subtitle: string, footer: string | null = null): void {
     this.ctx.fillStyle = CANVAS_UI_PANEL_BG_STRONG;
     this.ctx.fillRect(40, 164, CANVAS_WIDTH - 80, 120);
     this.ctx.strokeStyle = CANVAS_UI_BORDER_STRONG;
@@ -4978,6 +5028,11 @@ export class GameApp {
     this.ctx.fillStyle = CANVAS_UI_MUTED;
     this.ctx.font = "600 13px Inter";
     this.ctx.fillText(subtitle, CANVAS_WIDTH / 2, 248);
+    if (footer) {
+      this.ctx.fillStyle = CANVAS_UI_GOLD;
+      this.ctx.font = "700 10px Inter";
+      this.ctx.fillText(footer, CANVAS_WIDTH / 2, 270);
+    }
   }
 
   private renderGameToText(): string {
@@ -5002,6 +5057,7 @@ export class GameApp {
         elapsedMs: Math.round(effect.elapsedMs),
       }));
     const suddenDeathHud = this.getSuddenDeathHudState();
+    const centerOverlay = this.getCenterOverlayState();
 
     const payload = {
       mode: this.mode,
@@ -5016,6 +5072,7 @@ export class GameApp {
         localBotFill: this.localBotFill,
         activePlayerIds: this.activePlayerIds,
         characterMenuOpen: this.characterMenuOpen,
+        centerOverlay,
         suddenDeath: {
           active: this.suddenDeathActive,
           startsAtMs: SUDDEN_DEATH_START_MS,

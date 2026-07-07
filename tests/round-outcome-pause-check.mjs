@@ -106,6 +106,9 @@ emit("keyup", keyEvent("Escape"));
 window.advanceTime(2_200);
 const afterEsc = JSON.parse(window.render_game_to_text());
 const roundEndPlayed = sounds.includes("roundEnd");
+const beforeOverlay = beforeEsc.match.centerOverlay;
+const overlayShowsScore = beforeOverlay?.footer?.includes("Placar: P1 1 - P2 0") === true;
+const overlayShowsNextAction = beforeOverlay?.footer?.includes("Proxima rodada em") === true;
 
 const report = {
   before: {
@@ -113,21 +116,28 @@ const report = {
     paused: beforeEsc.match.paused,
     roundOutcome: beforeEsc.match.roundOutcome,
     round: beforeEsc.match.round,
+    centerOverlay: beforeOverlay,
   },
   after: {
     mode: afterEsc.mode,
     paused: afterEsc.match.paused,
     roundOutcome: afterEsc.match.roundOutcome,
     round: afterEsc.match.round,
+    centerOverlay: afterEsc.match.centerOverlay,
   },
   sounds,
   roundEndPlayed,
+  overlayShowsScore,
+  overlayShowsNextAction,
   pass:
     beforeEsc.match.roundOutcome !== null &&
+    overlayShowsScore &&
+    overlayShowsNextAction &&
     afterEsc.mode === "match" &&
     afterEsc.match.round === 2 &&
     !afterEsc.match.paused &&
     afterEsc.match.roundOutcome === null &&
+    afterEsc.match.centerOverlay === null &&
     roundEndPlayed,
 };
 
