@@ -23,8 +23,10 @@ interface SoundPlaybackPolicy {
 
 const MASTER_VOLUME = 0.5;
 const SFX_PLAYBACK_POLICIES: Partial<Record<SfxKey, SoundPlaybackPolicy>> = {
+  bombPlace: { minIntervalMs: 45 },
   bombExplode: { minIntervalMs: 140 },
   flames: { minIntervalMs: 110 },
+  powerCollect: { minIntervalMs: 80 },
   suddenDeathAlarm: { minIntervalMs: 1200 },
 };
 
