@@ -47,11 +47,11 @@ export class InputManager {
 
   constructor(target: Window) {
     target.addEventListener("keydown", (event) => {
-      if (this.isTypingTarget(event.target)) {
+      if (this.shouldIgnoreKeyEvent(event.target)) {
         return;
       }
       const code = event.code;
-      if (this.reservedCodes.has(code)) {
+      if (this.reservedCodes.has(code) && typeof event.preventDefault === "function") {
         event.preventDefault();
       }
       if (!this.keysDown.has(code)) {
@@ -66,7 +66,11 @@ export class InputManager {
     });
 
     target.addEventListener("keyup", (event) => {
+      const shouldLetBrowserHandle = this.shouldIgnoreKeyEvent(event.target);
       const code = event.code;
+      if (!shouldLetBrowserHandle && this.reservedCodes.has(code) && typeof event.preventDefault === "function") {
+        event.preventDefault();
+      }
       this.keysDown.delete(code);
       const idx = this.keyOrder.indexOf(code);
       if (idx !== -1) {
@@ -133,6 +137,17 @@ export class InputManager {
     }
 
     return null;
+  }
+
+  private shouldIgnoreKeyEvent(target: EventTarget | null): boolean {
+    return this.isTypingTarget(target) || this.isInteractiveTarget(target);
+  }
+
+  private isInteractiveTarget(target: EventTarget | null): boolean {
+    if (typeof HTMLElement === "undefined" || !(target instanceof HTMLElement)) {
+      return false;
+    }
+    return target.closest("button, a[href], summary, [role='button'], [role='link'], [role='menuitem']") !== null;
   }
 
   private isTypingTarget(target: EventTarget | null): boolean {
