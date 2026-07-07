@@ -55,6 +55,7 @@ export interface PlayerState {
   spawnProtectionMs: number;
   perfectStartWindowMs?: number;
   perfectStartBoostMs?: number;
+  breakawayBoostMs?: number;
   skill: PlayerSkillState;
 }
 

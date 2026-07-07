@@ -177,6 +177,7 @@ const SUDDEN_DEATH_TICK_MS = 800;
 const SUDDEN_DEATH_FALL_MS = 340;
 const SUDDEN_DEATH_IMPACT_LINGER_MS = 180;
 const SHIELD_GUARD_MS = 600;
+const SHIELD_BREAKAWAY_BOOST_MS = 520;
 const DANGER_OVERLAY_MAX_ETA_MS = BOMB_FUSE_MS + 600;
 const MATCH_RESULT_RESTART_DELAY_MS = 900;
 const CANVAS_BACKBUFFER_SCALE = 2;
@@ -1501,6 +1502,7 @@ export class GameApp {
   ): boolean {
     player.spawnProtectionMs = Math.max(0, player.spawnProtectionMs - deltaMs);
     player.flameGuardMs = Math.max(0, player.flameGuardMs - deltaMs);
+    player.breakawayBoostMs = Math.max(0, (player.breakawayBoostMs ?? 0) - deltaMs);
     this.updatePerfectStartBurst(player, input.direction, deltaMs);
     this.syncPlayerSkill(player);
     this.advancePlayerSkillTimers(player, deltaMs);
@@ -2016,6 +2018,7 @@ export class GameApp {
       spawnProtectionMs: SPAWN_PROTECTION_MS,
       perfectStartWindowMs: PERFECT_START_WINDOW_MS,
       perfectStartBoostMs: 0,
+      breakawayBoostMs: 0,
       skill: createDefaultPlayerSkillState(null),
     };
   }
@@ -2273,7 +2276,8 @@ export class GameApp {
 
   private getMoveSpeed(player: PlayerState): number {
     const speed = TILE_SIZE / (this.getMoveDuration(player) / 1000);
-    return (player.perfectStartBoostMs ?? 0) > 0
+    const hasSpeedBoost = (player.perfectStartBoostMs ?? 0) > 0 || (player.breakawayBoostMs ?? 0) > 0;
+    return hasSpeedBoost
       ? speed * PERFECT_START_SPEED_MULTIPLIER
       : speed;
   }
@@ -3034,6 +3038,7 @@ export class GameApp {
     if (player.shieldCharges > 0) {
       player.shieldCharges -= 1;
       player.flameGuardMs = SHIELD_GUARD_MS;
+      player.breakawayBoostMs = Math.max(player.breakawayBoostMs ?? 0, SHIELD_BREAKAWAY_BOOST_MS);
       this.soundManager.playOneShot("shieldBlock");
       return false;
     }
@@ -5192,6 +5197,7 @@ export class GameApp {
             key: slot.keyLabel,
           })),
           flameGuardMs: Math.round(player.flameGuardMs),
+          breakawayBoostMs: Math.round(player.breakawayBoostMs ?? 0),
           spawnProtectionMs: Math.round(player.spawnProtectionMs),
           skill: {
             id: player.skill.id,
