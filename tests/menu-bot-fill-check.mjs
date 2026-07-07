@@ -1,4 +1,5 @@
 Object.defineProperty(globalThis, "navigator", { value: { webdriver: false }, configurable: true });
+globalThis.HTMLElement = class {};
 
 const noop = () => {};
 const fakeCtx = {
@@ -29,6 +30,7 @@ const fakeCanvas = {
   height: 0,
   style: {},
   setAttribute: noop,
+  closest: () => null,
   getContext: () => fakeCtx,
 };
 
@@ -46,6 +48,10 @@ globalThis.window = {
 };
 
 const { GameApp } = await import("../output/esm/Engine/game-app.js");
+const {
+  BOT_MATCH_FILL_OPTIONS,
+  parseStoredBotMatchFill,
+} = await import("../output/esm/NetCode/session-client.js");
 
 const emptySprites = {
   up: null,
@@ -72,23 +78,52 @@ const assets = {
   },
 };
 
-const game = new GameApp(root, assets);
-game["applyOfflineBotFill"](3, false);
-const state = JSON.parse(game["renderGameToText"]());
+function createGame() {
+  return new GameApp(root, assets);
+}
 
-const activePlayerIds = state.activePlayerIds;
-const allBotsPresent = [2, 3, 4].every((playerId) => state.players.some((player) => player.id === playerId && player.botControlled));
-const p1IsHuman = state.players.some((player) => player.id === 1 && !player.botControlled);
-const fillMatches = state.match.localBotFill === 3;
-const pass = activePlayerIds.length === 4
-  && fillMatches
-  && allBotsPresent
-  && p1IsHuman;
+const fillStates = BOT_MATCH_FILL_OPTIONS.map((fill) => {
+  const game = createGame();
+  game.startOfflineBotMatch(fill);
+  return {
+    fill,
+    state: JSON.parse(game["renderGameToText"]()),
+  };
+});
+
+const fillChecks = fillStates.map(({ fill, state }) => {
+  const expectedActiveIds = Array.from({ length: fill + 1 }, (_, index) => index + 1);
+  return {
+    fill,
+    activeCount: state.activePlayerIds.length === fill + 1,
+    activeIdsMatch: expectedActiveIds.every((playerId) => state.activePlayerIds.includes(playerId)),
+    fillMatches: state.match.localBotFill === fill,
+    p1IsHuman: state.players.some((player) => player.id === 1 && !player.botControlled),
+    botsPresent: expectedActiveIds
+      .filter((playerId) => playerId !== 1)
+      .every((playerId) => state.players.some((player) => player.id === playerId && player.botControlled)),
+  };
+});
+
+const helperChecks = {
+  exposesThreeOptions: BOT_MATCH_FILL_OPTIONS.join(",") === "1,2,3",
+  parsesValidFill: parseStoredBotMatchFill("2") === 2,
+  defaultsInvalidFill: parseStoredBotMatchFill("9") === 3,
+  defaultsMissingFill: parseStoredBotMatchFill(null) === 3,
+};
+
+const pass = fillChecks.every((checks) => Object.values(checks).every(Boolean))
+  && Object.values(helperChecks).every(Boolean);
 
 console.log(JSON.stringify({
-  activePlayerIds,
-  localBotFill: state.match.localBotFill,
-  players: state.players.map((player) => ({ id: player.id, botControlled: player.botControlled })),
+  fillChecks,
+  helperChecks,
+  fillStates: fillStates.map(({ fill, state }) => ({
+    fill,
+    activePlayerIds: state.activePlayerIds,
+    localBotFill: state.match.localBotFill,
+    players: state.players.map((player) => ({ id: player.id, botControlled: player.botControlled })),
+  })),
   pass,
 }, null, 2));
 

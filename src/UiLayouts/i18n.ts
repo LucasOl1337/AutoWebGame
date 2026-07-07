@@ -51,6 +51,10 @@ export interface SiteCopy {
     returnModeEndless: string;
     returnModeBotMatch: string;
     returnModeLobby: string;
+    botIntensityTitle: string;
+    botIntensityHint: string;
+    botIntensityOptionLabel: (botCount: number) => string;
+    botIntensityOptionDetail: (botCount: number) => string;
     localControlsTitle: string;
     localControlsHint: string;
     localControlsMove: string;
@@ -149,7 +153,7 @@ export interface SiteCopy {
     connecting: string;
     disconnected: string;
     connectionError: string;
-    botMatchStarted: string;
+    botMatchStarted: (botCount: number) => string;
     createLobbyUnavailable: string;
     creatingLobby: string;
     quickMatchUnavailable: string;
@@ -242,6 +246,26 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       returnModeEndless: "partida infinita",
       returnModeBotMatch: "partida contra bots",
       returnModeLobby: "lobby manual",
+      botIntensityTitle: "Intensidade local",
+      botIntensityHint: "Escolha quantos bots entram antes de comecar.",
+      botIntensityOptionLabel: (botCount) => {
+        if (botCount === 1) {
+          return "Duelo";
+        }
+        if (botCount === 2) {
+          return "Pressao";
+        }
+        return "Caos";
+      },
+      botIntensityOptionDetail: (botCount) => {
+        if (botCount === 1) {
+          return "1 bot rival";
+        }
+        if (botCount === 2) {
+          return "2 bots no mapa";
+        }
+        return "3 bots, sala cheia";
+      },
       localControlsTitle: "Antes da primeira bomba",
       localControlsHint: "A partida contra bots usa o personagem selecionado ao lado.",
       localControlsMove: "Mover pelo labirinto",
@@ -340,7 +364,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       connecting: "Conectando ao lobby global...",
       disconnected: "Conexao perdida. Reconectando...",
       connectionError: "Erro de conexao. Tentando novamente...",
-      botMatchStarted: "Partida contra bots iniciada.",
+      botMatchStarted: (botCount) => `Partida contra ${botCount} ${botCount === 1 ? "bot" : "bots"} iniciada.`,
       createLobbyUnavailable: "Nao foi possivel criar a sala agora.",
       creatingLobby: "Criando um lobby novo...",
       quickMatchUnavailable: "Quick match indisponivel. Reconectando...",
@@ -431,6 +455,26 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       returnModeEndless: "endless match",
       returnModeBotMatch: "match vs bots",
       returnModeLobby: "manual lobby",
+      botIntensityTitle: "Local intensity",
+      botIntensityHint: "Choose how many bots join before starting.",
+      botIntensityOptionLabel: (botCount) => {
+        if (botCount === 1) {
+          return "Duel";
+        }
+        if (botCount === 2) {
+          return "Pressure";
+        }
+        return "Chaos";
+      },
+      botIntensityOptionDetail: (botCount) => {
+        if (botCount === 1) {
+          return "1 rival bot";
+        }
+        if (botCount === 2) {
+          return "2 bots on map";
+        }
+        return "3 bots, full room";
+      },
       localControlsTitle: "Before the first bomb",
       localControlsHint: "Bot matches use the character selected on the side.",
       localControlsMove: "Move through the maze",
@@ -529,7 +573,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       connecting: "Connecting to the global lobby...",
       disconnected: "Connection lost. Reconnecting...",
       connectionError: "Connection error. Trying again...",
-      botMatchStarted: "Bot match started.",
+      botMatchStarted: (botCount) => `Bot match with ${botCount} ${botCount === 1 ? "bot" : "bots"} started.`,
       createLobbyUnavailable: "Could not create a room right now.",
       creatingLobby: "Creating a new lobby...",
       quickMatchUnavailable: "Quick match is unavailable. Reconnecting...",

@@ -69,6 +69,7 @@ interface SessionElements {
   landingQuickMatchButton: HTMLButtonElement;
   landingEndlessButton: HTMLButtonElement;
   landingBotMatchButton: HTMLButtonElement;
+  landingBotIntensityButtons: HTMLButtonElement[];
   landingLobbyButton: HTMLButtonElement;
   landingFeedbackButton: HTMLButtonElement;
   landingRoster: HTMLDivElement;
@@ -123,6 +124,12 @@ const SESSION_RETURN_BRIEF_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
 
 export const SESSION_RETURN_BRIEF_STORAGE_KEY = "bomba-session-return-brief";
 export const SESSION_RETURN_BRIEF_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+export const BOT_MATCH_FILL_STORAGE_KEY = "bomba-bot-match-fill";
+export const BOT_MATCH_FILL_OPTIONS = [1, 2, 3] as const;
+
+export type BotMatchFill = typeof BOT_MATCH_FILL_OPTIONS[number];
+
+const DEFAULT_BOT_MATCH_FILL: BotMatchFill = 3;
 
 export type SessionReturnMode = "quick-match" | "endless" | "bot-match" | "lobby";
 
@@ -165,6 +172,17 @@ function isSessionReturnMode(value: unknown): value is SessionReturnMode {
 
 function isPlayerId(value: unknown): value is PlayerId {
   return value === 1 || value === 2 || value === 3 || value === 4;
+}
+
+function isBotMatchFill(value: unknown): value is BotMatchFill {
+  return value === 1 || value === 2 || value === 3;
+}
+
+export function parseStoredBotMatchFill(raw: string | null | undefined): BotMatchFill {
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && isBotMatchFill(parsed)
+    ? parsed
+    : DEFAULT_BOT_MATCH_FILL;
 }
 
 function isFreshSessionReturnBrief(savedAtMs: number, nowMs: number): boolean {
@@ -426,6 +444,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private onlineUsers = 0;
   private onlinePlayers: OnlinePresenceEntry[] = [];
   private preferredCharacterIndex = 0;
+  private botMatchFill: BotMatchFill = DEFAULT_BOT_MATCH_FILL;
   private idleScreen: IdleScreen = "landing";
   private autoClaimRoomCode: string | null = null;
   private currentAccount: PlayerAccount | null = null;
@@ -454,6 +473,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.syncLanguageUrl(this.pendingAutoJoinRoom);
     this.app.setLanguage(this.language);
     this.preferredCharacterIndex = this.readPreferredCharacterIndex();
+    this.botMatchFill = this.readBotMatchFill();
     this.sessionReturnBrief = this.readSessionReturnBrief();
     this.telemetry = new GrowthTelemetryClient();
     this.elements = this.render(root);
@@ -676,10 +696,15 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.elements.landingBotMatchButton.addEventListener("click", () => {
       this.app.setOfflinePreferredCharacter(this.preferredCharacterIndex);
       this.rememberSessionEntry("bot-match");
-      this.app.startOfflineBotMatch(3);
-      this.setStatus(this.copy.status.botMatchStarted);
+      this.app.startOfflineBotMatch(this.botMatchFill);
+      this.setStatus(this.copy.status.botMatchStarted(this.botMatchFill));
       this.renderAll();
     });
+    for (const button of this.elements.landingBotIntensityButtons) {
+      button.addEventListener("click", () => {
+        this.selectBotMatchFill(parseStoredBotMatchFill(button.dataset.botFill));
+      });
+    }
     this.elements.landingFeedbackButton.addEventListener("click", () => {
       this.openFeedbackDialog();
     });
@@ -1331,6 +1356,47 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     landingBotMatchButton.type = "button";
     landingBotMatchButton.textContent = copy.landing.botMatch;
 
+    const landingBotIntensity = document.createElement("section");
+    landingBotIntensity.className = "experience-bot-intensity";
+    landingBotIntensity.setAttribute("aria-label", copy.landing.botIntensityTitle);
+
+    const landingBotIntensityHeader = document.createElement("div");
+    landingBotIntensityHeader.className = "experience-bot-intensity__header";
+
+    const landingBotIntensityTitle = document.createElement("p");
+    landingBotIntensityTitle.className = "experience-bot-intensity__title";
+    landingBotIntensityTitle.textContent = copy.landing.botIntensityTitle;
+
+    const landingBotIntensityHint = document.createElement("p");
+    landingBotIntensityHint.className = "experience-bot-intensity__hint";
+    landingBotIntensityHint.textContent = copy.landing.botIntensityHint;
+
+    landingBotIntensityHeader.append(landingBotIntensityTitle, landingBotIntensityHint);
+
+    const landingBotIntensityGroup = document.createElement("div");
+    landingBotIntensityGroup.className = "experience-bot-intensity__options";
+    landingBotIntensityGroup.setAttribute("role", "group");
+    landingBotIntensityGroup.setAttribute("aria-label", copy.landing.botIntensityTitle);
+
+    const landingBotIntensityButtons = BOT_MATCH_FILL_OPTIONS.map((fill) => {
+      const option = document.createElement("button");
+      option.className = "experience-bot-intensity__option";
+      option.type = "button";
+      option.dataset.botFill = String(fill);
+
+      const label = document.createElement("strong");
+      label.textContent = copy.landing.botIntensityOptionLabel(fill);
+
+      const detail = document.createElement("span");
+      detail.textContent = copy.landing.botIntensityOptionDetail(fill);
+
+      option.append(label, detail);
+      landingBotIntensityGroup.append(option);
+      return option;
+    });
+
+    landingBotIntensity.append(landingBotIntensityHeader, landingBotIntensityGroup);
+
     const landingLobbyButton = document.createElement("button");
     landingLobbyButton.className = "experience-button experience-button--secondary";
     landingLobbyButton.type = "button";
@@ -1407,7 +1473,14 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     });
 
     landingControls.append(landingControlsHeader, landingControlsGrid);
-    landingCopy.append(landingMeta, landingReturnBrief, landingActions, landingControls, landingAccountCard);
+    landingCopy.append(
+      landingMeta,
+      landingReturnBrief,
+      landingActions,
+      landingBotIntensity,
+      landingControls,
+      landingAccountCard,
+    );
 
     const landingRoster = document.createElement("div");
     landingRoster.className = "experience-hero__art";
@@ -1771,6 +1844,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       landingQuickMatchButton,
       landingEndlessButton,
       landingBotMatchButton,
+      landingBotIntensityButtons,
       landingLobbyButton,
       landingFeedbackButton,
       landingRoster,
@@ -1954,6 +2028,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.elements.landingQuickMatchButton.disabled = pendingEntry || !onlineActionsAvailable;
     this.elements.landingEndlessButton.disabled = pendingEntry || !onlineActionsAvailable;
     this.elements.landingBotMatchButton.disabled = pendingEntry;
+    for (const button of this.elements.landingBotIntensityButtons) {
+      button.disabled = pendingEntry;
+    }
     this.elements.landingLobbyButton.disabled = pendingEntry || !onlineActionsAvailable;
     this.elements.landingFeedbackButton.disabled = !feedbackAvailable;
     this.elements.landingFeedbackButton.hidden = !feedbackAvailable;
@@ -1966,7 +2043,17 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.elements.landingEndlessButton.textContent = this.endlessMatchStarting
       ? this.translate("Entrando...", "Joining...")
       : this.translate("Partida infinita", "Infinite match");
+    this.renderBotMatchIntensity();
     this.renderLandingCharacterPicker();
+  }
+
+  private renderBotMatchIntensity(): void {
+    for (const button of this.elements.landingBotIntensityButtons) {
+      const fill = parseStoredBotMatchFill(button.dataset.botFill);
+      const active = fill === this.botMatchFill;
+      button.dataset.active = active ? "true" : "false";
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    }
   }
 
   private renderLandingReturnBrief(): void {
@@ -2842,6 +2929,29 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       return;
     }
     window.localStorage.setItem("mistbridge-preferred-character-index", String(this.preferredCharacterIndex));
+  }
+
+  private readBotMatchFill(): BotMatchFill {
+    if (typeof window === "undefined") {
+      return DEFAULT_BOT_MATCH_FILL;
+    }
+    return parseStoredBotMatchFill(window.localStorage.getItem(BOT_MATCH_FILL_STORAGE_KEY));
+  }
+
+  private persistBotMatchFill(): void {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(BOT_MATCH_FILL_STORAGE_KEY, String(this.botMatchFill));
+  }
+
+  private selectBotMatchFill(fill: BotMatchFill): void {
+    if (this.botMatchFill === fill) {
+      return;
+    }
+    this.botMatchFill = fill;
+    this.persistBotMatchFill();
+    this.renderBotMatchIntensity();
   }
 
   private readSessionReturnBrief(): SessionReturnBrief | null {
