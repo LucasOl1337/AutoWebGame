@@ -48,6 +48,7 @@ interface TrackOptions {
 const ANON_PLAYER_ID_KEY = "bomba-anon-player-id";
 const TELEMETRY_FLUSH_INTERVAL_MS = 4_000;
 const TELEMETRY_BATCH_SIZE = 6;
+const TELEMETRY_MAX_QUEUE_SIZE = 30;
 
 function createTelemetryId(): string {
   const cryptoSource = globalThis.crypto;
@@ -161,6 +162,7 @@ export class GrowthTelemetryClient {
 
   private enqueue(body: GrowthTelemetryEventBody): void {
     this.queuedEvents.push(body);
+    this.trimQueuedEvents();
     if (this.queuedEvents.length >= TELEMETRY_BATCH_SIZE) {
       this.flushNow(false);
       return;
@@ -188,20 +190,36 @@ export class GrowthTelemetryClient {
     }
 
     const batch = this.queuedEvents.splice(0, this.queuedEvents.length);
-    void this.sendBatch(batch, useBeacon);
+    void this.sendBatch(batch, useBeacon).then((sent) => {
+      if (!sent && !useBeacon) {
+        this.requeueFailedBatch(batch);
+      }
+    });
   }
 
-  private async sendBatch(batch: GrowthTelemetryEventBody[], useBeacon: boolean): Promise<void> {
+  private requeueFailedBatch(batch: GrowthTelemetryEventBody[]): void {
+    this.queuedEvents = batch.concat(this.queuedEvents).slice(0, TELEMETRY_MAX_QUEUE_SIZE);
+    this.scheduleFlush();
+  }
+
+  private trimQueuedEvents(): void {
+    if (this.queuedEvents.length <= TELEMETRY_MAX_QUEUE_SIZE) {
+      return;
+    }
+    this.queuedEvents.splice(0, this.queuedEvents.length - TELEMETRY_MAX_QUEUE_SIZE);
+  }
+
+  private async sendBatch(batch: GrowthTelemetryEventBody[], useBeacon: boolean): Promise<boolean> {
     const encoded = JSON.stringify(batch);
     if (useBeacon && navigator.sendBeacon) {
       const blob = new Blob([encoded], { type: "application/json" });
       if (navigator.sendBeacon("/api/telemetry", blob)) {
-        return;
+        return true;
       }
     }
 
     try {
-      await fetch("/api/telemetry", {
+      const response = await fetch("/api/telemetry", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -209,8 +227,10 @@ export class GrowthTelemetryClient {
         body: encoded,
         keepalive: true,
       });
+      return response.ok || (response.status >= 400 && response.status < 500);
     } catch {
       // Telemetry cannot block gameplay flow.
+      return false;
     }
   }
 

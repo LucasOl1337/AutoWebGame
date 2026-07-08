@@ -47,6 +47,7 @@
     "test:account-username": "npm run compile:esm && node tests/account-username-validation-check.mjs",
     "test:match-result-shortcuts": "npm run compile:esm && node tests/match-result-shortcuts-check.mjs",
     "test:ui-storage-fallback": "npm run compile:esm && node tests/ui-storage-fallback-check.mjs",
+    "test:growth-telemetry-retry": "npm run compile:esm && node tests/growth-telemetry-event-retry-check.mjs",
     "test:i18n-storage-guard": "npm run compile:esm && node tests/i18n-storage-guard-check.mjs",
     "test:touch-focus-css": "node tests/touch-focus-css-check.mjs",
     "test:roster-sync": "npm run compile:esm && node tests/character-roster-manifest-sync-check.mjs",
