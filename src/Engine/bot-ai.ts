@@ -251,6 +251,13 @@ export function getBotDecision(player: PlayerState, context: BotContext): BotDec
     return { direction: null, placeBomb: true };
   }
 
+  const revengeAttackPositionTarget = isRevengeWindowActive(player)
+    ? findEnemyBombLineDirection(player, enemy, enemyVulnerable, strategicSafetyWindowMs, context)
+    : null;
+  if (revengeAttackPositionTarget) {
+    return { direction: revengeAttackPositionTarget, placeBomb: false };
+  }
+
   const powerUpTarget = findValuablePowerUpDirection(player, strategicSafetyWindowMs, context);
   if (powerUpTarget) {
     return { direction: powerUpTarget, placeBomb: false };
@@ -266,18 +273,7 @@ export function getBotDecision(player: PlayerState, context: BotContext): BotDec
     return { direction: breakableTarget, placeBomb: false };
   }
 
-  const attackPositionTarget = enemy
-    ? findNearestReachableTarget(
-      player,
-      (tile) => (
-        enemyVulnerable
-        && canBombReachTile(tile, enemy.tile, player.flameRange, context)
-        && canBotPlaceBombAtTile(player, tile, false, context)
-      ),
-      strategicSafetyWindowMs,
-      context,
-    )
-    : null;
+  const attackPositionTarget = findEnemyBombLineDirection(player, enemy, enemyVulnerable, strategicSafetyWindowMs, context);
   if (attackPositionTarget) {
     return { direction: attackPositionTarget, placeBomb: false };
   }
@@ -656,6 +652,32 @@ function findValuablePowerUpDirection(player: PlayerState, minSafetyWindowMs: nu
   }
 
   return null;
+}
+
+function isRevengeWindowActive(player: PlayerState): boolean {
+  return player.flameGuardMs > 0 || (player.breakawayBoostMs ?? 0) > 0;
+}
+
+function findEnemyBombLineDirection(
+  player: PlayerState,
+  enemy: PlayerState | null,
+  enemyVulnerable: boolean,
+  minSafetyWindowMs: number,
+  context: BotContext,
+): Direction | null {
+  if (!enemy || !enemyVulnerable) {
+    return null;
+  }
+
+  return findNearestReachableTarget(
+    player,
+    (tile) => (
+      canBombReachTile(tile, enemy.tile, player.flameRange, context)
+      && canBotPlaceBombAtTile(player, tile, false, context)
+    ),
+    minSafetyWindowMs,
+    context,
+  );
 }
 
 /**
