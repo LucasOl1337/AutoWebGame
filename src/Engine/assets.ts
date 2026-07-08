@@ -79,6 +79,21 @@ interface CharacterManifestPayload {
   characters?: CharacterManifestEntry[];
 }
 
+function createEmptyDirectionalSprites(): DirectionalSprites {
+  return {
+    up: null,
+    down: null,
+    left: null,
+    right: null,
+    idle: { up: [], down: [], left: [], right: [] },
+    walk: { up: [], down: [], left: [], right: [] },
+    run: { up: [], down: [], left: [], right: [] },
+    cast: { up: [], down: [], left: [], right: [] },
+    attack: { up: [], down: [], left: [], right: [] },
+    death: { up: [], down: [], left: [], right: [] },
+  };
+}
+
 function appendAssetVersion(path: string, assetVersion?: string): string {
   if (!assetVersion) {
     return path;
@@ -234,6 +249,21 @@ async function loadCharacterManifest(): Promise<CharacterManifestPayload> {
   }
 }
 
+function hasLoadedSpriteImage(sprites: DirectionalSprites): boolean {
+  if (sprites.up || sprites.down || sprites.left || sprites.right) {
+    return true;
+  }
+
+  return [
+    sprites.idle,
+    sprites.walk,
+    sprites.run,
+    sprites.cast,
+    sprites.attack,
+    sprites.death,
+  ].some((framesByDirection) => Object.values(framesByDirection).some((frames) => frames.length > 0));
+}
+
 function isUsablePublicCharacterManifest(entries: CharacterManifestEntry[]): boolean {
   if (entries.length === 0) {
     return false;
@@ -289,7 +319,19 @@ async function loadCharacterRoster(): Promise<CharacterRosterEntry[]> {
   return rosterEntries.filter((entry): entry is CharacterRosterEntry => entry !== null);
 }
 
-function createCharacterSpriteLoader(): (entry: CharacterRosterEntry) => Promise<DirectionalSprites> {
+function getFallbackSpritesForRosterEntry(
+  entry: CharacterRosterEntry,
+  playerSprites: Partial<Record<PlayerId, DirectionalSprites>>,
+): DirectionalSprites {
+  const fallbackSlot = entry.defaultSlot ?? 1;
+  return playerSprites[fallbackSlot]
+    ?? playerSprites[1]
+    ?? createEmptyDirectionalSprites();
+}
+
+function createCharacterSpriteLoader(
+  playerSprites: Partial<Record<PlayerId, DirectionalSprites>>,
+): (entry: CharacterRosterEntry) => Promise<DirectionalSprites> {
   const spriteLoadCache = new Map<string, Promise<DirectionalSprites>>();
   return (entry: CharacterRosterEntry): Promise<DirectionalSprites> => {
     const cached = spriteLoadCache.get(entry.id);
@@ -301,7 +343,11 @@ function createCharacterSpriteLoader(): (entry: CharacterRosterEntry) => Promise
       assetUrl(`/Assets/Characters/Animations/${entry.id}`),
       entry.animations,
       entry.assetVersion,
-    );
+    ).then((sprites) => (
+      hasLoadedSpriteImage(sprites)
+        ? sprites
+        : getFallbackSpritesForRosterEntry(entry, playerSprites)
+    ));
     spriteLoadCache.set(entry.id, loaded);
     return loaded;
   };
@@ -311,7 +357,6 @@ export async function loadGameAssets(arenaThemeId?: string | null): Promise<Game
   const resolvedTheme = arenaThemeId ? getArenaThemeById(arenaThemeId) : null;
   const arenaTheme = resolvedTheme ?? resolveArenaTheme(typeof window !== "undefined" ? window.location.search : "");
   const arenaTilePaths = arenaTheme.renderMode === "sprite" ? arenaTheme.tilePaths ?? null : null;
-  const characterSpriteLoader = createCharacterSpriteLoader();
   const [
     playerOne,
     playerTwo,
@@ -361,6 +406,13 @@ export async function loadGameAssets(arenaThemeId?: string | null): Promise<Game
     loadImage(assetUrl("/Assets/UiLayouts/power-speed.png")),
     loadImage(assetUrl("/Assets/UiLayouts/power-remote.png")),
   ]);
+  const playerSprites: Partial<Record<PlayerId, DirectionalSprites>> = {
+    1: playerOne,
+    2: playerTwo,
+    3: playerOne,
+    4: playerTwo,
+  };
+  const characterSpriteLoader = createCharacterSpriteLoader(playerSprites);
 
   const fallbackRoster: CharacterRosterEntry[] = [
     {
@@ -384,12 +436,7 @@ export async function loadGameAssets(arenaThemeId?: string | null): Promise<Game
   ];
 
   return {
-    players: {
-      1: playerOne,
-      2: playerTwo,
-      3: playerOne,
-      4: playerTwo,
-    },
+    players: playerSprites,
     arenaTheme,
     characterRoster: characterRosterFromManifest.length > 0
       ? characterRosterFromManifest
