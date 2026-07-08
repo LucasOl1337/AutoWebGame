@@ -58,6 +58,7 @@
     "test:server-tick": "npm run compile:esm && node tests/server-tick-catchup-check.mjs",
     "test:danger-overlay": "npm run compile:esm && node tests/danger-overlay-check.mjs",
     "test:danger-adrenaline": "npm run compile:esm && node tests/danger-adrenaline-step-check.mjs",
+    "test:hud-critical": "npm run compile:esm && node tests/hud-critical-state-feedback-check.mjs",
     "test:bomb-preview": "npm run compile:esm && node tests/bomb-preview-toggle-check.mjs",
     "test:bot-powerup": "npm run compile:esm && node tests/bot-powerup-priority-check.mjs",
     "test:bot-survival": "npm run compile:esm && node tests/bot-survival-10s-check.mjs",
