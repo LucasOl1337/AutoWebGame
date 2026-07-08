@@ -6,9 +6,9 @@ Melhorar progressivamente a performance do AutoWebGame em ate 20 rodadas sequenc
 
 ## Rodada atual
 
-- Rodada concluida: 3/20 - Frontend bundle e code-splitting
-- Proxima rodada recomendada: 4/20 - Frontend render e hidratacao
-- Atualizado em: 2026-07-08 13:09 America/Sao_Paulo
+- Rodada concluida: 5/20 - Frontend assets/audio
+- Proxima rodada recomendada: 6/20 - Frontend rede e cache HTTP
+- Atualizado em: 2026-07-08 14:20 America/Sao_Paulo
 
 ## Contexto do repositorio
 
@@ -165,6 +165,7 @@ Conclusao da rodada 2: o maior win mensuravel parece estar menos no gzip do bund
 | 1/20 | Codex 2026-07-08 10:46 | Baseline real | `PerformanceSwarm.md` | Criar coordenacao, baseline, rotas criticas, metricas e budgets iniciais | Baixo: arquivo novo de coordenacao | Baixo: sem codigo runtime | `npm run build` 3x, tamanhos de `dist`, inventario CodeGraph e scripts disponiveis | Concluido |
 | 2/20 | Codex 2026-07-08 12:27 | Inventario de gargalos | `PerformanceSwarm.md` | Medir e ranquear gargalos provaveis de bundle/assets/rede/build sem alterar runtime | Baixo: somente documento de coordenacao | Baixo: sem mudanca de codigo; risco limitado a diagnostico incompleto | `npm run build` 3x, inventario de `dist`, gzip/brotli quando aplicavel, referencias HTML/CSS/TS a assets criticos e estimativa de assets iniciais | Concluido |
 | 3/20 | Codex 2026-07-08 12:10 | Frontend bundle/code-splitting | `src/UiLayouts/main.ts`, `PerformanceSwarm.md` | Separar o bootstrap leve do carregamento de `GameApp`, `assets` e `OnlineSessionClient` com dynamic imports | Baixo: entrada unica do jogo nesta worktree; sem escopo ativo conflitante | Medio: bootstrap top-level e testes que verificam strings de `main.ts` | `npm run build` antes/depois, tamanhos gzip/brutos dos chunks Vite, checks de contrato focados | Concluido |
+| 5/20 | Codex 2026-07-08 14:05 | Frontend assets/audio | `src/Engine/sound-manager.ts`, `tests/sound-manager-lazy-load-check.mjs`, `PerformanceSwarm.md` | Adiar preload real de SFX para remover chamadas `audio.load()` do start do jogo | Baixo: `sound-manager.ts` estava limpo; evitado `src/Engine/assets.ts` porque ja havia mudancas pendentes de outro escopo | Medio mitigado: audio poderia falhar se o clone nao carregasse sob demanda; validado por teste de playback com fake Audio | Antes/depois com contagem de chamadas `Audio.load()`, soma de bytes do `SFX_MANIFEST`, `npm run compile:esm`, teste de variacao de som e build 3x | Concluido |
 
 ## Historico de rodadas
 
@@ -173,12 +174,14 @@ Conclusao da rodada 2: o maior win mensuravel parece estar menos no gzip do bund
 | 1/20 | Concluida | Baseline real | Criado baseline de performance, rotas criticas, budgets iniciais e mapa de arquivos quentes | Build 3x OK; dist 5.676,5 kB; JS gzip 69,22 kB; CSS gzip 10,84 kB; 3 checks OK | `52428aa` |
 | 2/20 | Concluida | Inventario de gargalos | Ranqueados gargalos de bootstrap, audio/assets, landing inline, fontes externas e bundle unico sem alterar runtime | Build 3x OK; dist 5.676,6 kB; JS gzip 67,10 kB; CSS gzip 10,33 kB; assets iniciais provaveis 807,8 kB; SFX preload 663,6 kB; imagens top 872,3 kB e 475,7 kB | `9d801da`, `af2061e`, `ec1394c`, `d4a1456` |
 | 3/20 | Concluida | Frontend bundle/code-splitting | `main.ts` passou a carregar `assets`, `GameApp` e `OnlineSessionClient` via dynamic imports, separando o bootstrap leve dos chunks pesados; a variante que separava apenas `OnlineSessionClient` foi absorvida por esse split completo | Antes: JS unico `game-D26tCmAO.js` 249,36 kB / 67,37 kB gzip. Depois: JS inicial linkado/preloaded 24,49 kB / 9,32 kB gzip; chunks tardios `game-app` 126,46 kB / 33,88 kB gzip e `session-client` 78,23 kB / 18,50 kB gzip. Build 3x OK; mediana 4.660,1 ms | `4f9975c`, `5d22c4a` |
+| 5/20 | Concluida | Frontend assets/audio | `SoundManager.loadSounds` deixou de chamar `audio.load()` para 12 SFX no start; o manifesto ainda cria as variacoes e o playback sob demanda continua funcional | Antes: 12 chamadas `Audio.load()` para 679.480 bytes / 663,6 KiB de SFX no bootstrap simulado. Depois: 0/0/0 chamadas em 3 execucoes; `sound-manager-lazy-load-check` e `sound-manager-variation-check` OK; build 3x OK | pendente ate commit desta rodada |
 
 ## Pendencias
 
-- Rodada 4/20: revisar render/hidratacao/percepcao inicial. Recomendo medir se o `#app` fica em branco enquanto dynamic imports e `loadGameAssets` rodam, e entao renderizar um shell leve ou estado de carregamento sem esperar sprites/audio.
-- Rodada 5/20: investigar assets estaticos grandes com Network real, especialmente `ICON.png`, `social-preview.png` e WAVs, antes de converter/remover.
-- Rodada 5/20 deve priorizar assets/audio: adiar preload de SFX ate primeira interacao/entrada real em partida, remover tentativas de 48 sprites ausentes de `default-p2:walk` se nao houver animacao, e trocar favicon PNG grande por SVG/32px quando suportado.
+- Rodada 4/20: memoria da automacao registra conclusao em outra worktree (`c788080`/`9c62356`) com startup shell antes de imports/assets; confirmar merge pelo coletor antes de remover esta nota historica.
+- Rodada 5/20 restante: investigar assets estaticos grandes com Network real, especialmente `ICON.png`, `social-preview.png` e WAVs, antes de converter/remover.
+- Rodada 5/20 restante: existe mudanca pendente anterior em `src/Engine/assets.ts`/`tests/asset-loader-walk-cycle-warm-check.mjs` para aquecer walk cycles fora do caminho bloqueante; esta sessao nao reivindicou nem commitou esse escopo.
+- Rodada 6/20 recomendada: revisar cache HTTP e rede para `game.html`, chunks hashed, fontes externas e assets publicos; medir requests/headers via servidor local ou Chrome/Codex app tooling, sem Playwright.
 
 ## Evidencias
 
@@ -200,6 +203,12 @@ Conclusao da rodada 2: o maior win mensuravel parece estar menos no gzip do bund
 - Chunks tardios apos rodada 3: `game-app-CX670W2N.js` 126,46 kB / 33,88 kB gzip; `session-client-CXSRhjhs.js` 78,23 kB / 18,50 kB gzip; `assets-CPSO5IMC.js` 5,18 kB / 2,04 kB gzip; `i18n-CKG11rT1.js` 18,54 kB / 6,58 kB gzip.
 - Validacao rodada 3: `npm run compile:esm` OK; `node tests/arena-theme-selection-check.mjs` OK; `npm run test:roster-sync` OK.
 - Variante absorvida da rodada 3: split apenas de `OnlineSessionClient` mediu entrada 146.349 bytes / 40.441 bytes gzip e `session-client` 80.707 bytes / 18.965 bytes gzip; o main oficial manteve split mais agressivo do bootstrap.
+- Rodada 5 antes: apos `npm run compile:esm`, simulacao de `SoundManager.loadSounds(SFX_MANIFEST)` com fake `Audio` registrou 12 chamadas `Audio.load()` para 12 entradas de manifesto; soma dos arquivos referenciados = 679.480 bytes / 663,6 KiB.
+- Rodada 5 depois: `node tests/sound-manager-lazy-load-check.mjs` OK; manifesto com 12 entradas, 0 chamadas `Audio.load()` durante `loadSounds`, e `bombPlace` ainda tocou sob demanda.
+- Rodada 5 depois: `node tests/sound-manager-variation-check.mjs` OK; manifestos de variacao, anti-spam e rotacao de variantes continuaram passando.
+- Rodada 5 depois: medicao repetida 3x de `SoundManager.loadSounds(SFX_MANIFEST)` registrou chamadas `Audio.load()` = 0 / 0 / 0, mediana 0.
+- Rodada 5 build: `npm run build` 3x OK; tempos totais 5.358,8 ms, 4.965,6 ms e 16.886,2 ms, mediana 5.358,8 ms; Vite reportou 2,01 s / 2,24 s / 8,39 s.
+- Rodada 5 bundle depois: `dist/game.html` 1,51 kB / 0,66 kB gzip; CSS 71,57 kB / 11,07 kB gzip; `game-app` 132,29 kB / 35,48 kB gzip; `session-client` 86,71 kB / 20,36 kB gzip. Estes tamanhos incluem mudancas pendentes preexistentes na worktree e nao devem ser atribuidos apenas a esta sessao.
 
 ## Limitacoes da medicao
 
@@ -211,3 +220,5 @@ Conclusao da rodada 2: o maior win mensuravel parece estar menos no gzip do bund
 - Rodada 2 nao usou Network tab nem Chrome tooling; a estimativa de requests iniciais e estatica, derivada dos URLs que os loaders tentam carregar e dos arquivos existentes em `public`.
 - `codegraph status` nesta worktree retornou `Not initialized`; foi usado `DocsDev/codegraph/inventory.md` existente como referencia estrutural e medicoes diretas para HTML/CSS/JS/assets.
 - O tempo de build da rodada 2 nao deve ser interpretado isoladamente como regressao contra a rodada 1, pois a worktree estava sem dependencias e o ambiente/cache diferiu.
+- Rodada 5 usou fake `Audio` para medir preload de forma deterministica; isso comprova remocao de `audio.load()` do bootstrap, mas nao substitui uma Network tab real para confirmar comportamento exato de cada navegador.
+- Rodada 5 aconteceu com worktree ja suja por alteracoes anteriores em `package.json`, `src/Engine/assets.ts`, `src/NetCode/*`, `worker/index.js`, CSS e testes. O commit desta sessao deve incluir somente `src/Engine/sound-manager.ts`, `tests/sound-manager-lazy-load-check.mjs` e `PerformanceSwarm.md`.

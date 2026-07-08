@@ -74,11 +74,7 @@ export class SoundManager {
       this.sounds.set(key as SfxKey, audioVariants);
 
       for (const audio of audioVariants) {
-        try {
-          await audio.load();
-        } catch {
-          // Best-effort preload only.
-        }
+        audio.preload = "none";
       }
     });
 
