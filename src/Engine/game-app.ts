@@ -784,6 +784,14 @@ export class GameApp {
     this.matchResultChoice = createPlayerRecord(() => null);
     this.matchResultCooldownMs = 0;
     this.applyEndlessStats(snapshot.endlessStats);
+    this.syncRoundStartCue(
+      previousMode,
+      previousRoundNumber,
+      previousRoundOutcome,
+      snapshot.mode,
+      snapshot.roundNumber,
+      this.roundOutcome,
+    );
     this.primeCharacterSprites();
     this.resetOnlineRoundBuffers(snapshot.roundNumber);
     this.pushOnlineRenderSample(snapshot.serverTimeMs, snapshot.serverTick, snapshot.players);
@@ -860,6 +868,14 @@ export class GameApp {
     this.setBotPlayers(frame.botPlayerIds ?? []);
     this.nextBombId = frame.nextBombId;
     this.applyEndlessStats(frame.endlessStats);
+    this.syncRoundStartCue(
+      previousMode,
+      previousRoundNumber,
+      previousRoundOutcome,
+      frame.mode,
+      frame.roundNumber,
+      this.roundOutcome,
+    );
     this.primeCharacterSprites();
     this.resetOnlineRoundBuffers(frame.roundNumber);
     this.pushOnlineRenderSample(frame.serverTimeMs, frame.serverTick, frame.players);
@@ -919,7 +935,7 @@ export class GameApp {
       this.botControlledPlayers = createBooleanPlayerRecord(false);
       this.botEnabled = false;
     }
-    this.resetRound();
+    this.resetRound(false);
   }
 
   private playOnlineAudioTransition(next: {
