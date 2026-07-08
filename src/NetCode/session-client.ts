@@ -56,6 +56,7 @@ interface OnlineGameAppBridge {
   applyOnlineSnapshot(snapshot: OnlineGameSnapshot): void;
   clearOnlinePeer(): void;
   receiveOnlineGuestInput(input: OnlineInputState): void;
+  returnToMenu(): void;
 }
 
 type ExperienceScreen = "landing" | "lobby-list" | "setup" | "match";
@@ -864,16 +865,22 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       void this.copyInvite();
     });
     this.elements.matchLeaveButton.addEventListener("click", () => {
-      this.leaveCurrentLobby();
+      this.leaveCurrentMatch();
     });
     this.elements.matchFullscreenButton.addEventListener("click", () => {
       this.setMatchChromeVisible(true);
       void this.toggleMatchFullscreen();
     });
     this.elements.matchInfoToggleButton.addEventListener("click", () => {
+      if (!this.currentLobby) {
+        return;
+      }
       this.setActiveMatchPanel(this.matchInfoPanelOpen ? null : "info");
     });
     this.elements.matchChatToggleButton.addEventListener("click", () => {
+      if (!this.currentLobby) {
+        return;
+      }
       this.setActiveMatchPanel(this.matchChatPanelOpen ? null : "chat");
     });
     this.elements.matchViewport.addEventListener("pointerdown", () => {
@@ -1109,6 +1116,21 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       context: { roomCode: this.currentLobby?.roomCode ?? null, screen: this.getScreen() },
     });
     this.send({ type: "leave-lobby" });
+  }
+
+  private leaveCurrentMatch(): void {
+    if (this.currentLobby) {
+      this.leaveCurrentLobby();
+      return;
+    }
+    this.matchInfoPanelOpen = false;
+    this.matchChatPanelOpen = false;
+    this.matchChromeVisible = true;
+    this.clearMatchChromeHideTimer();
+    this.idleScreen = "landing";
+    this.app.returnToMenu();
+    this.renderAll();
+    this.setStatus(this.copy.status.returnedHome);
   }
 
   private sendChat(): void {
@@ -2153,6 +2175,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
   private renderMatchSurfaceState(): void {
     const isMatchScreen = this.getScreen() === "match";
+    const hasOnlineLobby = Boolean(this.currentLobby);
+    if (!hasOnlineLobby) {
+      this.matchInfoPanelOpen = false;
+      this.matchChatPanelOpen = false;
+    }
     const fullscreenActive = this.isMatchStageFullscreen();
     const chromeHidden = isMatchScreen
       && fullscreenActive
@@ -2163,8 +2190,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.elements.matchStage.dataset.chatOpen = isMatchScreen && this.matchChatPanelOpen ? "true" : "false";
     this.elements.matchStage.dataset.fullscreen = isMatchScreen && fullscreenActive ? "true" : "false";
     this.elements.matchStage.dataset.chromeHidden = chromeHidden ? "true" : "false";
+    this.elements.matchStage.dataset.onlineLobby = hasOnlineLobby ? "true" : "false";
     this.elements.shell.dataset.matchFullscreen = isMatchScreen && fullscreenActive ? "true" : "false";
-    this.elements.matchDock.hidden = !isMatchScreen;
+    this.elements.matchDock.hidden = !isMatchScreen || !hasOnlineLobby;
+    this.elements.matchInfoToggleButton.hidden = !hasOnlineLobby;
+    this.elements.matchChatToggleButton.hidden = !hasOnlineLobby;
     this.elements.matchInfoToggleButton.setAttribute(
       "aria-expanded",
       isMatchScreen && this.matchInfoPanelOpen ? "true" : "false",
@@ -2826,6 +2856,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private renderMatch(): void {
     const copy = this.copy;
     const lobby = this.currentLobby;
+    const hasOnlineLobby = Boolean(lobby);
+    const isMatchScreen = this.getScreen() === "match";
     this.elements.matchCode.textContent = lobby
       ? lobby.roomMode === "endless"
         ? this.translate("Modo infinito", "Endless mode")
@@ -2846,9 +2878,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
           `${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} jogadores na partida`,
           `${lobby.occupantCount}/${LOBBY_MAX_PLAYERS} players in match`,
         )
-      : copy.match.liveStatus;
-    this.elements.matchCopyButton.disabled = !lobby;
-    this.elements.matchLeaveButton.disabled = !lobby;
+      : copy.match.offlineStatus;
+    this.elements.matchCopyButton.hidden = !hasOnlineLobby;
+    this.elements.matchCopyButton.disabled = !hasOnlineLobby;
+    this.elements.matchLeaveButton.disabled = !isMatchScreen;
   }
 
   private renderMatchRoster(): void {
