@@ -169,7 +169,7 @@ Conclusao da rodada 2: o maior win mensuravel parece estar menos no gzip do bund
 | Rodada | Status | Area | Entrega | Evidencia | Commit |
 |---|---|---|---|---|---|
 | 1/20 | Concluida | Baseline real | Criado baseline de performance, rotas criticas, budgets iniciais e mapa de arquivos quentes | Build 3x OK; dist 5.676,5 kB; JS gzip 69,22 kB; CSS gzip 10,84 kB; 3 checks OK | `52428aa` |
-| 2/20 | Concluida | Inventario de gargalos | Ranqueados gargalos de audio/assets, landing inline, fontes externas e bundle unico sem alterar runtime | Build 3x OK; dist 5.676,6 kB; JS gzip 67,10 kB; CSS gzip 10,33 kB; assets iniciais provaveis 807,8 kB; SFX preload 663,6 kB | Pendente ate commit local |
+| 2/20 | Concluida | Inventario de gargalos | Ranqueados gargalos de audio/assets, landing inline, fontes externas e bundle unico sem alterar runtime | Build 3x OK; dist 5.676,6 kB; JS gzip 67,10 kB; CSS gzip 10,33 kB; assets iniciais provaveis 807,8 kB; SFX preload 663,6 kB | `ec1394c` |
 
 ## Pendencias
 
