@@ -29,6 +29,7 @@ import {
   USERNAME_MIN_LENGTH,
   validateUsername,
 } from "./account";
+import type { PlayerBillingStatus } from "./billing";
 import type { OnlineSessionState } from "./matchmaking";
 import type {
   LobbyState,
@@ -82,6 +83,10 @@ interface SessionElements {
   landingAccountPrimaryButton: HTMLButtonElement;
   landingAccountSecondaryButton: HTMLButtonElement;
   landingAccountHint: HTMLParagraphElement;
+  landingBillingTitle: HTMLParagraphElement;
+  landingBillingStatus: HTMLParagraphElement;
+  landingBillingButton: HTMLButtonElement;
+  landingBillingHint: HTMLParagraphElement;
   landingQuickMatchButton: HTMLButtonElement;
   landingEndlessButton: HTMLButtonElement;
   landingBotMatchButton: HTMLButtonElement;
@@ -184,6 +189,28 @@ export interface SessionReturnBriefView {
   kicker: string;
   title: string;
   body: string;
+}
+
+export type SetupLoadingMode = "quick-match" | "endless" | "invite";
+
+export interface SetupLoadingBriefStep {
+  label: string;
+  text: string;
+  state: "ready" | "active" | "pending";
+}
+
+export interface SetupLoadingBrief {
+  steps: SetupLoadingBriefStep[];
+  primaryLabel: string;
+  hint: string;
+}
+
+export interface SetupLoadingBriefOptions {
+  mode: SetupLoadingMode;
+  onlineUsers: number;
+  queuedCount: number;
+  roomCode: string | null;
+  realtimeReady: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -321,6 +348,55 @@ export function formatSessionReturnBrief(
 
 export function canSendLobbyAction(realtimeReady: boolean, socketReadyState: number | null | undefined): boolean {
   return realtimeReady && socketReadyState === WEBSOCKET_OPEN_READY_STATE;
+}
+
+export function formatSetupLoadingBrief(copy: SiteCopy, options: SetupLoadingBriefOptions): SetupLoadingBrief {
+  const modeStepText = (() => {
+    switch (options.mode) {
+      case "quick-match":
+        return options.queuedCount > 0
+          ? copy.setup.loadingQueueStatus(options.queuedCount)
+          : copy.setup.loadingAutoRoom;
+      case "endless":
+        return copy.setup.loadingEndlessRoom;
+      case "invite":
+        return options.roomCode
+          ? copy.setup.loadingInviteRoom(options.roomCode)
+          : copy.setup.loadingMetaInvite;
+      default: {
+        const neverMode: never = options.mode;
+        return neverMode;
+      }
+    }
+  })();
+
+  return {
+    steps: [
+      {
+        label: "01",
+        text: options.realtimeReady
+          ? copy.setup.loadingOnlineReady(options.onlineUsers)
+          : copy.setup.loadingOnlineWaiting,
+        state: options.realtimeReady ? "ready" : "active",
+      },
+      {
+        label: "02",
+        text: modeStepText,
+        state: options.realtimeReady ? "active" : "pending",
+      },
+      {
+        label: "03",
+        text: copy.setup.loadingCharacterLocked,
+        state: "pending",
+      },
+    ],
+    primaryLabel: options.mode === "quick-match"
+      ? copy.setup.loadingCancelSearch
+      : copy.setup.loadingBackHome,
+    hint: options.mode === "quick-match"
+      ? copy.setup.loadingCancelHint
+      : copy.setup.loadingBackHomeHint,
+  };
 }
 
 function normalizeRoomCodeToken(roomCode: string | null | undefined): string {
@@ -529,7 +605,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private idleScreen: IdleScreen = "landing";
   private autoClaimRoomCode: string | null = null;
   private currentAccount: PlayerAccount | null = null;
+  private currentBillingStatus: PlayerBillingStatus | null = null;
   private accountRequestPending = false;
+  private billingRequestPending = false;
+  private billingCheckoutPending = false;
   private feedbackDialogOpen = false;
   private feedbackRequestPending = false;
   private matchInfoPanelOpen = false;
@@ -572,6 +651,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.mountCanvas(root);
     this.bindEvents();
     void this.refreshAccountState();
+    void this.refreshBillingStatus();
     this.renderAll();
     this.app.setOfflinePreferredCharacter(this.preferredCharacterIndex);
     this.telemetry.trackLandingView();
@@ -836,24 +916,14 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.leaveCurrentLobby();
         return;
       }
-      if (this.quickMatchSearching) {
-        this.quickMatchSearching = false;
-        this.send({ type: "quick-match-cancel" });
-      }
-      this.pendingAutoJoinRoom = null;
-      this.idleScreen = "landing";
-      this.renderAll();
+      this.cancelPendingSetupEntry();
     });
     this.elements.setupLeaveButton.addEventListener("click", () => {
       if (this.currentLobby) {
         this.leaveCurrentLobby();
         return;
       }
-      if (this.quickMatchSearching) {
-        this.quickMatchSearching = false;
-        this.send({ type: "quick-match-cancel" });
-        this.renderAll();
-      }
+      this.cancelPendingSetupEntry();
     });
     this.elements.setupCopyButton.addEventListener("click", () => {
       void this.copyInvite();
@@ -942,6 +1012,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     });
     this.elements.landingAccountSecondaryButton.addEventListener("click", () => {
       void this.logoutAccount();
+    });
+    this.elements.landingBillingButton.addEventListener("click", () => {
+      void this.startBillingCheckout();
     });
     this.elements.landingAccountUsernameInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
@@ -1045,9 +1118,27 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.setStatus(this.copy.lobbies.entering(roomCode));
   }
 
+  private cancelPendingSetupEntry(): void {
+    if (this.quickMatchSearching || this.currentSessionState?.kind === "queueing-classic") {
+      this.send({ type: "quick-match-cancel" });
+    }
+
+    this.applySessionState(null);
+    this.quickMatchSearching = false;
+    this.endlessMatchStarting = false;
+    this.pendingAutoJoinRoom = null;
+    this.idleScreen = "landing";
+    this.renderAll();
+    this.setStatus(this.copy.status.returnedHome);
+  }
+
   private handleSetupPrimaryAction(): void {
     const lobby = this.currentLobby;
-    if (!lobby || lobby.status !== "open") {
+    if (!lobby) {
+      this.cancelPendingSetupEntry();
+      return;
+    }
+    if (lobby.status !== "open") {
       return;
     }
     if (!this.canSendRealtimeAction()) {
@@ -1502,6 +1593,38 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       landingAccountHint,
     );
 
+    const landingBillingPanel = document.createElement("div");
+    landingBillingPanel.className = "experience-billing-panel";
+
+    const landingBillingKicker = document.createElement("p");
+    landingBillingKicker.className = "experience-kicker";
+    landingBillingKicker.textContent = copy.landing.billingKicker;
+
+    const landingBillingTitle = document.createElement("p");
+    landingBillingTitle.className = "experience-billing__title";
+
+    const landingBillingStatus = document.createElement("p");
+    landingBillingStatus.className = "experience-billing__status";
+
+    const landingBillingActions = document.createElement("div");
+    landingBillingActions.className = "experience-billing__actions";
+
+    const landingBillingButton = document.createElement("button");
+    landingBillingButton.className = "experience-button experience-button--secondary";
+    landingBillingButton.type = "button";
+
+    const landingBillingHint = document.createElement("p");
+    landingBillingHint.className = "experience-billing__hint";
+
+    landingBillingActions.append(landingBillingButton);
+    landingBillingPanel.append(
+      landingBillingKicker,
+      landingBillingTitle,
+      landingBillingStatus,
+      landingBillingActions,
+      landingBillingHint,
+    );
+
     const landingQuickMatchButton = document.createElement("button");
     landingQuickMatchButton.className = "experience-button experience-button--primary";
     landingQuickMatchButton.type = "button";
@@ -1688,6 +1811,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       landingArenaTheme,
       landingControls,
       landingAccountCard,
+      landingBillingPanel,
     );
 
     const landingRoster = document.createElement("div");
@@ -2101,6 +2225,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       landingAccountPrimaryButton,
       landingAccountSecondaryButton,
       landingAccountHint,
+      landingBillingTitle,
+      landingBillingStatus,
+      landingBillingButton,
+      landingBillingHint,
       landingQuickMatchButton,
       landingEndlessButton,
       landingBotMatchButton,
@@ -2162,6 +2290,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.renderLanguageSwitcher();
     this.renderLanding();
     this.renderAccountPanel();
+    this.renderBillingPanel();
     this.renderFeedbackDialog();
     this.renderLobbyList();
     this.renderCharacterSelector();
@@ -2428,6 +2557,65 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         );
   }
 
+  private renderBillingPanel(): void {
+    const copy = this.copy.landing;
+    const billing = this.currentBillingStatus;
+    const checkoutState = billing?.checkoutState ?? "not-configured";
+    const hasAccount = Boolean(this.currentAccount);
+    const isPaid = billing?.accessLevel === "paid";
+    const isPending = checkoutState === "pending";
+    const isReady = checkoutState === "ready";
+    const isUnavailable = checkoutState === "not-configured";
+    const loading = this.billingRequestPending && !billing;
+
+    this.elements.landingBillingTitle.textContent = isPaid
+      ? copy.billingTitlePaid
+      : isPending
+        ? copy.billingTitlePending
+        : isReady
+          ? copy.billingTitleReady
+          : copy.billingTitleUnavailable;
+
+    this.elements.landingBillingStatus.textContent = loading
+      ? copy.billingStatusLoading
+      : isPaid
+        ? copy.billingStatusPaid
+        : isPending
+          ? copy.billingStatusPending
+          : isReady && hasAccount
+            ? copy.billingStatusFree
+            : isReady
+              ? copy.billingStatusVisitor
+              : copy.billingStatusUnavailable;
+
+    this.elements.landingBillingHint.textContent = isPaid
+      ? copy.billingHintPaid
+      : isPending
+        ? copy.billingHintPending
+        : isReady && hasAccount
+          ? copy.billingHintReady
+          : isReady
+            ? copy.billingHintVisitor
+            : copy.billingHintUnavailable;
+
+    this.elements.landingBillingButton.textContent = this.billingCheckoutPending
+      ? copy.billingCtaLoading
+      : isPaid
+        ? copy.billingCtaPaid
+        : isPending
+          ? copy.billingCtaPending
+          : isUnavailable
+            ? copy.billingCtaUnavailable
+            : hasAccount
+              ? copy.billingCtaReady
+              : copy.billingCtaCreateAccount;
+    this.elements.landingBillingButton.disabled = this.billingCheckoutPending
+      || loading
+      || isPaid
+      || isUnavailable;
+    this.elements.landingBillingButton.setAttribute("aria-busy", this.billingCheckoutPending ? "true" : "false");
+  }
+
   private renderLobbyList(): void {
     const copy = this.copy;
     const manualJoinDisabled = !this.realtimeReady;
@@ -2507,32 +2695,38 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.elements.setupBackButton.textContent = lobby ? copy.common.home : copy.common.back;
 
     if (!lobby) {
-      this.elements.setupEyebrow.textContent = this.quickMatchSearching
+      const loadingMode = this.getSetupLoadingMode();
+      const loadingBrief = formatSetupLoadingBrief(copy, {
+        mode: loadingMode,
+        onlineUsers: this.onlineUsers,
+        queuedCount: this.quickMatchQueuedCount,
+        roomCode: this.pendingAutoJoinRoom,
+        realtimeReady: this.realtimeReady,
+      });
+      this.elements.setupEyebrow.textContent = loadingMode === "quick-match"
         ? copy.setup.kickerQuickMatch
-        : this.endlessMatchStarting
+        : loadingMode === "endless"
           ? this.translate("Partida infinita", "Infinite match")
           : copy.setup.kickerLoading;
-      this.elements.setupTitle.textContent = this.quickMatchSearching
+      this.elements.setupTitle.textContent = loadingMode === "quick-match"
         ? copy.setup.titleQuickMatch
-        : this.endlessMatchStarting
+        : loadingMode === "endless"
           ? this.translate("Entrando na arena", "Joining arena")
           : copy.setup.titleLoading;
       this.elements.setupDescription.textContent = copy.setup.loadingDescription;
-      this.elements.setupRoomMeta.textContent = this.quickMatchSearching
+      this.elements.setupRoomMeta.textContent = loadingMode === "quick-match"
         ? copy.setup.loadingMetaQuickMatch
-        : this.endlessMatchStarting
+        : loadingMode === "endless"
           ? this.translate(
             "Essa sala nunca para. Humanos assumem vagas de bots automaticamente.",
             "This room never stops. Humans automatically take over bot seats.",
           )
           : copy.setup.loadingMetaInvite;
-      this.elements.setupSeatStrip.replaceChildren(this.buildSeatStripPlaceholder());
-      this.renderPresenceList(this.quickMatchSearching || this.endlessMatchStarting);
-      this.elements.setupPrimaryButton.textContent = this.quickMatchSearching || this.endlessMatchStarting
-        ? this.translate("Entrando...", "Joining...")
-        : copy.setup.loadingPrimaryWaiting;
-      this.elements.setupPrimaryButton.disabled = true;
-      this.elements.setupPrimaryHint.textContent = copy.setup.loadingHint;
+      this.elements.setupSeatStrip.replaceChildren(...this.buildSetupLoadingPills(loadingBrief));
+      this.renderPresenceList(loadingMode === "quick-match" || loadingMode === "endless");
+      this.elements.setupPrimaryButton.textContent = loadingBrief.primaryLabel;
+      this.elements.setupPrimaryButton.disabled = false;
+      this.elements.setupPrimaryHint.textContent = loadingBrief.hint;
       return;
     }
 
@@ -2586,11 +2780,32 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       : copy.setup.reconnectingHint;
   }
 
-  private buildSeatStripPlaceholder(): HTMLElement {
-    const placeholder = document.createElement("div");
-    placeholder.className = "experience-seat-pill";
-    placeholder.textContent = this.copy.setup.preparingRoom;
-    return placeholder;
+  private getSetupLoadingMode(): SetupLoadingMode {
+    if (this.quickMatchSearching || this.currentSessionState?.kind === "queueing-classic") {
+      return "quick-match";
+    }
+    if (this.endlessMatchStarting || this.currentSessionState?.kind === "queueing-endless") {
+      return "endless";
+    }
+    return "invite";
+  }
+
+  private buildSetupLoadingPills(brief: SetupLoadingBrief): HTMLElement[] {
+    return brief.steps.map((step) => {
+      const pill = document.createElement("div");
+      pill.className = "experience-seat-pill experience-seat-pill--loading";
+      pill.dataset.state = step.state;
+
+      const label = document.createElement("span");
+      label.className = "experience-seat-pill__label";
+      label.textContent = step.label;
+
+      const text = document.createElement("strong");
+      text.textContent = step.text;
+
+      pill.append(label, text);
+      return pill;
+    });
   }
 
   private buildSeatStrip(lobby: LobbySummary): HTMLElement[] {
@@ -2995,9 +3210,105 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       }
       const payload = await response.json() as { account?: PlayerAccount | null };
       this.currentAccount = payload.account ?? null;
+      void this.refreshBillingStatus();
       this.renderAll();
     } catch {
       // Account state is optional and must not block gameplay.
+    }
+  }
+
+  private async refreshBillingStatus(): Promise<void> {
+    if (this.billingRequestPending) {
+      return;
+    }
+    this.billingRequestPending = true;
+    this.renderAll();
+    try {
+      const response = await fetch("/api/billing/status", {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        return;
+      }
+      const payload = await response.json() as { billing?: PlayerBillingStatus | null };
+      this.currentBillingStatus = payload.billing ?? null;
+      if (this.currentBillingStatus) {
+        this.telemetry.track("billing_status_viewed", {
+          payload: {
+            accessLevel: this.currentBillingStatus.accessLevel,
+            checkoutState: this.currentBillingStatus.checkoutState,
+            hasAccount: Boolean(this.currentBillingStatus.accountId),
+          },
+        });
+      }
+    } catch {
+      // Billing readiness is optional and must not block gameplay.
+    } finally {
+      this.billingRequestPending = false;
+      this.renderAll();
+    }
+  }
+
+  private async startBillingCheckout(): Promise<void> {
+    if (this.billingCheckoutPending) {
+      return;
+    }
+
+    this.telemetry.track("billing_checkout_clicked", {
+      context: { screen: this.getScreen() },
+      payload: {
+        hasAccount: Boolean(this.currentAccount),
+        checkoutState: this.currentBillingStatus?.checkoutState ?? "unknown",
+      },
+    });
+
+    if (!this.currentAccount) {
+      this.setStatus(this.copy.landing.billingRequiresAccount);
+      this.elements.landingAccountUsernameInput.focus();
+      return;
+    }
+
+    this.billingCheckoutPending = true;
+    this.renderAll();
+    try {
+      const response = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          accountId: this.currentAccount.id,
+          source: "landing",
+        }),
+      });
+      const payload = await response.json() as {
+        billing?: PlayerBillingStatus | null;
+        checkoutUrl?: string | null;
+        error?: string;
+      };
+      this.currentBillingStatus = payload.billing ?? this.currentBillingStatus;
+      if (!response.ok) {
+        this.setStatus(payload.error ?? this.copy.landing.billingCheckoutError);
+        return;
+      }
+      if (!payload.checkoutUrl) {
+        this.setStatus(this.copy.landing.billingCheckoutAlreadyActive);
+        return;
+      }
+      this.telemetry.track("billing_checkout_started", {
+        context: { screen: this.getScreen() },
+        payload: {
+          checkoutState: this.currentBillingStatus?.checkoutState ?? "pending",
+          hasAccount: true,
+        },
+      });
+      window.location.href = payload.checkoutUrl;
+    } catch {
+      this.setStatus(this.copy.landing.billingCheckoutError);
+    } finally {
+      this.billingCheckoutPending = false;
+      this.renderAll();
     }
   }
 
@@ -3031,6 +3342,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       if (this.currentAccount) {
         this.setStatus(this.translate(`Conta ${this.currentAccount.username} criada.`, `Account ${this.currentAccount.username} created.`));
       }
+      void this.refreshBillingStatus();
       this.refreshConnectionForAccountChange();
     } catch {
       this.setStatus(this.translate("Erro ao criar a conta.", "Error creating account."));
@@ -3055,10 +3367,12 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         return;
       }
       this.currentAccount = null;
+      this.currentBillingStatus = null;
       this.setStatus(this.translate(
         "Conta desconectada. Voce pode continuar jogando como convidado.",
         "Account disconnected. You can keep playing as a guest.",
       ));
+      void this.refreshBillingStatus();
       this.refreshConnectionForAccountChange();
     } catch {
       this.setStatus(this.translate("Erro ao sair da conta.", "Error logging out."));

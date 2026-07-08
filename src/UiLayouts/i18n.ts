@@ -48,6 +48,31 @@ export interface SiteCopy {
     feedbackCharactersRemaining: (remaining: number) => string;
     feedbackCharactersOverLimit: (overLimitBy: number, maxLength: number) => string;
     feedbackTooLong: (maxLength: number) => string;
+    billingKicker: string;
+    billingTitleReady: string;
+    billingTitlePending: string;
+    billingTitlePaid: string;
+    billingTitleUnavailable: string;
+    billingStatusLoading: string;
+    billingStatusVisitor: string;
+    billingStatusFree: string;
+    billingStatusPending: string;
+    billingStatusPaid: string;
+    billingStatusUnavailable: string;
+    billingHintVisitor: string;
+    billingHintReady: string;
+    billingHintPending: string;
+    billingHintPaid: string;
+    billingHintUnavailable: string;
+    billingCtaReady: string;
+    billingCtaCreateAccount: string;
+    billingCtaPending: string;
+    billingCtaPaid: string;
+    billingCtaUnavailable: string;
+    billingCtaLoading: string;
+    billingRequiresAccount: string;
+    billingCheckoutError: string;
+    billingCheckoutAlreadyActive: string;
     returnBriefKicker: string;
     returnBriefEntryTitle: (mode: string) => string;
     returnBriefEntryBody: (characterName: string) => string;
@@ -107,6 +132,17 @@ export interface SiteCopy {
     loadingPrimarySearching: string;
     loadingPrimaryWaiting: string;
     loadingHint: string;
+    loadingOnlineReady: (count: number) => string;
+    loadingOnlineWaiting: string;
+    loadingQueueStatus: (count: number) => string;
+    loadingAutoRoom: string;
+    loadingInviteRoom: (roomCode: string) => string;
+    loadingEndlessRoom: string;
+    loadingCharacterLocked: string;
+    loadingCancelSearch: string;
+    loadingBackHome: string;
+    loadingCancelHint: string;
+    loadingBackHomeHint: string;
     description: string;
     roomMeta: (roomCode: string, count: number, max: number) => string;
     roomFull: string;
@@ -264,6 +300,31 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedbackCharactersRemaining: (remaining) => `${remaining} ${remaining === 1 ? "caractere restante" : "caracteres restantes"}.`,
       feedbackCharactersOverLimit: (overLimitBy, maxLength) => `Remova ${overLimitBy} ${overLimitBy === 1 ? "caractere" : "caracteres"} para enviar. Limite: ${maxLength}.`,
       feedbackTooLong: (maxLength) => `Feedback precisa ter ate ${maxLength} caracteres.`,
+      billingKicker: "Early access",
+      billingTitleReady: "Plano fundador",
+      billingTitlePending: "Checkout iniciado",
+      billingTitlePaid: "Acesso fundador ativo",
+      billingTitleUnavailable: "Venda controlada em preparo",
+      billingStatusLoading: "Verificando status do plano...",
+      billingStatusVisitor: "Crie uma conta rapida para vincular a compra.",
+      billingStatusFree: "Conta gratuita pronta para upgrade.",
+      billingStatusPending: "Checkout pendente de confirmacao.",
+      billingStatusPaid: "Plano pago confirmado.",
+      billingStatusUnavailable: "Checkout ainda nao configurado neste ambiente.",
+      billingHintVisitor: "A compra fica ligada ao seu username e libera acesso quando o webhook confirmar.",
+      billingHintReady: "O checkout abre em uma pagina externa configurada pelo dono.",
+      billingHintPending: "Assim que o pagamento for confirmado, o webhook muda seu acesso automaticamente.",
+      billingHintPaid: "Seu acesso pago ja pode ser usado para liberar recursos comerciais.",
+      billingHintUnavailable: "Configure BILLING_CHECKOUT_URL e BILLING_WEBHOOK_SECRET no Worker para vender.",
+      billingCtaReady: "Abrir checkout",
+      billingCtaCreateAccount: "Criar conta para comprar",
+      billingCtaPending: "Continuar checkout",
+      billingCtaPaid: "Plano ativo",
+      billingCtaUnavailable: "Checkout indisponivel",
+      billingCtaLoading: "Abrindo...",
+      billingRequiresAccount: "Crie uma conta rapida antes de abrir o checkout.",
+      billingCheckoutError: "Nao foi possivel abrir o checkout agora.",
+      billingCheckoutAlreadyActive: "Seu acesso pago ja esta ativo.",
       returnBriefKicker: "Ultima sessao",
       returnBriefEntryTitle: (mode) => `Ultimo atalho: ${mode}`,
       returnBriefEntryBody: (characterName) => `Seu personagem ativo era ${characterName}. A selecao fica pronta para a proxima entrada.`,
@@ -350,6 +411,17 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       loadingPrimarySearching: "Buscando...",
       loadingPrimaryWaiting: "Aguardando...",
       loadingHint: "Os comandos abaixo ja funcionam assim que a sala abrir.",
+      loadingOnlineReady: (count) => `${count} jogadores online detectados`,
+      loadingOnlineWaiting: "Conectando ao lobby global",
+      loadingQueueStatus: (count) => `${count} na fila de partida rapida`,
+      loadingAutoRoom: "Criando ou encontrando sala publica",
+      loadingInviteRoom: (roomCode) => `Entrando por convite ${roomCode}`,
+      loadingEndlessRoom: "Entrando na arena infinita ao vivo",
+      loadingCharacterLocked: "Personagem escolhido ja reservado",
+      loadingCancelSearch: "Cancelar busca",
+      loadingBackHome: "Voltar ao inicio",
+      loadingCancelHint: "Cancela a fila e mantem seu personagem escolhido para a proxima tentativa.",
+      loadingBackHomeHint: "Volta para o inicio sem trocar personagem ou configuracao local.",
       description: "Escolha seu personagem e entre na partida sem atrito.",
       roomMeta: (roomCode, count, max) => `${roomCode} | ${count}/${max} jogadores`,
       roomFull: "Sala cheia",
@@ -505,6 +577,31 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedbackCharactersRemaining: (remaining) => `${remaining} ${remaining === 1 ? "character" : "characters"} remaining.`,
       feedbackCharactersOverLimit: (overLimitBy, maxLength) => `Remove ${overLimitBy} ${overLimitBy === 1 ? "character" : "characters"} to send. Limit: ${maxLength}.`,
       feedbackTooLong: (maxLength) => `Feedback must be ${maxLength} characters or fewer.`,
+      billingKicker: "Early access",
+      billingTitleReady: "Founder plan",
+      billingTitlePending: "Checkout started",
+      billingTitlePaid: "Founder access active",
+      billingTitleUnavailable: "Controlled sales in setup",
+      billingStatusLoading: "Checking plan status...",
+      billingStatusVisitor: "Create a quick account to attach the purchase.",
+      billingStatusFree: "Free account ready for upgrade.",
+      billingStatusPending: "Checkout waiting for confirmation.",
+      billingStatusPaid: "Paid plan confirmed.",
+      billingStatusUnavailable: "Checkout is not configured in this environment.",
+      billingHintVisitor: "The purchase attaches to your username and unlocks access after the webhook confirms it.",
+      billingHintReady: "Checkout opens on an external page configured by the owner.",
+      billingHintPending: "When payment is confirmed, the webhook updates your access automatically.",
+      billingHintPaid: "Your paid access can now unlock commercial features.",
+      billingHintUnavailable: "Set BILLING_CHECKOUT_URL and BILLING_WEBHOOK_SECRET on the Worker to sell.",
+      billingCtaReady: "Open checkout",
+      billingCtaCreateAccount: "Create account to buy",
+      billingCtaPending: "Continue checkout",
+      billingCtaPaid: "Plan active",
+      billingCtaUnavailable: "Checkout unavailable",
+      billingCtaLoading: "Opening...",
+      billingRequiresAccount: "Create a quick account before opening checkout.",
+      billingCheckoutError: "Could not open checkout right now.",
+      billingCheckoutAlreadyActive: "Your paid access is already active.",
       returnBriefKicker: "Last session",
       returnBriefEntryTitle: (mode) => `Last shortcut: ${mode}`,
       returnBriefEntryBody: (characterName) => `${characterName} was your active character. The selection is ready for the next entry.`,
@@ -580,6 +677,17 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       loadingPrimarySearching: "Searching...",
       loadingPrimaryWaiting: "Waiting...",
       loadingHint: "The controls below already work as soon as the room opens.",
+      loadingOnlineReady: (count) => `${count} players online detected`,
+      loadingOnlineWaiting: "Connecting to the global lobby",
+      loadingQueueStatus: (count) => `${count} in quick match queue`,
+      loadingAutoRoom: "Creating or finding a public room",
+      loadingInviteRoom: (roomCode) => `Joining invite ${roomCode}`,
+      loadingEndlessRoom: "Entering the live endless arena",
+      loadingCharacterLocked: "Selected character already reserved",
+      loadingCancelSearch: "Cancel search",
+      loadingBackHome: "Back to start",
+      loadingCancelHint: "Cancels the queue and keeps your selected character for the next try.",
+      loadingBackHomeHint: "Returns to start without changing character or local settings.",
       description: "Pick your character and get into the match without friction.",
       roomMeta: (roomCode, count, max) => `${roomCode} | ${count}/${max} players`,
       roomFull: "Room full",

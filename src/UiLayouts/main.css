@@ -503,6 +503,43 @@ button {
   color: var(--muted);
 }
 
+.experience-billing-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.experience-billing__title,
+.experience-billing__status,
+.experience-billing__hint {
+  margin: 0;
+}
+
+.experience-billing__title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--muted-strong);
+}
+
+.experience-billing__status {
+  color: var(--accent);
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.experience-billing__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.experience-billing__hint {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 .experience-actions {
   display: grid;
   gap: 10px;
@@ -1218,6 +1255,57 @@ button {
   border-color: rgba(var(--accent-rgb), 0.28);
   background: rgba(var(--accent-rgb), 0.1);
   color: var(--muted-strong);
+}
+
+.experience-seat-pill--loading {
+  min-height: 42px;
+  gap: 8px;
+  padding: 0 12px;
+  text-transform: none;
+  letter-spacing: 0;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.experience-seat-pill--loading .experience-seat-pill__label {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: var(--accent-contrast);
+  background: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 900;
+}
+
+.experience-seat-pill--loading strong {
+  min-width: 0;
+  color: var(--muted-strong);
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.experience-seat-pill--loading[data-state="ready"] {
+  border-color: rgba(var(--accent-rgb), 0.36);
+  background: rgba(var(--accent-rgb), 0.09);
+}
+
+.experience-seat-pill--loading[data-state="ready"] .experience-seat-pill__label,
+.experience-seat-pill--loading[data-state="active"] .experience-seat-pill__label {
+  background: linear-gradient(135deg, var(--accent-strong) 0%, var(--accent-deep) 100%);
+}
+
+.experience-seat-pill--loading[data-state="active"] {
+  border-color: rgba(var(--accent-rgb), 0.5);
+  box-shadow: 0 0 18px rgba(var(--accent-rgb), 0.1);
+}
+
+.experience-seat-pill--loading[data-state="pending"] {
+  opacity: 0.72;
 }
 
 .experience-seat-pill[data-self="true"] {
@@ -3616,7 +3704,8 @@ button {
   grid-template-columns: minmax(0, 1.16fr) minmax(0, 0.92fr) minmax(0, 1fr);
 }
 
-.experience-screen--landing .experience-account-card {
+.experience-screen--landing .experience-account-card,
+.experience-screen--landing .experience-billing-panel {
   max-width: 640px;
   gap: 10px;
   margin-top: 10px;
@@ -3630,7 +3719,8 @@ button {
   text-transform: uppercase;
 }
 
-.experience-screen--landing .experience-account__hint {
+.experience-screen--landing .experience-account__hint,
+.experience-screen--landing .experience-billing__hint {
   max-width: 62ch;
   font-size: 0.94rem;
 }
@@ -3842,6 +3932,10 @@ button {
 
   .experience-screen--landing .experience-account__form {
     grid-template-columns: 1fr;
+  }
+
+  .experience-screen--landing .experience-billing__actions .experience-button {
+    width: 100%;
   }
 
   .experience-screen--landing .experience-character-summary--landing {

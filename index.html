@@ -546,6 +546,78 @@
         line-height: 1.65;
       }
 
+      /* Trust section (07) */
+      .trust-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .trust-card,
+      .faq-item {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--bg-1);
+      }
+
+      .trust-card {
+        padding: 24px 22px;
+      }
+
+      .trust-card h3,
+      .faq-item h3 {
+        font-size: 0.84rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--text);
+        margin-bottom: 9px;
+      }
+
+      .trust-card p,
+      .faq-item p {
+        font-size: 0.82rem;
+        color: var(--muted-2);
+        line-height: 1.65;
+      }
+
+      .faq-list {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+        margin-top: 24px;
+      }
+
+      .faq-item {
+        padding: 20px 22px;
+      }
+
+      .legal-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 28px;
+      }
+
+      .legal-links a {
+        display: inline-flex;
+        align-items: center;
+        padding: 9px 14px;
+        border: 1px solid var(--border-gold);
+        border-radius: 999px;
+        color: var(--gold);
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        text-decoration: none;
+      }
+
+      .legal-links a:hover {
+        background: var(--gold-soft);
+      }
+
       /* ── Footer ── */
       footer {
         padding: 52px 32px;
@@ -804,12 +876,15 @@
       /* ── Responsive ── */
       @media (max-width: 700px) {
         .sidenav { display: none; }
+        .topbar { padding: 0 18px; }
+        .topbar-links { display: none; }
         .mechanic-grid { grid-template-columns: 1fr 1fr; }
         .mechanic-card:nth-child(3n) { border-right: 1px solid var(--border); }
         .mechanic-card:nth-child(2n) { border-right: none; }
         .character-grid { grid-template-columns: 1fr 1fr; }
         .mode-grid { grid-template-columns: 1fr; }
         .feature-grid { grid-template-columns: 1fr 1fr; }
+        .trust-grid { grid-template-columns: 1fr; }
         .stats-row { flex-wrap: wrap; }
         .stat { flex: 1 1 40%; }
       }
@@ -819,6 +894,8 @@
         .mechanic-card { border-right: none !important; }
         .character-grid { grid-template-columns: 1fr; }
         .feature-grid { grid-template-columns: 1fr; }
+        .legal-links { flex-direction: column; align-items: stretch; }
+        .legal-links a { justify-content: center; }
       }
     </style>
       <!-- kamui-brand -->
@@ -836,6 +913,7 @@
         <a href="#personagens">Personagens</a>
         <a href="#arenas">Arenas</a>
         <a href="#modos">Modos</a>
+        <a href="#confianca">Confianca</a>
       </nav>
       <a href="/game" class="topbar-cta">Jogar →</a>
     </header>
@@ -848,6 +926,7 @@
       <a href="#controles"   data-s="controles">04</a>
       <a href="#modos"       data-s="modos">05</a>
       <a href="#em-breve"    data-s="em-breve">06</a>
+      <a href="#confianca"   data-s="confianca">07</a>
     </nav>
 
     <!-- ── HERO ── -->
@@ -1201,12 +1280,67 @@
 
     <div class="rule"></div>
 
+    <!-- 07 CONFIANCA -->
+    <section class="section reveal" id="confianca">
+      <div class="section-head" data-num="07">
+        <span class="section-kicker">07 - Confianca</span>
+        <h2>Transparente antes<br>de jogar serio.</h2>
+        <p class="section-desc">BOMBA PvP esta em evolucao publica. Esta area deixa claro o que ja existe, o que ainda e futuro e quais dados sao usados para operar o jogo.</p>
+      </div>
+
+      <div class="trust-grid">
+        <div class="trust-card">
+          <h3>Produto jogavel agora</h3>
+          <p>Partidas locais, bots, lobby online, personagens com ultimates e arenas tematicas ja fazem parte da experiencia publica.</p>
+        </div>
+        <div class="trust-card">
+          <h3>Conta opcional</h3>
+          <p>Voce pode entrar como visitante. A conta rapida usa nome de jogador para identificar perfil e preparar progresso futuro.</p>
+        </div>
+        <div class="trust-card">
+          <h3>Dados minimos</h3>
+          <p>O jogo usa eventos de produto, feedback e dados de conta para manter a arena funcionando e priorizar melhorias reais.</p>
+        </div>
+        <div class="trust-card">
+          <h3>Venda controlada</h3>
+          <p>Qualquer oferta paga deve mostrar preco, recurso liberado e limite de acesso antes de um checkout oficial ser usado.</p>
+        </div>
+      </div>
+
+      <div class="faq-list" aria-label="Perguntas frequentes">
+        <div class="faq-item">
+          <h3>Posso jogar sem pagar?</h3>
+          <p>Sim. A entrada publica atual permite testar o jogo e entender a arena antes de qualquer compra ou plano futuro.</p>
+        </div>
+        <div class="faq-item">
+          <h3>Minha conta e obrigatoria?</h3>
+          <p>Nao. Criar conta ajuda a manter um nome de jogador e preparar recursos de progressao, mas o visitante ainda consegue entrar no jogo.</p>
+        </div>
+        <div class="faq-item">
+          <h3>Como reporto problema?</h3>
+          <p>Use o botao de feedback dentro do jogo. Feedbacks recentes aparecem no painel admin para orientar correcoes e proximas entregas.</p>
+        </div>
+      </div>
+
+      <div class="legal-links" aria-label="Links de confianca">
+        <a href="/privacy.html">Privacidade</a>
+        <a href="/terms.html">Termos de uso</a>
+        <a href="/game">Jogar agora</a>
+      </div>
+    </section>
+
+    <div class="rule"></div>
+
     <!-- Footer -->
     <footer>
       <p>
         <strong style="color:var(--text)">BOMBA PvP</strong>
         &nbsp;·&nbsp;
         <a href="/game">Jogar agora</a>
+        &nbsp;·&nbsp;
+        <a href="/privacy.html">Privacidade</a>
+        &nbsp;·&nbsp;
+        <a href="/terms.html">Termos</a>
         &nbsp;·&nbsp;
         <span>Feito com 💣 e muito caos</span>
       </p>
@@ -1222,7 +1356,7 @@
 
       // Active sidenav
       const navLinks = document.querySelectorAll('.sidenav a');
-      const sectionIds = ['combate','personagens','arenas','controles','modos','em-breve'];
+      const sectionIds = ['combate','personagens','arenas','controles','modos','em-breve','confianca'];
 
       const navObserver = new IntersectionObserver(
         entries => {

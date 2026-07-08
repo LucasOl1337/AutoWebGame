@@ -79,18 +79,22 @@ interface CharacterManifestPayload {
   characters?: CharacterManifestEntry[];
 }
 
+function createEmptyDirectionalFrameSet(): Record<Direction, HTMLImageElement[]> {
+  return { up: [], down: [], left: [], right: [] };
+}
+
 function createEmptyDirectionalSprites(): DirectionalSprites {
   return {
     up: null,
     down: null,
     left: null,
     right: null,
-    idle: { up: [], down: [], left: [], right: [] },
-    walk: { up: [], down: [], left: [], right: [] },
-    run: { up: [], down: [], left: [], right: [] },
-    cast: { up: [], down: [], left: [], right: [] },
-    attack: { up: [], down: [], left: [], right: [] },
-    death: { up: [], down: [], left: [], right: [] },
+    idle: createEmptyDirectionalFrameSet(),
+    walk: createEmptyDirectionalFrameSet(),
+    run: createEmptyDirectionalFrameSet(),
+    cast: createEmptyDirectionalFrameSet(),
+    attack: createEmptyDirectionalFrameSet(),
+    death: createEmptyDirectionalFrameSet(),
   };
 }
 
@@ -128,6 +132,16 @@ async function loadFirstAvailableImage(paths: string[]): Promise<HTMLImageElemen
   return null;
 }
 
+function assignDirectionalFrameSet(
+  target: Record<Direction, HTMLImageElement[]>,
+  frames: Record<Direction, HTMLImageElement[]>,
+): void {
+  target.up = frames.up;
+  target.down = frames.down;
+  target.left = frames.left;
+  target.right = frames.right;
+}
+
 async function loadDirectionalSprites(prefix: string, baseVariants: string[] = [""]): Promise<DirectionalSprites> {
   const fileCandidates = (suffix: string): string[] => baseVariants.map((variant) => (
     variant.length > 0 ? `${prefix}-${suffix}-${variant}.png` : `${prefix}-${suffix}.png`
@@ -139,18 +153,24 @@ async function loadDirectionalSprites(prefix: string, baseVariants: string[] = [
     loadFirstAvailableImage(fileCandidates("west")),
   ]);
 
-  const walk = await loadWalkCycle(prefix);
+  const walk = createEmptyDirectionalFrameSet();
+  void loadWalkCycle(prefix).then((frames) => {
+    assignDirectionalFrameSet(walk, frames);
+  }).catch(() => {
+    // Walk-cycle sprites are a non-critical visual upgrade over static directional sprites.
+  });
+
   return {
     up,
     down,
     left,
     right,
-    idle: { up: [], down: [], left: [], right: [] },
+    idle: createEmptyDirectionalFrameSet(),
     walk,
-    run: { up: [], down: [], left: [], right: [] },
-    cast: { up: [], down: [], left: [], right: [] },
-    attack: { up: [], down: [], left: [], right: [] },
-    death: { up: [], down: [], left: [], right: [] },
+    run: createEmptyDirectionalFrameSet(),
+    cast: createEmptyDirectionalFrameSet(),
+    attack: createEmptyDirectionalFrameSet(),
+    death: createEmptyDirectionalFrameSet(),
   };
 }
 

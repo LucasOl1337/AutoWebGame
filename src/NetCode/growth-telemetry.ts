@@ -16,6 +16,9 @@ export type GrowthTelemetryEventName =
   | "chat_sent"
   | "feedback_opened"
   | "feedback_submitted"
+  | "billing_status_viewed"
+  | "billing_checkout_clicked"
+  | "billing_checkout_started"
   | "match_started"
   | "match_ended"
   | "lobby_left";

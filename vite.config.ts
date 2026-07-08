@@ -8,6 +8,8 @@ export default defineConfig({
       input: {
         main: "./index.html",
         game: "./game.html",
+        privacy: "./privacy.html",
+        terms: "./terms.html",
       },
     },
   },
