@@ -8,6 +8,14 @@ None.
 
 ## Completed work
 
+- 2026-07-08T17:17:02-03:00 - Automation `enxame-cont-nuo-ship-comercial-autowebgame`
+  - Area: QA real do fluxo comercial completo.
+  - Before: commercial checks were split between focused account/billing tests and manual confidence that landing, game route, legal pages, account creation, checkout and telemetry still formed one sellable flow.
+  - After: added `npm run test:commercial-release-flow`, a release smoke that validates visitor promise, `/game` entry, published legal/trust pages, quick account creation, external checkout gating, webhook-paid access model, localized purchase copy and conversion telemetry.
+  - Files touched: `tests/commercial-release-flow-check.mjs`, `package.json`, `ShipSwarm.md`.
+  - Evidence: `npm run test:commercial-release-flow` passed; `npm run test:account-username` passed; `npm run test:billing-commercial` passed; `npm run build` passed and emitted `dist/index.html`, `dist/game.html`, `dist/privacy.html` and `dist/terms.html`.
+  - Collision note: active claims were empty when claimed; no other files were touched.
+
 - 2026-07-08T13:01:47-03:00 - Automation `enxame-cont-nuo-ship-comercial-autowebgame`
   - Area: Checkout, webhook, plan status and purchase confirmation.
   - Before: account existed as username-only; no billing model, no checkout handoff, no webhook confirmation path, no landing plan status.
