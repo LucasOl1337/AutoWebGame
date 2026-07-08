@@ -19,6 +19,13 @@ import {
 } from "../src/NetCode/matchmaking";
 import { getLobbySeatSnapshot, isPlayableLobbySeat } from "../src/NetCode/lobby-rules";
 import { validateUsername } from "../src/NetCode/account";
+import {
+  billingRecordToStatus,
+  createConfirmedBillingRecord,
+  createDefaultBillingStatus,
+  createPendingBillingRecord,
+  normalizeStoredBillingRecord,
+} from "../src/NetCode/billing";
 import { mergeSequencedOnlineInputState } from "../src/NetCode/input-latch";
 import { createFixedRatePumpState, consumeFixedRatePumpSteps } from "../src/NetCode/server-tick";
 
@@ -56,6 +63,9 @@ const TELEMETRY_EVENT_NAMES = new Set([
   "chat_sent",
   "feedback_opened",
   "feedback_submitted",
+  "billing_status_viewed",
+  "billing_checkout_clicked",
+  "billing_checkout_started",
   "match_started",
   "match_ended",
   "lobby_left",
@@ -63,6 +73,22 @@ const TELEMETRY_EVENT_NAMES = new Set([
 const LEGACY_ASSET_PREFIX = "/assets/";
 const ACTIVE_ARENA_ID_KEY = "arena:active-id";
 const ARENA_KEY_PREFIX = "arena:def:";
+const HASHED_VITE_ASSET_RE = /^\/Assets\/[^/?#]+-[A-Za-z0-9_-]{8,}\.(?:js|css)$/;
+const SHORT_STATIC_CACHE_CONTROL = "public, max-age=86400, stale-while-revalidate=604800";
+const IMMUTABLE_STATIC_CACHE_CONTROL = "public, max-age=31536000, immutable";
+
+function getStaticAssetCacheControl(pathname, contentType) {
+  if (pathname === "/Assets/Characters/Animations/manifest.json") {
+    return "no-store";
+  }
+  if (contentType.includes("text/html")) {
+    return "no-store";
+  }
+  if (HASHED_VITE_ASSET_RE.test(pathname)) {
+    return IMMUTABLE_STATIC_CACHE_CONTROL;
+  }
+  return SHORT_STATIC_CACHE_CONTROL;
+}
 
 /**
  * @typedef {{
@@ -191,6 +217,27 @@ export default {
       return globalLobby.fetch(rewriteRequestPath(request, "/internal/account/logout"));
     }
 
+    if (url.pathname === "/api/billing/status") {
+      if (request.method !== "GET") {
+        return new Response("Method not allowed", { status: 405 });
+      }
+      return globalLobby.fetch(rewriteRequestPath(request, "/internal/billing/status"));
+    }
+
+    if (url.pathname === "/api/billing/checkout") {
+      if (request.method !== "POST") {
+        return new Response("Method not allowed", { status: 405 });
+      }
+      return globalLobby.fetch(rewriteRequestPath(request, "/internal/billing/checkout"));
+    }
+
+    if (url.pathname === "/api/billing/webhook") {
+      if (request.method !== "POST") {
+        return new Response("Method not allowed", { status: 405 });
+      }
+      return globalLobby.fetch(rewriteRequestPath(request, "/internal/billing/webhook"));
+    }
+
     if (url.pathname === "/admin") {
       return new Response(renderAdminHtml(env), {
         headers: {
@@ -213,26 +260,8 @@ export default {
 
     const assetResponse = await env.ASSETS.fetch(request);
     const contentType = assetResponse.headers.get("content-type") || "";
-    if (url.pathname === "/Assets/Characters/Animations/manifest.json") {
-      const headers = new Headers(assetResponse.headers);
-      headers.set("cache-control", "no-store");
-      return new Response(assetResponse.body, {
-        status: assetResponse.status,
-        statusText: assetResponse.statusText,
-        headers,
-      });
-    }
-    if (!contentType.includes("text/html")) {
-      const headers = new Headers(assetResponse.headers);
-      headers.set("cache-control", "public, max-age=86400, stale-while-revalidate=604800");
-      return new Response(assetResponse.body, {
-        status: assetResponse.status,
-        statusText: assetResponse.statusText,
-        headers,
-      });
-    }
     const headers = new Headers(assetResponse.headers);
-    headers.set("cache-control", "no-store");
+    headers.set("cache-control", getStaticAssetCacheControl(url.pathname, contentType));
     return new Response(assetResponse.body, {
       status: assetResponse.status,
       statusText: assetResponse.statusText,
@@ -421,6 +450,18 @@ export class GlobalLobby extends DurableObject {
 
     if (url.pathname === "/internal/account/logout") {
       return this.handleAccountLogout(request);
+    }
+
+    if (url.pathname === "/internal/billing/status") {
+      return this.handleBillingStatus(request);
+    }
+
+    if (url.pathname === "/internal/billing/checkout") {
+      return this.handleBillingCheckout(request);
+    }
+
+    if (url.pathname === "/internal/billing/webhook") {
+      return this.handleBillingWebhook(request);
     }
 
     if (url.pathname === "/internal/admin/daily-report") {
@@ -674,6 +715,206 @@ export class GlobalLobby extends DurableObject {
         },
       },
     );
+  }
+
+  /**
+   * @param {Request} request
+   * @returns {Promise<Response>}
+   */
+  async handleBillingStatus(request) {
+    const account = await this.readCurrentAccountFromRequest(request);
+    const billing = await this.readBillingStatus(account?.id ?? null);
+    return Response.json(
+      { billing },
+      {
+        headers: {
+          "cache-control": "no-store",
+        },
+      },
+    );
+  }
+
+  /**
+   * @param {Request} request
+   * @returns {Promise<Response>}
+   */
+  async handleBillingCheckout(request) {
+    const account = await this.readCurrentAccountFromRequest(request);
+    if (!account) {
+      return Response.json(
+        { error: "Crie uma conta rapida antes de abrir o checkout." },
+        {
+          status: 401,
+          headers: {
+            "cache-control": "no-store",
+          },
+        },
+      );
+    }
+
+    const checkoutBaseUrl = readBillingCheckoutUrl(this.env);
+    if (!checkoutBaseUrl) {
+      const billing = await this.readBillingStatus(account.id);
+      return Response.json(
+        { billing, error: "Checkout ainda nao configurado." },
+        {
+          status: 503,
+          headers: {
+            "cache-control": "no-store",
+          },
+        },
+      );
+    }
+
+    const existing = normalizeStoredBillingRecord(await this.ctx.storage.get(buildBillingKey(account.id)));
+    if (existing?.checkoutState === "confirmed") {
+      const billing = billingRecordToStatus(existing, checkoutBaseUrl) ?? await this.readBillingStatus(account.id);
+      return Response.json(
+        { billing, checkoutUrl: null },
+        {
+          headers: {
+            "cache-control": "no-store",
+          },
+        },
+      );
+    }
+
+    const now = Date.now();
+    const checkoutId = createId("chk");
+    const pending = createPendingBillingRecord(account.id, now, checkoutId);
+    await this.ctx.storage.put(buildBillingKey(account.id), pending);
+
+    const checkoutUrl = buildBillingCheckoutUrl(checkoutBaseUrl, {
+      accountId: account.id,
+      username: account.username,
+      checkoutId,
+      returnUrl: buildCheckoutReturnUrl(request.url),
+    });
+    const billing = billingRecordToStatus(pending, checkoutUrl, now) ?? createDefaultBillingStatus(account.id, checkoutUrl, now);
+
+    return Response.json(
+      { billing, checkoutUrl },
+      {
+        headers: {
+          "cache-control": "no-store",
+        },
+      },
+    );
+  }
+
+  /**
+   * @param {Request} request
+   * @returns {Promise<Response>}
+   */
+  async handleBillingWebhook(request) {
+    const expectedSecret = readBillingWebhookSecret(this.env);
+    if (!expectedSecret) {
+      return Response.json(
+        { ok: false, error: "Billing webhook is not configured." },
+        {
+          status: 503,
+          headers: {
+            "cache-control": "no-store",
+          },
+        },
+      );
+    }
+
+    const providedSecret = readBillingWebhookSecretFromRequest(request);
+    if (!providedSecret || !timingSafeEqual(providedSecret, expectedSecret)) {
+      return Response.json(
+        { ok: false, error: "Unauthorized." },
+        {
+          status: 401,
+          headers: {
+            "cache-control": "no-store",
+          },
+        },
+      );
+    }
+
+    let payload;
+    try {
+      payload = await request.json();
+    } catch {
+      return Response.json(
+        { ok: false, error: "Invalid billing webhook payload." },
+        {
+          status: 400,
+          headers: {
+            "cache-control": "no-store",
+          },
+        },
+      );
+    }
+
+    const eventName = readBillingWebhookEventName(payload);
+    if (eventName !== "checkout.confirmed" && eventName !== "payment.succeeded") {
+      return Response.json(
+        { ok: true, ignored: true },
+        {
+          status: 202,
+          headers: {
+            "cache-control": "no-store",
+          },
+        },
+      );
+    }
+
+    const accountId = readBillingWebhookAccountId(payload);
+    if (!accountId) {
+      return Response.json(
+        { ok: false, error: "Missing accountId." },
+        {
+          status: 400,
+          headers: {
+            "cache-control": "no-store",
+          },
+        },
+      );
+    }
+
+    const account = normalizeStoredAccount(await this.ctx.storage.get(buildAccountKey(accountId)));
+    if (!account) {
+      return Response.json(
+        { ok: false, error: "Account not found." },
+        {
+          status: 404,
+          headers: {
+            "cache-control": "no-store",
+          },
+        },
+      );
+    }
+
+    const now = Date.now();
+    const providerSessionId = readBillingWebhookProviderSessionId(payload);
+    const record = createConfirmedBillingRecord(account.id, now, providerSessionId);
+    await this.ctx.storage.put(buildBillingKey(account.id), record);
+    const billing = billingRecordToStatus(record, readBillingCheckoutUrl(this.env), now);
+
+    return Response.json(
+      { ok: true, billing },
+      {
+        headers: {
+          "cache-control": "no-store",
+        },
+      },
+    );
+  }
+
+  /**
+   * @param {string | null} accountId
+   * @returns {Promise<import("../src/NetCode/billing").PlayerBillingStatus>}
+   */
+  async readBillingStatus(accountId) {
+    const checkoutUrl = readBillingCheckoutUrl(this.env);
+    if (!accountId) {
+      return createDefaultBillingStatus(null, checkoutUrl);
+    }
+
+    const stored = normalizeStoredBillingRecord(await this.ctx.storage.get(buildBillingKey(accountId)));
+    return billingRecordToStatus(stored, checkoutUrl) ?? createDefaultBillingStatus(accountId, checkoutUrl);
   }
 
   /**
@@ -3096,6 +3337,68 @@ function buildAccountUsernameLookupKey(normalizedUsername) {
 
 function buildAccountSessionKey(sessionId) {
   return `account-session:${sessionId}`;
+}
+
+function buildBillingKey(accountId) {
+  return `billing:${accountId}`;
+}
+
+function readBillingCheckoutUrl(env) {
+  return readNonEmptyEnv(env, "BILLING_CHECKOUT_URL");
+}
+
+function readBillingWebhookSecret(env) {
+  return readNonEmptyEnv(env, "BILLING_WEBHOOK_SECRET");
+}
+
+function readNonEmptyEnv(env, key) {
+  const value = env?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function buildCheckoutReturnUrl(requestUrl) {
+  const url = new URL(requestUrl);
+  url.pathname = "/";
+  url.search = "?checkout=pending";
+  url.hash = "";
+  return url.toString();
+}
+
+function buildBillingCheckoutUrl(baseUrl, params) {
+  const url = new URL(baseUrl);
+  url.searchParams.set("account_id", params.accountId);
+  url.searchParams.set("username", params.username);
+  url.searchParams.set("checkout_id", params.checkoutId);
+  url.searchParams.set("client_reference_id", params.accountId);
+  url.searchParams.set("return_url", params.returnUrl);
+  return url.toString();
+}
+
+function readBillingWebhookSecretFromRequest(request) {
+  const headerSecret = request.headers.get("x-billing-webhook-secret") || request.headers.get("authorization");
+  return headerSecret ? headerSecret.replace(/^Bearer\s+/i, "").trim() : null;
+}
+
+function readBillingWebhookEventName(payload) {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+  return String(payload.event ?? payload.type ?? "").trim();
+}
+
+function readBillingWebhookAccountId(payload) {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+  return String(payload.accountId ?? payload.account_id ?? payload.client_reference_id ?? "").trim();
+}
+
+function readBillingWebhookProviderSessionId(payload) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const value = payload.providerSessionId ?? payload.provider_session_id ?? payload.checkout_id ?? payload.sessionId ?? payload.id;
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, 160) : null;
 }
 
 function readCookieValue(cookieHeader, name) {

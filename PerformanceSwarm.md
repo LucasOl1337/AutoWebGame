@@ -6,9 +6,9 @@ Melhorar progressivamente a performance do AutoWebGame em ate 20 rodadas sequenc
 
 ## Rodada atual
 
-- Rodada concluida: 5/20 - Frontend assets/audio
-- Proxima rodada recomendada: 6/20 - Frontend rede e cache HTTP
-- Atualizado em: 2026-07-08 14:20 America/Sao_Paulo
+- Rodada concluida: 6/20 - Frontend rede e cache HTTP
+- Proxima rodada recomendada: 7/20 - Frontend third-party e scripts, salvo se o coletor importar a rodada 7 ja mencionada na memoria externa da automacao; nesse caso seguir para 8/20 - Backend latencia de API.
+- Atualizado em: 2026-07-08 15:39 America/Sao_Paulo
 
 ## Contexto do repositorio
 
@@ -166,6 +166,8 @@ Conclusao da rodada 2: o maior win mensuravel parece estar menos no gzip do bund
 | 2/20 | Codex 2026-07-08 12:27 | Inventario de gargalos | `PerformanceSwarm.md` | Medir e ranquear gargalos provaveis de bundle/assets/rede/build sem alterar runtime | Baixo: somente documento de coordenacao | Baixo: sem mudanca de codigo; risco limitado a diagnostico incompleto | `npm run build` 3x, inventario de `dist`, gzip/brotli quando aplicavel, referencias HTML/CSS/TS a assets criticos e estimativa de assets iniciais | Concluido |
 | 3/20 | Codex 2026-07-08 12:10 | Frontend bundle/code-splitting | `src/UiLayouts/main.ts`, `PerformanceSwarm.md` | Separar o bootstrap leve do carregamento de `GameApp`, `assets` e `OnlineSessionClient` com dynamic imports | Baixo: entrada unica do jogo nesta worktree; sem escopo ativo conflitante | Medio: bootstrap top-level e testes que verificam strings de `main.ts` | `npm run build` antes/depois, tamanhos gzip/brutos dos chunks Vite, checks de contrato focados | Concluido |
 | 5/20 | Codex 2026-07-08 14:05 | Frontend assets/audio | `src/Engine/sound-manager.ts`, `tests/sound-manager-lazy-load-check.mjs`, `PerformanceSwarm.md` | Adiar preload real de SFX para remover chamadas `audio.load()` do start do jogo | Baixo: `sound-manager.ts` estava limpo; evitado `src/Engine/assets.ts` porque ja havia mudancas pendentes de outro escopo | Medio mitigado: audio poderia falhar se o clone nao carregasse sob demanda; validado por teste de playback com fake Audio | Antes/depois com contagem de chamadas `Audio.load()`, soma de bytes do `SFX_MANIFEST`, `npm run compile:esm`, teste de variacao de som e build 3x | Concluido |
+| 5/20b | Codex 2026-07-08 13:37 | Frontend assets/sprites | `src/Engine/assets.ts`, `tests/asset-loader-walk-cycle-warm-check.mjs`, `package.json`, `PerformanceSwarm.md` | Tirar walk cycles opcionais do caminho bloqueante do loader de assets e aquecer os frames em segundo plano | Medio: mesmo arquivo quente de assets ja estava tocado por fallback de sprite; alteracao mantida restrita ao carregador direcional | Medio mitigado: sprites de caminhada poderiam nao hidratar; validado por teste com mock de `Image` e contagem de frames | `npm run test:asset-loader-walk-cycle-warm`; `npm run build` | Concluido |
+| 6/20 | Codex 2026-07-08 15:20 | Frontend rede/cache HTTP | `worker/index.js`, `tests/worker-cache-headers-check.mjs`, `package.json`, `PerformanceSwarm.md` | Aplicar cache longo immutable somente para chunks CSS/JS versionados do Vite, mantendo HTML, APIs e manifest dinamico fora do cache agressivo | Medio: `worker/index.js` e modulo de alto risco; mudanca limitada ao ramo de assets estaticos | Baixo/medio mitigado: header errado poderia prender HTML/manifest; teste cobre HTML, manifest, JS/CSS hashed e imagem publica | `npm run test:worker-cache-headers`; `npm run build` 3x; comparacao dos headers antes/depois | Concluido |
 
 ## Historico de rodadas
 
@@ -175,13 +177,14 @@ Conclusao da rodada 2: o maior win mensuravel parece estar menos no gzip do bund
 | 2/20 | Concluida | Inventario de gargalos | Ranqueados gargalos de bootstrap, audio/assets, landing inline, fontes externas e bundle unico sem alterar runtime | Build 3x OK; dist 5.676,6 kB; JS gzip 67,10 kB; CSS gzip 10,33 kB; assets iniciais provaveis 807,8 kB; SFX preload 663,6 kB; imagens top 872,3 kB e 475,7 kB | `9d801da`, `af2061e`, `ec1394c`, `d4a1456` |
 | 3/20 | Concluida | Frontend bundle/code-splitting | `main.ts` passou a carregar `assets`, `GameApp` e `OnlineSessionClient` via dynamic imports, separando o bootstrap leve dos chunks pesados; a variante que separava apenas `OnlineSessionClient` foi absorvida por esse split completo | Antes: JS unico `game-D26tCmAO.js` 249,36 kB / 67,37 kB gzip. Depois: JS inicial linkado/preloaded 24,49 kB / 9,32 kB gzip; chunks tardios `game-app` 126,46 kB / 33,88 kB gzip e `session-client` 78,23 kB / 18,50 kB gzip. Build 3x OK; mediana 4.660,1 ms | `4f9975c`, `5d22c4a` |
 | 5/20 | Concluida | Frontend assets/audio | `SoundManager.loadSounds` deixou de chamar `audio.load()` para 12 SFX no start; o manifesto ainda cria as variacoes e o playback sob demanda continua funcional | Antes: 12 chamadas `Audio.load()` para 679.480 bytes / 663,6 KiB de SFX no bootstrap simulado. Depois: 0/0/0 chamadas em 3 execucoes; `sound-manager-lazy-load-check` e `sound-manager-variation-check` OK; build 3x OK | `306d257` |
+| 5/20b | Concluida | Frontend assets/sprites | `loadDirectionalSprites()` passou a devolver sprites cardinais imediatamente e aquecer walk cycles em segundo plano, hidratando os arrays compartilhados quando as imagens chegam | `npm run test:asset-loader-walk-cycle-warm` confirmou retorno antes de 96 loads de caminhada, hidratacao posterior com 12 frames por direcao em P1/P2 e zero loads pendentes; `npm run build` OK | pendente ate commit do coletor |
+| 6/20 | Concluida | Frontend rede/cache HTTP | Worker passou a diferenciar cache de assets estaticos: chunks Vite CSS/JS com hash recebem `public, max-age=31536000, immutable`, enquanto HTML, manifest de personagens e assets publicos nao versionados mantem politicas conservadoras | Antes: chunks JS/CSS versionados recebiam `public, max-age=86400, stale-while-revalidate=604800`. Depois: JS/CSS versionados recebem `public, max-age=31536000, immutable`; `game.html` e manifest continuam `no-store`; imagem publica continua 1 dia + stale. Build 3x OK; mediana 5.016,8 ms | pendente ate commit desta rodada |
 
 ## Pendencias
 
 - Rodada 4/20: memoria da automacao registra conclusao em outra worktree (`c788080`/`9c62356`) com startup shell antes de imports/assets; confirmar merge pelo coletor antes de remover esta nota historica.
 - Rodada 5/20 restante: investigar assets estaticos grandes com Network real, especialmente `ICON.png`, `social-preview.png` e WAVs, antes de converter/remover.
-- Rodada 5/20 restante: existe mudanca pendente anterior em `src/Engine/assets.ts`/`tests/asset-loader-walk-cycle-warm-check.mjs` para aquecer walk cycles fora do caminho bloqueante; esta sessao nao reivindicou nem commitou esse escopo.
-- Rodada 6/20 recomendada: revisar cache HTTP e rede para `game.html`, chunks hashed, fontes externas e assets publicos; medir requests/headers via servidor local ou Chrome/Codex app tooling, sem Playwright.
+- Rodada 7/20 recomendada: revisar third-party/scripts no estado desta worktree. Observacao: a memoria externa da automacao registra uma rodada 7 ja feita em outra passagem removendo Google Fonts; se o coletor importar essa entrega, seguir para 8/20 - Backend latencia de API.
 
 ## Evidencias
 
@@ -209,6 +212,9 @@ Conclusao da rodada 2: o maior win mensuravel parece estar menos no gzip do bund
 - Rodada 5 depois: medicao repetida 3x de `SoundManager.loadSounds(SFX_MANIFEST)` registrou chamadas `Audio.load()` = 0 / 0 / 0, mediana 0.
 - Rodada 5 build: `npm run build` 3x OK; tempos totais 5.358,8 ms, 4.965,6 ms e 16.886,2 ms, mediana 5.358,8 ms; Vite reportou 2,01 s / 2,24 s / 8,39 s.
 - Rodada 5 bundle depois: `dist/game.html` 1,51 kB / 0,66 kB gzip; CSS 71,57 kB / 11,07 kB gzip; `game-app` 132,29 kB / 35,48 kB gzip; `session-client` 86,71 kB / 20,36 kB gzip. Estes tamanhos incluem mudancas pendentes preexistentes na worktree e nao devem ser atribuidos apenas a esta sessao.
+- Rodada 5b sprites: `npm run test:asset-loader-walk-cycle-warm` OK; retorno inicial ocorreu antes de carregar todos os walk cycles, P1/P2 hidrataram 12 frames `down` depois do aquecimento e `pendingWalkLoadsAfterHydrate` ficou 0.
+- Rodada 6 headers: `npm run test:worker-cache-headers` OK. Amostras: `/Assets/game-app-CX670W2N.js` e `/Assets/game-BFrr1qZI.css` foram de `public, max-age=86400, stale-while-revalidate=604800` para `public, max-age=31536000, immutable`; `/Assets/UiLayouts/ICON.png` ficou em `public, max-age=86400, stale-while-revalidate=604800`; `/Assets/Characters/Animations/manifest.json` e `/game.html` ficaram `no-store`.
+- Rodada 6 build: `npm run build` 3x OK; tempos totais 5.016,8 ms, 5.370,2 ms e 4.376,4 ms; media 4.921,1 ms; mediana 5.016,8 ms; melhor 4.376,4 ms. Vite reportou 1,85 s / 2,14 s / 1,72 s.
 
 ## Limitacoes da medicao
 
@@ -221,4 +227,5 @@ Conclusao da rodada 2: o maior win mensuravel parece estar menos no gzip do bund
 - `codegraph status` nesta worktree retornou `Not initialized`; foi usado `DocsDev/codegraph/inventory.md` existente como referencia estrutural e medicoes diretas para HTML/CSS/JS/assets.
 - O tempo de build da rodada 2 nao deve ser interpretado isoladamente como regressao contra a rodada 1, pois a worktree estava sem dependencias e o ambiente/cache diferiu.
 - Rodada 5 usou fake `Audio` para medir preload de forma deterministica; isso comprova remocao de `audio.load()` do bootstrap, mas nao substitui uma Network tab real para confirmar comportamento exato de cada navegador.
-- Rodada 5 aconteceu com worktree ja suja por alteracoes anteriores em `package.json`, `src/Engine/assets.ts`, `src/NetCode/*`, `worker/index.js`, CSS e testes. O commit desta sessao deve incluir somente `src/Engine/sound-manager.ts`, `tests/sound-manager-lazy-load-check.mjs` e `PerformanceSwarm.md`.
+- Rodada 5 audio aconteceu com worktree ja suja por alteracoes anteriores; o commit `306d257` incluiu somente `src/Engine/sound-manager.ts`, `tests/sound-manager-lazy-load-check.mjs` e `PerformanceSwarm.md`.
+- Rodada 6 mediu headers por helper deterministico extraido de `worker/index.js`, nao por `wrangler dev`/Network tab real. A worktree ja tinha mudancas staged anteriores em `package.json`, `worker/index.js` e `PerformanceSwarm.md`; o commit desta rodada deve conter apenas os hunks de cache HTTP, o teste novo e este registro.
