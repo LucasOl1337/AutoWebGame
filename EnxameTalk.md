@@ -1,13 +1,17 @@
 # EnxameTalk
 
-## Active claim
+Arquivo de coordenacao local para agentes do enxame nesta worktree.
 
-CLAIM | 2026-07-08T12:25:24.3007816-03:00 | sessao=character-sprite-load-fallback-20260708-1225 | area=Estados vazios, loading, erro e sucesso | escopo=evitar personagem invisivel quando sprites aprovados falham no carregamento tardio | arquivos=src/Engine/assets.ts, tests/character-sprite-loader-fallback-check.mjs, package.json, DocsDev/swarm-coordination.md, EnxameTalk.md | status=feito 2026-07-08T12:29:51.0861094-03:00
+## Reivindicacoes
 
-## Notes
+| Sessao | Inicio | Area | Escopo | Arquivos | Status |
+|---|---:|---|---|---|---|
+| character-sprite-load-fallback-20260708-1225 | 2026-07-08T12:25:24.3007816-03:00 | Estados vazios, loading, erro e sucesso | Evitar personagem invisivel quando sprites aprovados falham no carregamento tardio. | `src/Engine/assets.ts`, `tests/character-sprite-loader-fallback-check.mjs`, `package.json`, `DocsDev/swarm-coordination.md`, `EnxameTalk.md` | feito 2026-07-08T12:29:51.0861094-03:00 |
+| active-arena-invalid-fallback-20260708-1144 | 2026-07-08T11:44:00-03:00 | Estados vazios, loading, erro e sucesso | Impedir que resposta `/api/arena/active` com arena invalida quebre a primeira partida; cair para arena default validada. | `src/Arenas/arena.ts`, `tests/active-arena-fetch-fallback-check.mjs`, `package.json`, `EnxameTalk.md`, `DocsDev/swarm-coordination.md` | feito 2026-07-08T11:45:42-03:00 |
 
-- EnxameTalk.md nao existia nesta worktree no inicio da sessao.
-- CodeGraph local reportou `Not initialized`; usei `DocsDev/codegraph/inventory.md` e leituras pontuais como fallback.
-- Antes: o loader podia cachear um pacote de personagem sem nenhuma imagem quando os PNGs aprovados falhavam.
-- Depois: o loader detecta pacote vazio e devolve os sprites padrao do slot do personagem, mantendo a partida renderizavel.
-- Evidencia: `npm run test:character-sprite-fallback`; `npm run test:roster-sync`; `npm run test:player-sprite`; `npm run build`.
+## Fechamentos
+
+| Sessao | Antes | Depois | Evidencia | Commit |
+|---|---|---|---|---|
+| character-sprite-load-fallback-20260708-1225 | O loader podia cachear um pacote de personagem sem nenhuma imagem quando os PNGs aprovados falhavam. | O loader detecta pacote vazio e devolve os sprites padrao do slot do personagem, mantendo a partida renderizavel. | `npm run test:character-sprite-fallback`; `npm run test:roster-sync`; `npm run test:player-sprite`; `npm run build` | `5c8ce51` |
+| active-arena-invalid-fallback-20260708-1144 | `fetchActiveArenaDefinition()` aceitava resposta `ok` com arena estruturalmente invalida; probe confirmou `blockedSpawnAccepted: true`. | Arena ativa recebida do backend e validada antes de uso; payload invalido cai para `default-live-arena`, enquanto payload valido continua sendo normalizado e aceito. | `npm run test:active-arena-fetch`; `npm run test:arena-runtime`; `npm run build`; `git diff --check -- src/Arenas/arena.ts tests/active-arena-fetch-fallback-check.mjs package.json EnxameTalk.md DocsDev/swarm-coordination.md` | `6aa6bad` |

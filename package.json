@@ -35,6 +35,7 @@
     "test:local-match-chrome": "npm run compile:esm && node tests/local-match-chrome-check.mjs",
     "test:input": "npm run compile:esm && node tests/input-transition-check.mjs",
     "test:arena-runtime": "npm run compile:esm && node tests/arena-runtime-contract-check.mjs",
+    "test:active-arena-fetch": "npm run compile:esm && node tests/active-arena-fetch-fallback-check.mjs",
     "test:spawn": "npm run compile:esm && node tests/spawn-escape-check.mjs",
     "test:online-4p": "npm run compile:esm && node tests/online-four-player-check.mjs",
     "test:matchmaking-state": "npm run compile:esm && node tests/matchmaking-session-state-check.mjs",
