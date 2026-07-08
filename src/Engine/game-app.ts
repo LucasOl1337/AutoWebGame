@@ -153,6 +153,12 @@ const directionDelta: Record<Direction, TileCoord> = {
   right: { x: 1, y: 0 },
 };
 
+interface CenterOverlayState {
+  title: string;
+  subtitle: string;
+  footer: string | null;
+}
+
 const PLAYER_HITBOX_HALF = TILE_SIZE * 0.5;
 const LANE_SNAP_THRESHOLD = TILE_SIZE * 0.45;
 const LANE_LOCK_THRESHOLD = 3;
