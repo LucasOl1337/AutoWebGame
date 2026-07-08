@@ -2332,8 +2332,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       link.href = buildArenaThemeUrl(themeId, href);
       if (active) {
         link.setAttribute("aria-current", "true");
-      } else {
+      } else if (typeof link.removeAttribute === "function") {
         link.removeAttribute("aria-current");
+      } else {
+        link.setAttribute("aria-current", "false");
       }
       const badge = link.querySelector<HTMLElement>(".experience-arena-theme__badge");
       if (badge) {

@@ -9,6 +9,29 @@ class FakeElement {
     this.style = {};
     this.attributes = new Map();
     this.listeners = new Map();
+    this.classNames = new Set();
+    this.classList = {
+      add: (...names) => {
+        for (const name of names) {
+          this.classNames.add(name);
+        }
+      },
+      remove: (...names) => {
+        for (const name of names) {
+          this.classNames.delete(name);
+        }
+      },
+      toggle: (name, force) => {
+        const shouldAdd = force === undefined ? !this.classNames.has(name) : Boolean(force);
+        if (shouldAdd) {
+          this.classNames.add(name);
+        } else {
+          this.classNames.delete(name);
+        }
+        return shouldAdd;
+      },
+      contains: (name) => this.classNames.has(name),
+    };
     this.hidden = false;
     this.disabled = false;
     this.textContent = "";
@@ -78,6 +101,10 @@ class FakeElement {
 
   getAttribute(name) {
     return this.attributes.get(name) ?? null;
+  }
+
+  removeAttribute(name) {
+    this.attributes.delete(name);
   }
 
   focus() {}

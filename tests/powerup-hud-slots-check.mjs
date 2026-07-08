@@ -179,8 +179,9 @@ const report = {
       && shortFuseSlot.acquired === true
       && shortFuseSlot.level === 1
       && shortFuseSlot.value === "x1"
+      && shortFuseSlot.recentlyCollected === true
       && recentPowerUpPickup
-      && recentPowerUpPickup.type === "kick-up"
+      && recentPowerUpPickup.type === "short-fuse-up"
       && recentPowerUpPickup.value === "x1"
       && recentPowerUpPickup.remainingMs > 0
       && expiredRecentPowerUpPickup === null
