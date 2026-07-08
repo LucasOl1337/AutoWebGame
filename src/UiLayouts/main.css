@@ -496,6 +496,41 @@ button {
   text-transform: uppercase;
 }
 
+.experience-commercial-proof {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 680px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.experience-commercial-proof li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 7px 10px;
+  border: 1px solid rgba(var(--accent-rgb), 0.24);
+  border-radius: 8px;
+  color: var(--muted-strong);
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.experience-commercial-proof li::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: rgb(var(--accent-rgb));
+  content: "";
+}
+
 .experience-hero__meta,
 .experience-panel__meta,
 .experience-panel__lead,
@@ -3804,6 +3839,10 @@ button {
   max-width: 42ch;
 }
 
+.experience-screen--landing .experience-commercial-proof {
+  max-width: 620px;
+}
+
 .experience-screen--landing .experience-actions {
   gap: 10px;
 }
@@ -4308,6 +4347,7 @@ button {
 @media (max-height: 700px) and (min-width: 1081px) {
   .experience-screen--landing .experience-return-brief__body,
   .experience-screen--landing .experience-release-notes__list li:nth-child(n+2),
+  .experience-screen--landing .experience-commercial-proof li,
   .experience-screen--landing .experience-bot-intensity__hint,
   .experience-screen--landing .experience-arena-theme__hint,
   .experience-screen--landing .experience-arena-theme__option span,
@@ -4318,6 +4358,11 @@ button {
 }
 
 @media (max-width: 760px) {
+  .experience-screen--landing .experience-commercial-proof {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
   .experience-screen--landing .experience-bot-intensity__options,
   .experience-screen--landing .experience-arena-theme__options {
     grid-template-columns: 1fr;

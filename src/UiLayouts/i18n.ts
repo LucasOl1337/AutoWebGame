@@ -26,6 +26,7 @@ export interface SiteCopy {
   landing: {
     kicker: string;
     lead: string;
+    commercialProof: string[];
     quickMatch: string;
     quickMatchBusy: string;
     botMatch: string;
@@ -277,12 +278,17 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
     },
     landing: {
       kicker: "Arena online",
-      lead: "Entre, escolha um bomber e entenda o jogo em segundos.",
-      quickMatch: "Partida rapida",
+      lead: "Arena bomber de navegador para rounds curtos: escolha um personagem, entre no lobby online ou teste contra bots antes de comprar o acesso fundador.",
+      commercialProof: [
+        "Partida jogavel no browser",
+        "Lobby online com quick match",
+        "Compra vinculada a conta rapida",
+      ],
+      quickMatch: "Jogar partida rapida",
       quickMatchBusy: "Buscando partida...",
-      botMatch: "Partida contra bots",
-      enterLobby: "Entrar em lobby",
-      feedback: "Dar feedback",
+      botMatch: "Testar contra bots",
+      enterLobby: "Ver lobbies abertos",
+      feedback: "Enviar feedback",
       searching: "Procurando a melhor sala para voce entrar.",
       meta: (queuedRooms, onlineUsers) => `${queuedRooms} salas abertas agora | ${onlineUsers} jogadores online`,
       releaseBadge: "v0.2.2 no ar",
@@ -560,12 +566,17 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
     },
     landing: {
       kicker: "Online arena",
-      lead: "Jump in, pick a bomber, and understand the game in seconds.",
-      quickMatch: "Quick match",
+      lead: "Browser bomber arena for short competitive rounds: pick a character, join the online lobby, or test against bots before buying founder access.",
+      commercialProof: [
+        "Playable in the browser",
+        "Online lobby with quick match",
+        "Purchase tied to a quick account",
+      ],
+      quickMatch: "Play quick match",
       quickMatchBusy: "Finding match...",
-      botMatch: "Match vs bots",
-      enterLobby: "Enter lobby",
-      feedback: "Leave feedback",
+      botMatch: "Try vs bots",
+      enterLobby: "View open lobbies",
+      feedback: "Send feedback",
       searching: "Looking for the best room for you.",
       meta: (queuedRooms, onlineUsers) => `${queuedRooms} open rooms right now | ${onlineUsers} players online`,
       releaseBadge: "v0.2.2 live",

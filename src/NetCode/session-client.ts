@@ -1445,6 +1445,14 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     landingCopy.append(landingKicker, landingReleaseBadge, landingTitle, landingLead);
 
+    const landingCommercialProof = document.createElement("ul");
+    landingCommercialProof.className = "experience-commercial-proof";
+    for (const proof of copy.landing.commercialProof) {
+      const proofItem = document.createElement("li");
+      proofItem.textContent = proof;
+      landingCommercialProof.append(proofItem);
+    }
+
     const landingMeta = document.createElement("p");
     landingMeta.className = "experience-hero__meta";
 
@@ -1746,6 +1754,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     landingControls.append(landingControlsHeader, landingControlsGrid);
     landingCopy.append(
+      landingCommercialProof,
       landingMeta,
       landingReleaseNotes,
       landingReturnBrief,
