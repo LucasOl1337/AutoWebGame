@@ -74,8 +74,24 @@ const LEGACY_ASSET_PREFIX = "/assets/";
 const ACTIVE_ARENA_ID_KEY = "arena:active-id";
 const ARENA_KEY_PREFIX = "arena:def:";
 const HASHED_VITE_ASSET_RE = /^\/Assets\/[^/?#]+-[A-Za-z0-9_-]{8,}\.(?:js|css)$/;
+const API_ADMIN_ARENA_ROUTE_RE = /^\/api\/admin\/arenas\/([^/]+)(?:\/(activate|validate))?$/;
 const SHORT_STATIC_CACHE_CONTROL = "public, max-age=86400, stale-while-revalidate=604800";
 const IMMUTABLE_STATIC_CACHE_CONTROL = "public, max-age=31536000, immutable";
+const PUBLIC_API_ROUTES = new Map([
+  ["/api/telemetry", { methods: new Set(["POST"]), targetPath: "/internal/telemetry" }],
+  ["/api/admin/summary", { methods: null, targetPath: "/internal/admin/summary" }],
+  ["/api/arena/active", { methods: new Set(["GET"]), targetPath: "/internal/arena/active" }],
+  ["/api/admin/arenas", { methods: new Set(["GET", "POST"]), targetPath: "/internal/admin/arenas" }],
+  ["/api/admin/login", { methods: new Set(["POST"]), targetPath: "/internal/admin/login" }],
+  ["/api/admin/logout", { methods: new Set(["POST"]), targetPath: "/internal/admin/logout" }],
+  ["/api/feedback", { methods: new Set(["POST"]), targetPath: "/internal/feedback" }],
+  ["/api/me", { methods: new Set(["GET"]), targetPath: "/internal/account/me" }],
+  ["/api/account/quick-create", { methods: new Set(["POST"]), targetPath: "/internal/account/quick-create" }],
+  ["/api/logout", { methods: new Set(["POST"]), targetPath: "/internal/account/logout" }],
+  ["/api/billing/status", { methods: new Set(["GET"]), targetPath: "/internal/billing/status" }],
+  ["/api/billing/checkout", { methods: new Set(["POST"]), targetPath: "/internal/billing/checkout" }],
+  ["/api/billing/webhook", { methods: new Set(["POST"]), targetPath: "/internal/billing/webhook" }],
+]);
 
 function getStaticAssetCacheControl(pathname, contentType) {
   if (pathname === "/Assets/Characters/Animations/manifest.json") {
@@ -88,6 +104,30 @@ function getStaticAssetCacheControl(pathname, contentType) {
     return IMMUTABLE_STATIC_CACHE_CONTROL;
   }
   return SHORT_STATIC_CACHE_CONTROL;
+}
+
+function resolvePublicApiRoute(pathname, method) {
+  const staticRoute = PUBLIC_API_ROUTES.get(pathname);
+  if (staticRoute) {
+    return {
+      matched: true,
+      methodAllowed: !staticRoute.methods || staticRoute.methods.has(method),
+      targetPath: staticRoute.targetPath,
+    };
+  }
+
+  const arenaAdminMatch = API_ADMIN_ARENA_ROUTE_RE.exec(pathname);
+  if (!arenaAdminMatch) {
+    return null;
+  }
+
+  const arenaId = encodeURIComponent(arenaAdminMatch[1]);
+  const suffix = arenaAdminMatch[2] ? `/${arenaAdminMatch[2]}` : "";
+  return {
+    matched: true,
+    methodAllowed: method === "GET" || method === "PUT" || method === "POST",
+    targetPath: `/internal/admin/arenas/${arenaId}${suffix}`,
+  };
 }
 
 /**
@@ -136,106 +176,12 @@ export default {
       return Response.json({ ok: true });
     }
 
-    if (url.pathname === "/api/telemetry") {
-      if (request.method !== "POST") {
+    const apiRoute = resolvePublicApiRoute(url.pathname, request.method);
+    if (apiRoute) {
+      if (!apiRoute.methodAllowed) {
         return new Response("Method not allowed", { status: 405 });
       }
-      return globalLobby.fetch(rewriteRequestPath(request, "/internal/telemetry"));
-    }
-
-    if (url.pathname === "/api/admin/summary") {
-      return globalLobby.fetch(rewriteRequestPath(request, "/internal/admin/summary"));
-    }
-
-    if (url.pathname === "/api/arena/active") {
-      if (request.method !== "GET") {
-        return new Response("Method not allowed", { status: 405 });
-      }
-      return globalLobby.fetch(rewriteRequestPath(request, "/internal/arena/active"));
-    }
-
-    if (url.pathname === "/api/admin/arenas") {
-      if (request.method === "GET") {
-        return globalLobby.fetch(rewriteRequestPath(request, "/internal/admin/arenas"));
-      }
-      if (request.method === "POST") {
-        return globalLobby.fetch(rewriteRequestPath(request, "/internal/admin/arenas"));
-      }
-      return new Response("Method not allowed", { status: 405 });
-    }
-
-    const arenaAdminMatch = url.pathname.match(/^\/api\/admin\/arenas\/([^/]+)(?:\/(activate|validate))?$/);
-    if (arenaAdminMatch) {
-      const arenaId = encodeURIComponent(arenaAdminMatch[1]);
-      const suffix = arenaAdminMatch[2] ? `/${arenaAdminMatch[2]}` : "";
-      const targetPath = `/internal/admin/arenas/${arenaId}${suffix}`;
-      if (request.method === "GET" || request.method === "PUT" || request.method === "POST") {
-        return globalLobby.fetch(rewriteRequestPath(request, targetPath));
-      }
-      return new Response("Method not allowed", { status: 405 });
-    }
-
-    if (url.pathname === "/api/admin/login") {
-      if (request.method !== "POST") {
-        return new Response("Method not allowed", { status: 405 });
-      }
-      return globalLobby.fetch(rewriteRequestPath(request, "/internal/admin/login"));
-    }
-
-    if (url.pathname === "/api/admin/logout") {
-      if (request.method !== "POST") {
-        return new Response("Method not allowed", { status: 405 });
-      }
-      return globalLobby.fetch(rewriteRequestPath(request, "/internal/admin/logout"));
-    }
-
-    if (url.pathname === "/api/feedback") {
-      if (request.method !== "POST") {
-        return new Response("Method not allowed", { status: 405 });
-      }
-      return globalLobby.fetch(rewriteRequestPath(request, "/internal/feedback"));
-    }
-
-    if (url.pathname === "/api/me") {
-      if (request.method !== "GET") {
-        return new Response("Method not allowed", { status: 405 });
-      }
-      return globalLobby.fetch(rewriteRequestPath(request, "/internal/account/me"));
-    }
-
-    if (url.pathname === "/api/account/quick-create") {
-      if (request.method !== "POST") {
-        return new Response("Method not allowed", { status: 405 });
-      }
-      return globalLobby.fetch(rewriteRequestPath(request, "/internal/account/quick-create"));
-    }
-
-    if (url.pathname === "/api/logout") {
-      if (request.method !== "POST") {
-        return new Response("Method not allowed", { status: 405 });
-      }
-      return globalLobby.fetch(rewriteRequestPath(request, "/internal/account/logout"));
-    }
-
-    if (url.pathname === "/api/billing/status") {
-      if (request.method !== "GET") {
-        return new Response("Method not allowed", { status: 405 });
-      }
-      return globalLobby.fetch(rewriteRequestPath(request, "/internal/billing/status"));
-    }
-
-    if (url.pathname === "/api/billing/checkout") {
-      if (request.method !== "POST") {
-        return new Response("Method not allowed", { status: 405 });
-      }
-      return globalLobby.fetch(rewriteRequestPath(request, "/internal/billing/checkout"));
-    }
-
-    if (url.pathname === "/api/billing/webhook") {
-      if (request.method !== "POST") {
-        return new Response("Method not allowed", { status: 405 });
-      }
-      return globalLobby.fetch(rewriteRequestPath(request, "/internal/billing/webhook"));
+      return globalLobby.fetch(rewriteRequestPath(request, apiRoute.targetPath));
     }
 
     if (url.pathname === "/admin") {

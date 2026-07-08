@@ -6,9 +6,9 @@ Melhorar progressivamente a performance do AutoWebGame em ate 20 rodadas sequenc
 
 ## Rodada atual
 
-- Rodada concluida: 6/20 - Frontend rede e cache HTTP
-- Proxima rodada recomendada: 7/20 - Frontend third-party e scripts, salvo se o coletor importar a rodada 7 ja mencionada na memoria externa da automacao; nesse caso seguir para 8/20 - Backend latencia de API.
-- Atualizado em: 2026-07-08 15:39 America/Sao_Paulo
+- Rodada concluida: 8/20 - Backend latencia de API
+- Proxima rodada recomendada: 9/20 - Backend banco e queries; se nao houver banco relacional, auditar Durable Object storage/list/get/put em rotas admin/telemetry.
+- Atualizado em: 2026-07-08 17:48 America/Sao_Paulo
 
 ## Contexto do repositorio
 
@@ -168,6 +168,8 @@ Conclusao da rodada 2: o maior win mensuravel parece estar menos no gzip do bund
 | 5/20 | Codex 2026-07-08 14:05 | Frontend assets/audio | `src/Engine/sound-manager.ts`, `tests/sound-manager-lazy-load-check.mjs`, `PerformanceSwarm.md` | Adiar preload real de SFX para remover chamadas `audio.load()` do start do jogo | Baixo: `sound-manager.ts` estava limpo; evitado `src/Engine/assets.ts` porque ja havia mudancas pendentes de outro escopo | Medio mitigado: audio poderia falhar se o clone nao carregasse sob demanda; validado por teste de playback com fake Audio | Antes/depois com contagem de chamadas `Audio.load()`, soma de bytes do `SFX_MANIFEST`, `npm run compile:esm`, teste de variacao de som e build 3x | Concluido |
 | 5/20b | Codex 2026-07-08 13:37 | Frontend assets/sprites | `src/Engine/assets.ts`, `tests/asset-loader-walk-cycle-warm-check.mjs`, `package.json`, `PerformanceSwarm.md` | Tirar walk cycles opcionais do caminho bloqueante do loader de assets e aquecer os frames em segundo plano | Medio: mesmo arquivo quente de assets ja estava tocado por fallback de sprite; alteracao mantida restrita ao carregador direcional | Medio mitigado: sprites de caminhada poderiam nao hidratar; validado por teste com mock de `Image` e contagem de frames | `npm run test:asset-loader-walk-cycle-warm`; `npm run build` | Concluido |
 | 6/20 | Codex 2026-07-08 15:20 | Frontend rede/cache HTTP | `worker/index.js`, `tests/worker-cache-headers-check.mjs`, `package.json`, `PerformanceSwarm.md` | Aplicar cache longo immutable somente para chunks CSS/JS versionados do Vite, mantendo HTML, APIs e manifest dinamico fora do cache agressivo | Medio: `worker/index.js` e modulo de alto risco; mudanca limitada ao ramo de assets estaticos | Baixo/medio mitigado: header errado poderia prender HTML/manifest; teste cobre HTML, manifest, JS/CSS hashed e imagem publica | `npm run test:worker-cache-headers`; `npm run build` 3x; comparacao dos headers antes/depois | Concluido |
+| 7/20 | Codex 2026-07-08 16:10 | Frontend third-party e scripts | `index.html`, `game.html`, `src/UiLayouts/main.css`, `PerformanceSwarm.md` | Remover Google Fonts/preconnects e usar pilhas locais/sistema para cortar round-trips externos | Baixo: alteracao ja registrada na memoria externa da automacao | Baixo: mudanca visual de fonte mitigada por pilhas locais | `rg "fonts\\.googleapis|fonts\\.gstatic"` e tamanho gzip de HTML em `dist` | Concluido via memoria externa |
+| 8/20 | Codex 2026-07-08 17:28 | Backend latencia de API / roteamento HTTP | `worker/index.js`, `tests/worker-api-route-dispatch-check.mjs`, `package.json`, `PerformanceSwarm.md` | Substituir cadeia de `if` estaticos `/api` por tabela de rotas pre-compilada e medir dispatch antes/depois | Medio: `worker/index.js` e modulo critico, mas mudanca fica no front-door HTTP antes dos handlers | Baixo/medio mitigado: risco de metodo/rota divergente coberto por teste de contrato | Benchmark local 3x do roteador worst-case e `npm run test:worker-api-route-dispatch`; `npm run test:worker-cache-headers`; `npm run build` 3x | Concluido |
 
 ## Historico de rodadas
 
@@ -179,12 +181,14 @@ Conclusao da rodada 2: o maior win mensuravel parece estar menos no gzip do bund
 | 5/20 | Concluida | Frontend assets/audio | `SoundManager.loadSounds` deixou de chamar `audio.load()` para 12 SFX no start; o manifesto ainda cria as variacoes e o playback sob demanda continua funcional | Antes: 12 chamadas `Audio.load()` para 679.480 bytes / 663,6 KiB de SFX no bootstrap simulado. Depois: 0/0/0 chamadas em 3 execucoes; `sound-manager-lazy-load-check` e `sound-manager-variation-check` OK; build 3x OK | `306d257` |
 | 5/20b | Concluida | Frontend assets/sprites | `loadDirectionalSprites()` passou a devolver sprites cardinais imediatamente e aquecer walk cycles em segundo plano, hidratando os arrays compartilhados quando as imagens chegam | `npm run test:asset-loader-walk-cycle-warm` confirmou retorno antes de 96 loads de caminhada, hidratacao posterior com 12 frames por direcao em P1/P2 e zero loads pendentes; `npm run build` OK | pendente ate commit do coletor |
 | 6/20 | Concluida | Frontend rede/cache HTTP | Worker passou a diferenciar cache de assets estaticos: chunks Vite CSS/JS com hash recebem `public, max-age=31536000, immutable`, enquanto HTML, manifest de personagens e assets publicos nao versionados mantem politicas conservadoras | Antes: chunks JS/CSS versionados recebiam `public, max-age=86400, stale-while-revalidate=604800`. Depois: JS/CSS versionados recebem `public, max-age=31536000, immutable`; `game.html` e manifest continuam `no-store`; imagem publica continua 1 dia + stale. Build 3x OK; mediana 5.016,8 ms | `2b9e4dd` |
+| 7/20 | Concluida | Frontend third-party e scripts | Removidos Google Fonts e preconnects de `index.html` e `game.html`; `index.html` e `src/UiLayouts/main.css` usam pilhas locais/sistema | Depois `rg "fonts\\.googleapis|fonts\\.gstatic"` em fontes e `dist` sem referencias; `dist/game.html` 1.515 -> 1.181 bytes e gzip 657 -> 529 bytes; `dist/index.html` 47.033 -> 46.753 bytes e gzip 10.316 -> 10.210 bytes | `82fd80e`, `fe5d5c5` |
+| 8/20 | Concluida | Backend latencia de API | Roteamento publico de `/api/*` do Worker passou de cadeia linear de `if` para tabela pre-compilada com helper `resolvePublicApiRoute`, mantendo regex apenas para arena admin dinamica | Benchmark deterministico worst-case `/api/billing/webhook` em 300.000 resolucoes: antes mediana 14,358 ms; depois 8,232 ms; -42,7%. Contrato de rotas/metodos equivalente; build 3x OK com mediana 7.376,8 ms | `22d151a` |
 
 ## Pendencias
 
 - Rodada 4/20: memoria da automacao registra conclusao em outra worktree (`c788080`/`9c62356`) com startup shell antes de imports/assets; confirmar merge pelo coletor antes de remover esta nota historica.
 - Rodada 5/20 restante: investigar assets estaticos grandes com Network real, especialmente `ICON.png`, `social-preview.png` e WAVs, antes de converter/remover.
-- Rodada 7/20 recomendada: revisar third-party/scripts no estado desta worktree. Observacao: a memoria externa da automacao registra uma rodada 7 ja feita em outra passagem removendo Google Fonts; se o coletor importar essa entrega, seguir para 8/20 - Backend latencia de API.
+- Rodada 9/20 recomendada: auditar custos de Durable Object storage em endpoints admin/telemetry (`list`, `get`, `put`) e procurar reducao segura de queries/leituras, sem alterar auth/admin boundaries.
 
 ## Evidencias
 
@@ -215,6 +219,10 @@ Conclusao da rodada 2: o maior win mensuravel parece estar menos no gzip do bund
 - Rodada 5b sprites: `npm run test:asset-loader-walk-cycle-warm` OK; retorno inicial ocorreu antes de carregar todos os walk cycles, P1/P2 hidrataram 12 frames `down` depois do aquecimento e `pendingWalkLoadsAfterHydrate` ficou 0.
 - Rodada 6 headers: `npm run test:worker-cache-headers` OK. Amostras: `/Assets/game-app-CX670W2N.js` e `/Assets/game-BFrr1qZI.css` foram de `public, max-age=86400, stale-while-revalidate=604800` para `public, max-age=31536000, immutable`; `/Assets/UiLayouts/ICON.png` ficou em `public, max-age=86400, stale-while-revalidate=604800`; `/Assets/Characters/Animations/manifest.json` e `/game.html` ficaram `no-store`.
 - Rodada 6 build: `npm run build` 3x OK; tempos totais 5.016,8 ms, 5.370,2 ms e 4.376,4 ms; media 4.921,1 ms; mediana 5.016,8 ms; melhor 4.376,4 ms. Vite reportou 1,85 s / 2,14 s / 1,72 s.
+- Rodada 7 memoria externa: removidas referencias `fonts.googleapis`/`fonts.gstatic`; `dist/game.html` reduziu 1.515 -> 1.181 bytes e gzip 657 -> 529 bytes; `dist/index.html` reduziu 47.033 -> 46.753 bytes e gzip 10.316 -> 10.210 bytes.
+- Rodada 8 benchmark: `npm run test:worker-api-route-dispatch` OK. Contrato de 22 combinacoes de rota/metodo preservado; 300.000 resolucoes worst-case de `/api/billing/webhook` em 3 execucoes: antes 14,358 / 13,094 / 15,310 ms, depois 10,756 / 8,232 / 7,640 ms; mediana antes 14,358 ms, mediana depois 8,232 ms; melhora 42,7%.
+- Rodada 8 cache adjacente: `npm run test:worker-cache-headers` OK apos mudanca em `worker/index.js`.
+- Rodada 8 build: apos `npm ci` porque a worktree isolada estava sem `node_modules`, `npm run build` 3x OK; tempos totais 9.607,2 ms, 7.376,8 ms e 6.727,5 ms; media 7.903,8 ms; mediana 7.376,8 ms; melhor 6.727,5 ms. Vite reportou 3,65 s / 2,90 s / 2,52 s.
 
 ## Limitacoes da medicao
 
@@ -229,4 +237,5 @@ Conclusao da rodada 2: o maior win mensuravel parece estar menos no gzip do bund
 - Rodada 5 usou fake `Audio` para medir preload de forma deterministica; isso comprova remocao de `audio.load()` do bootstrap, mas nao substitui uma Network tab real para confirmar comportamento exato de cada navegador.
 - Rodada 5 audio aconteceu com worktree ja suja por alteracoes anteriores; o commit `306d257` incluiu somente `src/Engine/sound-manager.ts`, `tests/sound-manager-lazy-load-check.mjs` e `PerformanceSwarm.md`.
 - Rodada 6 mediu headers por helper deterministico extraido de `worker/index.js`, nao por `wrangler dev`/Network tab real. A worktree ja tinha mudancas staged anteriores em `package.json`, `worker/index.js` e `PerformanceSwarm.md`; o commit desta rodada deve conter apenas os hunks de cache HTTP, o teste novo e este registro.
+- Rodada 8 mediu o custo do roteador publico isolado em Node, nao uma requisicao real no runtime Cloudflare Worker/Durable Object; o ganho e no dispatch antes do DO e nao inclui latencia de storage, rede ou handlers internos. A primeira tentativa de build falhou por `node_modules` ausente; apos `npm ci`, build passou 3x.
 
