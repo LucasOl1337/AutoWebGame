@@ -117,9 +117,12 @@ const checks = {
       && validCommercialUsername.username === "Founder_1"
       && !invalidCommercialUsername.ok,
     workerExposesAccountSessionRoutes: includesAll(workerSource, [
-      'url.pathname === "/api/me"',
-      'url.pathname === "/api/account/quick-create"',
-      'url.pathname === "/api/logout"',
+      '["/api/me", { methods: new Set(["GET"]), targetPath: "/internal/account/me" }]',
+      '["/api/account/quick-create", { methods: new Set(["POST"]), targetPath: "/internal/account/quick-create" }]',
+      '["/api/logout", { methods: new Set(["POST"]), targetPath: "/internal/account/logout" }]',
+      'url.pathname === "/internal/account/me"',
+      'url.pathname === "/internal/account/quick-create"',
+      'url.pathname === "/internal/account/logout"',
       "handleQuickAccountCreate",
       "buildAccountSessionKey",
     ]),
@@ -144,9 +147,12 @@ const checks = {
   },
   checkoutAndConversion: {
     workerExposesBillingRoutesAndEnvGates: includesAll(workerSource, [
-      'url.pathname === "/api/billing/status"',
-      'url.pathname === "/api/billing/checkout"',
-      'url.pathname === "/api/billing/webhook"',
+      '["/api/billing/status", { methods: new Set(["GET"]), targetPath: "/internal/billing/status" }]',
+      '["/api/billing/checkout", { methods: new Set(["POST"]), targetPath: "/internal/billing/checkout" }]',
+      '["/api/billing/webhook", { methods: new Set(["POST"]), targetPath: "/internal/billing/webhook" }]',
+      'url.pathname === "/internal/billing/status"',
+      'url.pathname === "/internal/billing/checkout"',
+      'url.pathname === "/internal/billing/webhook"',
       "BILLING_CHECKOUT_URL",
       "BILLING_WEBHOOK_SECRET",
       "timingSafeEqual(providedSecret, expectedSecret)",

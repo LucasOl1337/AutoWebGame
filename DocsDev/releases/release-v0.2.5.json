@@ -1,0 +1,146 @@
+{
+  "brand": {
+    "name": "AutoWebGame",
+    "vendor": "BOMBA",
+    "footer": "BROWSER ARENA GAME",
+    "masthead": "NOTAS DO PATCH"
+  },
+  "version": "v0.2.5",
+  "date": "8 de julho de 2026 - Patch oficial",
+  "title": "Onboarding, QA e APIs mais rapidas",
+  "cloud": {
+    "latestReleaseBeforePatch": "v0.2.4",
+    "latestReleasePublishedAtUtc": "2026-07-08T18:42:01Z",
+    "originMainBeforePatch": "82222707698fbf6bbcc86ea869540e36c37d641d",
+    "tagBeforePatch": "82222707698fbf6bbcc86ea869540e36c37d641d",
+    "localHeadBeforePatchNotes": "77796a8",
+    "commitsAheadOfOriginBeforePatch": 5
+  },
+  "agentSessions": [
+    {
+      "agent": "Codex / Ship commercial QA",
+      "evidence": "7459d65, ShipSwarm.md, tests/commercial-release-flow-check.mjs",
+      "decision": "integrated"
+    },
+    {
+      "agent": "Codex / How-to-play page",
+      "evidence": "72996ff, db07b4a, how-to-play.html, tests/how-to-play-page-check.mjs",
+      "decision": "integrated"
+    },
+    {
+      "agent": "Codex / Performance round 8",
+      "evidence": "5f9cec8, fcfa975, worker/index.js, tests/worker-api-route-dispatch-check.mjs",
+      "decision": "integrated"
+    },
+    {
+      "agent": "Codex / codex-swarm",
+      "evidence": "branch codex-swarm, 10 commits, merge conflicts against main",
+      "decision": "not integrated"
+    },
+    {
+      "agent": "Codex / dirty detached worktrees",
+      "evidence": "4f9a and 58f1 have uncommitted changes",
+      "decision": "pending"
+    },
+    {
+      "agent": "Claude",
+      "evidence": "text search, branches, worktrees, docs, C:\\Projetos\\LucasOl",
+      "decision": "no versioned AutoWebGame change found"
+    },
+    {
+      "agent": "ZCode",
+      "evidence": "text search, branches, worktrees, docs, C:\\Projetos\\LucasOl",
+      "decision": "no versioned AutoWebGame change found"
+    },
+    {
+      "agent": "Wispr Flow",
+      "evidence": "text search, branches, worktrees, docs, C:\\Projetos\\LucasOl",
+      "decision": "no versioned AutoWebGame change found"
+    },
+    {
+      "agent": "OpenCode",
+      "evidence": "text search, branches, worktrees, docs, C:\\Projetos\\LucasOl",
+      "decision": "no versioned AutoWebGame change found"
+    },
+    {
+      "agent": "Trae Work",
+      "evidence": "text search, branches, worktrees, docs, C:\\Projetos\\LucasOl",
+      "decision": "no versioned AutoWebGame change found"
+    }
+  ],
+  "categories": [
+    {
+      "label": "Onboarding",
+      "title": "COMO JOGAR",
+      "items": [
+        {
+          "name": "Pagina publica",
+          "desc": "Guia de objetivo, controles, arena e primeira partida",
+          "tag": "GUIDE"
+        },
+        {
+          "name": "Arte de apoio",
+          "desc": "Imagem propria para explicar a leitura da arena",
+          "tag": "VISUAL"
+        }
+      ]
+    },
+    {
+      "label": "Release QA",
+      "title": "COMMERCIAL SMOKE",
+      "items": [
+        {
+          "name": "Fluxo comercial",
+          "desc": "Conta, checkout, webhook, legal pages e telemetry",
+          "tag": "QA"
+        }
+      ]
+    },
+    {
+      "label": "Backend",
+      "title": "WORKER API",
+      "items": [
+        {
+          "name": "Dispatch por tabela",
+          "desc": "Rotas publicas de API resolvidas por tabela precompilada",
+          "tag": "PERF"
+        },
+        {
+          "name": "Contrato de rotas",
+          "desc": "Teste dedicado preserva comportamento e metodos",
+          "tag": "TEST"
+        }
+      ]
+    }
+  ],
+  "notIntegrated": [
+    "codex-swarm merge direto",
+    "worktree 4f9a match dock responsive a11y",
+    "worktree 58f1 manual room-code message extract"
+  ],
+  "validation": [
+    "git diff --check",
+    "node --check worker/index.js",
+    "npm run build",
+    "npm run test:commercial-release-flow",
+    "npm run test:how-to-play-page",
+    "npm run test:worker-api-route-dispatch",
+    "npm run test:billing-commercial",
+    "npm run test:account-username",
+    "npm run test:lobby-rules",
+    "npm run test:matchmaking-state",
+    "npm run test:online-4p",
+    "npm run test:roster-sync",
+    "npm run test:active-arena-fetch",
+    "npm run test:growth-telemetry-retry",
+    "codegraph status C:\\Projetos\\AutoWebGame"
+  ],
+  "artifacts": [
+    "DocsDev/releases/release-v0.2.5.md",
+    "DocsDev/releases/release-v0.2.5.json",
+    "release-assets/v0.2.5-card.png",
+    "release-assets/v0.2.5-card-bg.png",
+    "patchnotes.md",
+    "changelog.md"
+  ]
+}

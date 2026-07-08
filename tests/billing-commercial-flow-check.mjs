@@ -32,9 +32,12 @@ const modelChecks = {
 };
 
 const sourceChecks = {
-  publicStatusRouteExists: workerSource.includes('url.pathname === "/api/billing/status"'),
-  publicCheckoutRouteExists: workerSource.includes('url.pathname === "/api/billing/checkout"'),
-  publicWebhookRouteExists: workerSource.includes('url.pathname === "/api/billing/webhook"'),
+  publicStatusRouteExists: workerSource.includes('["/api/billing/status", { methods: new Set(["GET"]), targetPath: "/internal/billing/status" }]')
+    && workerSource.includes('url.pathname === "/internal/billing/status"'),
+  publicCheckoutRouteExists: workerSource.includes('["/api/billing/checkout", { methods: new Set(["POST"]), targetPath: "/internal/billing/checkout" }]')
+    && workerSource.includes('url.pathname === "/internal/billing/checkout"'),
+  publicWebhookRouteExists: workerSource.includes('["/api/billing/webhook", { methods: new Set(["POST"]), targetPath: "/internal/billing/webhook" }]')
+    && workerSource.includes('url.pathname === "/internal/billing/webhook"'),
   checkoutUsesConfigEnv: workerSource.includes("BILLING_CHECKOUT_URL"),
   webhookRequiresSecretEnv: workerSource.includes("BILLING_WEBHOOK_SECRET")
     && workerSource.includes("x-billing-webhook-secret")

@@ -1,5 +1,33 @@
 # Changelog
 
+## [2026-07-08] - v0.2.5 Official Patch (Onboarding, QA e APIs mais rapidas)
+
+**Project:** AutoWebGame / BOMBA  |  **Branch:** main  |  **State:** v0.2.5 release candidate
+
+### PC vs GitHub at Release Time
+- Remote latest release before patch: `v0.2.4`, published on 2026-07-08T18:42:01Z.
+- `origin/main` before patch: `82222707698fbf6bbcc86ea869540e36c37d641d`.
+- Local integration: selected clean post-`v0.2.4` Codex work from detached worktrees.
+- Left out: direct `codex-swarm` merge and dirty worktrees `4f9a`/`58f1`.
+
+### Summary of Changes Being Released
+- Public `how-to-play.html` explains objective, controls, arena reading and first-match plan.
+- Landing now links to the how-to-play guide.
+- Commercial release smoke validates public promise, game route, legal pages, quick account, checkout, webhook-paid access, purchase copy and conversion telemetry.
+- Worker public API routing now uses a precompiled dispatch table and has dedicated route-contract coverage.
+- Release notes, JSON metadata and patch-card art were generated for the GitHub release.
+
+### Multi-Agent Session Audit
+- Codex / Ship commercial QA: tracked and integrated from detached worktree `7459d65`.
+- Codex / How-to-play page: tracked and integrated from detached commits `72996ff` and `db07b4a`.
+- Codex / Performance round 8: tracked and integrated from detached commits `5f9cec8` and `fcfa975`.
+- Codex / codex-swarm: not integrated as a direct merge because it conflicts with current `main`.
+- Claude, ZCode, Wispr Flow, OpenCode and Trae Work: no post-`v0.2.4` versioned AutoWebGame changes found in the inspected repo, branches, worktrees or `C:\Projetos\LucasOl`.
+
+See `DocsDev/releases/release-v0.2.5.md` and `patchnotes.md` for the release notes and validation list.
+
+---
+
 ## [2026-07-07] - v0.2.3 Official Patch (Danger, powerups e lobby solido)
 
 **Project:** AutoWebGame / BOMBA  |  **Branch:** main  |  **State:** v0.2.3 release candidate

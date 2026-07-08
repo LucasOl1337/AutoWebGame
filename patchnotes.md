@@ -1,3 +1,96 @@
+# Patch Notes - 2026-07-08 v0.2.5 Official Patch
+
+**Project:** AutoWebGame / BOMBA
+**Path:** C:\Projetos\AutoWebGame
+**Branch:** main
+**Generated:** 2026-07-08
+**State:** release candidate for `v0.2.5`
+
+## Executive Summary
+
+Patch `v0.2.5` consolidates selected Codex work done after the official `v0.2.4` release. The GitHub cloud state (`origin/main`) and the latest official tag both pointed to `8222270`, while local detached worktrees held the new release candidates.
+
+Main themes:
+- New players get a public how-to-play guide before entering the arena.
+- The commercial funnel has a full release smoke.
+- Worker API dispatch is faster and covered by a route-contract check.
+- Risky/conflicting work stayed outside this patch.
+
+## Local PC vs GitHub Comparison
+
+| Aspect | PC (Local) | GitHub (origin) | Notes |
+|--------|------------|-----------------|-------|
+| Latest release before patch | `v0.2.4` | `v0.2.4` | GitHub release published 2026-07-08T18:42:01Z. |
+| Branch state before release prep | `main` at `v0.2.4` | `origin/main` at `8222270` | Local and remote were aligned before cherry-picks. |
+| Integration | 5 selected commits cherry-picked | Not yet pushed at prep time | `codex-swarm` direct merge rejected due conflicts. |
+| Working tree after validation | Release docs/art pending final commit | Clean remote | Release docs/art are final additions. |
+
+## Sessions Checked Since v0.2.4
+
+| Session / agent | Evidence checked | Changes found |
+|-----------------|------------------|---------------|
+| Codex / Ship commercial QA | Detached worktree `7459d65`, `ShipSwarm.md`, test script and package script | Yes: integrated commercial release smoke. |
+| Codex / How-to-play page | Detached commits `72996ff` and `db07b4a`, `EnxameTalk.md`, HTML, image and test | Yes: integrated public how-to-play guide. |
+| Codex / Performance round 8 | Detached commits `5f9cec8` and `fcfa975`, `PerformanceSwarm.md`, Worker diff and route test | Yes: integrated Worker API dispatch optimization. |
+| Codex / codex-swarm | Branch `codex-swarm`, diff and merge-tree | Yes, but not integrated: branch conflicts with current `main` and needs cherry-pick review. |
+| Codex / dirty detached worktrees | Worktrees `4f9a` and `58f1` | Pending uncommitted UI/edge-case work; not released. |
+| Claude | Text search, branches, worktrees, docs and `C:\Projetos\LucasOl` | No post-`v0.2.4` versioned AutoWebGame changes found. |
+| ZCode | Text search, branches, worktrees, docs and `C:\Projetos\LucasOl` | No post-`v0.2.4` versioned AutoWebGame changes found. |
+| Wispr Flow | Text search, branches, worktrees, docs and `C:\Projetos\LucasOl` | No post-`v0.2.4` versioned AutoWebGame changes found. |
+| OpenCode | Text search, branches, worktrees, docs and `C:\Projetos\LucasOl` | No post-`v0.2.4` versioned AutoWebGame changes found. |
+| Trae Work | Text search, branches, worktrees, docs and `C:\Projetos\LucasOl` | No post-`v0.2.4` versioned AutoWebGame changes found. |
+
+If any of those agents worked outside Git, outside the inspected worktrees, or in another repository, that work did not leave a versioned AutoWebGame trace in this release audit.
+
+## Patch Notes Candidate
+
+### Novidades
+
+- **Como jogar publico:** nova pagina explica objetivo, controles, leitura de arena e plano de primeira partida.
+- **Landing com guia:** a pagina inicial passa a apontar para o guia antes de abrir a arena.
+- **Smoke comercial:** novo teste cobre promessa publica, `/game`, paginas legais, conta rapida, checkout, webhook pago, copy de compra e telemetria.
+
+### Melhorias
+
+- **Worker API mais rapido:** dispatch de `/api/*` usa tabela de rotas precompilada em vez de cadeia linear de `if`.
+- **Contrato de rotas:** teste dedicado garante equivalencia de metodos e handlers publicos.
+- **Patch card oficial:** nova arte 16:9 segue o padrao visual do release anterior.
+
+### Fora deste release
+
+- **`codex-swarm`:** nao entrou como merge direto por conflito e escopo amplo.
+- **Dock responsivo e room-code em mensagem:** continuam pendentes por estarem sem commit/teste final nos worktrees `4f9a` e `58f1`.
+
+## Validation
+
+Passed:
+- `git diff --check`
+- `node --check worker/index.js`
+- `npm run build`
+- `npm run test:commercial-release-flow`
+- `npm run test:how-to-play-page`
+- `npm run test:worker-api-route-dispatch`
+- `npm run test:billing-commercial`
+- `npm run test:account-username`
+- `npm run test:lobby-rules`
+- `npm run test:matchmaking-state`
+- `npm run test:online-4p`
+- `npm run test:roster-sync`
+- `npm run test:active-arena-fetch`
+- `npm run test:growth-telemetry-retry`
+- `codegraph status C:\Projetos\AutoWebGame`
+
+## Files For This Release Prep
+
+- `DocsDev/releases/release-v0.2.5.md`
+- `DocsDev/releases/release-v0.2.5.json`
+- `release-assets/v0.2.5-card.png`
+- `release-assets/v0.2.5-card-bg.png`
+- `patchnotes.md`
+- `changelog.md`
+
+---
+
 # Patch Notes - 2026-07-07 v0.2.3 Official Patch
 
 **Project:** AutoWebGame / BOMBA
