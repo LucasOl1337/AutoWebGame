@@ -400,6 +400,10 @@ export async function loadGameAssets(arenaThemeId?: string | null): Promise<Game
     flameUp,
     speedUp,
     remoteUp,
+    shieldUp,
+    bombPassUp,
+    kickUp,
+    shortFuseUp,
   ] = await Promise.all([
     loadDirectionalSprites(assetUrl("/Assets/Characters/Animations/default-players/player1"), ["hires", ""]),
     loadDirectionalSprites(assetUrl("/Assets/Characters/Animations/default-players/player2")),
@@ -430,6 +434,10 @@ export async function loadGameAssets(arenaThemeId?: string | null): Promise<Game
     loadImage(assetUrl("/Assets/UiLayouts/power-flame.png")),
     loadImage(assetUrl("/Assets/UiLayouts/power-speed.png")),
     loadImage(assetUrl("/Assets/UiLayouts/power-remote.png")),
+    loadImage(assetUrl("/Assets/UiLayouts/power-shield.png")),
+    loadImage(assetUrl("/Assets/UiLayouts/power-bomb-pass.png")),
+    loadImage(assetUrl("/Assets/UiLayouts/power-kick.png")),
+    loadImage(assetUrl("/Assets/UiLayouts/power-short-fuse.png")),
   ]);
   const playerSprites: Partial<Record<PlayerId, DirectionalSprites>> = {
     1: playerOne,
@@ -487,6 +495,10 @@ export async function loadGameAssets(arenaThemeId?: string | null): Promise<Game
       "flame-up": flameUp,
       "speed-up": speedUp,
       "remote-up": remoteUp,
+      "shield-up": shieldUp,
+      "bomb-pass-up": bombPassUp,
+      "kick-up": kickUp,
+      "short-fuse-up": shortFuseUp,
     },
     characterSpriteLoader,
   };
