@@ -6,9 +6,9 @@ Melhorar progressivamente a performance do AutoWebGame em ate 20 rodadas sequenc
 
 ## Rodada atual
 
-- Rodada concluida: 1/20 - Baseline real
-- Proxima rodada recomendada: 2/20 - Inventario de gargalos
-- Atualizado em: 2026-07-08 10:50 America/Sao_Paulo
+- Rodada concluida: 3/20 - Frontend bundle e code-splitting
+- Proxima rodada recomendada: 4/20 - Frontend render e hidratacao
+- Atualizado em: 2026-07-08 13:09 America/Sao_Paulo
 
 ## Contexto do repositorio
 
@@ -37,7 +37,7 @@ Melhorar progressivamente a performance do AutoWebGame em ate 20 rodadas sequenc
 |---|---:|---:|---|
 | Tempo de `npm run build` local | media 4.756 ms, mediana 4.669 ms, melhor 4.354 ms | manter mediana <= 5.500 ms | Inclui `tsc` + `vite build`; 3 execucoes consecutivas |
 | Vite build interno | 2,15 s / 1,69 s / 1,68 s | manter <= 2,50 s | Valor reportado pelo Vite, sem overhead total do npm/tsc |
-| JS inicial gerado | 255,34 kB bruto / 69,22 kB gzip | manter gzip <= 75 kB ate rodada 3; depois mirar <= 60 kB | `dist/Assets/game-D26tCmAO.js` |
+| JS inicial gerado | 146,35 kB bruto / 40,44 kB gzip apos rodada 3 | manter chunk de entrada gzip <= 45 kB; total JS gzip <= 75 kB | `session-client` agora sai do chunk de entrada; `i18n` e preloaded pelo Vite |
 | CSS inicial gerado | 69,77 kB bruto / 10,84 kB gzip | manter gzip <= 12 kB; investigar CSS bruto na rodada 3/6 | `dist/Assets/game-BFrr1qZI.css` |
 | HTML landing | 42,58 kB bruto / 9,34 kB gzip | reduzir ou manter <= 45 kB bruto | `index.html` tem CSS/markup inline grande |
 | Peso total de `dist` | 5.676,5 kB em 693 arquivos | reduzir top assets antes de subir budget | Imagens 4.649,5 kB; audio 663,6 kB |
@@ -105,21 +105,20 @@ Maiores arquivos de `dist`:
 | Rodada | Agente/data | Area | Arquivos pretendidos | Intencao | Risco de conflito | Risco de regressao | Como medir | Status |
 |---|---|---|---|---|---|---|---|---|
 | 1/20 | Codex 2026-07-08 10:46 | Baseline real | `PerformanceSwarm.md` | Criar coordenacao, baseline, rotas criticas, metricas e budgets iniciais | Baixo: arquivo novo de coordenacao | Baixo: sem codigo runtime | `npm run build` 3x, tamanhos de `dist`, inventario CodeGraph e scripts disponiveis | Concluido |
+| 3/20 | Codex 2026-07-08 12:58 | Frontend bundle e code-splitting | `src/UiLayouts/main.ts`, `PerformanceSwarm.md` | Adiar carregamento do cliente de sessao/menu online para separar parte do shell DOM do chunk inicial do jogo | Baixo: nenhum outro escopo ativo registrado neste arquivo; mudanca restrita ao entrypoint | Medio: bootstrap async pode afetar ordem de inicializacao e testes que esperam `__autobot` em dev | `npm run build` antes/depois 3x, tamanhos gzip dos chunks JS/CSS, `npm run test:roster-sync` | Concluido |
 
 ## Historico de rodadas
 
 | Rodada | Status | Area | Entrega | Evidencia | Commit |
 |---|---|---|---|---|---|
 | 1/20 | Concluida | Baseline real | Criado baseline de performance, rotas criticas, budgets iniciais e mapa de arquivos quentes | Build 3x OK; dist 5.676,5 kB; JS gzip 69,22 kB; CSS gzip 10,84 kB; 3 checks OK | `52428aa` |
+| 2/20 | Concluida | Inventario de gargalos | Ranking objetivo de gargalos registrado pela automacao: preload de SFX, assets iniciais, landing inline, Google Fonts duplicado e bundle unico do jogo | `npm ci` OK; `npm run build` 3x OK com mediana 14.395 ms; `npm run test:roster-sync` OK; bundle unico 249,36 kB bruto / 67,10 kB gzip | `ec1394c`, `d4a1456` na memoria da automacao; nao presentes neste checkout |
+| 3/20 | Concluida | Frontend bundle e code-splitting | `OnlineSessionClient` passou de import estatico para import dinamico no bootstrap do jogo, criando chunks separados para shell online e i18n | Antes: 1 JS chunk 259.449 bytes / 70.201 gzip; depois: entrada 146.349 / 40.441 gzip, `session-client` 80.707 / 18.965 gzip, `i18n` 34.460 / 11.781 gzip; `npm run test:roster-sync` OK | Pendente ate commit desta sessao |
 
 ## Pendencias
 
-- Rodada 2/20: inventariar gargalos com evidencia antes de mudar codigo. Recomendo focar primeiro em:
-  - se `social-preview.png` e `ICON.png` sao baixados no caminho critico ou apenas copiados;
-  - se `index.html` precisa manter tanto CSS/markup inline na landing;
-  - se o bundle unico `game-*.js` permite code-splitting seguro entre landing/shell/jogo;
-  - se WAVs grandes podem ser convertidos ou lazy-loaded sem quebrar feedback de gameplay;
-  - se `worker/index.js` tem endpoints ou serializacoes lentas que merecem microbench.
+- Rodada 4/20: investigar render e trabalho de main thread. Recomendo focar em `src/NetCode/session-client.ts` e `src/Engine/game-app.ts` para reduzir render DOM repetido, estados derivados caros ou inicializacao visual que ocorre antes da primeira interacao.
+- Rodada futura de assets: confirmar via Network/Chrome se `ICON.png`, `social-preview.png` e SFX entram no caminho critico real antes de converter ou adiar.
 
 ## Evidencias
 
@@ -131,9 +130,14 @@ Maiores arquivos de `dist`:
 - `npm run test:lobby-rules`: OK em 5.090 ms.
 - `npm run test:matchmaking-state`: OK em 5.274 ms.
 - `npm run test:roster-sync`: OK em 5.125 ms.
+- Rodada 3 antes: `npm run build` 3x OK; tempos totais 6.367 ms, 5.100 ms, 5.837 ms; mediana 5.837 ms. JS: 1 chunk `game-DG3ogrnx.js` 259.449 bytes / 70.201 bytes gzip.
+- Rodada 3 depois: `npm run build` 3x OK; tempos totais 12.838 ms, 11.785 ms, 12.441 ms; mediana 12.441 ms. JS: entrada `game-BP7cZItW.js` 146.349 bytes / 40.441 bytes gzip; `session-client-DVmGoRry.js` 80.707 / 18.965 gzip; `i18n-CSU40Hnw.js` 34.460 / 11.781 gzip; total JS 261.516 / 71.187 gzip.
+- Rodada 3 HTML final: `dist/game.html` contem `modulepreload` para `i18n`, mas nao para `session-client`; ganho principal e menor JS de entrada/parsing, nao menor total transferido.
+- Rodada 3 validacao: `npm run test:roster-sync` OK (`publicLength` 4, `coreLength` 4, `pass` true).
 
 ## Limitacoes da medicao
 
 - Nao houve medicao de Lighthouse/Web Vitals nem Network tab nesta rodada para respeitar a restricao local de evitar Playwright e porque o objetivo da rodada 1 era baseline operacional.
 - Tamanhos de assets em `dist` indicam peso copiado, nao necessariamente bytes baixados na primeira carga. A rodada 2 deve confirmar requisicoes reais no browser/Network ou por servidor estatico.
 - Tempos locais incluem ruido de maquina, cache do sistema e overhead do npm; por isso foram feitas 3 execucoes e registrada media/mediana/melhor valor.
+- Na rodada 3, o total JS gzip subiu de 70.201 para 71.187 bytes por overhead de chunking, e o build ficou mais lento. O ganho aceito foi no chunk de entrada: -113.100 bytes bruto e -29.760 bytes gzip (-42,4%) antes de baixar/executar o shell online completo.

@@ -3,7 +3,6 @@ import { fetchActiveArenaDefinition } from "../Arenas/arena";
 import { applyArenaThemeSelection } from "../Arenas/arena-theme-selection";
 import { loadGameAssets } from "../Engine/assets";
 import { GameApp } from "../Engine/game-app";
-import { OnlineSessionClient } from "../NetCode/session-client";
 
 const root = document.querySelector<HTMLDivElement>("#app");
 
@@ -17,6 +16,7 @@ const activeArena = applyArenaThemeSelection(
 );
 const assets = await loadGameAssets(activeArena.themeId);
 const game = new GameApp(root, assets, activeArena);
+const { OnlineSessionClient } = await import("../NetCode/session-client");
 new OnlineSessionClient(root, game, assets.characterRoster ?? [], activeArena.themeId);
 game.start();
 
