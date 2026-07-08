@@ -212,6 +212,10 @@ export async function fetchActiveArenaDefinition(): Promise<ArenaDefinition> {
     if (!payload?.arena) {
       return createDefaultArenaDefinition();
     }
+    const validation = validateArenaDefinition(payload.arena);
+    if (!validation.ok) {
+      return createDefaultArenaDefinition();
+    }
     return normalizeArenaDefinition(payload.arena);
   } catch {
     return createDefaultArenaDefinition();
