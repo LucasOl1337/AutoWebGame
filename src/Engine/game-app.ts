@@ -178,6 +178,7 @@ const SPAWN_PROTECTION_MS = 2200;
 const PERFECT_START_WINDOW_MS = 320;
 const PERFECT_START_BOOST_MS = 640;
 const PERFECT_START_SPEED_MULTIPLIER = 1.35;
+const PICKUP_SPRINT_BOOST_MS = 420;
 const DANGER_ADRENALINE_ETA_MS = 900;
 const DANGER_ADRENALINE_SPEED_MULTIPLIER = 1.18;
 const SUDDEN_DEATH_ELAPSED_MS = 40_000;
@@ -1535,6 +1536,7 @@ export class GameApp {
     player.spawnProtectionMs = Math.max(0, player.spawnProtectionMs - deltaMs);
     player.flameGuardMs = Math.max(0, player.flameGuardMs - deltaMs);
     player.breakawayBoostMs = Math.max(0, (player.breakawayBoostMs ?? 0) - deltaMs);
+    player.pickupSprintMs = Math.max(0, (player.pickupSprintMs ?? 0) - deltaMs);
     this.updatePerfectStartBurst(player, input.direction, deltaMs);
     this.syncPlayerSkill(player);
     this.advancePlayerSkillTimers(player, deltaMs);
@@ -2053,6 +2055,7 @@ export class GameApp {
       perfectStartWindowMs: PERFECT_START_WINDOW_MS,
       perfectStartBoostMs: 0,
       breakawayBoostMs: 0,
+      pickupSprintMs: 0,
       skill: createDefaultPlayerSkillState(null),
     };
   }
@@ -2310,7 +2313,11 @@ export class GameApp {
 
   private getMoveSpeed(player: PlayerState): number {
     const speed = TILE_SIZE / (this.getMoveDuration(player) / 1000);
-    const hasSpeedBoost = (player.perfectStartBoostMs ?? 0) > 0 || (player.breakawayBoostMs ?? 0) > 0;
+    const hasSpeedBoost = (
+      (player.perfectStartBoostMs ?? 0) > 0
+      || (player.breakawayBoostMs ?? 0) > 0
+      || (player.pickupSprintMs ?? 0) > 0
+    );
     if (hasSpeedBoost) {
       return speed * PERFECT_START_SPEED_MULTIPLIER;
     }
@@ -3137,6 +3144,7 @@ export class GameApp {
         if (powerUp.tile.x === tile.x && powerUp.tile.y === tile.y) {
           powerUp.collected = true;
           applyPowerUpToPlayer(player, powerUp.type);
+          player.pickupSprintMs = Math.max(player.pickupSprintMs ?? 0, PICKUP_SPRINT_BOOST_MS);
           this.soundManager.playOneShot("powerCollect");
         }
       }
@@ -5351,6 +5359,7 @@ export class GameApp {
           })),
           flameGuardMs: Math.round(player.flameGuardMs),
           breakawayBoostMs: Math.round(player.breakawayBoostMs ?? 0),
+          pickupSprintMs: Math.round(player.pickupSprintMs ?? 0),
           spawnProtectionMs: Math.round(player.spawnProtectionMs),
           skill: {
             id: player.skill.id,

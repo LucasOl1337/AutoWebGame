@@ -99,6 +99,48 @@ const fallbackPass = await copyTextWithFallback("fallback-link", {
   document: fallbackDocument,
 });
 
+let legacyTextarea = null;
+const legacyDocument = {
+  body: {
+    appendChild(element) {
+      legacyTextarea = element;
+      element.parentNode = this;
+    },
+    removeChild(element) {
+      element.removedByParent = true;
+    },
+  },
+  createElement(tagName) {
+    if (tagName !== "textarea") {
+      throw new Error(`Unexpected legacy element: ${tagName}`);
+    }
+    return {
+      value: "",
+      style: {},
+      setAttribute(name, value) {
+        this[name] = value;
+      },
+      focusCalled: false,
+      selectCalled: false,
+      removedByParent: false,
+      focus() {
+        this.focusCalled = true;
+      },
+      select() {
+        this.selectCalled = true;
+      },
+    };
+  },
+  execCommand(command) {
+    return command === "copy";
+  },
+};
+
+const legacyFallbackPass = await copyTextWithFallback("legacy-link", {
+  clipboard: null,
+  document: legacyDocument,
+});
+
 const unavailablePass = await copyTextWithFallback("no-copy", {
   clipboard: null,
   document: null,
@@ -112,6 +154,11 @@ const copyPass = clipboardPass
   && fallbackTextarea?.focusCalled
   && fallbackTextarea?.selectCalled
   && fallbackTextarea?.removed
+  && legacyFallbackPass
+  && legacyTextarea?.value === "legacy-link"
+  && legacyTextarea?.focusCalled
+  && legacyTextarea?.selectCalled
+  && legacyTextarea?.removedByParent
   && unavailablePass;
 
 const pass = normalizationPass && urlReadPass && invitePass && copyPass;
@@ -134,6 +181,13 @@ console.log(JSON.stringify({
       focusCalled: fallbackTextarea?.focusCalled,
       selectCalled: fallbackTextarea?.selectCalled,
       removed: fallbackTextarea?.removed,
+    },
+    legacyFallback: {
+      value: legacyTextarea?.value,
+      focusCalled: legacyTextarea?.focusCalled,
+      selectCalled: legacyTextarea?.selectCalled,
+      removedByParent: legacyTextarea?.removedByParent,
+      pass: legacyFallbackPass,
     },
     unavailablePass,
   },

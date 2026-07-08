@@ -452,6 +452,18 @@ function getClipboardFallbackEnvironment(): ClipboardFallbackEnvironment {
   };
 }
 
+function removeClipboardFallbackTextarea(textarea: HTMLTextAreaElement): void {
+  try {
+    if (typeof textarea.remove === "function") {
+      textarea.remove();
+      return;
+    }
+    textarea.parentNode?.removeChild(textarea);
+  } catch {
+    // Cleanup must not turn a successful legacy copy into a failed invite action.
+  }
+}
+
 export async function copyTextWithFallback(
   text: string,
   environment: ClipboardFallbackEnvironment = getClipboardFallbackEnvironment(),
@@ -487,7 +499,7 @@ export async function copyTextWithFallback(
   } catch {
     return false;
   } finally {
-    textarea.remove();
+    removeClipboardFallbackTextarea(textarea);
   }
 }
 
