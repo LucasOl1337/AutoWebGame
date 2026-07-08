@@ -8,7 +8,7 @@ Melhorar progressivamente a performance do AutoWebGame em ate 20 rodadas sequenc
 
 - Rodada concluida: 1/20 - Baseline real
 - Proxima rodada recomendada: 2/20 - Inventario de gargalos
-- Atualizado em: 2026-07-08 11:04 America/Sao_Paulo
+- Atualizado em: 2026-07-08 10:50 America/Sao_Paulo
 
 ## Contexto do repositorio
 
@@ -104,7 +104,7 @@ Maiores arquivos de `dist`:
 
 | Rodada | Agente/data | Area | Arquivos pretendidos | Intencao | Risco de conflito | Risco de regressao | Como medir | Status |
 |---|---|---|---|---|---|---|---|---|
-| 1/20 | Codex 2026-07-08 10:55 | Baseline real | `PerformanceSwarm.md` | Criar coordenacao, baseline, rotas criticas, metricas e budgets iniciais | Baixo: arquivo novo de coordenacao | Baixo: sem codigo runtime | `npm run build` 3x, tamanhos de `dist`, inventario CodeGraph e scripts disponiveis | Concluido |
+| 1/20 | Codex 2026-07-08 10:46 | Baseline real | `PerformanceSwarm.md` | Criar coordenacao, baseline, rotas criticas, metricas e budgets iniciais | Baixo: arquivo novo de coordenacao | Baixo: sem codigo runtime | `npm run build` 3x, tamanhos de `dist`, inventario CodeGraph e scripts disponiveis | Concluido |
 
 ## Historico de rodadas
 
