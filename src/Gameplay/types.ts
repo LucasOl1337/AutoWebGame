@@ -56,6 +56,7 @@ export interface PlayerState {
   perfectStartWindowMs?: number;
   perfectStartBoostMs?: number;
   breakawayBoostMs?: number;
+  pickupSprintMs?: number;
   skill: PlayerSkillState;
 }
 
