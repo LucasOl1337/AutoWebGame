@@ -8,7 +8,7 @@ Melhorar progressivamente a performance do AutoWebGame em ate 20 rodadas sequenc
 
 - Rodada concluida: 3/20 - Frontend bundle e code-splitting
 - Proxima rodada recomendada: 4/20 - Frontend render e hidratacao
-- Atualizado em: 2026-07-08 12:45 America/Sao_Paulo
+- Atualizado em: 2026-07-08 13:09 America/Sao_Paulo
 
 ## Contexto do repositorio
 
@@ -172,7 +172,7 @@ Conclusao da rodada 2: o maior win mensuravel parece estar menos no gzip do bund
 |---|---|---|---|---|---|
 | 1/20 | Concluida | Baseline real | Criado baseline de performance, rotas criticas, budgets iniciais e mapa de arquivos quentes | Build 3x OK; dist 5.676,5 kB; JS gzip 69,22 kB; CSS gzip 10,84 kB; 3 checks OK | `52428aa` |
 | 2/20 | Concluida | Inventario de gargalos | Ranqueados gargalos de bootstrap, audio/assets, landing inline, fontes externas e bundle unico sem alterar runtime | Build 3x OK; dist 5.676,6 kB; JS gzip 67,10 kB; CSS gzip 10,33 kB; assets iniciais provaveis 807,8 kB; SFX preload 663,6 kB; imagens top 872,3 kB e 475,7 kB | `9d801da`, `af2061e`, `ec1394c`, `d4a1456` |
-| 3/20 | Concluida | Frontend bundle/code-splitting | `main.ts` passou a carregar `assets`, `GameApp` e `OnlineSessionClient` via dynamic imports, separando o bootstrap leve dos chunks pesados | Antes: JS unico `game-D26tCmAO.js` 249,36 kB / 67,37 kB gzip. Depois: JS inicial linkado/preloaded 24,49 kB / 9,32 kB gzip; chunks tardios `game-app` 126,46 kB / 33,88 kB gzip e `session-client` 78,23 kB / 18,50 kB gzip. Build 3x OK; mediana 4.660,1 ms | Este commit local |
+| 3/20 | Concluida | Frontend bundle/code-splitting | `main.ts` passou a carregar `assets`, `GameApp` e `OnlineSessionClient` via dynamic imports, separando o bootstrap leve dos chunks pesados; a variante que separava apenas `OnlineSessionClient` foi absorvida por esse split completo | Antes: JS unico `game-D26tCmAO.js` 249,36 kB / 67,37 kB gzip. Depois: JS inicial linkado/preloaded 24,49 kB / 9,32 kB gzip; chunks tardios `game-app` 126,46 kB / 33,88 kB gzip e `session-client` 78,23 kB / 18,50 kB gzip. Build 3x OK; mediana 4.660,1 ms | `4f9975c`, `5d22c4a` |
 
 ## Pendencias
 
@@ -199,6 +199,7 @@ Conclusao da rodada 2: o maior win mensuravel parece estar menos no gzip do bund
 - Rodada 3 depois da mudanca: `npm run build` 3x OK em 4.660,1 ms, 4.505,9 ms e 4.804,9 ms; mediana 4.660,1 ms. JS inicial linkado/preloaded em `dist/game.html`: 24,49 kB bruto / 9,32 kB gzip.
 - Chunks tardios apos rodada 3: `game-app-CX670W2N.js` 126,46 kB / 33,88 kB gzip; `session-client-CXSRhjhs.js` 78,23 kB / 18,50 kB gzip; `assets-CPSO5IMC.js` 5,18 kB / 2,04 kB gzip; `i18n-CKG11rT1.js` 18,54 kB / 6,58 kB gzip.
 - Validacao rodada 3: `npm run compile:esm` OK; `node tests/arena-theme-selection-check.mjs` OK; `npm run test:roster-sync` OK.
+- Variante absorvida da rodada 3: split apenas de `OnlineSessionClient` mediu entrada 146.349 bytes / 40.441 bytes gzip e `session-client` 80.707 bytes / 18.965 bytes gzip; o main oficial manteve split mais agressivo do bootstrap.
 
 ## Limitacoes da medicao
 
@@ -206,6 +207,7 @@ Conclusao da rodada 2: o maior win mensuravel parece estar menos no gzip do bund
 - Tamanhos de assets em `dist` indicam peso copiado, nao necessariamente bytes baixados na primeira carga. A rodada 2 deve confirmar requisicoes reais no browser/Network ou por servidor estatico.
 - Tempos locais incluem ruido de maquina, cache do sistema e overhead do npm; por isso foram feitas 3 execucoes e registrada media/mediana/melhor valor.
 - A rodada 3 mediu payload estatico gerado e links/preloads em HTML, nao Web Vitals em browser real. O ganho de build depois da mudanca provavelmente inclui aquecimento de cache/dependencias e nao deve ser tratado como otimizacao primaria.
+- A variante que separava apenas `OnlineSessionClient` reduzia o chunk de entrada, mas aumentava levemente o total JS gzip por overhead de chunking; foi mantida a abordagem mais agressiva ja integrada no main.
 - Rodada 2 nao usou Network tab nem Chrome tooling; a estimativa de requests iniciais e estatica, derivada dos URLs que os loaders tentam carregar e dos arquivos existentes em `public`.
 - `codegraph status` nesta worktree retornou `Not initialized`; foi usado `DocsDev/codegraph/inventory.md` existente como referencia estrutural e medicoes diretas para HTML/CSS/JS/assets.
 - O tempo de build da rodada 2 nao deve ser interpretado isoladamente como regressao contra a rodada 1, pois a worktree estava sem dependencias e o ambiente/cache diferiu.
