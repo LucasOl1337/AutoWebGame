@@ -1,0 +1,115 @@
+{
+  "brand": {
+    "name": "AutoWebGame",
+    "vendor": "BOMBA",
+    "footer": "BROWSER ARENA GAME",
+    "masthead": "NOTAS DO PATCH"
+  },
+  "version": "v0.2.4",
+  "date": "8 de julho de 2026 - Patch oficial",
+  "title": "Comercial, confianca e entrada mais rapida",
+  "cloud": {
+    "latestReleaseBeforePatch": "v0.2.3",
+    "latestReleasePublishedAtUtc": "2026-07-07T17:35:06Z",
+    "originMainBeforePatch": "3e04149bb65234d12d33ec55571be1cf0680e178",
+    "tagBeforePatch": "6a7cf7016cc29f390c4ac2facfad08b0936d3b54",
+    "localHeadBeforePatchNotes": "3f1f5ed34a5a213cafa559a005089bff5230d503",
+    "commitsAheadOfOriginBeforePatch": 46
+  },
+  "categories": [
+    {
+      "label": "Comercial",
+      "title": "BILLING",
+      "items": [
+        {
+          "name": "Checkout readiness",
+          "desc": "Status, checkout e webhook preparados no Worker",
+          "tag": "BILLING"
+        },
+        {
+          "name": "Plano na landing",
+          "desc": "Painel de plano e eventos comerciais no cliente",
+          "tag": "FUNNEL"
+        }
+      ]
+    },
+    {
+      "label": "Confianca",
+      "title": "LEGAL",
+      "items": [
+        {
+          "name": "Trust center",
+          "desc": "Secao de confianca e FAQ na landing publica",
+          "tag": "TRUST"
+        },
+        {
+          "name": "Paginas legais",
+          "desc": "Privacidade e termos publicados no build",
+          "tag": "LEGAL"
+        }
+      ]
+    },
+    {
+      "label": "Performance",
+      "title": "PERFORMANCE",
+      "items": [
+        {
+          "name": "Split de bootstrap",
+          "desc": "Chunks pesados carregam depois da entrada no jogo",
+          "tag": "BUNDLE"
+        },
+        {
+          "name": "SFX e sprites sob demanda",
+          "desc": "Audio e walk cycles saem do caminho bloqueante",
+          "tag": "ASSETS"
+        },
+        {
+          "name": "Cache imutavel",
+          "desc": "Worker aplica cache longo a assets versionados",
+          "tag": "CACHE"
+        }
+      ]
+    },
+    {
+      "label": "Estabilidade",
+      "title": "STABILITY",
+      "items": [
+        {
+          "name": "Arena e sprites fallback",
+          "desc": "Payload invalido e pacote vazio deixam fallback seguro",
+          "tag": "FALLBACK"
+        },
+        {
+          "name": "Telemetry retry",
+          "desc": "Eventos voltam para a fila apos falha temporaria",
+          "tag": "ANALYTICS"
+        },
+        {
+          "name": "Setup online",
+          "desc": "Etapas de fila/sala e cancelamento previsiveis",
+          "tag": "LOBBY"
+        }
+      ]
+    }
+  ],
+  "validation": [
+    "npm run test:asset-loader-walk-cycle-warm",
+    "npm run test:setup-loading-brief",
+    "npm run test:billing-commercial",
+    "npm run test:account-username",
+    "npm run test:lobby-rules",
+    "npm run test:room-invite-link",
+    "node tests/sound-manager-lazy-load-check.mjs",
+    "npm run test:online-audio",
+    "node --check worker/index.js",
+    "npm run build",
+    "git diff --cached --check",
+    "npm run test:worker-cache-headers",
+    "git diff --check",
+    "codegraph status ."
+  ],
+  "artifacts": [
+    "DocsDev/releases/release-v0.2.4.md",
+    "DocsDev/releases/release-v0.2.4.json"
+  ]
+}
