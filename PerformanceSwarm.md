@@ -110,7 +110,7 @@ Maiores arquivos de `dist`:
 
 | Rodada | Status | Area | Entrega | Evidencia | Commit |
 |---|---|---|---|---|---|
-| 1/20 | Concluida | Baseline real | Criado baseline de performance, rotas criticas, budgets iniciais e mapa de arquivos quentes | Build 3x OK; dist 5.676,5 kB; JS gzip 69,22 kB; CSS gzip 10,84 kB; 3 checks OK | Pendente ate commit local |
+| 1/20 | Concluida | Baseline real | Criado baseline de performance, rotas criticas, budgets iniciais e mapa de arquivos quentes | Build 3x OK; dist 5.676,5 kB; JS gzip 69,22 kB; CSS gzip 10,84 kB; 3 checks OK | `52428aa` |
 
 ## Pendencias
 
