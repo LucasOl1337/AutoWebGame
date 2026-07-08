@@ -1,0 +1,30 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+
+const root = process.cwd();
+const pagePath = path.join(root, "how-to-play.html");
+const landingPath = path.join(root, "index.html");
+const vitePath = path.join(root, "vite.config.ts");
+const assetPath = path.join(root, "public", "Assets", "UiLayouts", "how-to-play-arena.png");
+
+const pageHtml = fs.readFileSync(pagePath, "utf8");
+const landingHtml = fs.readFileSync(landingPath, "utf8");
+const viteConfig = fs.readFileSync(vitePath, "utf8");
+const assetStats = fs.statSync(assetPath);
+
+assert.match(pageHtml, /<title>Como jogar \| BOMBA PvP<\/title>/);
+assert.match(pageHtml, /<h1>Como jogar BOMBA PvP<\/h1>/);
+assert.match(pageHtml, /href="\/game"/);
+assert.match(pageHtml, /src="\/Assets\/UiLayouts\/how-to-play-arena\.png"/);
+assert.match(pageHtml, /<kbd>W<\/kbd><kbd>A<\/kbd><kbd>S<\/kbd><kbd>D<\/kbd>/);
+assert.match(pageHtml, /id="objetivo"/);
+assert.match(pageHtml, /id="controles"/);
+assert.match(pageHtml, /id="arena"/);
+assert.match(pageHtml, /id="plano"/);
+
+assert.match(landingHtml, /href="\/how-to-play\.html">Como jogar<\/a>/);
+assert.match(viteConfig, /howToPlay:\s*"\.\/how-to-play\.html"/);
+assert.ok(assetStats.size > 100_000, "how-to-play banner should be a real generated image asset");
+
+console.log("How-to-play page contract ok");

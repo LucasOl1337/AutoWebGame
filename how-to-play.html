@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Como jogar | BOMBA PvP</title>
+    <meta name="description" content="Guia rapido de BOMBA PvP: objetivo, controles, leitura da arena, bombas, flames, powerups e primeiros passos para jogar melhor." />
+    <link rel="icon" href="/Assets/UiLayouts/ICON.png" />
+    <style>
+      :root {
+        --bg: #050608;
+        --panel: #10141a;
+        --panel-strong: #161d24;
+        --line: rgba(223, 235, 242, 0.14);
+        --text: #f4f7fb;
+        --muted: #bdcbd7;
+        --soft: #7f8d9c;
+        --green: #00e5a0;
+        --gold: #f4b84a;
+        --red: #ff5f57;
+        --blue: #5eb7ff;
+        --purple: #bb83ff;
+        --sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --serif: Georgia, "Times New Roman", serif;
+      }
+
+      * { box-sizing: border-box; }
+
+      html { scroll-behavior: smooth; }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 10% 8%, rgba(0, 229, 160, 0.14), transparent 28rem),
+          linear-gradient(180deg, #050608 0%, #080b0f 44%, #050608 100%);
+        color: var(--text);
+        font-family: var(--sans);
+        line-height: 1.6;
+      }
+
+      a { color: inherit; text-decoration: none; }
+
+      a:hover { color: var(--green); }
+
+      .topbar,
+      main,
+      footer {
+        width: min(1120px, calc(100% - 40px));
+        margin: 0 auto;
+      }
+
+      .topbar {
+        min-height: 76px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .brand {
+        font-family: var(--serif);
+        font-weight: 900;
+        letter-spacing: 0.04em;
+      }
+
+      .nav {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 16px;
+        color: var(--muted);
+        font-size: 0.8rem;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .nav-cta,
+      .hero-cta {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 42px;
+        border-radius: 7px;
+        background: var(--green);
+        color: #04100c;
+        font-weight: 900;
+        padding: 0 16px;
+      }
+
+      .nav-cta:hover,
+      .hero-cta:hover {
+        color: #04100c;
+        background: #6dffd2;
+      }
+
+      .hero {
+        min-height: min(680px, calc(100svh - 76px));
+        display: grid;
+        grid-template-columns: minmax(0, 0.92fr) minmax(360px, 1.08fr);
+        gap: 34px;
+        align-items: center;
+        padding: 34px 0 64px;
+      }
+
+      .kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--gold);
+        font-size: 0.78rem;
+        font-weight: 900;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .kicker::before {
+        content: "";
+        width: 28px;
+        height: 2px;
+        background: var(--gold);
+      }
+
+      h1 {
+        margin: 18px 0 18px;
+        font-family: var(--serif);
+        font-size: 5.25rem;
+        line-height: 0.94;
+      }
+
+      .lead {
+        max-width: 620px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 1.08rem;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 28px;
+      }
+
+      .hero-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 42px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        color: var(--text);
+        font-weight: 800;
+        padding: 0 16px;
+      }
+
+      .hero-art {
+        margin: 0;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--panel);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.36);
+      }
+
+      .hero-art img {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        object-fit: cover;
+      }
+
+      .hero-art figcaption {
+        padding: 12px 14px;
+        color: var(--soft);
+        font-size: 0.82rem;
+      }
+
+      .quick-strip {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .quick-strip a {
+        min-height: 92px;
+        padding: 18px;
+        border-right: 1px solid var(--line);
+      }
+
+      .quick-strip a:last-child { border-right: 0; }
+
+      .quick-strip strong {
+        display: block;
+        margin-bottom: 5px;
+        color: var(--text);
+        font-size: 0.92rem;
+      }
+
+      .quick-strip span {
+        color: var(--soft);
+        font-size: 0.8rem;
+      }
+
+      section {
+        padding: 70px 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .section-head {
+        max-width: 720px;
+        margin-bottom: 28px;
+      }
+
+      .section-label {
+        color: var(--green);
+        font-size: 0.76rem;
+        font-weight: 900;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      h2 {
+        margin: 10px 0 0;
+        font-family: var(--serif);
+        font-size: 3.35rem;
+        line-height: 1;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .tile,
+      .step,
+      .control-row {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(16, 20, 26, 0.74);
+      }
+
+      .tile {
+        min-height: 168px;
+        padding: 18px;
+      }
+
+      .tile h3,
+      .step h3 {
+        margin: 0 0 8px;
+        font-size: 1rem;
+      }
+
+      .tile p,
+      .step p,
+      .control-row p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.94rem;
+      }
+
+      .accent-red { color: var(--red); }
+      .accent-gold { color: var(--gold); }
+      .accent-blue { color: var(--blue); }
+      .accent-purple { color: var(--purple); }
+      .accent-green { color: var(--green); }
+
+      .control-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .control-row {
+        display: grid;
+        grid-template-columns: minmax(170px, 0.36fr) 1fr;
+        gap: 16px;
+        align-items: center;
+        padding: 16px 18px;
+      }
+
+      kbd {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 34px;
+        min-height: 30px;
+        margin-right: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-bottom-color: rgba(0, 0, 0, 0.55);
+        border-radius: 6px;
+        background: var(--panel-strong);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 0.82rem;
+        font-weight: 900;
+      }
+
+      .steps {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        counter-reset: step;
+      }
+
+      .step {
+        min-height: 210px;
+        padding: 18px;
+        position: relative;
+      }
+
+      .step::before {
+        counter-increment: step;
+        content: counter(step, decimal-leading-zero);
+        display: block;
+        margin-bottom: 24px;
+        color: var(--gold);
+        font-family: var(--serif);
+        font-size: 2.1rem;
+        font-weight: 900;
+      }
+
+      .play-panel {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 22px;
+        align-items: center;
+        padding: 26px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: linear-gradient(135deg, rgba(0, 229, 160, 0.14), rgba(244, 184, 74, 0.12));
+      }
+
+      .play-panel h2 {
+        margin: 0 0 8px;
+        font-size: 2.65rem;
+      }
+
+      .play-panel p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      footer {
+        padding: 34px 0 48px;
+        color: var(--soft);
+        font-size: 0.84rem;
+      }
+
+      footer p {
+        margin: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+
+      footer a { color: var(--muted); }
+
+      @media (max-width: 900px) {
+        .hero {
+          min-height: 0;
+          grid-template-columns: 1fr;
+          padding-top: 28px;
+        }
+
+        .quick-strip,
+        .grid,
+        .steps {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 640px) {
+        .topbar {
+          align-items: flex-start;
+          flex-direction: column;
+          padding: 20px 0;
+        }
+
+        .nav {
+          width: 100%;
+          justify-content: flex-start;
+          overflow-x: auto;
+          padding-bottom: 4px;
+        }
+
+        .quick-strip,
+        .grid,
+        .steps,
+        .control-row,
+        .play-panel {
+          grid-template-columns: 1fr;
+        }
+
+        .quick-strip a {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .quick-strip a:last-child { border-bottom: 0; }
+
+        section { padding: 52px 0; }
+
+        h1 { font-size: 3.2rem; }
+        h2 { font-size: 2.25rem; }
+        .play-panel h2 { font-size: 2rem; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/">BOMBA PvP</a>
+      <nav class="nav" aria-label="Navegacao principal">
+        <a href="/">Home</a>
+        <a href="#controles">Controles</a>
+        <a href="#plano">Plano</a>
+        <a href="/game" class="nav-cta">Jogar</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" id="top">
+        <div>
+          <span class="kicker">Guia rapido</span>
+          <h1>Como jogar BOMBA PvP</h1>
+          <p class="lead">Aprenda o ciclo essencial antes de entrar na arena: mover, plantar bombas, ler flames, pegar powerups e sobreviver ao caos sem desperdicar as primeiras rodadas.</p>
+          <div class="hero-actions">
+            <a href="/game" class="hero-cta">Jogar agora</a>
+            <a href="#objetivo" class="hero-link">Ver fundamentos</a>
+          </div>
+        </div>
+        <figure class="hero-art">
+          <img src="/Assets/UiLayouts/how-to-play-arena.png" alt="Arena ilustrada com personagens, bombas, crates, powerups e flames em linhas retas" />
+          <figcaption>Bombas explodem em cruz: leia linhas, bloqueios e rotas antes de avancar.</figcaption>
+        </figure>
+      </section>
+
+      <nav class="quick-strip" aria-label="Atalhos do guia">
+        <a href="#objetivo">
+          <strong>Objetivo</strong>
+          <span>Sobreviva, prenda rivais e controle espaco.</span>
+        </a>
+        <a href="#controles">
+          <strong>Controles</strong>
+          <span>Movimento, bomba, detonacao e ultimate.</span>
+        </a>
+        <a href="#arena">
+          <strong>Arena</strong>
+          <span>Crates, paredes, flames e powerups.</span>
+        </a>
+        <a href="#plano">
+          <strong>Primeira partida</strong>
+          <span>Um plano pratico em quatro passos.</span>
+        </a>
+      </nav>
+
+      <section id="objetivo">
+        <div class="section-head">
+          <span class="section-label">01 - Objetivo</span>
+          <h2>Ganhe espaco antes de buscar eliminacao.</h2>
+        </div>
+        <div class="grid">
+          <article class="tile">
+            <h3 class="accent-green">Abra rotas</h3>
+            <p>Use bombas para quebrar crates e criar caminhos. Rotas abertas valem mais que correr direto para o centro sem saida.</p>
+          </article>
+          <article class="tile">
+            <h3 class="accent-red">Prenda rivais</h3>
+            <p>Uma bomba boa corta fuga. O alvo fica perigoso quando voce limita duas saidas e forca ele a escolher tarde.</p>
+          </article>
+          <article class="tile">
+            <h3 class="accent-gold">Jogue a rodada</h3>
+            <p>Powerups acumulam vantagem. Mais alcance, velocidade e bombas transformam pequenos controles em vitoria.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="controles">
+        <div class="section-head">
+          <span class="section-label">02 - Controles</span>
+          <h2>Comandos diretos para entrar sem procurar menu.</h2>
+        </div>
+        <div class="control-list">
+          <div class="control-row">
+            <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div>
+            <p>Mover o personagem local principal. Em teclado alternativo, as setas tambem cobrem movimento.</p>
+          </div>
+          <div class="control-row">
+            <div><kbd>Space</kbd></div>
+            <p>Plantar bomba no tile atual. Saia da linha reta antes do fuse terminar.</p>
+          </div>
+          <div class="control-row">
+            <div><kbd>E</kbd></div>
+            <p>Detonar bomba remota quando o powerup estiver ativo. Use para surpreender em vez de esperar o fuse.</p>
+          </div>
+          <div class="control-row">
+            <div><kbd>Q</kbd></div>
+            <p>Ativar a habilidade do personagem quando estiver carregada. Cada lutador muda uma situacao diferente.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="arena">
+        <div class="section-head">
+          <span class="section-label">03 - Leitura da arena</span>
+          <h2>O tabuleiro fala antes da explosao.</h2>
+        </div>
+        <div class="grid">
+          <article class="tile">
+            <h3 class="accent-blue">Paredes param flames</h3>
+            <p>Blocos fixos cortam a explosao. Use-os como abrigo e como ancora para cercar corredores.</p>
+          </article>
+          <article class="tile">
+            <h3 class="accent-gold">Crates viram recompensa</h3>
+            <p>Caixas podem abrir caminho e revelar powerups. Quebre com plano de fuga pronto.</p>
+          </article>
+          <article class="tile">
+            <h3 class="accent-red">Flames cruzam linhas</h3>
+            <p>Explosao segue horizontal e vertical. Diagonais parecem perto, mas nao queimam sem linha direta.</p>
+          </article>
+          <article class="tile">
+            <h3 class="accent-purple">Ultimates mudam leitura</h3>
+            <p>Blink, dash, beam e surge quebram expectativas. Guarde habilidade para sair de prisao ou fechar abate.</p>
+          </article>
+          <article class="tile">
+            <h3 class="accent-green">Powerups escalam</h3>
+            <p>Velocidade e alcance aumentam pressao. Pegue o que abre rota segura, nao apenas o item mais perto.</p>
+          </article>
+          <article class="tile">
+            <h3 class="accent-blue">Som e pausa importam</h3>
+            <p>Use sinais visuais e audio como aviso. Se perder foco, volte com calma antes de plantar outra bomba.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="plano">
+        <div class="section-head">
+          <span class="section-label">04 - Primeira partida</span>
+          <h2>Um plano simples para os primeiros 90 segundos.</h2>
+        </div>
+        <div class="steps">
+          <article class="step">
+            <h3>Quebre uma lateral</h3>
+            <p>Comece abrindo rota perto do spawn e fuja pelo caminho oposto ao fuse.</p>
+          </article>
+          <article class="step">
+            <h3>Pegue um powerup seguro</h3>
+            <p>Priorize item com saida limpa. Nao atravesse linha de bomba por pressa.</p>
+          </article>
+          <article class="step">
+            <h3>Observe o rival</h3>
+            <p>Plante onde ele quer passar, nao onde ele esta agora.</p>
+          </article>
+          <article class="step">
+            <h3>Use ultimate para decidir</h3>
+            <p>Guarde a habilidade para escapar de uma armadilha ou garantir o ultimo bloqueio.</p>
+          </article>
+        </div>
+      </section>
+
+      <section aria-label="Comecar a jogar">
+        <div class="play-panel">
+          <div>
+            <h2>Entre na arena com o plano na cabeca.</h2>
+            <p>Comece contra bots para testar bomba, fuga e alcance; depois va para lobby online quando o ritmo estiver natural.</p>
+          </div>
+          <a href="/game" class="hero-cta">Abrir jogo</a>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        <strong>BOMBA PvP</strong>
+        <span>-</span>
+        <a href="/">Home</a>
+        <span>-</span>
+        <a href="/game">Jogar agora</a>
+        <span>-</span>
+        <a href="/privacy.html">Privacidade</a>
+        <span>-</span>
+        <a href="/terms.html">Termos</a>
+      </p>
+    </footer>
+  </body>
+</html>
