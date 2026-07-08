@@ -193,6 +193,7 @@ const HUD_CRITICAL_DANGER_MS = 1_200;
 const MATCH_RESULT_RESTART_DELAY_MS = 900;
 const CANVAS_BACKBUFFER_SCALE = 2;
 const CANVAS_VIEWPORT_PADDING = 32;
+const POWER_UP_PICKUP_NOTICE_MS = 2200;
 const PLAYER_SPRITE_HEIGHT_SCALE = 1.45;
 const PLAYER_SPRITE_MAX_WIDTH_SCALE = 1.2;
 const CANVAS_UI_PANEL_BG = "rgba(8, 8, 16, 0.82)";
@@ -316,6 +317,8 @@ interface HudSkillSlot {
   acquired: boolean;
   keyLabel: string | null;
   valueLabel: string;
+  recentlyCollected: boolean;
+  pickupProgress: number;
 }
 
 interface HudPlayerStatus {
@@ -328,6 +331,14 @@ interface HudPlayerStatus {
 interface CrateBreakAnimation {
   tile: TileCoord;
   elapsedMs: number;
+}
+
+interface PowerUpPickupNotice {
+  playerId: PlayerId;
+  type: SkillPowerUpType;
+  valueLabel: string;
+  elapsedMs: number;
+  remainingMs: number;
 }
 
 interface PlayerDeathAnimationState {
@@ -423,6 +434,7 @@ export class GameApp {
   private botPendingReverseFrames: Record<PlayerId, number> = createNumberPlayerRecord(0);
   private animationClockMs = 0;
   private crateBreakAnimations: CrateBreakAnimation[] = [];
+  private powerUpPickupNotices: PowerUpPickupNotice[] = [];
   private playerDeathAnimations: Record<PlayerId, PlayerDeathAnimationState | null> = createPlayerRecord(() => null);
   private suddenDeathActive = false;
   private suddenDeathTickMs = SUDDEN_DEATH_TICK_MS;
@@ -1889,6 +1901,7 @@ export class GameApp {
     this.flames = [];
     this.magicBeams = [];
     this.crateBreakAnimations = [];
+    this.powerUpPickupNotices = [];
     this.playerDeathAnimations = createPlayerRecord(() => null);
     this.nextBombId = 1;
     this.roundTimeMs = ROUND_DURATION_MS;
@@ -2933,6 +2946,14 @@ export class GameApp {
   }
 
   private updateVisualEffects(deltaMs: number): void {
+    if (this.powerUpPickupNotices.length > 0) {
+      for (const notice of this.powerUpPickupNotices) {
+        notice.elapsedMs += deltaMs;
+        notice.remainingMs -= deltaMs;
+      }
+      this.powerUpPickupNotices = this.powerUpPickupNotices.filter((notice) => notice.remainingMs > 0);
+    }
+
     if (this.crateBreakAnimations.length > 0) {
       for (const effect of this.crateBreakAnimations) {
         effect.elapsedMs += deltaMs;
@@ -3153,6 +3174,7 @@ export class GameApp {
           powerUp.collected = true;
           applyPowerUpToPlayer(player, powerUp.type);
           player.pickupSprintMs = Math.max(player.pickupSprintMs ?? 0, PICKUP_SPRINT_BOOST_MS);
+          this.addPowerUpPickupNotice(id, powerUp.type);
           this.soundManager.playOneShot("powerCollect");
         }
       }
@@ -3737,6 +3759,13 @@ export class GameApp {
     const statLine = `B${player.maxBombs} F${player.flameRange} S${player.speedLevel} Q${player.shortFuseLevel}`;
     const status = this.getPlayerHudStatus(playerId);
     const compact = width < 230;
+    const recentPickup = this.getLatestPowerUpPickupNotice(playerId);
+    const subtitleText = recentPickup
+      ? this.formatPowerUpPickupNotice(recentPickup, compact ? 8 : 12)
+      : this.shortenCharacterName(this.getCharacterLabel(playerId, compact ? 8 : 12), compact ? 8 : 12);
+    const subtitleColor = recentPickup
+      ? getPowerUpDefinition(recentPickup.type).tint
+      : CANVAS_UI_TEXT;
     const allSkillSlots = this.getHudSkillSlots(playerId);
     const skillSlots = compact
       ? allSkillSlots.filter((slot) => (
@@ -3753,10 +3782,10 @@ export class GameApp {
     this.drawHudText(title, x + 6, y + 10, palette.primary, CANVAS_UI_SHADOW);
     this.ctx.font = "500 6px Inter";
     this.drawHudText(
-      this.shortenCharacterName(this.getCharacterLabel(playerId, compact ? 8 : 12), compact ? 8 : 12),
+      subtitleText,
       x + 6,
       y + 18,
-      CANVAS_UI_TEXT,
+      subtitleColor,
       CANVAS_UI_SHADOW,
     );
     this.ctx.textAlign = "right";
@@ -3841,26 +3870,63 @@ export class GameApp {
   }
 
   private getHudSkillSlots(playerId: PlayerId): HudSkillSlot[] {
+    return SKILL_POWER_UP_TYPES.map((type) => this.getHudSkillSlot(playerId, type));
+  }
+
+  private getHudSkillSlot(playerId: PlayerId, type: SkillPowerUpType): HudSkillSlot {
     const player = this.players[playerId];
     const detonateKeyLabel = this.getDetonateHudKeyLabel(playerId);
+    const rawLevel = getPowerUpLevel(player, type);
+    const level = type === "bomb-up" || type === "flame-up"
+      ? Math.max(0, rawLevel - 1)
+      : rawLevel;
+    const valueLabel = type === "remote-up"
+      ? (level > 0 ? "ON" : "--")
+      : `x${level}`;
+    const pickupNotice = this.getPowerUpPickupNotice(playerId, type);
 
-    return SKILL_POWER_UP_TYPES.map((type) => {
-      const rawLevel = getPowerUpLevel(player, type);
-      const level = type === "bomb-up" || type === "flame-up"
-        ? Math.max(0, rawLevel - 1)
-        : rawLevel;
-      const valueLabel = type === "remote-up"
-        ? (level > 0 ? "ON" : "--")
-        : `x${level}`;
+    return {
+      type,
+      level,
+      acquired: level > 0,
+      keyLabel: type === "remote-up" && level > 0 ? detonateKeyLabel : null,
+      valueLabel,
+      recentlyCollected: Boolean(pickupNotice),
+      pickupProgress: pickupNotice
+        ? Math.max(0, Math.min(1, pickupNotice.remainingMs / POWER_UP_PICKUP_NOTICE_MS))
+        : 0,
+    } satisfies HudSkillSlot;
+  }
 
-      return {
-        type,
-        level,
-        acquired: level > 0,
-        keyLabel: type === "remote-up" && level > 0 ? detonateKeyLabel : null,
-        valueLabel,
-      } satisfies HudSkillSlot;
-    });
+  private addPowerUpPickupNotice(playerId: PlayerId, type: SkillPowerUpType): void {
+    const slot = this.getHudSkillSlot(playerId, type);
+    const notice: PowerUpPickupNotice = {
+      playerId,
+      type,
+      valueLabel: slot.valueLabel,
+      elapsedMs: 0,
+      remainingMs: POWER_UP_PICKUP_NOTICE_MS,
+    };
+    this.powerUpPickupNotices = [
+      notice,
+      ...this.powerUpPickupNotices.filter((entry) => !(entry.playerId === playerId && entry.type === type)),
+    ].slice(0, 6);
+  }
+
+  private getLatestPowerUpPickupNotice(playerId: PlayerId): PowerUpPickupNotice | null {
+    return this.powerUpPickupNotices.find((notice) => notice.playerId === playerId) ?? null;
+  }
+
+  private getPowerUpPickupNotice(playerId: PlayerId, type: SkillPowerUpType): PowerUpPickupNotice | null {
+    return this.powerUpPickupNotices.find((notice) => (
+      notice.playerId === playerId && notice.type === type
+    )) ?? null;
+  }
+
+  private formatPowerUpPickupNotice(notice: PowerUpPickupNotice, maxLength: number): string {
+    const definition = getPowerUpDefinition(notice.type);
+    const label = maxLength <= 8 ? definition.shortLabel : definition.label;
+    return this.shortenCharacterName(`+${label} ${notice.valueLabel}`, maxLength);
   }
 
   private getDetonateHudKeyLabel(playerId: PlayerId): string | null {
@@ -3932,8 +3998,19 @@ export class GameApp {
     const tint = slot.acquired ? definition.tint : "rgba(180, 167, 147, 0.4)";
     this.ctx.fillStyle = slot.acquired ? CANVAS_UI_PANEL_BG_STRONG : CANVAS_UI_PANEL_BG_SOFT;
     this.ctx.fillRect(x, y, width, height);
-    this.ctx.strokeStyle = slot.acquired ? tint : CANVAS_UI_BORDER;
+    if (slot.recentlyCollected) {
+      const pulse = 0.12 + slot.pickupProgress * 0.24;
+      this.ctx.globalAlpha = pulse;
+      this.ctx.fillStyle = definition.tint;
+      this.ctx.fillRect(x, y, width, height);
+      this.ctx.globalAlpha = 1;
+    }
+    this.ctx.strokeStyle = slot.recentlyCollected
+      ? definition.tint
+      : (slot.acquired ? tint : CANVAS_UI_BORDER);
+    this.ctx.lineWidth = slot.recentlyCollected ? 1.5 : 1;
     this.ctx.strokeRect(x + 0.5, y + 0.5, Math.max(1, width - 1), Math.max(1, height - 1));
+    this.ctx.lineWidth = 1;
 
     const icon = this.assets.powerUps[slot.type];
     if (icon) {
@@ -5370,6 +5447,7 @@ export class GameApp {
         const player = this.players[id];
         const tile = this.getTileFromPosition(player.position);
         const pixel = this.getPlayerPixelPosition(player);
+        const recentPowerUpPickup = this.getLatestPowerUpPickupNotice(id);
         return {
           id: player.id,
           name: player.name,
@@ -5406,7 +5484,15 @@ export class GameApp {
             level: slot.level,
             value: slot.valueLabel,
             key: slot.keyLabel,
+            recentlyCollected: slot.recentlyCollected,
           })),
+          recentPowerUpPickup: recentPowerUpPickup
+            ? {
+                type: recentPowerUpPickup.type,
+                value: recentPowerUpPickup.valueLabel,
+                remainingMs: Math.round(recentPowerUpPickup.remainingMs),
+              }
+            : null,
           flameGuardMs: Math.round(player.flameGuardMs),
           breakawayBoostMs: Math.round(player.breakawayBoostMs ?? 0),
           pickupSprintMs: Math.round(player.pickupSprintMs ?? 0),
