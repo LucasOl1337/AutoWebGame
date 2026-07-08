@@ -201,6 +201,8 @@ const PERFECT_START_SPEED_MULTIPLIER = 1.35;
 const PICKUP_SPRINT_BOOST_MS = 420;
 const DANGER_ADRENALINE_ETA_MS = 900;
 const DANGER_ADRENALINE_SPEED_MULTIPLIER = 1.18;
+const SPEED_SPARK_TRAIL_ACTIVE_ALPHA = 0.72;
+const SPEED_SPARK_TRAIL_PASSIVE_ALPHA = 0.42;
 const SUDDEN_DEATH_ELAPSED_MS = 40_000;
 const SUDDEN_DEATH_START_MS = ROUND_DURATION_MS - SUDDEN_DEATH_ELAPSED_MS;
 const SUDDEN_DEATH_IMPACT_LINGER_MS = 180;
@@ -298,6 +300,8 @@ function createHeadlessCanvas(): {
     strokeText: noop,
     save: noop,
     restore: noop,
+    translate: noop,
+    rotate: noop,
     createLinearGradient: () => ({ addColorStop: noop }),
   } as unknown as CanvasRenderingContext2D;
   fakeContext.imageSmoothingEnabled = false;
@@ -4824,6 +4828,59 @@ export class GameApp {
     this.ctx.restore();
   }
 
+  private isSpeedSparkTrailActive(player: PlayerState, moving: boolean): boolean {
+    if (!player.active || !player.alive || !moving) {
+      return false;
+    }
+    return player.speedLevel > 0
+      || (player.perfectStartBoostMs ?? 0) > 0
+      || (player.breakawayBoostMs ?? 0) > 0
+      || (player.pickupSprintMs ?? 0) > 0
+      || this.hasDangerAdrenalineStep(player);
+  }
+
+  private getSpeedSparkTrailAlpha(player: PlayerState): number {
+    const hasTimedBoost = (player.perfectStartBoostMs ?? 0) > 0
+      || (player.breakawayBoostMs ?? 0) > 0
+      || (player.pickupSprintMs ?? 0) > 0
+      || this.hasDangerAdrenalineStep(player);
+    const baseAlpha = hasTimedBoost ? SPEED_SPARK_TRAIL_ACTIVE_ALPHA : SPEED_SPARK_TRAIL_PASSIVE_ALPHA;
+    return Math.max(0.32, Math.min(0.86, baseAlpha + Math.sin(this.animationClockMs / 90) * 0.06));
+  }
+
+  private drawSpeedSparkTrail(
+    player: PlayerState,
+    x: number,
+    y: number,
+    renderDirection: Direction,
+  ): void {
+    const sprite = this.assets.effects?.speedSparkTrail;
+    if (!sprite) {
+      return;
+    }
+
+    const direction = player.lastMoveDirection ?? renderDirection;
+    const delta = directionDelta[direction];
+    const angle: Record<Direction, number> = {
+      right: 0,
+      down: Math.PI / 2,
+      left: Math.PI,
+      up: -Math.PI / 2,
+    };
+    const trailWidth = TILE_SIZE * 1.36;
+    const trailHeight = TILE_SIZE * 0.94;
+    const centerX = x + TILE_SIZE * 0.5 - delta.x * TILE_SIZE * 0.24;
+    const centerY = y + TILE_SIZE * 0.58 - delta.y * TILE_SIZE * 0.24;
+
+    this.ctx.save();
+    this.ctx.globalAlpha = this.getSpeedSparkTrailAlpha(player);
+    this.ctx.globalCompositeOperation = "lighter";
+    this.ctx.translate(centerX, centerY);
+    this.ctx.rotate(angle[direction]);
+    this.ctx.drawImage(sprite, -trailWidth * 0.74, -trailHeight * 0.5, trailWidth, trailHeight);
+    this.ctx.restore();
+  }
+
   private drawPlayer(player: PlayerState): void {
     const existingDeathState = this.playerDeathAnimations[player.id];
     if (!player.active && !existingDeathState) {
@@ -4879,6 +4936,10 @@ export class GameApp {
     let sprite = deathSprite ?? castSprite ?? movementSprite ?? spriteForDirection(baseSprites, renderDirection);
     if (!sprite || !this.getSpriteTrimBounds(sprite)) {
       sprite = this.getRenderableSprite(baseSprites, renderDirection);
+    }
+
+    if (this.isSpeedSparkTrailActive(player, moving)) {
+      this.drawSpeedSparkTrail(player, x, y, renderDirection);
     }
 
     this.ctx.fillStyle = "rgba(10, 8, 7, 0.32)";

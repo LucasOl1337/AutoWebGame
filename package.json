@@ -95,6 +95,7 @@
     "test:shield-breakaway": "npm run compile:esm && node tests/shield-breakaway-burst-check.mjs",
     "test:pickup-sprint": "npm run compile:esm && node tests/pickup-sprint-check.mjs",
     "test:pickup-chain": "npm run compile:esm && node tests/pickup-chain-guard-check.mjs",
+    "test:speed-spark-trail": "npm run compile:esm && node tests/speed-spark-trail-check.mjs",
     "test:shield-block-sfx": "npm run compile:esm && node tests/shield-block-sfx-check.mjs",
     "test:powerup-hud": "npm run compile:esm && node tests/powerup-hud-slots-check.mjs",
     "test:powerup-drop-rate": "npm run compile:esm && node tests/powerup-drop-rate-check.mjs",
