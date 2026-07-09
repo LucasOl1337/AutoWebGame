@@ -453,6 +453,11 @@ export function resolveManualLobbyJoinCode(roomCode: string | null | undefined):
   return normalizedRoomCode || null;
 }
 
+export function resolvePastedLobbyJoinCode(roomCode: string | null | undefined): string | null {
+  const normalizedRoomCode = resolveManualLobbyJoinCode(roomCode);
+  return normalizedRoomCode?.length === 6 ? normalizedRoomCode : null;
+}
+
 export function readRoomCodeFromUrl(href: string | null | undefined): string | null {
   if (!href) {
     return null;
@@ -909,6 +914,16 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     });
     this.elements.lobbyCodeForm.addEventListener("submit", (event) => {
       event.preventDefault();
+      this.joinLobbyFromCodeEntry();
+    });
+    this.elements.lobbyCodeInput.addEventListener("paste", (event) => {
+      const roomCode = resolvePastedLobbyJoinCode(event.clipboardData?.getData("text"));
+      if (!roomCode) {
+        return;
+      }
+
+      event.preventDefault();
+      this.elements.lobbyCodeInput.value = roomCode;
       this.joinLobbyFromCodeEntry();
     });
     this.elements.setupBackButton.addEventListener("click", () => {
