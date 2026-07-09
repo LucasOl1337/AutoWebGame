@@ -1,5 +1,12 @@
 # Swarm Ledger - performance
 
+## 2026-07-09T05:59:43-03:00 - GOVERNOR
+
+- Branch: `swarm-gov/autowebgame/performance`
+- Entrega: `GrowthTelemetryClient.normalizeRecord` agora percorre as chaves do contexto/payload sem alocar `Object.entries()` por evento, reduzindo trabalho no caminho quente de tracking.
+- Validacao: `npm run test:growth-telemetry-retry`
+- Risco: baixo; mantem a filtragem de `undefined`, truncamento de strings e somente chaves proprias do objeto de entrada.
+
 ## 2026-07-09T04:55:00-03:00 - EXECUTOR
 
 - Branch: `swarm-gov/autowebgame/performance`
