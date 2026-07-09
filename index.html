@@ -851,6 +851,30 @@
 
       .topbar-cta:hover { filter: brightness(1.1); transform: translateY(-1px); }
 
+      .skip-link {
+        position: fixed;
+        left: 16px;
+        top: 12px;
+        z-index: 300;
+        transform: translateY(-140%);
+        padding: 8px 14px;
+        border: 1px solid var(--border-gold);
+        border-radius: 6px;
+        color: var(--text);
+        background: var(--bg-2);
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-decoration: none;
+        transition: transform 160ms;
+      }
+
+      .skip-link:focus,
+      .skip-link:focus-visible {
+        transform: translateY(0);
+        outline: 2px solid var(--gold-bright);
+        outline-offset: 2px;
+      }
+
       /* ── Char sprite ── */
       .char-sprite {
         width: 72px;
@@ -904,6 +928,7 @@
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   </head>
   <body>
+    <a href="#main-content" class="skip-link">Pular para o conteudo</a>
 
     <!-- Topbar -->
     <header class="topbar">
@@ -929,6 +954,8 @@
       <a href="#em-breve"    data-s="em-breve">06</a>
       <a href="#confianca"   data-s="confianca">07</a>
     </nav>
+
+    <main id="main-content" tabindex="-1">
 
     <!-- ── HERO ── -->
     <section class="hero" id="top">
@@ -1330,6 +1357,7 @@
         <a href="/game">Jogar agora</a>
       </div>
     </section>
+    </main>
 
     <div class="rule"></div>
 
