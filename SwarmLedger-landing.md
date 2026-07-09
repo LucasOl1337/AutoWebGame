@@ -18,3 +18,13 @@
   - `npm run test:how-to-play-page`
 - Risco: baixo; altera apenas contrato estatico de HTML publico e nao muda runtime.
 - Proxima sugestao: expor esse gate no checklist ready-to-ship quando a landing publica for alterada.
+
+## 2026-07-09T11:09:32.1828003Z
+
+- Branch: `swarm-gov/autowebgame/landing`.
+- Mudanca: adiciona nome acessivel para a navegacao principal e para CTAs publicos que entram no jogo.
+- Validacao:
+  - `npm run test:how-to-play-page`
+  - PowerShell contract check para `aria-label="Navegacao principal"` e CTAs `/game` com `aria-label="Jogar BOMBA PvP agora"`.
+- Risco: baixo; altera apenas atributos semanticos no HTML da landing, sem mudar layout ou runtime.
+- Proxima sugestao: promover o contrato de CTAs da landing para um teste dedicado quando houver novo gate de acessibilidade.
