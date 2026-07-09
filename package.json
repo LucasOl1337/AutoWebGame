@@ -62,6 +62,7 @@
     "test:landing-commercial-copy": "npm run compile:esm && node tests/landing-commercial-copy-check.mjs",
     "test:match-result-shortcuts": "npm run compile:esm && node tests/match-result-shortcuts-check.mjs",
     "test:ui-storage-fallback": "npm run compile:esm && node tests/ui-storage-fallback-check.mjs",
+    "test:growth-telemetry-storage": "npm run compile:esm && node tests/growth-telemetry-storage-check.mjs",
     "test:growth-telemetry-retry": "npm run compile:esm && node tests/growth-telemetry-event-retry-check.mjs",
     "test:growth-telemetry-uuid-fallback": "npm run compile:esm && node tests/growth-telemetry-uuid-fallback-check.mjs",
     "test:feedback-length-guard": "npm run compile:esm && node tests/feedback-length-guard-check.mjs",
