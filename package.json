@@ -72,6 +72,7 @@
     "test:roster-sync": "npm run compile:esm && node tests/character-roster-manifest-sync-check.mjs",
     "test:character-sprite-fallback": "npm run compile:esm && node tests/character-sprite-loader-fallback-check.mjs",
     "test:server-character-skill": "npm run compile:esm && node tests/server-character-skill-mapping-check.mjs",
+    "test:server-player-removal": "npm run compile:esm && node tests/server-player-removal-check.mjs",
     "test:online-character-selection": "npm run compile:esm && node tests/online-character-selection-index-check.mjs",
     "test:online-audio": "npm run compile:esm && node tests/online-audio-bridge-check.mjs",
     "test:online-input-latch": "npm run compile:esm && node tests/online-input-latching-check.mjs",

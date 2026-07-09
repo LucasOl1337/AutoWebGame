@@ -1,5 +1,12 @@
 # Swarm Ledger - bugs
 
+## 2026-07-09T06:28:00-03:00 - GOVERNOR
+
+- Branch: `swarm-gov/autowebgame/bugs`
+- Mudanca: exposto `test:server-player-removal` em `package.json` para tornar executavel o guard de regressao da remocao de jogador em partida server-authoritative.
+- Validacao: `npm run test:server-player-removal` passou.
+- Risco: baixo; mudanca limitada a script de teste existente e ledger do assunto.
+
 ## 2026-07-09T05:55:03-03:00 - GOVERNOR
 
 - Branch: `swarm-gov/autowebgame/bugs`
