@@ -101,6 +101,7 @@
     "test:powerup-hud": "npm run compile:esm && node tests/powerup-hud-slots-check.mjs",
     "test:powerup-drop-rate": "npm run compile:esm && node tests/powerup-drop-rate-check.mjs",
     "test:player-sprite": "npm run compile:esm && node tests/player-sprite-render-check.mjs",
+    "test:roster-invalid-public-manifest": "npm run compile:esm && node tests/character-roster-invalid-public-manifest-check.mjs",
     "test:killer-bee-ult": "npm run compile:esm && node tests/killer-bee-ult-dash-check.mjs",
     "test:crocodilo-ult": "npm run compile:esm && node tests/crocodilo-ult-emerald-surge-check.mjs",
     "test:nico-ult": "npm run compile:esm && node tests/nico-ult-arcane-beam-check.mjs",
