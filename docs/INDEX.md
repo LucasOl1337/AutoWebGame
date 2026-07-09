@@ -18,6 +18,7 @@ Use this index as the first stop for release, gameplay, visual, and operations d
 
 ## Operations
 
+- [Repository README](../README.md) - setup commands, release-oriented test gates, and code principles.
 - [Oracle Cloud VM](oracle-cloud-vm.md) - VM deployment and operations notes.
 - [Swarm Coordination](../DocsDev/swarm-coordination.md) - coordination notes for parallel agent work.
 - [Audio Map](../DocsDev/mapa-de-audio.md) - audio inventory and implementation map.
@@ -25,6 +26,7 @@ Use this index as the first stop for release, gameplay, visual, and operations d
 
 ## Release Records
 
+- [Billing Checkout Readiness](../DocsDev/releases/billing-checkout-readiness.md)
 - [Release v0.2.0](../DocsDev/releases/release-v0.2.0.md)
 - [Release v0.2.1](../DocsDev/releases/release-v0.2.1.md)
 - [Release v0.2.2](../DocsDev/releases/release-v0.2.2.md)
