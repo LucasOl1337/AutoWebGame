@@ -11,5 +11,5 @@
 
 - Branch: `swarm-gov/autowebgame/bugs`
 - Mudanca: exposto `test:room-code-entry-normalization` em `package.json` para tornar executavel o guard de normalizacao de codigo de sala e links de convite colados.
-- Validacao: pendente no checkpoint inicial do governor.
+- Validacao: `npm run test:room-code-entry-normalization` passou.
 - Risco: baixo; mudanca limitada a script de teste e ledger do assunto.
