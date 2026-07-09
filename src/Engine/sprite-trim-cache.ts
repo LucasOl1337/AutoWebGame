@@ -27,8 +27,12 @@ export class SpriteTrimCache {
       return null;
     }
 
-    this.canvas.width = width;
-    this.canvas.height = height;
+    if (this.canvas.width !== width) {
+      this.canvas.width = width;
+    }
+    if (this.canvas.height !== height) {
+      this.canvas.height = height;
+    }
     context.clearRect(0, 0, width, height);
 
     try {

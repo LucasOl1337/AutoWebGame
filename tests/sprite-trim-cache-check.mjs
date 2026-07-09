@@ -1,5 +1,7 @@
 const contextOptions = [];
 let getImageDataCalls = 0;
+let canvasWidthWrites = 0;
+let canvasHeightWrites = 0;
 
 const alphaGrid = new Uint8ClampedArray(4 * 4 * 4);
 for (const [x, y] of [
@@ -22,8 +24,22 @@ const fakeContext = {
 };
 
 const fakeCanvas = {
-  width: 0,
-  height: 0,
+  _width: 0,
+  _height: 0,
+  get width() {
+    return this._width;
+  },
+  set width(value) {
+    canvasWidthWrites += 1;
+    this._width = value;
+  },
+  get height() {
+    return this._height;
+  },
+  set height(value) {
+    canvasHeightWrites += 1;
+    this._height = value;
+  },
   getContext: (_kind, options) => {
     contextOptions.push(options ?? null);
     return fakeContext;
@@ -64,6 +80,8 @@ const pass = Boolean(first)
   && afterLoadCached === afterLoad
   && second === first
   && getImageDataCalls === 2
+  && canvasWidthWrites === 1
+  && canvasHeightWrites === 1
   && contextOptions.length === 1
   && contextOptions[0]?.willReadFrequently === true;
 
@@ -74,6 +92,8 @@ console.log(JSON.stringify({
   first,
   secondMatchesFirst: second === first,
   getImageDataCalls,
+  canvasWidthWrites,
+  canvasHeightWrites,
   contextOptions,
   pass,
 }, null, 2));
