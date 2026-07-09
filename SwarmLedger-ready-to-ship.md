@@ -1,5 +1,12 @@
 # Swarm Ledger - ready-to-ship
 
+## 2026-07-09 - Runnable release visibility gate
+
+- Branch: `swarm-gov/autowebgame/ready-to-ship`
+- Change: exposed the existing release badge/notes visibility check as `npm run test:release-visibility` for ready-to-ship verification.
+- Validation: `npm run test:release-visibility` passed.
+- Risk: low; package script only, no runtime behavior change.
+
 ## 2026-07-09 - Runnable README release gate
 
 - Branch: `swarm-gov/autowebgame/ready-to-ship`
