@@ -1,5 +1,12 @@
 # Swarm Ledger - bugs
 
+## 2026-07-09T05:55:03-03:00 - GOVERNOR
+
+- Branch: `swarm-gov/autowebgame/bugs`
+- Mudanca: exposto `test:growth-telemetry-uuid-fallback` em `package.json` para tornar executavel o guard de fallback de UUID da telemetria quando `crypto.randomUUID` nao existe.
+- Validacao: `npm run test:growth-telemetry-uuid-fallback` passou.
+- Risco: baixo; mudanca limitada a script de teste e ledger do assunto.
+
 ## 2026-07-09T03:14:20-03:00 - EXECUTOR
 
 - Branch: `swarm-gov/autowebgame/bugs`
