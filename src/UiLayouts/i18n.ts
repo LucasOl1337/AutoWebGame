@@ -169,6 +169,7 @@ export interface SiteCopy {
     pendingNote: string;
     quickMatchNote: string;
     defaultNote: string;
+    surpriseAction: string;
     selectable: string;
     defaultSlot: (slot: number) => string;
   };
@@ -448,6 +449,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       pendingNote: "Esse personagem sera aplicado assim que voce ficar pronto.",
       quickMatchNote: "Partida rapida so te coloca em uma sala. O inicio continua sendo decidido dentro do lobby.",
       defaultNote: "Escolha agora e entre no setup com tudo explicado na mesma tela.",
+      surpriseAction: "Surpreenda-me",
       selectable: "Selecionavel",
       defaultSlot: (slot) => `Default P${slot}`,
     },
@@ -714,6 +716,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       pendingNote: "This character will be applied as soon as you ready up.",
       quickMatchNote: "Quick match only places you into a room. Match start is still decided inside the lobby.",
       defaultNote: "Pick now and enter setup with everything explained on one screen.",
+      surpriseAction: "Surprise me",
       selectable: "Selectable",
       defaultSlot: (slot) => `Default P${slot}`,
     },

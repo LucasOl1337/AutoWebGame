@@ -30,6 +30,7 @@ import {
   validateUsername,
 } from "./account";
 import type { PlayerBillingStatus } from "./billing";
+import { pickSurpriseCharacterIndex } from "./character-surprise";
 import type { OnlineSessionState } from "./matchmaking";
 import type {
   LobbyState,
@@ -121,6 +122,7 @@ interface SessionElements {
   selectorPortrait: HTMLImageElement;
   selectorName: HTMLParagraphElement;
   selectorNote: HTMLParagraphElement;
+  selectorSurpriseButton: HTMLButtonElement;
   selectorGrid: HTMLDivElement;
   setupPrimaryButton: HTMLButtonElement;
   setupPrimaryHint: HTMLParagraphElement;
@@ -857,6 +859,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     });
     this.elements.languageEnglishButton.addEventListener("click", () => {
       this.changeLanguage("en");
+    });
+    this.elements.selectorSurpriseButton.addEventListener("click", () => {
+      this.surprisePreferredCharacter("setup");
     });
     this.elements.landingQuickMatchButton.addEventListener("click", () => {
       this.telemetry.track("quick_match_clicked", {
@@ -2027,7 +2032,12 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const selectorNote = document.createElement("p");
     selectorNote.className = "experience-character-summary__note";
 
-    selectorSummaryCopy.append(selectorName, selectorNote);
+    const selectorSurpriseButton = document.createElement("button");
+    selectorSurpriseButton.className = "experience-button experience-button--ghost experience-character-surprise";
+    selectorSurpriseButton.type = "button";
+    selectorSurpriseButton.textContent = copy.character.surpriseAction;
+
+    selectorSummaryCopy.append(selectorName, selectorNote, selectorSurpriseButton);
     selectorSummary.append(selectorPortrait, selectorSummaryCopy);
 
     const selectorGrid = document.createElement("div");
@@ -2278,6 +2288,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       selectorPortrait,
       selectorName,
       selectorNote,
+      selectorSurpriseButton,
       selectorGrid,
       setupPrimaryButton,
       setupPrimaryHint,
@@ -2895,6 +2906,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const selected = this.getCharacter(this.preferredCharacterIndex);
     this.renderPortrait(this.elements.selectorPortrait, selected);
     this.elements.selectorName.textContent = selected.name;
+    this.elements.selectorSurpriseButton.disabled = this.roster.length <= 1;
 
     const lobby = this.currentLobby;
     if (lobby?.selfSeat) {
@@ -2968,7 +2980,16 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.updatePreferredCharacter(this.preferredCharacterIndex + 1);
     });
 
-    nav.append(previousButton, nextButton);
+    const surpriseButton = document.createElement("button");
+    surpriseButton.type = "button";
+    surpriseButton.className = "experience-button experience-button--secondary experience-character-surprise";
+    surpriseButton.textContent = this.copy.character.surpriseAction;
+    surpriseButton.disabled = this.roster.length <= 1;
+    surpriseButton.addEventListener("click", () => {
+      this.surprisePreferredCharacter("landing");
+    });
+
+    nav.append(previousButton, surpriseButton, nextButton);
 
     // Compact portrait strip — all chars, no text labels
     const strip = document.createElement("div");
@@ -3045,23 +3066,36 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     return option;
   }
 
-  private updatePreferredCharacter(nextIndex: number): void {
+  private updatePreferredCharacter(
+    nextIndex: number,
+    selectionOrigin: "manual" | "landing" | "setup" = "manual",
+  ): void {
     this.preferredCharacterIndex = this.wrapCharacterIndex(nextIndex);
     this.persistPreferredCharacterIndex();
     this.app.setOfflinePreferredCharacter(this.preferredCharacterIndex);
-      this.telemetry.track("character_selected", {
-        context: { roomCode: this.currentLobby?.roomCode ?? null, screen: this.getScreen() },
-        payload: {
-          characterIndex: this.preferredCharacterIndex,
-          authoritativeCharacterIndex: this.getPreferredAuthoritativeCharacterIndex(),
-          characterId: this.getCharacter(this.preferredCharacterIndex).id,
-        },
-      });
+    this.telemetry.track("character_selected", {
+      context: { roomCode: this.currentLobby?.roomCode ?? null, screen: this.getScreen() },
+      payload: {
+        characterIndex: this.preferredCharacterIndex,
+        authoritativeCharacterIndex: this.getPreferredAuthoritativeCharacterIndex(),
+        characterId: this.getCharacter(this.preferredCharacterIndex).id,
+        selectionOrigin,
+      },
+    });
     this.renderAll();
 
     if (this.currentLobby?.selfSeat && this.currentLobby.status === "open") {
       this.send({ type: "set-character", characterIndex: this.getPreferredAuthoritativeCharacterIndex() });
     }
+  }
+
+  private surprisePreferredCharacter(origin: "landing" | "setup"): void {
+    if (this.roster.length <= 1) {
+      return;
+    }
+
+    const nextIndex = pickSurpriseCharacterIndex(this.preferredCharacterIndex, this.roster.length);
+    this.updatePreferredCharacter(nextIndex, origin);
   }
 
   private syncPreferredCharacterFromLobby(): void {
