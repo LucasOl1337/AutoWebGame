@@ -28,3 +28,12 @@
   - PowerShell contract check para `aria-label="Navegacao principal"` e CTAs `/game` com `aria-label="Jogar BOMBA PvP agora"`.
 - Risco: baixo; altera apenas atributos semanticos no HTML da landing, sem mudar layout ou runtime.
 - Proxima sugestao: promover o contrato de CTAs da landing para um teste dedicado quando houver novo gate de acessibilidade.
+
+## 2026-07-09T13:34:10.0000000Z
+
+- Branch: `swarm-gov/autowebgame/landing`.
+- Mudanca: adiciona `test:landing-page` com contrato estatico para titulo, skip link, landmark, navegacao principal, CTAs `/game`, secoes e links de confianca da landing publica.
+- Validacao:
+  - `npm run test:landing-page`
+- Risco: baixo; altera apenas gate estatico e script npm, sem runtime de produto.
+- Proxima sugestao: incluir `npm run test:landing-page` no checklist ready-to-ship da landing publica.
