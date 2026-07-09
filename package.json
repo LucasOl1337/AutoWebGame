@@ -106,6 +106,7 @@
     "test:speed-spark-trail": "npm run compile:esm && node tests/speed-spark-trail-check.mjs",
     "test:short-fuse-powerup": "npm run compile:esm && node tests/short-fuse-powerup-check.mjs",
     "test:shield-block-sfx": "npm run compile:esm && node tests/shield-block-sfx-check.mjs",
+    "test:sound-manager-lazy-load": "npm run compile:esm && node tests/sound-manager-lazy-load-check.mjs",
     "test:powerup-hud": "npm run compile:esm && node tests/powerup-hud-slots-check.mjs",
     "test:powerup-drop-rate": "npm run compile:esm && node tests/powerup-drop-rate-check.mjs",
     "test:player-sprite": "npm run compile:esm && node tests/player-sprite-render-check.mjs",
