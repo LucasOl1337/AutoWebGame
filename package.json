@@ -55,6 +55,7 @@
     "test:i18n-storage-guard": "npm run compile:esm && node tests/i18n-storage-guard-check.mjs",
     "test:touch-focus-css": "node tests/touch-focus-css-check.mjs",
     "test:how-to-play-page": "node tests/how-to-play-page-check.mjs",
+    "test:bootstrap-load-recovery": "node tests/bootstrap-load-recovery-check.mjs",
     "test:worker-api-route-dispatch": "node tests/worker-api-route-dispatch-check.mjs",
     "test:worker-cache-headers": "node tests/worker-cache-headers-check.mjs",
     "test:roster-sync": "npm run compile:esm && node tests/character-roster-manifest-sync-check.mjs",
