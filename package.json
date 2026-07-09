@@ -63,6 +63,7 @@
     "test:ui-storage-fallback": "npm run compile:esm && node tests/ui-storage-fallback-check.mjs",
     "test:growth-telemetry-retry": "npm run compile:esm && node tests/growth-telemetry-event-retry-check.mjs",
     "test:growth-telemetry-uuid-fallback": "npm run compile:esm && node tests/growth-telemetry-uuid-fallback-check.mjs",
+    "test:feedback-length-guard": "npm run compile:esm && node tests/feedback-length-guard-check.mjs",
     "test:i18n-storage-guard": "npm run compile:esm && node tests/i18n-storage-guard-check.mjs",
     "test:touch-focus-css": "node tests/touch-focus-css-check.mjs",
     "test:how-to-play-page": "node tests/how-to-play-page-check.mjs",
