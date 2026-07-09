@@ -29,6 +29,16 @@ assert.match(pageHtml, /link\.setAttribute\("aria-current", "true"\)/);
 assert.match(pageHtml, /@media \(prefers-reduced-motion: reduce\)/);
 
 assert.match(landingHtml, /href="\/how-to-play\.html">Como jogar<\/a>/);
+assert.match(landingHtml, /<a href="#main-content" class="skip-link">Pular para o conteudo<\/a>/);
+assert.match(landingHtml, /<main id="main-content" tabindex="-1">/);
+assert.ok(
+  landingHtml.indexOf('class="skip-link"') < landingHtml.indexOf('id="main-content"'),
+  "landing skip link should appear before the main landmark",
+);
+assert.ok(
+  landingHtml.indexOf('id="main-content"') < landingHtml.indexOf("<footer>"),
+  "landing main landmark should wrap content before the footer",
+);
 assert.match(viteConfig, /howToPlay:\s*"\.\/how-to-play\.html"/);
 assert.ok(assetStats.size > 100_000, "how-to-play banner should be a real generated image asset");
 
