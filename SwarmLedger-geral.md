@@ -3,6 +3,14 @@
 ## 2026-07-09 - Governor
 
 - Branch: `swarm-gov/autowebgame/geral`
+- Entrega: exposto o teste existente de burst de partida perfeita como `npm run test:perfect-start-burst`.
+- Arquivos: `package.json`
+- Validacao: `npm run test:perfect-start-burst` passou.
+- Risco: baixo; a mudanca adiciona apenas um alias de script para um check existente.
+
+## 2026-07-09 - Governor
+
+- Branch: `swarm-gov/autowebgame/geral`
 - Entrega: exposto o teste existente de lazy load do sound manager como `npm run test:sound-manager-lazy-load`.
 - Arquivos: `package.json`
 - Validacao: `npm run test:sound-manager-lazy-load` passou.

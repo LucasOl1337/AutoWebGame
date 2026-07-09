@@ -105,6 +105,7 @@
     "test:pickup-chain": "npm run compile:esm && node tests/pickup-chain-guard-check.mjs",
     "test:speed-spark-trail": "npm run compile:esm && node tests/speed-spark-trail-check.mjs",
     "test:short-fuse-powerup": "npm run compile:esm && node tests/short-fuse-powerup-check.mjs",
+    "test:perfect-start-burst": "npm run compile:esm && node tests/perfect-start-burst-check.mjs",
     "test:shield-block-sfx": "npm run compile:esm && node tests/shield-block-sfx-check.mjs",
     "test:sound-manager-lazy-load": "npm run compile:esm && node tests/sound-manager-lazy-load-check.mjs",
     "test:powerup-hud": "npm run compile:esm && node tests/powerup-hud-slots-check.mjs",
