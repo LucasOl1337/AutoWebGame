@@ -1,5 +1,12 @@
 # Swarm Ledger - migracao-visual
 
+## 2026-07-09T06:10:21-03:00 - Governor
+
+- Branch: `swarm-gov/autowebgame/migracao-visual`
+- Mudanca: normalizou `letter-spacing` negativo em titulos e nomes do shell visual para `0`, preservando tamanhos, layout e tokens existentes.
+- Validacao: `npm run test:touch-focus-css` passou; varredura `rg "letter-spacing:\s*-" src\UiLayouts\main.css` sem ocorrencias.
+- Risco: baixo; alteracao CSS pontual sem tocar fluxo de jogo, online ou worker.
+
 ## 2026-07-09 - governor
 
 - Branch: `swarm-gov/autowebgame/migracao-visual`
