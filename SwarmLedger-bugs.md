@@ -1,5 +1,12 @@
 # Swarm Ledger - bugs
 
+## 2026-07-09T09:54:58-03:00 - GOVERNOR
+
+- Branch: `swarm-gov/autowebgame/bugs`
+- Mudanca: exposto `test:short-fuse-powerup` em `package.json` para tornar executavel o guard de regressao do powerup de fuse reduzido.
+- Validacao: `npm run test:short-fuse-powerup` passou.
+- Risco: baixo; mudanca limitada a script de teste existente e ledger do assunto.
+
 ## 2026-07-09T06:28:00-03:00 - GOVERNOR
 
 - Branch: `swarm-gov/autowebgame/bugs`
