@@ -24,3 +24,11 @@
 - Validacao: `npm run test:room-code-normalization` passou.
 - Risco: baixo; a mudanca adiciona apenas um alias de script para um check existente.
 
+## 2026-07-09 - Governor
+
+- Branch: `swarm-gov/autowebgame/geral`
+- Entrega: exposto o teste existente de visibilidade de release como `npm run test:release-visibility`.
+- Arquivos: `package.json`
+- Validacao: `npm run test:release-visibility` passou.
+- Risco: baixo; a mudanca adiciona apenas um alias de script para um check existente.
+
