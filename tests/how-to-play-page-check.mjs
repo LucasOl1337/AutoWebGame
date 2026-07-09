@@ -22,6 +22,11 @@ assert.match(pageHtml, /id="objetivo"/);
 assert.match(pageHtml, /id="controles"/);
 assert.match(pageHtml, /id="arena"/);
 assert.match(pageHtml, /id="plano"/);
+assert.match(pageHtml, /class="back-to-top"/);
+assert.match(pageHtml, /aria-label="Voltar ao inicio"/);
+assert.match(pageHtml, /new IntersectionObserver/);
+assert.match(pageHtml, /link\.setAttribute\("aria-current", "true"\)/);
+assert.match(pageHtml, /@media \(prefers-reduced-motion: reduce\)/);
 
 assert.match(landingHtml, /href="\/how-to-play\.html">Como jogar<\/a>/);
 assert.match(viteConfig, /howToPlay:\s*"\.\/how-to-play\.html"/);

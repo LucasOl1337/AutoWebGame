@@ -176,16 +176,45 @@
       }
 
       .quick-strip {
+        position: sticky;
+        top: 0;
+        z-index: 10;
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
         border-top: 1px solid var(--line);
         border-bottom: 1px solid var(--line);
+        background: rgba(5, 6, 8, 0.94);
+        backdrop-filter: blur(14px);
       }
 
       .quick-strip a {
+        position: relative;
         min-height: 92px;
         padding: 18px;
         border-right: 1px solid var(--line);
+      }
+
+      .quick-strip a::after {
+        content: "";
+        position: absolute;
+        right: 18px;
+        bottom: 10px;
+        left: 18px;
+        height: 2px;
+        border-radius: 999px;
+        background: var(--green);
+        opacity: 0;
+        transform: scaleX(0.35);
+        transition: opacity 160ms ease, transform 160ms ease;
+      }
+
+      .quick-strip a[aria-current="true"] {
+        background: rgba(0, 229, 160, 0.08);
+      }
+
+      .quick-strip a[aria-current="true"]::after {
+        opacity: 1;
+        transform: scaleX(1);
       }
 
       .quick-strip a:last-child { border-right: 0; }
@@ -357,6 +386,48 @@
 
       footer a { color: var(--muted); }
 
+      .back-to-top {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        z-index: 20;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 48px;
+        min-height: 48px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--panel-strong);
+        color: var(--text);
+        font: inherit;
+        font-size: 0.78rem;
+        font-weight: 900;
+        cursor: pointer;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.34);
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(10px);
+        transition: opacity 160ms ease, transform 160ms ease, background 160ms ease;
+      }
+
+      .back-to-top[data-visible="true"] {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0);
+      }
+
+      .back-to-top:hover,
+      .back-to-top:focus-visible {
+        background: var(--green);
+        color: #04100c;
+      }
+
+      .back-to-top:focus-visible {
+        outline: 3px solid rgba(94, 183, 255, 0.7);
+        outline-offset: 3px;
+      }
+
       @media (max-width: 900px) {
         .hero {
           min-height: 0;
@@ -393,9 +464,20 @@
           grid-template-columns: 1fr;
         }
 
+        .quick-strip {
+          display: flex;
+          width: 100vw;
+          margin-left: calc(50% - 50vw);
+          overflow-x: auto;
+          scroll-snap-type: x proximity;
+        }
+
         .quick-strip a {
+          flex: 0 0 min(72vw, 250px);
+          min-height: 72px;
           border-right: 0;
           border-bottom: 1px solid var(--line);
+          scroll-snap-align: start;
         }
 
         .quick-strip a:last-child { border-bottom: 0; }
@@ -405,6 +487,12 @@
         h1 { font-size: 3.2rem; }
         h2 { font-size: 2.25rem; }
         .play-panel h2 { font-size: 2rem; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        .quick-strip a::after,
+        .back-to-top { transition: none; }
       }
     </style>
   </head>
@@ -583,5 +671,47 @@
         <a href="/terms.html">Termos</a>
       </p>
     </footer>
+    <button class="back-to-top" type="button" aria-label="Voltar ao inicio" data-visible="false">Topo</button>
+    <script>
+      const guideLinks = Array.from(document.querySelectorAll('.quick-strip a[href^="#"]'));
+      const guideSections = guideLinks
+        .map((link) => document.querySelector(link.getAttribute("href")))
+        .filter(Boolean);
+      const backToTop = document.querySelector(".back-to-top");
+
+      const markCurrentSection = (sectionId) => {
+        guideLinks.forEach((link) => {
+          if (link.getAttribute("href") === `#${sectionId}`) {
+            link.setAttribute("aria-current", "true");
+            if (window.matchMedia("(max-width: 640px)").matches) {
+              link.scrollIntoView({ block: "nearest", inline: "center" });
+            }
+          } else {
+            link.removeAttribute("aria-current");
+          }
+        });
+      };
+
+      if ("IntersectionObserver" in window) {
+        const sectionObserver = new IntersectionObserver((entries) => {
+          const visible = entries
+            .filter((entry) => entry.isIntersecting)
+            .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+          if (visible) markCurrentSection(visible.target.id);
+        }, { rootMargin: "-20% 0px -60%", threshold: [0, 0.2, 0.5] });
+        guideSections.forEach((section) => sectionObserver.observe(section));
+      }
+
+      const updateBackToTop = () => {
+        backToTop.dataset.visible = window.scrollY > window.innerHeight * 0.8 ? "true" : "false";
+      };
+      window.addEventListener("scroll", updateBackToTop, { passive: true });
+      updateBackToTop();
+      backToTop.addEventListener("click", () => {
+        document.querySelector("#top").scrollIntoView({ block: "start" });
+        document.querySelector(".hero h1").setAttribute("tabindex", "-1");
+        document.querySelector(".hero h1").focus({ preventScroll: true });
+      });
+    </script>
   </body>
 </html>
