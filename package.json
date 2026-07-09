@@ -68,6 +68,7 @@
     "test:feedback-length-guard": "npm run compile:esm && node tests/feedback-length-guard-check.mjs",
     "test:feedback-live-counter": "npm run compile:esm && node tests/feedback-dialog-live-counter-check.mjs",
     "test:i18n-storage-guard": "npm run compile:esm && node tests/i18n-storage-guard-check.mjs",
+    "test:landing-visual-token": "node tests/landing-visual-token-check.mjs",
     "test:touch-focus-css": "node tests/touch-focus-css-check.mjs",
     "test:landing-page": "node tests/landing-page-contract-check.mjs",
     "test:how-to-play-page": "node tests/how-to-play-page-check.mjs",

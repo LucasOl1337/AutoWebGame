@@ -1,5 +1,12 @@
 # Swarm Ledger - migracao-visual
 
+## 2026-07-09T08:33:40-03:00
+
+- Branch: `swarm-gov/autowebgame/migracao-visual`
+- Mudanca: exposto `test:landing-visual-token` no `package.json` para rodar o contrato visual da landing via npm.
+- Validacao: `npm run test:landing-visual-token` passou.
+- Risco: baixo; altera apenas script npm e ledger.
+
 ## 2026-07-09T06:10:21-03:00 - Governor
 
 - Branch: `swarm-gov/autowebgame/migracao-visual`
