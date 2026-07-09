@@ -1,7 +1,7 @@
 const {
   normalizeRoomCode,
   readRoomCodeFromUrl,
-} = await import("../output/esm/NetCode/session-client.js");
+} = await import("../output/esm/NetCode/room-invite.js");
 
 const normalizationCases = [
   {

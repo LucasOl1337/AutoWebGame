@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 const {
   resolveManualLobbyJoinCode,
   resolvePastedLobbyJoinCode,
-} = await import("../output/esm/NetCode/session-client.js");
+} = await import("../output/esm/NetCode/room-invite.js");
 
 const entryCases = [
   {

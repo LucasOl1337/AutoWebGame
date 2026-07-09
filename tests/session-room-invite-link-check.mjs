@@ -1,9 +1,20 @@
+const inviteModule = await import("../output/esm/NetCode/room-invite.js");
 const {
   buildRoomInviteUrl,
   copyTextWithFallback,
   normalizeRoomCode,
   readRoomCodeFromUrl,
-} = await import("../output/esm/NetCode/session-client.js");
+} = inviteModule;
+const sessionClientModule = await import("../output/esm/NetCode/session-client.js");
+
+const compatibilityPass = [
+  "buildRoomInviteUrl",
+  "copyTextWithFallback",
+  "normalizeRoomCode",
+  "readRoomCodeFromUrl",
+  "resolveManualLobbyJoinCode",
+  "resolvePastedLobbyJoinCode",
+].every((exportName) => sessionClientModule[exportName] === inviteModule[exportName]);
 
 const normalizedCases = [
   { input: "ab12cd", expected: "AB12CD" },
@@ -161,7 +172,7 @@ const copyPass = clipboardPass
   && legacyTextarea?.removedByParent
   && unavailablePass;
 
-const pass = normalizationPass && urlReadPass && invitePass && copyPass;
+const pass = compatibilityPass && normalizationPass && urlReadPass && invitePass && copyPass;
 
 console.log(JSON.stringify({
   normalizedCases: normalizedCases.map((entry) => ({
@@ -191,6 +202,7 @@ console.log(JSON.stringify({
     },
     unavailablePass,
   },
+  compatibilityPass,
   pass,
 }, null, 2));
 
