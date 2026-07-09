@@ -1,5 +1,12 @@
 # Swarm Ledger - ready-to-ship
 
+## 2026-07-09 - Runnable README release gate
+
+- Branch: `swarm-gov/autowebgame/ready-to-ship`
+- Change: exposed the existing README release gate as `npm run test:readme-release-gates` so release hygiene can be run through the normal script surface.
+- Validation: `npm --prefix C:\Projetos\AutoWebGame-swarm-governor run test:readme-release-gates` passed.
+- Risk: low; package script only, no runtime behavior change.
+
 ## 2026-07-09 - README release gate
 
 - Branch: `swarm-gov/autowebgame/ready-to-ship`

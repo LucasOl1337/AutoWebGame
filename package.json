@@ -59,6 +59,7 @@
     "test:commercial-release-flow": "npm run compile:esm && node tests/commercial-release-flow-check.mjs",
     "test:release-visibility": "node tests/release-visibility-check.mjs",
     "test:docs-index-links": "node tests/docs-index-links-check.mjs",
+    "test:readme-release-gates": "node tests/readme-release-gates-check.mjs",
     "test:setup-loading-brief": "npm run compile:esm && node tests/setup-loading-brief-check.mjs",
     "test:landing-commercial-copy": "npm run compile:esm && node tests/landing-commercial-copy-check.mjs",
     "test:match-result-shortcuts": "npm run compile:esm && node tests/match-result-shortcuts-check.mjs",
