@@ -189,18 +189,36 @@ async function loadStaticDirectionalSprites(
   },
   assetVersion?: string,
 ): Promise<DirectionalSprites> {
-  const [down, right, up, left] = await Promise.all([
+  const loadOptionalCycle = (
+    animationName: "idle" | "walk" | "run" | "cast" | "attack" | "death",
+  ): Promise<Record<Direction, HTMLImageElement[]>> => (
+    animations?.[animationName]
+      ? loadCharacterCycle(basePath, animationName, assetVersion)
+      : Promise.resolve(createEmptyDirectionalFrameSet())
+  );
+  const [
+    down,
+    right,
+    up,
+    left,
+    idleFrames,
+    walkFrames,
+    runFrames,
+    castFrames,
+    attackFrames,
+    deathFrames,
+  ] = await Promise.all([
     loadImage(appendAssetVersion(`${basePath}/south.png`, assetVersion)),
     loadImage(appendAssetVersion(`${basePath}/east.png`, assetVersion)),
     loadImage(appendAssetVersion(`${basePath}/north.png`, assetVersion)),
     loadImage(appendAssetVersion(`${basePath}/west.png`, assetVersion)),
+    loadOptionalCycle("idle"),
+    loadOptionalCycle("walk"),
+    loadOptionalCycle("run"),
+    loadOptionalCycle("cast"),
+    loadOptionalCycle("attack"),
+    loadOptionalCycle("death"),
   ]);
-  const idleFrames = animations?.idle ? await loadCharacterCycle(basePath, "idle", assetVersion) : { up: [], down: [], left: [], right: [] };
-  const walkFrames = animations?.walk ? await loadCharacterCycle(basePath, "walk", assetVersion) : { up: [], down: [], left: [], right: [] };
-  const runFrames = animations?.run ? await loadCharacterCycle(basePath, "run", assetVersion) : { up: [], down: [], left: [], right: [] };
-  const castFrames = animations?.cast ? await loadCharacterCycle(basePath, "cast", assetVersion) : { up: [], down: [], left: [], right: [] };
-  const attackFrames = animations?.attack ? await loadCharacterCycle(basePath, "attack", assetVersion) : { up: [], down: [], left: [], right: [] };
-  const deathFrames = animations?.death ? await loadCharacterCycle(basePath, "death", assetVersion) : { up: [], down: [], left: [], right: [] };
   return {
     up,
     down,

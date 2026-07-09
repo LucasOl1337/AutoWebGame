@@ -1,5 +1,12 @@
 # Swarm Ledger - performance
 
+## 2026-07-09T04:55:00-03:00 - EXECUTOR
+
+- Branch: `swarm-gov/autowebgame/performance`
+- Entrega: `loadStaticDirectionalSprites` agora dispara sprites base e ciclos opcionais de animacao em um unico `Promise.all`, removendo espera sequencial entre idle/walk/run/cast/attack/death no carregamento de personagens.
+- Validacao: `npm run test:character-sprite-fallback`
+- Risco: baixo; mantem o contrato de fallback e altera apenas a concorrencia do carregamento de assets de personagem.
+
 ## 2026-07-09T03:33:37-03:00 - EXECUTOR
 
 - Branch: `swarm-gov/autowebgame/performance`
