@@ -89,6 +89,7 @@ import type {
 import { SoundManager, SFX_MANIFEST } from "./sound-manager";
 import type { BotContext } from "./bot-ai";
 import {
+  buildBotDangerMap as botAI_buildDangerMap,
   getBotDecision as botAI_getBotDecision,
   getStableBotDirection as botAI_getStableBotDirection,
 } from "./bot-ai";
@@ -471,6 +472,8 @@ export class GameApp {
   private arenaStaticCache: HTMLCanvasElement | null = null;
   private arenaStaticDirty = true;
   private cachedDangerMap: Map<string, number> | null = null;
+  private cachedBotDangerMap: Map<string, number> | null = null;
+  private botDangerCacheActive = false;
   private arenaStaticMistGradient: CanvasGradient | null = null;
 
   constructor(root: HTMLElement, assets: GameAssets, arenaDefinition: ArenaDefinition = createDefaultArenaDefinition()) {
@@ -594,7 +597,7 @@ export class GameApp {
     return this.arena.config.spawnMap[playerId];
   }
 
-  private createBotContext(): BotContext {
+  private createBotContext(dangerMap?: Map<string, number>): BotContext {
     return {
       players: this.players,
       activePlayerIds: this.activePlayerIds,
@@ -610,6 +613,7 @@ export class GameApp {
       botCommittedDirection: this.botCommittedDirection,
       botPendingReverseDirection: this.botPendingReverseDirection,
       botPendingReverseFrames: this.botPendingReverseFrames,
+      dangerMap,
       canOccupyPosition: (_pos, _tile) => true,
       evaluateMovementOption: (player, dir, dt) => this.evaluateMovementOption(player, dir, dt),
       canMovementOptionAdvance: (pos, opt) => this.canMovementOptionAdvance(pos, opt),
@@ -2114,62 +2118,69 @@ export class GameApp {
   }
 
   private updatePlayers(deltaMs: number): void {
-    for (const id of this.activePlayerIds) {
-      const player = this.players[id];
-      if (!player.alive) {
-        continue;
-      }
+    this.cachedBotDangerMap = null;
+    this.botDangerCacheActive = true;
+    try {
+      for (const id of this.activePlayerIds) {
+        const player = this.players[id];
+        if (!player.alive) {
+          continue;
+        }
 
-      const botDecision = this.isBotControlled(id) ? this.getBotDecision(player) : null;
-      const automationBomb = this.automationMode
-        ? this.automationControlledPlayer === id && this.input.consumePress("Space")
-        : false;
-      const onlineBomb = this.consumeOnlineBombPress(id);
-      const nativeBindings = MENU_PLAYER_IDS.includes(id as MenuPlayerId)
-        ? KEY_BINDINGS[id as MenuPlayerId]
-        : null;
-      const nativeBomb = this.shouldUseNativeControls()
-        ? nativeBindings ? this.input.consumePress(nativeBindings.bomb) : false
-        : false;
-      const wantsBomb = botDecision?.placeBomb || automationBomb || nativeBomb || onlineBomb;
-      if (wantsBomb) {
-        const placedBomb = this.placeBomb(player);
+        const botDecision = this.isBotControlled(id) ? this.getBotDecision(player) : null;
+        const automationBomb = this.automationMode
+          ? this.automationControlledPlayer === id && this.input.consumePress("Space")
+          : false;
+        const onlineBomb = this.consumeOnlineBombPress(id);
+        const nativeBindings = MENU_PLAYER_IDS.includes(id as MenuPlayerId)
+          ? KEY_BINDINGS[id as MenuPlayerId]
+          : null;
+        const nativeBomb = this.shouldUseNativeControls()
+          ? nativeBindings ? this.input.consumePress(nativeBindings.bomb) : false
+          : false;
+        const wantsBomb = botDecision?.placeBomb || automationBomb || nativeBomb || onlineBomb;
+        if (wantsBomb) {
+          const placedBomb = this.placeBomb(player);
+          if (placedBomb && botDecision?.placeBomb && this.isBotControlled(id)) {
+            this.botBombCooldownMs = BOT_BOMB_COOLDOWN_MS;
+          }
+        }
+        const wantsDetonate = botDecision?.detonate
+          || this.consumeOnlineDetonatePress(id)
+          || (this.shouldUseNativeControls()
+            ? nativeBindings ? this.input.consumePress(nativeBindings.detonate) : false
+            : false);
+        const wantsSkill = this.consumeOnlineSkillPress(id)
+          || (this.shouldUseNativeControls()
+            ? id === 1 && this.input.consumePress(SKILL_KEY)
+            : false);
+        const skillHeld = this.isSkillHeld(id);
+
+        const desiredDirection = botDecision?.direction ?? this.getMovementDirection(id);
+        const direction = this.isBotControlled(id)
+          ? this.getStableBotDirection(player, desiredDirection, deltaMs)
+          : desiredDirection;
+        const placedBomb = this.simulatePlayerInputStep(
+          player,
+          {
+            direction,
+            bombPressed: wantsBomb,
+            detonatePressed: wantsDetonate,
+            skillPressed: wantsSkill,
+            skillHeld,
+          },
+          deltaMs,
+        );
+        if (this.isBotControlled(id) && direction && player.skill.phase !== "channeling") {
+          this.rememberBotDirection(id, player.direction);
+        }
         if (placedBomb && botDecision?.placeBomb && this.isBotControlled(id)) {
           this.botBombCooldownMs = BOT_BOMB_COOLDOWN_MS;
         }
       }
-      const wantsDetonate = botDecision?.detonate
-        || this.consumeOnlineDetonatePress(id)
-        || (this.shouldUseNativeControls()
-          ? nativeBindings ? this.input.consumePress(nativeBindings.detonate) : false
-          : false);
-      const wantsSkill = this.consumeOnlineSkillPress(id)
-        || (this.shouldUseNativeControls()
-          ? id === 1 && this.input.consumePress(SKILL_KEY)
-          : false);
-      const skillHeld = this.isSkillHeld(id);
-
-      const desiredDirection = botDecision?.direction ?? this.getMovementDirection(id);
-      const direction = this.isBotControlled(id)
-        ? this.getStableBotDirection(player, desiredDirection, deltaMs)
-        : desiredDirection;
-      const placedBomb = this.simulatePlayerInputStep(
-        player,
-        {
-          direction,
-          bombPressed: wantsBomb,
-          detonatePressed: wantsDetonate,
-          skillPressed: wantsSkill,
-          skillHeld,
-        },
-        deltaMs,
-      );
-      if (this.isBotControlled(id) && direction && player.skill.phase !== "channeling") {
-        this.rememberBotDirection(id, player.direction);
-      }
-      if (placedBomb && botDecision?.placeBomb && this.isBotControlled(id)) {
-        this.botBombCooldownMs = BOT_BOMB_COOLDOWN_MS;
-      }
+    } finally {
+      this.botDangerCacheActive = false;
+      this.cachedBotDangerMap = null;
     }
   }
 
@@ -2239,7 +2250,7 @@ export class GameApp {
     if (import.meta.env?.DEV && AutoImprovementBridge.isEnabled && this.isLiveBridgeControlled(player.id)) {
       // Per-player AI explicitly disabled → stand completely idle (no built-in AI)
       if (!AutoImprovementBridge.isPlayerEnabled(player.id)) {
-        return botAI_getBotDecision(player, this.createBotContext());
+        return botAI_getBotDecision(player, this.createBotContext(this.getSharedBotDangerMap()));
       }
       const aiDecision = AutoImprovementBridge.getDecision(player.id);
       if (aiDecision) return AutoImprovementBridge.toBotDecision(aiDecision);
@@ -2248,7 +2259,17 @@ export class GameApp {
         return { direction: null, placeBomb: false, detonate: false };
       }
     }
-    return botAI_getBotDecision(player, this.createBotContext());
+    return botAI_getBotDecision(player, this.createBotContext(this.getSharedBotDangerMap()));
+  }
+
+  private getSharedBotDangerMap(): Map<string, number> {
+    if (!this.botDangerCacheActive) {
+      return botAI_buildDangerMap(this.createBotContext());
+    }
+    if (!this.cachedBotDangerMap) {
+      this.cachedBotDangerMap = botAI_buildDangerMap(this.createBotContext());
+    }
+    return this.cachedBotDangerMap;
   }
 
   private getOldestOwnedBomb(playerId: PlayerId): BombState | null {
@@ -2412,7 +2433,12 @@ export class GameApp {
     desiredDirection: Direction | null,
     deltaMs: number,
   ): Direction | null {
-    return botAI_getStableBotDirection(player, desiredDirection, deltaMs, this.createBotContext());
+    return botAI_getStableBotDirection(
+      player,
+      desiredDirection,
+      deltaMs,
+      this.createBotContext(this.getSharedBotDangerMap()),
+    );
   }
 
   private rememberBotDirection(playerId: PlayerId, direction: Direction): void {
@@ -2803,6 +2829,7 @@ export class GameApp {
       ownerCanPass: true,
       flameRange: player.flameRange,
     });
+    this.cachedBotDangerMap = null;
     this.nextBombId += 1;
     player.activeBombs += 1;
     if (playAudio) {

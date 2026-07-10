@@ -66,6 +66,7 @@ export interface BotContext {
   botCommittedDirection: Record<PlayerId, Direction | null>;
   botPendingReverseDirection: Record<PlayerId, Direction | null>;
   botPendingReverseFrames: Record<PlayerId, number>;
+  dangerMap?: Map<string, number>;
   // Callback functions for complex GameApp operations
   canOccupyPosition: (position: PixelCoord, tile: TileCoord) => boolean;
   evaluateMovementOption: (player: PlayerState, direction: Direction, deltaMs: number) => any;
@@ -120,7 +121,7 @@ function getPriorityEnemy(player: PlayerState, playerTile: TileCoord, context: B
 export function getBotDecision(player: PlayerState, context: BotContext): BotDecision {
   const playerTile = getTileFromPosition(player.position);
   const enemy = getPriorityEnemy(player, playerTile, context);
-  const dangerMap = getDangerMap(context);
+  const dangerMap = resolveDangerMap(context);
   const moveDuration = getMoveDuration(player);
   const strategicSafetyWindowMs = moveDuration * BOT_STRATEGIC_MOVE_WINDOW_STEPS + BOT_DANGER_ARRIVAL_BUFFER_MS;
   const overlappingBomb = getOverlappingBomb(player, context);
@@ -399,7 +400,7 @@ function canBotPlaceBombAtTile(
   if (context.bombs.some((bomb) => bomb.tile.x === bombTile.x && bomb.tile.y === bombTile.y)) {
     return false;
   }
-  const dangerAfterBomb = getDangerMap(context, {
+  const dangerAfterBomb = buildBotDangerMap(context, {
     tile: bombTile,
     range: player.flameRange,
     fuseMs: BOMB_FUSE_MS,
@@ -451,7 +452,7 @@ function findNearestReachableTarget(
   minSafetyWindowMs = BOT_DANGER_ARRIVAL_BUFFER_MS,
   context: BotContext,
 ): Direction | null {
-  const dangerMap = getDangerMap(context);
+  const dangerMap = resolveDangerMap(context);
   return findDirectionToNearestTile(player, predicate, dangerMap, context, minSafetyWindowMs);
 }
 
@@ -488,7 +489,7 @@ function findDirectionToNearestTile(
     { tile: start, first: null, distance: 0 },
   ];
   const visited = new Set<string>([startKey]);
-  const danger = actualDanger ?? getDangerMap(actualContext);
+  const danger = actualDanger ?? resolveDangerMap(actualContext);
   const moveDuration = getMoveDuration(player);
 
   while (queue.length > 0) {
@@ -770,7 +771,11 @@ function getPatrolDirection(
 /**
  * Build a map of danger (explosive impact times) at each tile
  */
-function getDangerMap(
+function resolveDangerMap(context: BotContext): Map<string, number> {
+  return context.dangerMap ?? buildBotDangerMap(context);
+}
+
+export function buildBotDangerMap(
   context: BotContext,
   extraBomb?: { tile: TileCoord; range: number; fuseMs: number },
 ): Map<string, number> {
@@ -954,7 +959,7 @@ export function getStableBotDirection(
   }
 
   const currentTile = getTileFromPosition(player.position);
-  const currentDangerMs = getDangerMap(context).get(tileKey(currentTile.x, currentTile.y));
+  const currentDangerMs = resolveDangerMap(context).get(tileKey(currentTile.x, currentTile.y));
   const immediateDanger = currentDangerMs !== undefined
     && currentDangerMs <= getMoveDuration(player) + BOT_DANGER_ARRIVAL_BUFFER_MS;
   if (immediateDanger) {
