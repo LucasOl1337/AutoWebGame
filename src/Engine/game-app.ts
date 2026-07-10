@@ -2143,12 +2143,6 @@ export class GameApp {
           ? nativeBindings ? this.input.consumePress(nativeBindings.bomb) : false
           : false;
         const wantsBomb = botDecision?.placeBomb || automationBomb || nativeBomb || onlineBomb;
-        if (wantsBomb) {
-          const placedBomb = this.placeBomb(player);
-          if (placedBomb && botDecision?.placeBomb && this.isBotControlled(id)) {
-            this.botBombCooldownMs = BOT_BOMB_COOLDOWN_MS;
-          }
-        }
         const wantsDetonate = botDecision?.detonate
           || this.consumeOnlineDetonatePress(id)
           || (this.shouldUseNativeControls()
