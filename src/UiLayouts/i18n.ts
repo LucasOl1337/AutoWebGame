@@ -150,7 +150,8 @@ export interface SiteCopy {
     enterSeat: (playerId: number) => string;
     enterHint: string;
     readyDisabledSolo: string;
-    readyDisabledQueue: string;
+    readyWaitingFor: (players: string, count: number) => string;
+    readyStarting: string;
     readyButton: string;
     readyHint: string;
     reconnectingHint: string;
@@ -430,7 +431,10 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       enterSeat: (playerId) => `Entrar na vaga P${playerId}`,
       enterHint: "A entrada na vaga livre acontece com um clique.",
       readyDisabledSolo: "Sua vaga esta pronta. Falta mais gente para iniciar.",
-      readyDisabledQueue: "Tudo certo. A partida comeca assim que o servidor iniciar o match.",
+      readyWaitingFor: (players, count) => count === 1
+        ? `Ainda precisa marcar pronto: ${players}.`
+        : `Ainda precisam marcar pronto: ${players}.`,
+      readyStarting: "Todos estao prontos. Iniciando partida...",
       readyButton: "Pronto para jogar",
       readyHint: "Seu personagem escolhido ja sera usado na vaga atual.",
       reconnectingHint: "Reconectando ao lobby. A acao volta assim que o backend responder.",
@@ -697,7 +701,10 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       enterSeat: (playerId) => `Join seat P${playerId}`,
       enterHint: "Joining the first open slot takes one click.",
       readyDisabledSolo: "Your seat is ready. More players are still needed to start.",
-      readyDisabledQueue: "All set. The match starts as soon as the server launches it.",
+      readyWaitingFor: (players, count) => count === 1
+        ? `Still needs to ready up: ${players}.`
+        : `Still need to ready up: ${players}.`,
+      readyStarting: "Everyone is ready. Starting match...",
       readyButton: "Ready to play",
       readyHint: "Your selected character will be used in this seat.",
       reconnectingHint: "Reconnecting to the lobby. This action returns when the backend responds.",

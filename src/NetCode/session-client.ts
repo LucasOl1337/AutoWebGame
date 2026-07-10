@@ -368,6 +368,24 @@ export function canSendLobbyAction(realtimeReady: boolean, socketReadyState: num
   return realtimeReady && socketReadyState === WEBSOCKET_OPEN_READY_STATE;
 }
 
+export function formatLobbyReadyReminder(copy: SiteCopy, lobby: LobbySummary): string {
+  const waitingPlayers = ALL_PLAYER_IDS
+    .filter((playerId) => {
+      const seat = lobby.seats[playerId];
+      return (Boolean(seat.clientId) || seat.occupantType === "bot") && !seat.ready;
+    })
+    .map((playerId) => {
+      const displayName = lobby.seats[playerId].displayName?.trim();
+      return displayName ? `${displayName} (P${playerId})` : `P${playerId}`;
+    });
+
+  if (waitingPlayers.length === 0) {
+    return copy.setup.readyStarting;
+  }
+
+  return copy.setup.readyWaitingFor(waitingPlayers.join(", "), waitingPlayers.length);
+}
+
 export function formatSetupLoadingBrief(copy: SiteCopy, options: SetupLoadingBriefOptions): SetupLoadingBrief {
   const modeStepText = (() => {
     switch (options.mode) {
@@ -2665,7 +2683,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.elements.setupPrimaryButton.disabled = true;
       this.elements.setupPrimaryHint.textContent = lobby.occupantCount < 2
         ? copy.setup.readyDisabledSolo
-        : copy.setup.readyDisabledQueue;
+        : formatLobbyReadyReminder(copy, lobby);
       return;
     }
 
