@@ -33,7 +33,7 @@ const behaviorChecks = {
     && expired.remainingMs === 0,
 };
 
-const workerSource = await readFile(new URL("../worker/index.js", import.meta.url), "utf8");
+const workerSource = (await readFile(new URL("../worker/index.js", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const clientSource = await readFile(new URL("../src/NetCode/session-client.ts", import.meta.url), "utf8");
 const protocolSource = await readFile(new URL("../src/NetCode/protocol.ts", import.meta.url), "utf8");
 

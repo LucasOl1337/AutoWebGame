@@ -55,4 +55,3 @@
 - Arquivos: `package.json`
 - Validacao: `npm run test:release-visibility` passou.
 - Risco: baixo; a mudanca adiciona apenas um alias de script para um check existente.
-
