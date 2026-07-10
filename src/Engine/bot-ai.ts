@@ -17,19 +17,19 @@ import type {
 } from "../Gameplay/types";
 import { tileKey } from "../Arenas/arena";
 import { getPowerUpPriorityScore } from "../Gameplay/powerups";
+import {
+  buildDangerMap,
+  getBombBlastKeys as projectBombBlastKeys,
+  type ProjectedBomb,
+} from "./danger-map";
 
 // Bot-specific constants
-const BOT_DANGER_FUSE_MS = 1000;
 const BOT_DANGER_ARRIVAL_BUFFER_MS = 140;
 const BOT_SCAN_RADIUS = 7;
 const BOT_SUDDEN_DEATH_LOOKAHEAD_MS = 2100;
 const BOT_STRATEGIC_MOVE_WINDOW_STEPS = 2;
 const BOT_PREEMPTIVE_ESCAPE_STEPS = 4;
 const BOT_DIRECTION_CONFIRM_FRAMES = 2;
-
-// Sudden death constants
-const SUDDEN_DEATH_FALL_MS = 340;
-const SUDDEN_DEATH_TICK_MS = 800;
 
 // Direction delta mapping
 const directionDelta: Record<Direction, TileCoord> = {
@@ -777,106 +777,16 @@ function resolveDangerMap(context: BotContext): Map<string, number> {
 
 export function buildBotDangerMap(
   context: BotContext,
-  extraBomb?: { tile: TileCoord; range: number; fuseMs: number },
+  extraBomb?: ProjectedBomb,
 ): Map<string, number> {
-  const danger = new Map<string, number>();
-  const registerDanger = (key: string, fuseMs: number): void => {
-    const previous = danger.get(key);
-    if (previous === undefined || fuseMs < previous) {
-      danger.set(key, fuseMs);
-    }
-  };
-
-  for (const flame of context.flames) {
-    registerDanger(tileKey(flame.tile.x, flame.tile.y), 0);
-  }
-
-  const bombsToProject: Array<{ tile: TileCoord; range: number; fuseMs: number; blastKeys: Set<string> }> = context.bombs
-    .filter((bomb) => bomb.fuseMs <= BOMB_FUSE_MS + BOT_DANGER_FUSE_MS)
-    .map((bomb) => ({
-      tile: bomb.tile,
-      range: bomb.flameRange,
-      fuseMs: Math.max(0, bomb.fuseMs),
-      blastKeys: getBombBlastKeys(bomb.tile, bomb.flameRange, context),
-    }));
-
-  if (extraBomb) {
-    bombsToProject.push({
-      tile: extraBomb.tile,
-      range: extraBomb.range,
-      fuseMs: Math.max(0, extraBomb.fuseMs),
-      blastKeys: getBombBlastKeys(extraBomb.tile, extraBomb.range, context),
-    });
-  }
-
-  let updated = true;
-  while (updated) {
-    updated = false;
-    for (const source of bombsToProject) {
-      for (const target of bombsToProject) {
-        if (source === target || source.fuseMs >= target.fuseMs) {
-          continue;
-        }
-        if (source.blastKeys.has(tileKey(target.tile.x, target.tile.y))) {
-          target.fuseMs = source.fuseMs;
-          updated = true;
-        }
-      }
-    }
-  }
-
-  for (const bomb of bombsToProject) {
-    for (const key of bomb.blastKeys) {
-      registerDanger(key, bomb.fuseMs);
-    }
-  }
-
-  for (const effect of context.suddenDeathClosureEffects) {
-    if (effect.impacted) {
-      continue;
-    }
-    const impactMs = Math.max(0, SUDDEN_DEATH_FALL_MS - effect.elapsedMs);
-    registerDanger(tileKey(effect.tile.x, effect.tile.y), impactMs);
-  }
-
-  if (context.suddenDeathActive && context.suddenDeathPath.length > 0 && context.suddenDeathIndex < context.suddenDeathPath.length) {
-    const nextTickMs = Math.max(0, context.suddenDeathTickMs);
-    for (let index = context.suddenDeathIndex; index < context.suddenDeathPath.length; index += 1) {
-      const stepFromNow = index - context.suddenDeathIndex;
-      const impactMs = nextTickMs + stepFromNow * SUDDEN_DEATH_TICK_MS;
-      const tile = context.suddenDeathPath[index];
-      registerDanger(tileKey(tile.x, tile.y), impactMs);
-    }
-  }
-
-  return danger;
+  return buildDangerMap(context, extraBomb);
 }
 
 /**
  * Get all tiles affected by a bomb blast
  */
 function getBombBlastKeys(origin: TileCoord, range: number, context: BotContext): Set<string> {
-  const keys = new Set<string>([tileKey(origin.x, origin.y)]);
-  const arenaWidth = context.arena.config.grid.width;
-  const arenaHeight = context.arena.config.grid.height;
-  for (const delta of Object.values(directionDelta)) {
-    for (let step = 1; step <= range; step += 1) {
-      const x = origin.x + delta.x * step;
-      const y = origin.y + delta.y * step;
-      if (x < 0 || y < 0 || x >= arenaWidth || y >= arenaHeight) {
-        break;
-      }
-      const key = tileKey(x, y);
-      if (context.arena.solid.has(key)) {
-        break;
-      }
-      keys.add(key);
-      if (context.arena.breakable.has(key)) {
-        break;
-      }
-    }
-  }
-  return keys;
+  return projectBombBlastKeys(origin, range, context.arena);
 }
 
 /**

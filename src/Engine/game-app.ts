@@ -93,6 +93,13 @@ import {
   getBotDecision as botAI_getBotDecision,
   getStableBotDirection as botAI_getStableBotDirection,
 } from "./bot-ai";
+import {
+  buildDangerMap,
+  getBombBlastKeys as projectBombBlastKeys,
+  SUDDEN_DEATH_FALL_MS,
+  SUDDEN_DEATH_TICK_MS,
+  type ProjectedBomb,
+} from "./danger-map";
 import { AutoImprovementBridge } from "./auto-improvement-bridge";
 import type { SkillContext } from "../ultimate/skill-system";
 import {
@@ -181,7 +188,6 @@ const LOCAL_BOT_TOGGLE_KEY = "KeyB";
 const LOCAL_BOT_CYCLE_KEY = "KeyN";
 const MAX_LOCAL_BOT_FILL = 3;
 const BOT_BOMB_COOLDOWN_MS = 900;
-const BOT_DANGER_FUSE_MS = 1000;
 const FULLSCREEN_HUD_HEIGHT = 34;
 const FULLSCREEN_HUD_CENTER_WIDTH = 224;
 const WALK_FRAME_MS = 100;
@@ -197,8 +203,6 @@ const DANGER_ADRENALINE_ETA_MS = 900;
 const DANGER_ADRENALINE_SPEED_MULTIPLIER = 1.18;
 const SUDDEN_DEATH_ELAPSED_MS = 40_000;
 const SUDDEN_DEATH_START_MS = ROUND_DURATION_MS - SUDDEN_DEATH_ELAPSED_MS;
-const SUDDEN_DEATH_TICK_MS = 800;
-const SUDDEN_DEATH_FALL_MS = 340;
 const SUDDEN_DEATH_IMPACT_LINGER_MS = 180;
 const SHIELD_GUARD_MS = 600;
 const SHIELD_BREAKAWAY_BOOST_MS = 520;
@@ -2285,100 +2289,12 @@ export class GameApp {
     return selectedBomb;
   }
 
-  private getDangerMap(extraBomb?: { tile: TileCoord; range: number; fuseMs: number }): Map<string, number> {
-    const danger = new Map<string, number>();
-    const registerDanger = (key: string, fuseMs: number): void => {
-      const previous = danger.get(key);
-      if (previous === undefined || fuseMs < previous) {
-        danger.set(key, fuseMs);
-      }
-    };
-
-    for (const flame of this.flames) {
-      registerDanger(tileKey(flame.tile.x, flame.tile.y), 0);
-    }
-
-    const bombsToProject: Array<{ tile: TileCoord; range: number; fuseMs: number; blastKeys: Set<string> }> = this.bombs
-      .filter((bomb) => bomb.fuseMs <= BOMB_FUSE_MS + BOT_DANGER_FUSE_MS)
-      .map((bomb) => ({
-        tile: bomb.tile,
-        range: bomb.flameRange,
-        fuseMs: Math.max(0, bomb.fuseMs),
-        blastKeys: this.getBombBlastKeys(bomb.tile, bomb.flameRange),
-      }));
-
-    if (extraBomb) {
-      bombsToProject.push({
-        tile: extraBomb.tile,
-        range: extraBomb.range,
-        fuseMs: Math.max(0, extraBomb.fuseMs),
-        blastKeys: this.getBombBlastKeys(extraBomb.tile, extraBomb.range),
-      });
-    }
-
-    let updated = true;
-    while (updated) {
-      updated = false;
-      for (const source of bombsToProject) {
-        for (const target of bombsToProject) {
-          if (source === target || source.fuseMs >= target.fuseMs) {
-            continue;
-          }
-          if (source.blastKeys.has(tileKey(target.tile.x, target.tile.y))) {
-            target.fuseMs = source.fuseMs;
-            updated = true;
-          }
-        }
-      }
-    }
-
-    for (const bomb of bombsToProject) {
-      for (const key of bomb.blastKeys) {
-        registerDanger(key, bomb.fuseMs);
-      }
-    }
-
-    for (const effect of this.suddenDeathClosureEffects) {
-      if (effect.impacted) {
-        continue;
-      }
-      const impactMs = Math.max(0, SUDDEN_DEATH_FALL_MS - effect.elapsedMs);
-      registerDanger(tileKey(effect.tile.x, effect.tile.y), impactMs);
-    }
-
-    if (this.suddenDeathActive && this.suddenDeathPath.length > 0 && this.suddenDeathIndex < this.suddenDeathPath.length) {
-      const nextTickMs = Math.max(0, this.suddenDeathTickMs);
-      for (let index = this.suddenDeathIndex; index < this.suddenDeathPath.length; index += 1) {
-        const stepFromNow = index - this.suddenDeathIndex;
-        const impactMs = nextTickMs + stepFromNow * SUDDEN_DEATH_TICK_MS;
-        const tile = this.suddenDeathPath[index];
-        registerDanger(tileKey(tile.x, tile.y), impactMs);
-      }
-    }
-
-    return danger;
+  private getDangerMap(extraBomb?: ProjectedBomb): Map<string, number> {
+    return buildDangerMap(this.createBotContext(), extraBomb);
   }
 
   private getBombBlastKeys(origin: TileCoord, range: number): Set<string> {
-    const keys = new Set<string>([tileKey(origin.x, origin.y)]);
-    for (const delta of Object.values(directionDelta)) {
-      for (let step = 1; step <= range; step += 1) {
-        const x = origin.x + delta.x * step;
-        const y = origin.y + delta.y * step;
-        if (x < 0 || y < 0 || x >= this.getArenaGridWidth() || y >= this.getArenaGridHeight()) {
-          break;
-        }
-        const key = tileKey(x, y);
-        if (this.arena.solid.has(key)) {
-          break;
-        }
-        keys.add(key);
-        if (this.arena.breakable.has(key)) {
-          break;
-        }
-      }
-    }
-    return keys;
+    return projectBombBlastKeys(origin, range, this.arena);
   }
 
   private getMoveDuration(player: PlayerState): number {
