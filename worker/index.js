@@ -29,6 +29,11 @@ import {
 import { mergeSequencedOnlineInputState } from "../src/NetCode/input-latch";
 import { createFixedRatePumpState, consumeFixedRatePumpSteps } from "../src/NetCode/server-tick";
 import { getVacantRoomRecoveryState } from "../src/NetCode/lobby-reconnect-grace";
+import {
+  createReconnectToken,
+  getActiveMatchReconnectState,
+  normalizeReconnectToken,
+} from "../src/NetCode/reconnect-session";
 
 const STATE_VERSION = 3;
 const MATCH_TICK_MS = 1000 / 60;
@@ -144,6 +149,7 @@ function resolvePublicApiRoute(pathname, method) {
  *   clients: Set<string>;
  *   chat: ChatEntry[];
  *   seats: Record<1 | 2 | 3 | 4, LobbySeat>;
+ *   reconnectReservations: Record<1 | 2 | 3 | 4, ActiveMatchReconnectReservation | null>;
  * }} LobbyRoom
  *
  * @typedef {{
@@ -153,6 +159,12 @@ function resolvePublicApiRoute(pathname, method) {
  *   ready: boolean;
  *   occupantType: "empty" | "human" | "bot";
  * }} LobbySeat
+ *
+ * @typedef {{
+ *   clientId: string;
+ *   reconnectToken: string;
+ *   disconnectedAt: number | null;
+ * }} ActiveMatchReconnectReservation
  *
  * @typedef {{
  *   id: string;
@@ -244,6 +256,8 @@ export class GlobalLobby extends DurableObject {
   sockets = new Map();
   /** @type {Map<string, import("../src/NetCode/account").PlayerAccount | null>} */
   clientAccounts = new Map();
+  /** @type {Map<string, string>} */
+  clientReconnectTokens = new Map();
   /** @type {Map<string, import("../src/NetCode/matchmaking").OnlineClientIntent>} */
   clientIntents = new Map();
   /** @type {Set<string>} */
@@ -288,6 +302,9 @@ export class GlobalLobby extends DurableObject {
             clients: new Set(room.clients),
             chat: Array.isArray(room.chat) ? room.chat.slice(-40) : [],
             seats: createSeatMap((seatId) => normalizeStoredSeat(room.seats?.[seatId], room.roomMode === "endless")),
+            reconnectReservations: createSeatMap((seatId) => (
+              normalizeStoredReconnectReservation(room.reconnectReservations?.[seatId])
+            )),
           },
         ]),
       );
@@ -297,6 +314,10 @@ export class GlobalLobby extends DurableObject {
         if (attachment && typeof attachment === "object" && typeof attachment.clientId === "string") {
           this.sockets.set(attachment.clientId, websocket);
           this.clientAccounts.set(attachment.clientId, normalizeStoredAttachmentAccount(attachment.account));
+          const reconnectToken = normalizeReconnectToken(attachment.reconnectToken);
+          if (reconnectToken) {
+            this.clientReconnectTokens.set(attachment.clientId, reconnectToken);
+          }
           this.clientIntents.set(attachment.clientId, "idle");
         }
       }
@@ -424,20 +445,37 @@ export class GlobalLobby extends DurableObject {
       return new Response("Expected websocket upgrade", { status: 426 });
     }
 
+    const reconciledRooms = this.reconcileRoomsWithActiveSockets();
+    if (reconciledRooms) {
+      await this.persistState();
+    }
+    const requestedReconnectToken = normalizeReconnectToken(url.searchParams.get("resumeToken"));
+    const resumedClient = requestedReconnectToken
+      ? this.restoreActiveMatchClient(requestedReconnectToken)
+      : null;
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    const clientId = createId("cli");
+    const clientId = resumedClient?.clientId ?? createId("cli");
+    const reconnectToken = createReconnectToken();
+    if (resumedClient) {
+      resumedClient.reconnectToken = reconnectToken;
+    }
     const account = await this.readCurrentAccountFromRequest(request);
     await this.recordDailyIp(request);
 
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ clientId, account });
+    server.serializeAttachment({ clientId, account, reconnectToken });
     this.sockets.set(clientId, server);
     this.clientAccounts.set(clientId, account);
+    this.clientReconnectTokens.set(clientId, reconnectToken);
     this.clientIntents.set(clientId, "idle");
+    if (resumedClient) {
+      await this.persistState();
+    }
     this.send(server, {
       type: "hello",
       clientId,
+      reconnectToken,
       account,
       sessionState: this.buildClientSessionState(clientId),
       lobbies: this.buildLobbyList(),
@@ -952,6 +990,7 @@ export class GlobalLobby extends DurableObject {
       emptySince: null,
       chat: [],
       seats: createSeatMap(() => createEmptySeat()),
+      reconnectReservations: createSeatMap(() => null),
     };
 
     this.rooms.set(roomCode, room);
@@ -1007,6 +1046,18 @@ export class GlobalLobby extends DurableObject {
     room.emptySince = null;
     await this.persistState();
     this.sendJoinedLobby(clientId, room);
+    const resumedSeatId = this.findSeatForClient(room, clientId);
+    const activeMatch = this.matches.get(room.roomCode);
+    if (room.status === "playing" && resumedSeatId && activeMatch) {
+      this.sendMatchStartedToSeat(
+        room,
+        resumedSeatId,
+        activeMatch.activePlayerIds,
+        activeMatch.characterSelections,
+        activeMatch.botPlayerIds,
+      );
+      this.sendSnapshotToClient(clientId, room.roomCode);
+    }
     this.broadcastLobbyToMembers(room);
     this.broadcastLobbyList();
     this.broadcastQuickMatchState();
@@ -1074,6 +1125,7 @@ export class GlobalLobby extends DurableObject {
     for (const seatId of PLAYER_IDS) {
       if (room.seats[seatId].clientId === clientId && seatId !== seat) {
         room.seats[seatId] = createEmptySeat();
+        room.reconnectReservations[seatId] = null;
       }
     }
 
@@ -1217,6 +1269,7 @@ export class GlobalLobby extends DurableObject {
       clients: new Set(),
       chat: [],
       seats: createSeatMap((seatId) => createBotSeat((seatId - 1) % 4)),
+      reconnectReservations: createSeatMap(() => null),
     };
     this.refreshSeatLabels(room);
     return room;
@@ -1514,15 +1567,27 @@ export class GlobalLobby extends DurableObject {
     if (!clientId) {
       return;
     }
+    if (this.sockets.get(clientId) !== websocket) {
+      return;
+    }
 
+    const room = this.findRoomForClient(clientId);
+    const reservedActiveMatchSeat = room
+      ? this.reserveActiveMatchSeatForReconnect(room, clientId)
+      : false;
     this.sockets.delete(clientId);
     this.clientAccounts.delete(clientId);
+    this.clientReconnectTokens.delete(clientId);
     this.quickMatchPendingClients.delete(clientId);
     this.preferredCharacterSelections.delete(clientId);
     this.clientIntents.delete(clientId);
-    const room = this.findRoomForClient(clientId);
     if (room) {
-      await this.releaseClientFromRoom(room, clientId, { preserveVacantRoom: true });
+      if (reservedActiveMatchSeat) {
+        await this.persistState();
+        this.broadcastLobbyToMembers(room);
+      } else {
+        await this.releaseClientFromRoom(room, clientId, { preserveVacantRoom: true });
+      }
     }
     this.reconcileRoomsWithActiveSockets();
     this.broadcastLobbyList();
@@ -2359,6 +2424,7 @@ export class GlobalLobby extends DurableObject {
     for (const seatId of PLAYER_IDS) {
       if (room.seats[seatId].clientId === clientId) {
         room.seats[seatId] = createEmptySeat();
+        room.reconnectReservations[seatId] = null;
       }
     }
 
@@ -2528,6 +2594,10 @@ export class GlobalLobby extends DurableObject {
       normalizeCharacterIndex(rawCharacterIndex, room.seats[seat].characterIndex ?? ((seat - 1) % 2)),
       this.getHumanSeatDisplayName(clientId, seat),
     );
+    const reconnectToken = this.clientReconnectTokens.get(clientId) ?? null;
+    room.reconnectReservations[seat] = reconnectToken
+      ? { clientId, reconnectToken, disconnectedAt: null }
+      : null;
   }
 
   /**
@@ -2616,10 +2686,67 @@ export class GlobalLobby extends DurableObject {
     }
   }
 
+  /**
+   * @param {LobbyRoom} room
+   * @param {string} clientId
+   * @returns {boolean}
+   */
+  reserveActiveMatchSeatForReconnect(room, clientId) {
+    if (room.status !== "playing" || room.roomMode !== "classic") {
+      return false;
+    }
+    const seatId = this.findSeatForClient(room, clientId);
+    const match = this.matches.get(room.roomCode);
+    const reconnectToken = this.clientReconnectTokens.get(clientId) ?? null;
+    if (!seatId || !match || !reconnectToken) {
+      return false;
+    }
+
+    room.clients.delete(clientId);
+    room.reconnectReservations[seatId] = {
+      clientId,
+      reconnectToken,
+      disconnectedAt: Date.now(),
+    };
+    match.inputs[seatId] = createNeutralInput();
+    return true;
+  }
+
+  /**
+   * @param {string} reconnectToken
+   * @param {number} [nowMs]
+   * @returns {ActiveMatchReconnectReservation | null}
+   */
+  restoreActiveMatchClient(reconnectToken, nowMs = Date.now()) {
+    for (const room of this.rooms.values()) {
+      if (room.status !== "playing" || room.roomMode !== "classic" || !this.matches.has(room.roomCode)) {
+        continue;
+      }
+      for (const seatId of PLAYER_IDS) {
+        const reservation = room.reconnectReservations[seatId];
+        if (!reservation || !timingSafeEqual(reservation.reconnectToken, reconnectToken)) {
+          continue;
+        }
+        const recovery = getActiveMatchReconnectState(reservation.disconnectedAt, nowMs);
+        if (!recovery.canResume || room.seats[seatId].clientId !== reservation.clientId) {
+          return null;
+        }
+        if (this.sockets.has(reservation.clientId)) {
+          return null;
+        }
+        reservation.disconnectedAt = null;
+        room.clients.add(reservation.clientId);
+        room.emptySince = null;
+        return reservation;
+      }
+    }
+    return null;
+  }
+
   reconcileRoomsWithActiveSockets(nowMs = Date.now()) {
     let changed = false;
     for (const [roomCode, room] of this.rooms.entries()) {
-      if (this.sanitizeRoomOccupancy(room)) {
+      if (this.sanitizeRoomOccupancy(room, nowMs)) {
         changed = true;
       }
       const roomIsVacant = !PLAYER_IDS.some((seatId) => room.seats[seatId].clientId)
@@ -2646,8 +2773,9 @@ export class GlobalLobby extends DurableObject {
   /**
    * @param {LobbyRoom} room
    */
-  sanitizeRoomOccupancy(room) {
+  sanitizeRoomOccupancy(room, nowMs = Date.now()) {
     let changed = false;
+    const activeMatch = this.matches.get(room.roomCode);
     const activeClients = new Set(
       Array.from(room.clients).filter((clientId) => this.sockets.has(clientId)),
     );
@@ -2660,9 +2788,20 @@ export class GlobalLobby extends DurableObject {
     for (const seatId of PLAYER_IDS) {
       const seat = room.seats[seatId];
       if (seat.clientId && !this.sockets.has(seat.clientId)) {
+        const reservation = room.reconnectReservations[seatId];
+        const recovery = getActiveMatchReconnectState(reservation?.disconnectedAt, nowMs);
+        const reservationIsValid = room.status === "playing"
+          && room.roomMode === "classic"
+          && Boolean(activeMatch)
+          && reservation?.clientId === seat.clientId
+          && recovery.canResume;
+        if (reservationIsValid) {
+          continue;
+        }
         room.seats[seatId] = room.roomMode === "endless"
           ? createBotSeat(seat.characterIndex ?? ((seatId - 1) % 4))
           : createEmptySeat();
+        room.reconnectReservations[seatId] = null;
         changed = true;
       } else if (seat.clientId) {
         room.clients.add(seat.clientId);
@@ -2674,7 +2813,6 @@ export class GlobalLobby extends DurableObject {
       changed = true;
     }
 
-    const activeMatch = this.matches.get(room.roomCode);
     const mustResetPlayingRoom = room.status === "playing"
       && (
         !activeMatch
@@ -2754,6 +2892,7 @@ export class GlobalLobby extends DurableObject {
         clients: Array.from(room.clients),
         chat: room.chat.slice(-40),
         seats: createSeatMap((seatId) => room.seats[seatId]),
+        reconnectReservations: createSeatMap((seatId) => room.reconnectReservations[seatId]),
       })),
     });
   }
@@ -2824,6 +2963,14 @@ export class GlobalLobby extends DurableObject {
     if (!room || !match || room.status !== "playing") {
       this.stopRoomMatch(roomCode);
       return;
+    }
+    if (this.sanitizeRoomOccupancy(room)) {
+      await this.persistState();
+      this.broadcastLobbyToMembers(room);
+      this.broadcastLobbyList();
+      if (room.status !== "playing") {
+        return;
+      }
     }
 
     const pump = consumeFixedRatePumpSteps(
@@ -2925,12 +3072,25 @@ export class GlobalLobby extends DurableObject {
    */
   broadcastSnapshot(roomCode) {
     const room = this.rooms.get(roomCode);
+    if (!room) {
+      return;
+    }
+    for (const clientId of room.clients) {
+      this.sendSnapshotToClient(clientId, roomCode);
+    }
+  }
+
+  /**
+   * @param {string} clientId
+   * @param {string} roomCode
+   */
+  sendSnapshotToClient(clientId, roomCode) {
     const match = this.matches.get(roomCode);
-    if (!room || !match) {
+    if (!match) {
       return;
     }
     const snapshot = match.game.exportOnlineSnapshot();
-    this.broadcastToRoom(room, {
+    this.sendToClient(clientId, {
       type: "host-snapshot",
       snapshot: {
         ...snapshot,
@@ -3052,6 +3212,7 @@ export class GlobalLobby extends DurableObject {
       clients: new Set([clientId]),
       chat: [],
       seats: createSeatMap(() => createEmptySeat()),
+      reconnectReservations: createSeatMap(() => null),
     };
 
     this.assignSeat(room, 1, clientId, rawCharacterIndex);
@@ -3158,6 +3319,7 @@ export class GlobalLobby extends DurableObject {
     if (!seat?.clientId) {
       return;
     }
+    const match = this.matches.get(room.roomCode);
     this.sendToClient(seat.clientId, {
       type: "match-started",
       config: {
@@ -3261,6 +3423,23 @@ function normalizeStoredSeat(seat, endlessRoom = false) {
     return createBotSeat(normalizeCharacterIndex(seat.characterIndex, 0));
   }
   return createEmptySeat();
+}
+
+function normalizeStoredReconnectReservation(reservation) {
+  if (!reservation || typeof reservation !== "object") {
+    return null;
+  }
+  const reconnectToken = normalizeReconnectToken(reservation.reconnectToken);
+  if (typeof reservation.clientId !== "string" || !reconnectToken) {
+    return null;
+  }
+  return {
+    clientId: reservation.clientId,
+    reconnectToken,
+    disconnectedAt: Number.isFinite(reservation.disconnectedAt)
+      ? Math.max(0, reservation.disconnectedAt)
+      : null,
+  };
 }
 
 function normalizeStoredAccount(account) {

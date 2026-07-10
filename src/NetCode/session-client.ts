@@ -32,6 +32,7 @@ import {
 import type { PlayerBillingStatus } from "./billing";
 import { pickSurpriseCharacterIndex } from "./character-surprise";
 import type { OnlineSessionState } from "./matchmaking";
+import { buildReconnectWebSocketUrl } from "./reconnect-session";
 import {
   buildRoomInviteUrl,
   copyTextWithFallback,
@@ -495,6 +496,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private socket: WebSocket | null = null;
   private reconnectTimer: number | null = null;
   private clientId: string | null = null;
+  private reconnectToken: string | null = null;
   private lobbies: LobbySummary[] = [];
   private currentLobby: LobbyState | null = null;
   private pendingAutoJoinRoom: string | null;
@@ -687,7 +689,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     }
     this.realtimeReady = false;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const socket = new WebSocket(`${protocol}//${window.location.host}/online`);
+    const socket = new WebSocket(buildReconnectWebSocketUrl(
+      `${protocol}//${window.location.host}/online`,
+      this.reconnectToken,
+    ));
     this.socket = socket;
 
     socket.addEventListener("open", () => {
@@ -1181,6 +1186,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     switch (message.type) {
       case "hello":
         this.clientId = message.clientId;
+        this.reconnectToken = message.reconnectToken;
         this.currentAccount = message.account;
         this.applySessionState(message.sessionState);
         this.lobbies = message.lobbies;

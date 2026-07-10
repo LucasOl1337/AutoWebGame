@@ -161,6 +161,7 @@ export interface OnlineSessionBridge {
 export interface ServerHelloMessage {
   type: "hello";
   clientId: string;
+  reconnectToken: string;
   account: PlayerAccount | null;
   sessionState: OnlineSessionState;
   lobbies: LobbySummary[];
