@@ -116,6 +116,7 @@ export interface SiteCopy {
     entering: (title: string) => string;
     joinUnavailable: string;
     roomStatusLive: string;
+    roomStatusFull: string;
     roomStatusOpen: string;
     freeSeat: (playerId: number) => string;
     filledSeat: (playerId: number) => string;
@@ -398,6 +399,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       entering: (title) => `Entrando em ${title}...`,
       joinUnavailable: "Nao foi possivel entrar no lobby agora.",
       roomStatusLive: "Ao vivo",
+      roomStatusFull: "Sala cheia",
       roomStatusOpen: "Pronto para entrar",
       freeSeat: (playerId) => `P${playerId} livre`,
       filledSeat: (playerId) => `P${playerId}`,
@@ -669,6 +671,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       entering: (title) => `Joining ${title}...`,
       joinUnavailable: "Could not join the lobby right now.",
       roomStatusLive: "Live",
+      roomStatusFull: "Room full",
       roomStatusOpen: "Ready to join",
       freeSeat: (playerId) => `P${playerId} open`,
       filledSeat: (playerId) => `P${playerId}`,

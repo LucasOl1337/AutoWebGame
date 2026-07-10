@@ -38,8 +38,8 @@ export function getLobbyJoinBlockReason(
   return seatsFull ? "full" : null;
 }
 
-export function isLobbyCardJoinDisabled(status: LobbyStatus): boolean {
-  return getLobbyJoinBlockReason(status, false, false) === "match-in-progress";
+export function isLobbyCardJoinDisabled(status: LobbyStatus, seatsFull = false): boolean {
+  return getLobbyJoinBlockReason(status, false, seatsFull) !== null;
 }
 
 export function isPlayableLobbySeat(seat: SeatOccupancyLike | undefined): boolean {

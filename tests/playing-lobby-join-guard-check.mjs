@@ -32,13 +32,18 @@ function createActionTarget() {
 
 let openJoinCalls = 0;
 let liveJoinCalls = 0;
+let fullJoinCalls = 0;
 const openCard = createActionTarget();
 const liveCard = createActionTarget();
+const fullCard = createActionTarget();
 configureLobbyCardAction(openCard, isLobbyCardJoinDisabled("open"), () => {
   openJoinCalls += 1;
 });
 configureLobbyCardAction(liveCard, isLobbyCardJoinDisabled("playing"), () => {
   liveJoinCalls += 1;
+});
+configureLobbyCardAction(fullCard, isLobbyCardJoinDisabled("open", true), () => {
+  fullJoinCalls += 1;
 });
 openCard.listeners[0]?.listener();
 
@@ -49,10 +54,14 @@ const cardBehaviorChecks = {
   liveCardIsDisabled: liveCard.disabled === true,
   liveCardBindsNoJoinAction: liveCard.listeners.length === 0,
   liveCardActionNeverRuns: liveJoinCalls === 0,
+  fullCardIsDisabled: fullCard.disabled === true,
+  fullCardBindsNoJoinAction: fullCard.listeners.length === 0,
+  fullCardActionNeverRuns: fullJoinCalls === 0,
 };
 
 const workerSource = await readFile(new URL("../worker/index.js", import.meta.url), "utf8");
 const clientSource = await readFile(new URL("../src/NetCode/session-client.ts", import.meta.url), "utf8");
+const i18nSource = await readFile(new URL("../src/UiLayouts/i18n.ts", import.meta.url), "utf8");
 const cssSource = await readFile(new URL("../src/UiLayouts/main.css", import.meta.url), "utf8");
 const joinStart = workerSource.indexOf("async handleJoinLobby(clientId, rawRoomCode)");
 const joinEnd = workerSource.indexOf("async handleLeaveLobby(clientId)", joinStart);
@@ -77,8 +86,13 @@ const integrationChecks = {
   seatedResumeStillSendsMatchConfiguration: joinSource.includes("if (room.status === \"playing\" && resumedSeatId && activeMatch)")
     && joinSource.includes("this.sendMatchStartedToSeat(")
     && joinSource.includes("this.sendSnapshotToClient(clientId, room.roomCode);"),
-  clientUsesBehavioralCardPolicy: renderSource.includes("configureLobbyCardAction(card, isLobbyCardJoinDisabled(lobby.status)"),
-  liveStatusRemainsVisible: renderSource.includes('lobby.status === "playing" ? copy.lobbies.roomStatusLive'),
+  clientUsesBehavioralCardPolicy: renderSource.includes("configureLobbyCardAction(card, isLobbyCardJoinDisabled(lobby.status, seatsFull)"),
+  clientDerivesFullStateFromOccupancy: renderSource.includes("const seatsFull = lobby.occupantCount >= LOBBY_MAX_PLAYERS;"),
+  liveStatusRemainsVisible: renderSource.includes("? copy.lobbies.roomStatusLive"),
+  fullStatusIsVisible: renderSource.includes("seatsFull ? copy.lobbies.roomStatusFull"),
+  fullStatusIsLocalized: i18nSource.includes('roomStatusFull: "Sala cheia"')
+    && i18nSource.includes('roomStatusFull: "Room full"'),
+  workerCountsBotsAsOccupiedSeats: joinSource.includes("PLAYER_IDS.every((seatId) => isPlayableLobbySeat(room.seats[seatId]))"),
   disabledCardKeepsReadableText: disabledRule.includes("cursor: default;")
     && !disabledRule.includes("opacity"),
 };

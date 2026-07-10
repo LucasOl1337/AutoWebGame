@@ -1027,7 +1027,7 @@ export class GlobalLobby extends DurableObject {
     }
 
     const alreadySeated = PLAYER_IDS.some((seatId) => room.seats[seatId].clientId === clientId);
-    const seatsFull = PLAYER_IDS.every((seatId) => Boolean(room.seats[seatId].clientId));
+    const seatsFull = PLAYER_IDS.every((seatId) => isPlayableLobbySeat(room.seats[seatId]));
     const joinBlockReason = getLobbyJoinBlockReason(room.status, alreadySeated, seatsFull);
     if (joinBlockReason) {
       this.sendToClient(clientId, {

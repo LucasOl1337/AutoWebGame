@@ -2590,7 +2590,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       const card = document.createElement("button");
       card.type = "button";
       card.className = "experience-room-card";
-      configureLobbyCardAction(card, isLobbyCardJoinDisabled(lobby.status), () => {
+      const seatsFull = lobby.occupantCount >= LOBBY_MAX_PLAYERS;
+      configureLobbyCardAction(card, isLobbyCardJoinDisabled(lobby.status, seatsFull), () => {
         this.idleScreen = "lobby-list";
         this.pendingAutoJoinRoom = lobby.roomCode;
         this.telemetry.track("lobby_join_clicked", {
@@ -2614,7 +2615,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
       const status = document.createElement("span");
       status.className = "experience-room-card__status";
-      status.textContent = lobby.status === "playing" ? copy.lobbies.roomStatusLive : copy.lobbies.roomStatusOpen;
+      status.textContent = lobby.status === "playing"
+        ? copy.lobbies.roomStatusLive
+        : seatsFull ? copy.lobbies.roomStatusFull : copy.lobbies.roomStatusOpen;
 
       const occupants = document.createElement("div");
       occupants.className = "experience-room-card__occupants";
