@@ -671,7 +671,7 @@
         <a href="/terms.html">Termos</a>
       </p>
     </footer>
-    <button class="back-to-top" type="button" aria-label="Voltar ao inicio" data-visible="false">Topo</button>
+    <button class="back-to-top" type="button" aria-label="Voltar ao inicio" data-visible="false" hidden>Topo</button>
     <script>
       const guideLinks = Array.from(document.querySelectorAll('.quick-strip a[href^="#"]'));
       const guideSections = guideLinks
@@ -703,7 +703,9 @@
       }
 
       const updateBackToTop = () => {
-        backToTop.dataset.visible = window.scrollY > window.innerHeight * 0.8 ? "true" : "false";
+        const shouldShow = window.scrollY > window.innerHeight * 0.8;
+        backToTop.dataset.visible = shouldShow ? "true" : "false";
+        backToTop.hidden = !shouldShow;
       };
       window.addEventListener("scroll", updateBackToTop, { passive: true });
       updateBackToTop();
