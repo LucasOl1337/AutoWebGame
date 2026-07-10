@@ -70,6 +70,13 @@ import {
   type SkillPowerUpType,
   SKILL_POWER_UP_TYPES,
 } from "../Gameplay/powerups";
+import {
+  advancePickupChain,
+  createPickupChainState,
+  PICKUP_CHAIN_GUARD_MS,
+  registerPickupForChain,
+  type PickupChainState,
+} from "../Gameplay/pickup-chain";
 import type {
   LobbyMode,
   MatchStartConfig,
@@ -343,6 +350,7 @@ interface PowerUpPickupNotice {
   playerId: PlayerId;
   type: SkillPowerUpType;
   valueLabel: string;
+  chainGuard: boolean;
   elapsedMs: number;
   remainingMs: number;
 }
@@ -441,6 +449,7 @@ export class GameApp {
   private animationClockMs = 0;
   private crateBreakAnimations: CrateBreakAnimation[] = [];
   private powerUpPickupNotices: PowerUpPickupNotice[] = [];
+  private pickupChains: Record<PlayerId, PickupChainState> = createPlayerRecord(() => createPickupChainState());
   private playerDeathAnimations: Record<PlayerId, PlayerDeathAnimationState | null> = createPlayerRecord(() => null);
   private suddenDeathActive = false;
   private suddenDeathTickMs = SUDDEN_DEATH_TICK_MS;
@@ -1924,6 +1933,7 @@ export class GameApp {
     this.magicBeams = [];
     this.crateBreakAnimations = [];
     this.powerUpPickupNotices = [];
+    this.pickupChains = createPlayerRecord(() => createPickupChainState());
     this.playerDeathAnimations = createPlayerRecord(() => null);
     this.nextBombId = 1;
     this.roundTimeMs = ROUND_DURATION_MS;
@@ -2968,6 +2978,10 @@ export class GameApp {
   }
 
   private updateVisualEffects(deltaMs: number): void {
+    for (const playerId of this.activePlayerIds) {
+      advancePickupChain(this.pickupChains[playerId], deltaMs);
+    }
+
     if (this.powerUpPickupNotices.length > 0) {
       for (const notice of this.powerUpPickupNotices) {
         notice.elapsedMs += deltaMs;
@@ -3195,8 +3209,12 @@ export class GameApp {
         if (powerUp.tile.x === tile.x && powerUp.tile.y === tile.y) {
           powerUp.collected = true;
           applyPowerUpToPlayer(player, powerUp.type);
+          const chainGuard = registerPickupForChain(this.pickupChains[id], powerUp.type);
+          if (chainGuard) {
+            player.flameGuardMs = Math.max(player.flameGuardMs, PICKUP_CHAIN_GUARD_MS);
+          }
           player.pickupSprintMs = Math.max(player.pickupSprintMs ?? 0, PICKUP_SPRINT_BOOST_MS);
-          this.addPowerUpPickupNotice(id, powerUp.type);
+          this.addPowerUpPickupNotice(id, powerUp.type, chainGuard);
           this.soundManager.playOneShot("powerCollect");
         }
       }
@@ -3786,7 +3804,7 @@ export class GameApp {
       ? this.formatPowerUpPickupNotice(recentPickup, compact ? 8 : 12)
       : this.shortenCharacterName(this.getCharacterLabel(playerId, compact ? 8 : 12), compact ? 8 : 12);
     const subtitleColor = recentPickup
-      ? getPowerUpDefinition(recentPickup.type).tint
+      ? recentPickup.chainGuard ? CANVAS_UI_GOLD_BRIGHT : getPowerUpDefinition(recentPickup.type).tint
       : CANVAS_UI_TEXT;
     const allSkillSlots = this.getHudSkillSlots(playerId);
     const skillSlots = compact
@@ -3920,12 +3938,17 @@ export class GameApp {
     } satisfies HudSkillSlot;
   }
 
-  private addPowerUpPickupNotice(playerId: PlayerId, type: SkillPowerUpType): void {
+  private addPowerUpPickupNotice(
+    playerId: PlayerId,
+    type: SkillPowerUpType,
+    chainGuard = false,
+  ): void {
     const slot = this.getHudSkillSlot(playerId, type);
     const notice: PowerUpPickupNotice = {
       playerId,
       type,
       valueLabel: slot.valueLabel,
+      chainGuard,
       elapsedMs: 0,
       remainingMs: POWER_UP_PICKUP_NOTICE_MS,
     };
@@ -3946,6 +3969,9 @@ export class GameApp {
   }
 
   private formatPowerUpPickupNotice(notice: PowerUpPickupNotice, maxLength: number): string {
+    if (notice.chainGuard) {
+      return maxLength <= 8 ? "CHAIN!" : "CHAIN GUARD";
+    }
     const definition = getPowerUpDefinition(notice.type);
     const label = maxLength <= 8 ? definition.shortLabel : definition.label;
     return this.shortenCharacterName(`+${label} ${notice.valueLabel}`, maxLength);
@@ -5512,9 +5538,14 @@ export class GameApp {
             ? {
                 type: recentPowerUpPickup.type,
                 value: recentPowerUpPickup.valueLabel,
+                chainGuard: recentPowerUpPickup.chainGuard,
                 remainingMs: Math.round(recentPowerUpPickup.remainingMs),
               }
             : null,
+          pickupChain: {
+            previousType: this.pickupChains[id].previousType,
+            remainingMs: Math.round(this.pickupChains[id].remainingMs),
+          },
           flameGuardMs: Math.round(player.flameGuardMs),
           breakawayBoostMs: Math.round(player.breakawayBoostMs ?? 0),
           pickupSprintMs: Math.round(player.pickupSprintMs ?? 0),
