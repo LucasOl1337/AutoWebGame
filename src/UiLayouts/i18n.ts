@@ -44,6 +44,7 @@ export interface SiteCopy {
     feedbackSending: string;
     feedbackThanks: string;
     feedbackError: string;
+    feedbackTimeout: string;
     feedbackEmpty: string;
     feedbackCharactersRemaining: (remaining: number) => string;
     feedbackCharactersOverLimit: (overLimitBy: number, maxLength: number) => string;
@@ -298,6 +299,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedbackSending: "Enviando...",
       feedbackThanks: "Feedback enviado.",
       feedbackError: "Nao foi possivel enviar agora.",
+      feedbackTimeout: "O envio demorou demais. Seu texto foi preservado; tente novamente.",
       feedbackEmpty: "Escreva alguma coisa antes de enviar.",
       feedbackCharactersRemaining: (remaining) => `${remaining} ${remaining === 1 ? "caractere restante" : "caracteres restantes"}.`,
       feedbackCharactersOverLimit: (overLimitBy, maxLength) => `Remova ${overLimitBy} ${overLimitBy === 1 ? "caractere" : "caracteres"} para enviar. Limite: ${maxLength}.`,
@@ -579,6 +581,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedbackSending: "Sending...",
       feedbackThanks: "Feedback sent.",
       feedbackError: "Could not send feedback right now.",
+      feedbackTimeout: "Sending took too long. Your text was preserved; try again.",
       feedbackEmpty: "Write something before sending.",
       feedbackCharactersRemaining: (remaining) => `${remaining} ${remaining === 1 ? "character" : "characters"} remaining.`,
       feedbackCharactersOverLimit: (overLimitBy, maxLength) => `Remove ${overLimitBy} ${overLimitBy === 1 ? "character" : "characters"} to send. Limit: ${maxLength}.`,

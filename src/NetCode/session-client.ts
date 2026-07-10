@@ -172,6 +172,7 @@ export const SESSION_RETURN_BRIEF_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 export const BOT_MATCH_FILL_STORAGE_KEY = "bomba-bot-match-fill";
 export const BOT_MATCH_FILL_OPTIONS = [1, 2, 3] as const;
 export const FEEDBACK_MAX_LENGTH = 2000;
+export const FEEDBACK_REQUEST_TIMEOUT_MS = 10_000;
 
 export type BotMatchFill = typeof BOT_MATCH_FILL_OPTIONS[number];
 
@@ -3367,12 +3368,19 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.feedbackRequestPending = true;
     this.elements.feedbackStatus.textContent = "";
     this.renderAll();
+    const controller = new AbortController();
+    let requestTimedOut = false;
+    const timeoutId = window.setTimeout(() => {
+      requestTimedOut = true;
+      controller.abort();
+    }, FEEDBACK_REQUEST_TIMEOUT_MS);
     try {
       const response = await fetch("/api/feedback", {
         method: "POST",
         headers: {
           "content-type": "application/json",
         },
+        signal: controller.signal,
         body: JSON.stringify({
           message,
           screen: this.getScreen(),
@@ -3397,8 +3405,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.setStatus(this.copy.landing.feedbackThanks);
       this.renderAll();
     } catch {
-      this.elements.feedbackStatus.textContent = this.copy.landing.feedbackError;
+      this.elements.feedbackStatus.textContent = requestTimedOut
+        ? this.copy.landing.feedbackTimeout
+        : this.copy.landing.feedbackError;
     } finally {
+      window.clearTimeout(timeoutId);
       this.feedbackRequestPending = false;
       this.renderAll();
     }
