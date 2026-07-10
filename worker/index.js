@@ -18,7 +18,11 @@ import {
   resolveOnlineSessionState,
   shouldResetPlayingRoom,
 } from "../src/NetCode/matchmaking";
-import { getLobbySeatSnapshot, isPlayableLobbySeat } from "../src/NetCode/lobby-rules";
+import {
+  getLobbyJoinBlockReason,
+  getLobbySeatSnapshot,
+  isPlayableLobbySeat,
+} from "../src/NetCode/lobby-rules";
 import { validateUsername } from "../src/NetCode/account";
 import {
   billingRecordToStatus,
@@ -1005,7 +1009,6 @@ export class GlobalLobby extends DurableObject {
    * @param {string} rawRoomCode
    */
   async handleJoinLobby(clientId, rawRoomCode) {
-    this.quickMatchPendingClients.delete(clientId);
     this.reconcileRoomsWithActiveSockets();
     const roomCode = normalizeRoomCode(rawRoomCode);
     if (roomCode === ENDLESS_ROOM_CODE) {
@@ -1023,19 +1026,21 @@ export class GlobalLobby extends DurableObject {
       return;
     }
 
-    this.setClientIntent(clientId, room.roomKind === "matchmaking" ? "queue_classic" : "manual");
-
     const alreadySeated = PLAYER_IDS.some((seatId) => room.seats[seatId].clientId === clientId);
     const seatsFull = PLAYER_IDS.every((seatId) => Boolean(room.seats[seatId].clientId));
-    if (!alreadySeated && seatsFull) {
+    const joinBlockReason = getLobbyJoinBlockReason(room.status, alreadySeated, seatsFull);
+    if (joinBlockReason) {
       this.sendToClient(clientId, {
         type: "error",
-        message: room.status === "playing"
+        message: joinBlockReason === "match-in-progress"
           ? "Match already in progress. Pick another open room."
           : "Lobby full. Pick another room or wait for a slot.",
       });
       return;
     }
+
+    this.quickMatchPendingClients.delete(clientId);
+    this.setClientIntent(clientId, room.roomKind === "matchmaking" ? "queue_classic" : "manual");
 
     const currentRoom = this.findRoomForClient(clientId);
     if (currentRoom && currentRoom.roomCode !== roomCode) {

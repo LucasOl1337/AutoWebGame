@@ -1,4 +1,5 @@
 import type { PlayerId } from "../Gameplay/types";
+import type { LobbyStatus } from "./protocol";
 
 type SeatOccupancyLike = {
   clientId: string | null;
@@ -19,6 +20,26 @@ export interface LobbySeatSnapshot {
   minimumPlayersMet: boolean;
   canAutoStart: boolean;
   canForceStart: boolean;
+}
+
+export type LobbyJoinBlockReason = "match-in-progress" | "full";
+
+export function getLobbyJoinBlockReason(
+  status: LobbyStatus,
+  alreadySeated: boolean,
+  seatsFull: boolean,
+): LobbyJoinBlockReason | null {
+  if (alreadySeated) {
+    return null;
+  }
+  if (status === "playing") {
+    return "match-in-progress";
+  }
+  return seatsFull ? "full" : null;
+}
+
+export function isLobbyCardJoinDisabled(status: LobbyStatus): boolean {
+  return getLobbyJoinBlockReason(status, false, false) === "match-in-progress";
 }
 
 export function isPlayableLobbySeat(seat: SeatOccupancyLike | undefined): boolean {

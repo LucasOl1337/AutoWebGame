@@ -1298,6 +1298,14 @@ button {
   border-color: rgba(var(--accent-rgb), 0.28);
 }
 
+.experience-room-card:disabled {
+  cursor: default;
+}
+
+.experience-room-card:disabled:hover {
+  border-color: var(--line-soft);
+}
+
 .experience-room-card strong {
   font-family: var(--font-display);
   font-size: 1.26rem;

@@ -32,6 +32,7 @@ import {
 import type { PlayerBillingStatus } from "./billing";
 import { pickSurpriseCharacterIndex } from "./character-surprise";
 import type { OnlineSessionState } from "./matchmaking";
+import { isLobbyCardJoinDisabled } from "./lobby-rules";
 import { buildReconnectWebSocketUrl } from "./reconnect-session";
 import {
   buildRoomInviteUrl,
@@ -368,6 +369,19 @@ export function formatSessionReturnBrief(
 
 export function canSendLobbyAction(realtimeReady: boolean, socketReadyState: number | null | undefined): boolean {
   return realtimeReady && socketReadyState === WEBSOCKET_OPEN_READY_STATE;
+}
+
+type LobbyCardActionTarget = Pick<HTMLButtonElement, "disabled" | "addEventListener">;
+
+export function configureLobbyCardAction(
+  card: LobbyCardActionTarget,
+  disabled: boolean,
+  onJoin: () => void,
+): void {
+  card.disabled = disabled;
+  if (!disabled) {
+    card.addEventListener("click", onJoin);
+  }
 }
 
 export function resolveReconnectRoomCode(
@@ -2576,7 +2590,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       const card = document.createElement("button");
       card.type = "button";
       card.className = "experience-room-card";
-      card.addEventListener("click", () => {
+      configureLobbyCardAction(card, isLobbyCardJoinDisabled(lobby.status), () => {
         this.idleScreen = "lobby-list";
         this.pendingAutoJoinRoom = lobby.roomCode;
         this.telemetry.track("lobby_join_clicked", {
