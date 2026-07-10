@@ -1,5 +1,20 @@
 # Changelog
 
+## [2026-07-10] - v0.3.0 Official Minor Release (Arenas, retomada online e combate mais legivel)
+
+**Project:** AutoWebGame / BOMBA PvP  |  **Branch:** main  |  **State:** approved release
+
+- Duas novas arenas: `tidal-foundry` e `ember-kiln`.
+- Retomada segura de lobby/partida, cards de sala cheia/em andamento e lembretes de pronto.
+- Personagem surpresa, pickup-chain guard, speed sparks, fuse curto visivel e bot revenge pressure.
+- Landing/Como jogar mais acessiveis, copy comercial e recuperacao de bootstrap.
+- Admin fail-closed, `ws` 8.21.0 e melhorias invisiveis de performance/qualidade.
+- Validacao: build, audit de dependencias e 47/47 contratos focados.
+
+Relatorio completo: `DocsDev/releases/release-v0.3.0.md`.
+
+---
+
 ## [2026-07-08] - v0.2.5 Official Patch (Onboarding, QA e APIs mais rapidas)
 
 **Project:** AutoWebGame / BOMBA  |  **Branch:** main  |  **State:** v0.2.5 release candidate

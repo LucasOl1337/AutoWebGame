@@ -1,3 +1,34 @@
+# Patch Notes - 2026-07-10 v0.3.0 Official Minor Release
+
+**Project:** AutoWebGame / BOMBA PvP
+**Baseline:** `v0.2.5` (`664d616`)
+**State:** aprovado para publicacao
+
+## O que muda para quem joga
+
+- Explore `tidal-foundry` e `ember-kiln`, duas novas arenas com tiles proprios.
+- Retome lobbies e partidas apos quedas breves sem perder imediatamente o assento.
+- Veja claramente quando uma sala esta cheia ou com partida em andamento.
+- Use personagem surpresa, encadeie pickups para ganhar guard e perceba melhor velocidade/fuse curto.
+- Encontre entrada por codigo, guia Como jogar, copy e estados de carregamento mais claros.
+
+## Mudancas invisiveis
+
+- Admin fail-closed e sessoes administrativas anteriores revogadas.
+- Mapa de perigo compartilhado, carregamento paralelo de personagens e menos alocacoes/canvas resets.
+- Dependencia `ws` atualizada para 8.21.0; audit de producao sem vulnerabilidades conhecidas.
+
+## Qualidade
+
+- Build TypeScript/Vite aprovado.
+- 47/47 contratos focados aprovados.
+- Nenhum achado de seguranca P0-P2 confirmado.
+- Sem breaking change ou migracao de dados.
+
+Detalhes, tabela auditavel e riscos residuais: `DocsDev/releases/release-v0.3.0.md`.
+
+---
+
 # Patch Notes - 2026-07-08 v0.2.5 Official Patch
 
 **Project:** AutoWebGame / BOMBA

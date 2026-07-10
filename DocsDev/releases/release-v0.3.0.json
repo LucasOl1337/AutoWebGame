@@ -1,0 +1,43 @@
+{
+  "brand": {
+    "name": "AutoWebGame",
+    "vendor": "BOMBA PvP"
+  },
+  "version": "v0.3.0",
+  "date": "10 de julho de 2026",
+  "title": "Arenas, retomada online e combate mais legivel",
+  "baseline": {
+    "version": "v0.2.5",
+    "commit": "664d616f801599a1956dd94e8f8ff8c5ef4f1a1b",
+    "publishedAtUtc": "2026-07-08T21:51:27Z"
+  },
+  "snapshotBeforeReleaseNotes": "6e60141",
+  "semverDecision": "minor",
+  "diffBeforeReleaseNotes": {
+    "files": 76,
+    "insertions": 4392,
+    "deletions": 519,
+    "commits": 69
+  },
+  "validation": {
+    "focusedTests": "47/47",
+    "build": "passed",
+    "workerSyntax": "passed",
+    "dependencyAudit": "0 vulnerabilities",
+    "securityReview": "no confirmed P0-P2 finding"
+  },
+  "breakingChanges": [],
+  "migrationSteps": [],
+  "residualRisks": [
+    "Rotate external admin secrets before the next deployment",
+    "Reconnect was not exercised against a live production Durable Object lifecycle",
+    "Feedback retry can duplicate a request if the server persisted it after the client timeout"
+  ],
+  "artifacts": [
+    "DocsDev/releases/release-v0.3.0.md",
+    "DocsDev/releases/release-v0.3.0.json",
+    "release-assets/v0.3.0-card.png",
+    "patchnotes.md",
+    "changelog.md"
+  ]
+}
