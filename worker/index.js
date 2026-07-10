@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { resolveAdminAuthConfig } from './admin-auth.js';
 import { GameApp } from "../src/Engine/game-app";
 import {
   buildArenaRuntimeConfig,
@@ -48,8 +49,7 @@ const ACCOUNT_SESSION_COOKIE = "bomba_session";
 const ACCOUNT_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 180;
 const ADMIN_SESSION_COOKIE = "bomba_admin_session";
 const ADMIN_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
-const ADMIN_DEFAULT_USERNAME = "slicingstorm";
-const ADMIN_DEFAULT_PASSWORD = "pingodilocorvo00";
+const ADMIN_SESSION_STORAGE_VERSION = 2;
 const ANALYTICS_TIME_ZONE = "America/Sao_Paulo";
 const ANALYTICS_LOOKBACK_DAYS = 7;
 const TELEMETRY_EVENT_NAMES = new Set([
@@ -1724,6 +1724,11 @@ export class GlobalLobby extends DurableObject {
    * @returns {Promise<Response>}
    */
   async handleAdminLogin(request, env) {
+    const authConfig = resolveAdminAuthConfig(env);
+    if (!authConfig.login) {
+      return createAdminUnavailableResponse();
+    }
+
     /** @type {unknown} */
     let payload;
     try {
@@ -1734,8 +1739,8 @@ export class GlobalLobby extends DurableObject {
 
     const username = typeof payload?.username === "string" ? payload.username.trim() : "";
     const password = typeof payload?.password === "string" ? payload.password.trim() : "";
-    const expectedUsername = getAdminUsername(env);
-    const expectedPassword = getAdminPassword(env);
+    const expectedUsername = authConfig.login.username;
+    const expectedPassword = authConfig.login.password;
 
     if (!username || !password) {
       return Response.json({ ok: false, error: "Username and password are required." }, { status: 400 });
@@ -3647,14 +3652,37 @@ function rewriteRequestPath(request, pathname) {
   return new Request(url.toString(), request);
 }
 
+function createAdminUnavailableResponse() {
+  return Response.json(
+    { ok: false, error: 'Admin access is not configured.' },
+    {
+      status: 503,
+      headers: {
+        'cache-control': 'no-store',
+      },
+    },
+  );
+}
+
 async function authorizeAdminRequest(request, env, storage) {
-  const session = await readStoredAdminSession(request, storage);
+  const authConfig = resolveAdminAuthConfig(env);
+  if (!authConfig.enabled) {
+    return { ok: false, response: createAdminUnavailableResponse() };
+  }
+
+  const session = authConfig.login
+    ? await readStoredAdminSession(request, storage)
+    : null;
   if (session) {
     return { ok: true, session };
   }
 
   const legacyToken = readAdminToken(request);
-  if (legacyToken && env.ADMIN_TOKEN && timingSafeEqual(legacyToken, env.ADMIN_TOKEN)) {
+  if (
+    legacyToken
+    && authConfig.legacyToken
+    && timingSafeEqual(legacyToken, authConfig.legacyToken)
+  ) {
     return { ok: true, legacy: true };
   }
 
@@ -3703,22 +3731,9 @@ async function readStoredAdminSession(request, storage) {
   return stored;
 }
 
-function getAdminUsername(env) {
-  const value = typeof env?.ADMIN_USERNAME === "string" ? env.ADMIN_USERNAME.trim() : "";
-  return value || ADMIN_DEFAULT_USERNAME;
-}
-
-function getAdminPassword(env) {
-  const value = typeof env?.ADMIN_PASSWORD === "string" ? env.ADMIN_PASSWORD.trim() : "";
-  if (value) {
-    return value;
-  }
-  const token = typeof env?.ADMIN_TOKEN === "string" ? env.ADMIN_TOKEN.trim() : "";
-  return token || ADMIN_DEFAULT_PASSWORD;
-}
 
 function buildAdminSessionKey(sessionId) {
-  return `admin-session:${sessionId}`;
+  return `admin-session:v${ADMIN_SESSION_STORAGE_VERSION}:${sessionId}`;
 }
 
 function buildArenaDefinitionKey(arenaId) {
@@ -4062,7 +4077,7 @@ function createReportWebhookPayload(report) {
 }
 
 function renderAdminHtml(env) {
-  const safeUsername = escapeHtml(getAdminUsername(env));
+  const safeUsername = escapeHtml(resolveAdminAuthConfig(env).login?.username ?? '');
   const arenaThemes = JSON.stringify(
     ARENA_THEME_LIBRARY.map((theme) => ({
       id: theme.id,

@@ -47,6 +47,7 @@
     "test:lobby-reconnect": "npm run compile:esm && node tests/session-active-lobby-reconnect-check.mjs",
     "test:lobby-reconnect-grace": "npm run compile:esm && node tests/lobby-reconnect-grace-check.mjs",
     "test:active-match-reconnect": "npm run compile:esm && node tests/active-match-reconnect-resume-check.mjs",
+    "test:admin-auth": "node tests/admin-auth-fail-closed-check.mjs",
     "test:feedback-request-timeout": "npm run compile:esm && node tests/feedback-request-timeout-check.mjs",
     "test:session-return-brief": "npm run compile:esm && node tests/session-return-brief-check.mjs",
     "test:room-invite-link": "npm run compile:esm && node tests/session-room-invite-link-check.mjs",
