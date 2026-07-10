@@ -369,6 +369,14 @@ export function canSendLobbyAction(realtimeReady: boolean, socketReadyState: num
   return realtimeReady && socketReadyState === WEBSOCKET_OPEN_READY_STATE;
 }
 
+export function resolveReconnectRoomCode(
+  activeLobbyRoomCode: string | null | undefined,
+  roomCode: string | null | undefined,
+  pendingAutoJoinRoom: string | null | undefined,
+): string | null {
+  return activeLobbyRoomCode ?? roomCode ?? pendingAutoJoinRoom ?? null;
+}
+
 export function formatLobbyReadyReminder(copy: SiteCopy, lobby: LobbySummary): string {
   const waitingPlayers = ALL_PLAYER_IDS
     .filter((playerId) => {
@@ -693,6 +701,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     socket.addEventListener("message", (event) => this.handleMessage(event.data));
     socket.addEventListener("close", () => {
       const hadActiveOnlineSession = Boolean(this.currentLobby || this.role || this.roomCode);
+      const reconnectRoomCode = resolveReconnectRoomCode(
+        this.currentLobby?.roomCode,
+        this.roomCode,
+        this.pendingAutoJoinRoom,
+      );
       const accountRefresh = this.reconnectingForAccountRefresh;
       this.reconnectingForAccountRefresh = false;
       this.realtimeReady = false;
@@ -703,7 +716,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.currentSessionState = null;
       this.quickMatchSearching = false;
       this.endlessMatchStarting = false;
-      this.pendingAutoJoinRoom = null;
+      this.pendingAutoJoinRoom = reconnectRoomCode;
+      this.autoClaimRoomCode = null;
       if (hadActiveOnlineSession) {
         this.app.detachOnlineSession();
       }
