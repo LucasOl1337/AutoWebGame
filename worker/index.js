@@ -28,6 +28,7 @@ import {
 } from "../src/NetCode/billing";
 import { mergeSequencedOnlineInputState } from "../src/NetCode/input-latch";
 import { createFixedRatePumpState, consumeFixedRatePumpSteps } from "../src/NetCode/server-tick";
+import { getVacantRoomRecoveryState } from "../src/NetCode/lobby-reconnect-grace";
 
 const STATE_VERSION = 3;
 const MATCH_TICK_MS = 1000 / 60;
@@ -138,7 +139,8 @@ function resolvePublicApiRoute(pathname, method) {
  *   roomMode: "classic" | "endless";
  *   roomKind: "manual" | "matchmaking" | "endless";
  *   createdAt: number;
-  *   hostClientId: string | null;
+ *   emptySince: number | null;
+ *   hostClientId: string | null;
  *   clients: Set<string>;
  *   chat: ChatEntry[];
  *   seats: Record<1 | 2 | 3 | 4, LobbySeat>;
@@ -281,6 +283,7 @@ export class GlobalLobby extends DurableObject {
             roomMode: room.roomMode === "endless" ? "endless" : "classic",
             roomKind: normalizeStoredRoomKind(room.roomKind, room.roomMode),
             createdAt: room.createdAt,
+            emptySince: Number.isFinite(room.emptySince) ? room.emptySince : null,
             hostClientId: null,
             clients: new Set(room.clients),
             chat: Array.isArray(room.chat) ? room.chat.slice(-40) : [],
@@ -946,6 +949,7 @@ export class GlobalLobby extends DurableObject {
       roomKind: "manual",
       hostClientId: null,
       clients: new Set([clientId]),
+      emptySince: null,
       chat: [],
       seats: createSeatMap(() => createEmptySeat()),
     };
@@ -1000,6 +1004,7 @@ export class GlobalLobby extends DurableObject {
     }
 
     room.clients.add(clientId);
+    room.emptySince = null;
     await this.persistState();
     this.sendJoinedLobby(clientId, room);
     this.broadcastLobbyToMembers(room);
@@ -1207,6 +1212,7 @@ export class GlobalLobby extends DurableObject {
       status: "playing",
       roomMode: "endless",
       roomKind: "endless",
+      emptySince: null,
       hostClientId: null,
       clients: new Set(),
       chat: [],
@@ -1242,6 +1248,7 @@ export class GlobalLobby extends DurableObject {
 
     const fallbackCharacterIndex = room.seats[seatId]?.characterIndex ?? ((seatId - 1) % 4);
     room.clients.add(clientId);
+    room.emptySince = null;
     room.seats[seatId] = createHumanSeat(clientId, normalizeCharacterIndex(rawCharacterIndex, fallbackCharacterIndex));
     room.hostClientId = room.hostClientId && this.sockets.has(room.hostClientId)
       ? room.hostClientId
@@ -1515,7 +1522,7 @@ export class GlobalLobby extends DurableObject {
     this.clientIntents.delete(clientId);
     const room = this.findRoomForClient(clientId);
     if (room) {
-      await this.releaseClientFromRoom(room, clientId);
+      await this.releaseClientFromRoom(room, clientId, { preserveVacantRoom: true });
     }
     this.reconcileRoomsWithActiveSockets();
     this.broadcastLobbyList();
@@ -2340,8 +2347,9 @@ export class GlobalLobby extends DurableObject {
   /**
    * @param {LobbyRoom} room
    * @param {string} clientId
+   * @param {{ preserveVacantRoom?: boolean }} [options]
    */
-  async releaseClientFromRoom(room, clientId) {
+  async releaseClientFromRoom(room, clientId, options = {}) {
     if (room.roomMode === "endless") {
       await this.leaveEndlessRoom(room, clientId);
       return;
@@ -2373,6 +2381,11 @@ export class GlobalLobby extends DurableObject {
     }
 
     if (!PLAYER_IDS.some((seatId) => room.seats[seatId].clientId)) {
+      if (options.preserveVacantRoom) {
+        room.emptySince = Date.now();
+        await this.persistState();
+        return;
+      }
       this.rooms.delete(room.roomCode);
       await this.persistState();
       return;
@@ -2603,15 +2616,27 @@ export class GlobalLobby extends DurableObject {
     }
   }
 
-  reconcileRoomsWithActiveSockets() {
+  reconcileRoomsWithActiveSockets(nowMs = Date.now()) {
     let changed = false;
     for (const [roomCode, room] of this.rooms.entries()) {
       if (this.sanitizeRoomOccupancy(room)) {
         changed = true;
       }
-      if (!PLAYER_IDS.some((seatId) => room.seats[seatId].clientId) && room.clients.size === 0) {
-        this.stopRoomMatch(roomCode);
-        this.rooms.delete(roomCode);
+      const roomIsVacant = !PLAYER_IDS.some((seatId) => room.seats[seatId].clientId)
+        && room.clients.size === 0;
+      if (roomIsVacant) {
+        const recovery = getVacantRoomRecoveryState(room.emptySince, nowMs);
+        if (room.emptySince !== recovery.emptySince) {
+          room.emptySince = recovery.emptySince;
+          changed = true;
+        }
+        if (recovery.shouldDelete) {
+          this.stopRoomMatch(roomCode);
+          this.rooms.delete(roomCode);
+          changed = true;
+        }
+      } else if (room.emptySince !== null) {
+        room.emptySince = null;
         changed = true;
       }
     }
@@ -2724,6 +2749,7 @@ export class GlobalLobby extends DurableObject {
         roomMode: room.roomMode === "endless" ? "endless" : "classic",
         roomKind: room.roomKind,
         createdAt: room.createdAt,
+        emptySince: room.emptySince,
         hostClientId: room.hostClientId,
         clients: Array.from(room.clients),
         chat: room.chat.slice(-40),
@@ -2995,6 +3021,7 @@ export class GlobalLobby extends DurableObject {
     }
 
     room.clients.add(clientId);
+    room.emptySince = null;
     this.assignSeat(room, seatId, clientId, rawCharacterIndex);
     room.seats[seatId].ready = true;
     this.refreshSeatLabels(room);
@@ -3020,6 +3047,7 @@ export class GlobalLobby extends DurableObject {
       status: "open",
       roomMode: "classic",
       roomKind: "matchmaking",
+      emptySince: null,
       hostClientId: null,
       clients: new Set([clientId]),
       chat: [],
