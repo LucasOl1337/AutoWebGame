@@ -63,6 +63,7 @@ import {
 } from "../Arenas/arena";
 import {
   applyPowerUpToPlayer,
+  formatBombFuseSeconds,
   formatControlKey,
   getBombFuseMsForPlayer,
   getPowerUpDefinition,
@@ -3904,7 +3905,9 @@ export class GameApp {
       : rawLevel;
     const valueLabel = type === "remote-up"
       ? (level > 0 ? "ON" : "--")
-      : `x${level}`;
+      : type === "short-fuse-up"
+        ? formatBombFuseSeconds(player)
+        : `x${level}`;
     const pickupNotice = this.getPowerUpPickupNotice(playerId, type);
 
     return {

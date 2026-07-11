@@ -178,11 +178,11 @@ const report = {
       && shortFuseSlot
       && shortFuseSlot.acquired === true
       && shortFuseSlot.level === 1
-      && shortFuseSlot.value === "x1"
+      && shortFuseSlot.value === "1.65s"
       && shortFuseSlot.recentlyCollected === true
       && recentPowerUpPickup
       && recentPowerUpPickup.type === "short-fuse-up"
-      && recentPowerUpPickup.value === "x1"
+      && recentPowerUpPickup.value === "1.65s"
       && recentPowerUpPickup.remainingMs > 0
       && expiredRecentPowerUpPickup === null
       && expiredRecentSlots.length === 0

@@ -4,6 +4,8 @@ Shared coordination file for recurring Codex swarm sessions. Each session should
 
 ## Active claims
 
+CLAIM | 2026-07-11 | sessao=ux-short-fuse-hud-clarity | tipo=ux-polimento-feedback | arquivos=src/Gameplay/powerups.ts, src/Engine/game-app.ts, tests/powerup-hud-slots-check.mjs, DocsDev/swarm-coordination.md | status=feito | observacao=index.html e mudancas alheias preservados
+
 CLAIM | 2026-07-09T19:37:36.8688808-03:00 | sessao=ux-how-to-play-reading-progress | tipo=ux-polimento-fluxo | arquivos=how-to-play.html, tests/how-to-play-page-check.mjs, DocsDev/swarm-coordination.md | status=feito 2026-07-09T19:38:45.9085301-03:00
 
 | Session | Area | Scope | Files | Status |

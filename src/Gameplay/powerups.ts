@@ -225,6 +225,10 @@ export function getBombFuseMsForPlayer(player: PlayerState): number {
   );
 }
 
+export function formatBombFuseSeconds(player: PlayerState): string {
+  return `${(getBombFuseMsForPlayer(player) / 1000).toFixed(2)}s`;
+}
+
 export function formatControlKey(code: string): string {
   if (code.startsWith("Key")) {
     return code.slice(3).toUpperCase();
