@@ -373,7 +373,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
         return summaries[themeId] ?? fallback;
       },
       localControlsTitle: "Antes da primeira bomba",
-      localControlsHint: "A partida contra bots usa o personagem selecionado ao lado.",
+      localControlsHint: "Objetivo: seja o último bomber vivo. A partida contra bots usa o personagem selecionado ao lado.",
       localControlsMove: "Mover pelo labirinto",
       localControlsBomb: "Criar pressao",
       localControlsUltimate: "Virar a rodada",
@@ -639,7 +639,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       arenaThemeActive: "active",
       arenaThemeSummary: (_themeId, fallback) => fallback,
       localControlsTitle: "Before the first bomb",
-      localControlsHint: "Bot matches use the character selected on the side.",
+      localControlsHint: "Objective: be the last bomber alive. Bot matches use the character selected on the side.",
       localControlsMove: "Move through the maze",
       localControlsBomb: "Create pressure",
       localControlsUltimate: "Turn the round",
