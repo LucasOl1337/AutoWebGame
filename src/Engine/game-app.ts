@@ -3196,6 +3196,7 @@ export class GameApp {
         }
         if (powerUp.tile.x === tile.x && powerUp.tile.y === tile.y) {
           if (isPowerUpMaxed(player, powerUp.type)) {
+            this.addPowerUpPickupNotice(id, powerUp.type, "MAX");
             continue;
           }
           powerUp.collected = true;
@@ -3927,12 +3928,12 @@ export class GameApp {
     } satisfies HudSkillSlot;
   }
 
-  private addPowerUpPickupNotice(playerId: PlayerId, type: SkillPowerUpType): void {
+  private addPowerUpPickupNotice(playerId: PlayerId, type: SkillPowerUpType, valueLabel?: string): void {
     const slot = this.getHudSkillSlot(playerId, type);
     const notice: PowerUpPickupNotice = {
       playerId,
       type,
-      valueLabel: slot.valueLabel,
+      valueLabel: valueLabel ?? slot.valueLabel,
       elapsedMs: 0,
       remainingMs: POWER_UP_PICKUP_NOTICE_MS,
     };
