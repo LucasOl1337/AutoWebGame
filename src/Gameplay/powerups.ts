@@ -219,6 +219,9 @@ export function getPowerUpPriorityScore(player: PlayerState, type: PowerUpType):
   if (player.speedLevel >= MAX_SPEED_LEVEL) {
     return 0;
   }
+  if (player.speedLevel === 0) {
+    return 460;
+  }
   return 120 + (MAX_SPEED_LEVEL - player.speedLevel) * 25;
 }
 

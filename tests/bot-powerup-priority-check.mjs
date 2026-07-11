@@ -89,8 +89,8 @@ game.arena.powerUps.push(
   { type: "speed-up", tile: { x: 4, y: 3 }, revealed: true, collected: false },
   { type: "bomb-up", tile: { x: 4, y: 5 }, revealed: true, collected: false },
 );
-const preferBombDecision = game.getBotDecision(bot);
-const prefersHighValuePowerUp = preferBombDecision.placeBomb === false && preferBombDecision.direction === "down";
+const preferSpeedDecision = game.getBotDecision(bot);
+const prefersBaseMobility = preferSpeedDecision.placeBomb === false && preferSpeedDecision.direction === "up";
 
 for (const powerUp of game.arena.powerUps) {
   powerUp.collected = true;
@@ -132,11 +132,11 @@ const skipsSaturatedBombForSurvival = saturatedAttributeDecision.placeBomb === f
   && saturatedAttributeDecision.direction === "down";
 
 const report = {
-  preferBombDecision,
+  preferSpeedDecision,
   preferFirstShieldDecision,
   skipUselessDecision,
   saturatedAttributeDecision,
-  prefersHighValuePowerUp,
+  prefersBaseMobility,
   prefersFirstShield,
   skipsUselessSpeedUp,
   skipsSaturatedBombForSurvival,
@@ -144,6 +144,6 @@ const report = {
 
 console.log(JSON.stringify(report, null, 2));
 
-if (!prefersHighValuePowerUp || !prefersFirstShield || !skipsUselessSpeedUp || !skipsSaturatedBombForSurvival) {
+if (!prefersBaseMobility || !prefersFirstShield || !skipsUselessSpeedUp || !skipsSaturatedBombForSurvival) {
   process.exit(1);
 }

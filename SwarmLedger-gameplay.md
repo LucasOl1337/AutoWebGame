@@ -1,5 +1,15 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-11 — bot-base-speed-survival-priority
+
+- Claim/escopo antes da intervenção: ajustar somente o score de `speed-up` para bots ainda no nível base, fazendo mobilidade inicial concorrer acima de upgrades ofensivos; preservar fuga, segurança de rota, drops, coleta, níveis máximos, estado e rede.
+- Evidência de escolha: `getPowerUpPriorityScore` já centraliza a decisão estratégica de pickups, mas no nível base retorna 195 para velocidade, abaixo de `bomb-up` (420), `flame-up` (380) e `short-fuse-up` (260), apesar de mobilidade sustentar fuga no loop principal.
+- Arquivos previstos: `src/Gameplay/powerups.ts`, `tests/bot-powerup-priority-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.
+- Preservação: `index.html` modificado e documentos não rastreados alheios não foram tocados nem incluídos.
+- Antes → depois: com `speedLevel=0`, `speed-up` tinha score 195 e perdia para `bomb-up` 420; agora o primeiro `speed-up` vale 460, enquanto níveis intermediários, saturação e todos os demais tipos mantêm os scores existentes.
+- Evidência: no cenário equidistante, `preferSpeedDecision={direction:"up",placeBomb:false}` e `prefersBaseMobility=true`; shield sem carga continuou priorizado, speed saturado foi ignorado e bomb saturada cedeu ao shield.
+- Validação: `npm run compile:esm`; `node tests/bot-powerup-priority-check.mjs`; `node tests/bot-own-blast-escape-check.mjs`; `node tests/bot-survival-10s-check.mjs`; `node tests/bot-target-selection-check.mjs`; `npm run build`; `git diff --check -- src/Gameplay/powerups.ts tests/bot-powerup-priority-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` — todos com código 0. Diff revisado e limitado aos quatro arquivos reivindicados.
+
 ## 2026-07-11 — ux-maxed-powerup-hud-feedback
 
 - Claim/escopo antes da intervenção: alterar somente o feedback de toque em power-up já maximizado em `src/Engine/game-app.ts`, com teste focal novo; preservar item, níveis máximos, aplicação, drops, áudio, rede e demais regras.
