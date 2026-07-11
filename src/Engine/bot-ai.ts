@@ -255,16 +255,6 @@ export function getBotDecision(player: PlayerState, context: BotContext): BotDec
     return { direction: powerUpTarget, placeBomb: false };
   }
 
-  const breakableTarget = findNearestReachableTarget(
-    player,
-    (tile) => hasAdjacentBreakable(tile, context) && canBotPlaceBombAtTile(player, tile, false, context),
-    strategicSafetyWindowMs,
-    context,
-  );
-  if (breakableTarget) {
-    return { direction: breakableTarget, placeBomb: false };
-  }
-
   const attackPositionTarget = enemy
     ? findNearestReachableTarget(
       player,
@@ -279,6 +269,16 @@ export function getBotDecision(player: PlayerState, context: BotContext): BotDec
     : null;
   if (attackPositionTarget) {
     return { direction: attackPositionTarget, placeBomb: false };
+  }
+
+  const breakableTarget = findNearestReachableTarget(
+    player,
+    (tile) => hasAdjacentBreakable(tile, context) && canBotPlaceBombAtTile(player, tile, false, context),
+    strategicSafetyWindowMs,
+    context,
+  );
+  if (breakableTarget) {
+    return { direction: breakableTarget, placeBomb: false };
   }
 
   const chaseEnemy = enemy && enemyVulnerable
