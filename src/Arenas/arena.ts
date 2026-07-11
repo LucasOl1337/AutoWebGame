@@ -18,7 +18,7 @@ import {
 import { ALL_PLAYER_IDS } from "../Gameplay/types";
 import { DEFAULT_ARENA_THEME_ID } from "./arena-theme-library";
 
-const BREAKABLE_POWERUP_DROP_RATE = 0.9;
+const BREAKABLE_POWERUP_DROP_RATE = 0.75;
 const MIN_ARENA_WIDTH = 7;
 const MIN_ARENA_HEIGHT = 7;
 const MAX_ARENA_WIDTH = MAX_ARENA_GRID_WIDTH;
