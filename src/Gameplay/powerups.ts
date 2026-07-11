@@ -16,14 +16,14 @@ const SHORT_FUSE_STEP_MS = 350;
 const MIN_SHORT_FUSE_MS = 1_200;
 
 export interface PowerUpDefinition {
-  type: PowerUpType;
-  label: string;
-  shortLabel: string;
-  tint: string;
-  maxLevel: number;
+  readonly type: PowerUpType;
+  readonly label: string;
+  readonly shortLabel: string;
+  readonly tint: string;
+  readonly maxLevel: number;
 }
 
-const POWER_UP_DEFINITIONS: Record<PowerUpType, PowerUpDefinition> = {
+const POWER_UP_DEFINITIONS: Readonly<Record<PowerUpType, PowerUpDefinition>> = {
   "bomb-up": {
     type: "bomb-up",
     label: "Bomb Capacity",

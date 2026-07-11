@@ -1,5 +1,14 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-11 — immutable-powerup-definitions
+
+- Classificação: robustez de gameplay, baixo risco, alteração isolada de contrato.
+- Evidência: `getPowerUpDefinition` expõe objetos usados para limites de coleta, prioridade de bot, HUD e render; o CodeGraph apontou 8 símbolos afetados. Como o retorno era mutável, qualquer consumidor podia alterar em runtime `maxLevel`, `tint` ou identidade e desalinhar regras compartilhadas.
+- Escopo: tornar propriedades de `PowerUpDefinition` e o registro de definições somente leitura em TypeScript; sem alterar valores, drops, aplicação, balanceamento, rede, UI ou render.
+- Arquivos: `src/Gameplay/powerups.ts`, `SwarmLedger-gameplay.md`.
+- Validação: `npm run compile:esm`, testes focados de preservação/prioridade/HUD de power-ups, `npm run build` e `git diff --check` passaram; `npm test` não existe no `package.json`.
+- Estado preexistente preservado: `index.html` modificado e documentos/ledgers não rastreados não foram alterados nem incluídos.
+
 ## 2026-07-11 — preserve-maxed-powerup
 
 - Escopo: impedir que um jogador no nível máximo consuma um power-up que não produz efeito, preservando-o para outro jogador; sem alterar drops, níveis máximos, rede ou renderização.
