@@ -1,5 +1,13 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-11 — bot-skip-saturated-pickup
+
+- Claim/escopo antes da intervenção: ajustar somente a seleção de pickups do bot em `src/Engine/bot-ai.ts`, reutilizando o teste existente `tests/bot-powerup-priority-check.mjs`, para ignorar como alvo prioritário o item cujo atributo correspondente já atingiu o limite; prioridades de fuga/sobrevivência, ataque, drops, coleta e estado permanecem inalteradas.
+- Preservação: `index.html` modificado e arquivos não rastreados alheios não foram tocados; sem commit.
+- Antes → depois: a busca estratégica dependia apenas do score de prioridade para descartar upgrades no limite; agora exclui explicitamente, antes de agrupar/rotear, qualquer pickup cujo atributo correspondente esteja saturado via contrato compartilhado `isPowerUpMaxed`, enquanto pickups úteis continuam concorrendo por prioridade e segurança.
+- Evidência: o cenário existente ampliado produziu `saturatedAttributeDecision={direction:"down",placeBomb:false}`, ignorando `bomb-up` ao norte com `maxBombs=MAX_BOMBS` e preferindo o primeiro `shield-up` ao sul (`shieldCharges=0`). `codegraph status .` confirmou índice atualizado; `codegraph context "bot powerup priority saturated max level survival"`, `codegraph impact bot-ai.ts` e `codegraph impact isPowerUpMaxed` limitaram a mudança à seleção do bot e ao helper compartilhado já existente.
+- Validação: `npm run compile:esm`; `node tests/bot-powerup-priority-check.mjs`; `node tests/bot-own-blast-escape-check.mjs`; `node tests/bot-survival-10s-check.mjs`; `node tests/bot-target-selection-check.mjs`; `npm run build`; `git diff --check -- src/Engine/bot-ai.ts tests/bot-powerup-priority-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` — todos concluídos com código 0. Diff revisado; apenas os quatro arquivos reivindicados foram alterados por esta intervenção.
+
 ## 2026-07-11 — ux-powerup-render-legibility
 
 - Claim/escopo antes da intervenção: melhorar exclusivamente a legibilidade visual dos power-ups em `drawPowerUp`; sem alterar balanceamento, estado, drops, coleta, tipos ou rede.

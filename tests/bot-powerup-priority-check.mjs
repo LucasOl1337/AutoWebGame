@@ -48,7 +48,7 @@ globalThis.window = {
 };
 
 const { GameApp } = await import("../output/esm/Engine/game-app.js");
-const { MAX_SPEED_LEVEL, TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
+const { MAX_BOMBS, MAX_SPEED_LEVEL, TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
 
 const root = { appendChild: noop };
 const assets = {
@@ -116,17 +116,34 @@ setPlayerTile(enemy, { x: 4, y: 7 });
 const skipUselessDecision = game.getBotDecision(bot);
 const skipsUselessSpeedUp = skipUselessDecision.direction !== "up";
 
+for (const powerUp of game.arena.powerUps) {
+  powerUp.collected = true;
+  powerUp.revealed = false;
+}
+game.arena.powerUps.push(
+  { type: "bomb-up", tile: { x: 4, y: 3 }, revealed: true, collected: false },
+  { type: "shield-up", tile: { x: 4, y: 5 }, revealed: true, collected: false },
+);
+bot.maxBombs = MAX_BOMBS;
+bot.shieldCharges = 0;
+setPlayerTile(bot, { x: 4, y: 4 });
+const saturatedAttributeDecision = game.getBotDecision(bot);
+const skipsSaturatedBombForSurvival = saturatedAttributeDecision.placeBomb === false
+  && saturatedAttributeDecision.direction === "down";
+
 const report = {
   preferBombDecision,
   preferFirstShieldDecision,
   skipUselessDecision,
+  saturatedAttributeDecision,
   prefersHighValuePowerUp,
   prefersFirstShield,
   skipsUselessSpeedUp,
+  skipsSaturatedBombForSurvival,
 };
 
 console.log(JSON.stringify(report, null, 2));
 
-if (!prefersHighValuePowerUp || !prefersFirstShield || !skipsUselessSpeedUp) {
+if (!prefersHighValuePowerUp || !prefersFirstShield || !skipsUselessSpeedUp || !skipsSaturatedBombForSurvival) {
   process.exit(1);
 }

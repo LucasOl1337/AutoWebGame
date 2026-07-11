@@ -16,7 +16,7 @@ import type {
   TileCoord,
 } from "../Gameplay/types";
 import { tileKey } from "../Arenas/arena";
-import { getPowerUpPriorityScore } from "../Gameplay/powerups";
+import { getPowerUpPriorityScore, isPowerUpMaxed } from "../Gameplay/powerups";
 
 // Bot-specific constants
 const BOT_DANGER_FUSE_MS = 1000;
@@ -673,7 +673,7 @@ function getAdjacentBreakables(tile: TileCoord, context: BotContext): TileCoord[
 function findValuablePowerUpDirection(player: PlayerState, minSafetyWindowMs: number, context: BotContext): Direction | null {
   const priorityGroups = new Map<number, Set<string>>();
   for (const powerUp of context.arena.powerUps) {
-    if (!powerUp.revealed || powerUp.collected) {
+    if (!powerUp.revealed || powerUp.collected || isPowerUpMaxed(player, powerUp.type)) {
       continue;
     }
     const value = getPowerUpPriority(player, powerUp.type);
