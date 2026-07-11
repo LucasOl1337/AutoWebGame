@@ -68,6 +68,7 @@ import {
   getBombFuseMsForPlayer,
   getPowerUpDefinition,
   getPowerUpLevel,
+  isPowerUpMaxed,
   type SkillPowerUpType,
   SKILL_POWER_UP_TYPES,
 } from "../Gameplay/powerups";
@@ -3194,6 +3195,9 @@ export class GameApp {
           continue;
         }
         if (powerUp.tile.x === tile.x && powerUp.tile.y === tile.y) {
+          if (isPowerUpMaxed(player, powerUp.type)) {
+            continue;
+          }
           powerUp.collected = true;
           applyPowerUpToPlayer(player, powerUp.type);
           player.pickupSprintMs = Math.max(player.pickupSprintMs ?? 0, PICKUP_SPRINT_BOOST_MS);
