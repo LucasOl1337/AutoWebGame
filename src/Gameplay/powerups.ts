@@ -192,6 +192,10 @@ export function getPowerUpPriorityScore(player: PlayerState, type: PowerUpType):
     if (player.shieldCharges >= MAX_SHIELD_CHARGES) {
       return 0;
     }
+    // A bot sem proteção deve priorizar a sobrevivência antes de upgrades ofensivos.
+    if (player.shieldCharges === 0) {
+      return 500;
+    }
     return 210 + (MAX_SHIELD_CHARGES - player.shieldCharges) * 35;
   }
   if (type === "bomb-pass-up") {

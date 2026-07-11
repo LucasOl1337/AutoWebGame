@@ -96,6 +96,19 @@ for (const powerUp of game.arena.powerUps) {
   powerUp.collected = true;
   powerUp.revealed = false;
 }
+game.arena.powerUps.push(
+  { type: "shield-up", tile: { x: 4, y: 3 }, revealed: true, collected: false },
+  { type: "bomb-up", tile: { x: 4, y: 5 }, revealed: true, collected: false },
+);
+bot.shieldCharges = 0;
+setPlayerTile(bot, { x: 4, y: 4 });
+const preferFirstShieldDecision = game.getBotDecision(bot);
+const prefersFirstShield = preferFirstShieldDecision.placeBomb === false && preferFirstShieldDecision.direction === "up";
+
+for (const powerUp of game.arena.powerUps) {
+  powerUp.collected = true;
+  powerUp.revealed = false;
+}
 game.arena.powerUps.push({ type: "speed-up", tile: { x: 4, y: 3 }, revealed: true, collected: false });
 bot.speedLevel = MAX_SPEED_LEVEL;
 setPlayerTile(bot, { x: 4, y: 4 });
@@ -105,13 +118,15 @@ const skipsUselessSpeedUp = skipUselessDecision.direction !== "up";
 
 const report = {
   preferBombDecision,
+  preferFirstShieldDecision,
   skipUselessDecision,
   prefersHighValuePowerUp,
+  prefersFirstShield,
   skipsUselessSpeedUp,
 };
 
 console.log(JSON.stringify(report, null, 2));
 
-if (!prefersHighValuePowerUp || !skipsUselessSpeedUp) {
+if (!prefersHighValuePowerUp || !prefersFirstShield || !skipsUselessSpeedUp) {
   process.exit(1);
 }
