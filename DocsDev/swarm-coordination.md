@@ -4,6 +4,8 @@ Shared coordination file for recurring Codex swarm sessions. Each session should
 
 ## Active claims
 
+CLAIM | 2026-07-11 | sessao=ux-powerup-render-legibility | tipo=intervencao-render | arquivos=src/Engine/game-app.ts, tests/powerup-render-legibility-check.mjs, DocsDev/swarm-coordination.md, SwarmLedger-gameplay.md | status=feito | observacao=drawPowerUp agora separa sprites do piso com silhueta escura, contorno claro e inset de 2px; sem balanceamento/estado; teste dedicado, compile, regressões HUD/drop, build e diff check aprovados; sujeira alheia preservada
+
 CLAIM | 2026-07-11 | sessao=preserve-maxed-powerup | tipo=intervencao-gameplay-pequena | arquivos=src/Engine/game-app.ts, tests/powerup-max-level-preservation-check.mjs, DocsDev/swarm-coordination.md, SwarmLedger-gameplay.md | status=feito | observacao=jogador no nivel maximo preserva item para outro jogador; coleta volta a ocorrer quando util; teste dedicado, regressões de HUD/drop/bot, build e diff check aprovados; sujeira alheia intocada
 
 CLAIM | 2026-07-11 | sessao=ux-bot-controls-survival-goal | tipo=ux-copy-i18n | arquivos=src/UiLayouts/i18n.ts, tests/bot-controls-survival-goal-check.mjs, DocsDev/swarm-coordination.md | status=feito | observacao=PT/EN explicitam que o objetivo pre-partida contra bots e ser o ultimo bomber vivo via localControlsHint e wiring existente; teste dedicado, build e diff check aprovados; package.json/index.html e sujeira alheia intocados

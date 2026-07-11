@@ -4623,7 +4623,16 @@ export class GameApp {
     const y = powerUp.tile.y * TILE_SIZE;
     const sprite = this.assets.powerUps[powerUp.type];
     if (sprite) {
-      this.ctx.drawImage(sprite, x, y, TILE_SIZE, TILE_SIZE);
+      this.ctx.save();
+      this.ctx.fillStyle = "rgba(8, 10, 14, 0.66)";
+      this.ctx.beginPath();
+      this.ctx.arc(x + 16, y + 16, 13, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.strokeStyle = "rgba(255, 244, 214, 0.82)";
+      this.ctx.lineWidth = 1.5;
+      this.ctx.stroke();
+      this.ctx.drawImage(sprite, x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+      this.ctx.restore();
       return;
     }
     const definition = getPowerUpDefinition(powerUp.type);
