@@ -110,15 +110,15 @@ const hasTacticalDrops = tacticalDropTypes.every((type) => utilityDropCounts[typ
 const specialDropCount = [...utilityDropTypes, ...tacticalDropTypes]
   .reduce((total, type) => total + utilityDropCounts[type], 0);
 const hasDenseBreakables = breakableCount >= 24;
-const expectedDropCount = 26;
-const expectedDropRatio = 0.722;
+const expectedDropCount = 22;
+const expectedDropRatio = 0.611;
 const expectedDropTypeCounts = {
   "bomb-up": 0,
   "flame-up": 8,
   "speed-up": 4,
-  "remote-up": 2,
+  "remote-up": 0,
   "shield-up": 0,
-  "short-fuse-up": 4,
+  "short-fuse-up": 2,
   "bomb-pass-up": 6,
   "kick-up": 2,
 };
