@@ -4638,6 +4638,18 @@ export class GameApp {
     const pulse = 0.6 + 0.4 * Math.sin((bomb.fuseMs / 80) * Math.PI);
     const x = bomb.tile.x * TILE_SIZE;
     const y = bomb.tile.y * TILE_SIZE;
+    const isFinalFuse = bomb.fuseMs <= 450;
+    if (isFinalFuse) {
+      const urgency = 1 - Math.max(0, bomb.fuseMs) / 450;
+      const ringRadius = 12 + urgency * 5;
+      this.ctx.save();
+      this.ctx.strokeStyle = `rgba(255, 74, 42, ${0.68 + urgency * 0.32})`;
+      this.ctx.lineWidth = 2 + urgency * 2;
+      this.ctx.beginPath();
+      this.ctx.arc(x + 16, y + 16, ringRadius, 0, Math.PI * 2);
+      this.ctx.stroke();
+      this.ctx.restore();
+    }
     if (this.assets.props.bomb) {
       this.ctx.save();
       this.ctx.globalAlpha = Math.max(0.7, pulse);
