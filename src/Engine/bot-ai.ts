@@ -243,8 +243,16 @@ export function getBotDecision(player: PlayerState, context: BotContext): BotDec
     && canBombReachTile(playerTile, enemy.tile, player.flameRange, context),
   );
   const adjacentBreakable = hasAdjacentBreakable(playerTile, context);
+  const ownedBombAlreadyCoversEnemy = Boolean(
+    enemy
+    && enemyVulnerable
+    && context.bombs.some((bomb) => (
+      bomb.ownerId === player.id
+      && getBombBlastKeys(bomb.tile, bomb.flameRange, context).has(tileKey(enemy.tile.x, enemy.tile.y))
+    )),
+  );
   const shouldDropBomb = !openingProtected
-    && (adjacentEnemy || adjacentBreakable || enemyInBombLine)
+    && (adjacentBreakable || (!ownedBombAlreadyCoversEnemy && (adjacentEnemy || enemyInBombLine)))
     && canBotPlaceBomb(player, context);
   if (shouldDropBomb) {
     return { direction: null, placeBomb: true };
