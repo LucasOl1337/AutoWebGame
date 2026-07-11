@@ -284,6 +284,7 @@ export function getBotDecision(player: PlayerState, context: BotContext): BotDec
     (tile) => hasAdjacentBreakable(tile, context) && canBotPlaceBombAtTile(player, tile, false, context),
     strategicSafetyWindowMs,
     context,
+    (tile) => hasAdjacentBreakableWithPrecomputedPowerUp(tile, context) ? 1 : 0,
   );
   if (breakableTarget) {
     return { direction: breakableTarget, placeBomb: false };
@@ -458,9 +459,10 @@ function findNearestReachableTarget(
   predicate: (tile: TileCoord) => boolean,
   minSafetyWindowMs = BOT_DANGER_ARRIVAL_BUFFER_MS,
   context: BotContext,
+  tieBreakerScore?: (tile: TileCoord) => number,
 ): Direction | null {
   const dangerMap = getDangerMap(context);
-  return findDirectionToNearestTile(player, predicate, dangerMap, context, minSafetyWindowMs);
+  return findDirectionToNearestTile(player, predicate, dangerMap, context, minSafetyWindowMs, tieBreakerScore);
 }
 
 /**
@@ -472,6 +474,7 @@ function findDirectionToNearestTile(
   blockedDanger?: Map<string, number>,
   context?: BotContext,
   minSafetyWindowMs = BOT_DANGER_ARRIVAL_BUFFER_MS,
+  tieBreakerScore?: (tile: TileCoord) => number,
 ): Direction | null {
   // Handle overloaded parameter signature
   let actualContext: BotContext;
@@ -500,6 +503,30 @@ function findDirectionToNearestTile(
   const moveDuration = getMoveDuration(player);
 
   while (queue.length > 0) {
+    const distance = queue[0]?.distance;
+    if (tieBreakerScore && distance !== undefined) {
+      const candidates = queue.filter((entry) => entry.distance === distance);
+      let bestCandidate: typeof candidates[number] | null = null;
+      let bestScore = Number.NEGATIVE_INFINITY;
+      for (const candidate of candidates) {
+        const arrivalMs = candidate.distance * moveDuration;
+        if (
+          (candidate.tile.x !== start.x || candidate.tile.y !== start.y)
+          && isTileSafeForArrivalWithWindow(danger, candidate.tile, arrivalMs, actualMinSafetyWindowMs)
+          && predicate(candidate.tile)
+        ) {
+          const score = tieBreakerScore(candidate.tile);
+          if (score > bestScore) {
+            bestScore = score;
+            bestCandidate = candidate;
+          }
+        }
+      }
+      if (bestCandidate) {
+        return bestCandidate.first;
+      }
+    }
+
     const current = queue.shift();
     if (!current) {
       break;
@@ -616,13 +643,28 @@ function canBombReachTile(origin: TileCoord, target: TileCoord, range: number, c
  * Check if a tile has an adjacent breakable
  */
 function hasAdjacentBreakable(tile: TileCoord, context: BotContext): boolean {
+  return getAdjacentBreakables(tile, context).length > 0;
+}
+
+function hasAdjacentBreakableWithPrecomputedPowerUp(tile: TileCoord, context: BotContext): boolean {
+  const adjacentBreakableKeys = new Set(
+    getAdjacentBreakables(tile, context).map((neighbor) => tileKey(neighbor.x, neighbor.y)),
+  );
+  return context.arena.powerUps.some((powerUp) => (
+    !powerUp.revealed
+    && !powerUp.collected
+    && adjacentBreakableKeys.has(tileKey(powerUp.tile.x, powerUp.tile.y))
+  ));
+}
+
+function getAdjacentBreakables(tile: TileCoord, context: BotContext): TileCoord[] {
   const neighbors = [
     { x: tile.x + 1, y: tile.y },
     { x: tile.x - 1, y: tile.y },
     { x: tile.x, y: tile.y + 1 },
     { x: tile.x, y: tile.y - 1 },
   ];
-  return neighbors.some((neighbor) => context.arena.breakable.has(tileKey(neighbor.x, neighbor.y)));
+  return neighbors.filter((neighbor) => context.arena.breakable.has(tileKey(neighbor.x, neighbor.y)));
 }
 
 /**

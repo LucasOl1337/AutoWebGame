@@ -30,8 +30,13 @@ const context = {
   arena: {
     config: { grid: { width: 7, height: 7 } },
     solid: new Set(),
-    breakable: new Set([tileKey(5, 3)]),
-    powerUps: [],
+    breakable: new Set([tileKey(1, 3), tileKey(5, 3)]),
+    powerUps: [{
+      type: "speed-up",
+      tile: { x: 1, y: 3 },
+      revealed: false,
+      collected: false,
+    }],
   },
   suddenDeathActive: false,
   suddenDeathTickMs: 0,
@@ -51,7 +56,7 @@ const context = {
 
 enemy.spawnProtectionMs = 1000;
 const crateTieDecision = getBotDecision(bot, context);
-const crateTiePass = crateTieDecision.direction === "right" && crateTieDecision.placeBomb === false;
+const crateTiePass = crateTieDecision.direction === "left" && crateTieDecision.placeBomb === false;
 
 enemy.spawnProtectionMs = 0;
 enemy.tile = { x: 3, y: 5 };
