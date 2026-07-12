@@ -45,6 +45,7 @@
     "test:session-return-brief": "npm run compile:esm && node tests/session-return-brief-check.mjs",
     "test:room-invite-link": "npm run compile:esm && node tests/session-room-invite-link-check.mjs",
     "test:room-code-enter-submit": "npm run compile:esm && node tests/room-code-enter-submit-check.mjs",
+    "test:room-code-normalization": "node tests/room-code-entry-normalization-check.mjs",
     "test:account-username": "npm run compile:esm && node tests/account-username-validation-check.mjs",
     "test:billing-commercial": "npm run compile:esm && node tests/billing-commercial-flow-check.mjs",
     "test:commercial-release-flow": "npm run compile:esm && node tests/commercial-release-flow-check.mjs",
