@@ -459,7 +459,7 @@ function findNearestReachableTarget(
   predicate: (tile: TileCoord) => boolean,
   minSafetyWindowMs = BOT_DANGER_ARRIVAL_BUFFER_MS,
   context: BotContext,
-  tieBreakerScore?: (tile: TileCoord) => number,
+  tieBreakerScore?: (tile: TileCoord, firstDirection: Direction | null) => number,
 ): Direction | null {
   const dangerMap = getDangerMap(context);
   return findDirectionToNearestTile(player, predicate, dangerMap, context, minSafetyWindowMs, tieBreakerScore);
@@ -474,7 +474,7 @@ function findDirectionToNearestTile(
   blockedDanger?: Map<string, number>,
   context?: BotContext,
   minSafetyWindowMs = BOT_DANGER_ARRIVAL_BUFFER_MS,
-  tieBreakerScore?: (tile: TileCoord) => number,
+  tieBreakerScore?: (tile: TileCoord, firstDirection: Direction | null) => number,
 ): Direction | null {
   // Handle overloaded parameter signature
   let actualContext: BotContext;
@@ -515,7 +515,7 @@ function findDirectionToNearestTile(
           && isTileSafeForArrivalWithWindow(danger, candidate.tile, arrivalMs, actualMinSafetyWindowMs)
           && predicate(candidate.tile)
         ) {
-          const score = tieBreakerScore(candidate.tile);
+          const score = tieBreakerScore(candidate.tile, candidate.first);
           if (score > bestScore) {
             bestScore = score;
             bestCandidate = candidate;
@@ -698,6 +698,7 @@ function findValuablePowerUpDirection(player: PlayerState, minSafetyWindowMs: nu
       (tile) => targetTiles.has(tileKey(tile.x, tile.y)),
       minSafetyWindowMs,
       context,
+      (_tile, firstDirection) => firstDirection === context.botCommittedDirection[player.id] ? 1 : 0,
     );
     if (direction) {
       return direction;
