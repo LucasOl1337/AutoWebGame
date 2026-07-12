@@ -4,11 +4,11 @@
 
 | Dimensão | Antes da consolidação | Depois da preparação local | Depois da publicação |
 |---|---|---|---|
-| Produção Cloudflare | `v0.2.5`, Worker version 167, deployment `feea36d3…` | Sem alteração externa | Pendente de autorização |
-| GitHub `main` | `v0.3.0`, commit `15b3721` | Sem alteração externa | Pendente de autorização |
-| Release candidate local | Espalhada entre worktrees/refs | Worktree `AutoWebGame-release-v0.4.0-prep`, base `15b3721`, mudanças staged sem commit | Pendente de commit/push |
-| Versão de package/UI | `0.1.0` / badge `v0.2.2` | `0.4.0` / badge `v0.4.0` | Pendente de deploy |
-| Testes | v0.3 registrava 47 focados | 136/136 checks + build + audit + dry-run | Smoke live pendente |
+| Produção Cloudflare | `v0.2.5`, Worker version 167, deployment `feea36d3…` | Sem alteração externa | `v0.4.0` em ambos os domínios; Worker e 740 assets publicados |
+| GitHub `main` | `v0.3.0`, commit `15b3721` | Sem alteração externa | Consolidação integrada pelo PR #2 (`1bccda7`) |
+| Release candidate local | Espalhada entre worktrees/refs | Worktree `AutoWebGame-release-v0.4.0-prep`, base `15b3721`, mudanças staged sem commit | Commit de release `20eb22f`, publicado e integrado |
+| Versão de package/UI | `0.1.0` / badge `v0.2.2` | `0.4.0` / badge `v0.4.0` | `0.4.0` / badge `v0.4.0` em produção |
+| Testes | v0.3 registrava 47 focados | 136/136 checks + build + audit + dry-run | Smoke live aprovado nos dois domínios; assets amostrados 1:1 |
 
 ## Inventário auditado
 

@@ -1,6 +1,6 @@
 # v0.4.0 — Gameplay Trae consolidado, mobile seguro e Worker mais eficiente (12/07/2026)
 
-Release minor candidata do AutoWebGame/BOMBA PvP, baseada em `v0.3.0`. Esta unidade consolida o trabalho recuperável entre Codex e Trae Work, fecha diferenças locais relevantes e rejeita explicitamente protótipos ou snapshots que não atingiram o padrão de produção.
+Release minor publicada do AutoWebGame/BOMBA PvP, baseada em `v0.3.0`. Esta unidade consolida o trabalho recuperável entre Codex e Trae Work, fecha diferenças locais relevantes e rejeita explicitamente protótipos ou snapshots que não atingiram o padrão de produção.
 
 ## Destaques
 
@@ -42,6 +42,6 @@ Release minor candidata do AutoWebGame/BOMBA PvP, baseada em `v0.3.0`. Esta unid
 
 ## Estado de publicação
 
-**Release candidate preparada, ainda não commitada nem publicada.** Commit, push, tag e deploy dependem de autorização explícita. Após autorização, o smoke live deve confirmar `/health`, landing, `/game`, arena ativa, lobby e admin fail-closed.
+**Publicada em produção em 12/07/2026.** O PR #2 integrou a consolidação ao `main`; o Worker e os 740 assets foram implantados nos domínios `bombapvp.com` e `bombpvp.com`. O smoke live confirmou `/health`, landing, `/game`, `robots.txt` e `sitemap.xml`; amostras de JS/CSS e arquivos operacionais apresentaram hashes SHA-256 idênticos ao bundle local. Os bindings `LOBBY` e `ASSETS` foram preservados.
 
 Detalhes: [PRD](PRD-v0.4.0.md) e [antes/depois](before-after-v0.4.0.md).
