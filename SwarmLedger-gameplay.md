@@ -1,5 +1,15 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-12 — input-repeat-preserves-latest-direction
+
+- Claim/escopo antes da intervenção: ajustar exclusivamente `InputManager` para que `keydown` repetido pelo sistema operacional não reordene a prioridade direcional; preservar fila de presses, atalhos reservados, prevenção de scroll, aliases, blur/visibilidade e controles em campos interativos.
+- Arquivos previstos: `src/Engine/input.ts`, novo teste focal `tests/input-repeat-direction-priority-check.mjs` e `SwarmLedger-gameplay.md`.
+- Antes/evidência da lacuna: todo `keydown`, inclusive repetição de uma tecla já segurada, remove e reinsere seu código ao fim de `keyOrder`; assim, após segurar uma direção e pressionar outra, o auto-repeat da primeira pode indevidamente retomar o movimento sem nova ação física.
+- Preservação: `index.html`, `src/Engine/game-app.ts`, `tests/remote-detonation-check.mjs` e demais mudanças alheias permaneceram intocados e fora do commit seletivo.
+- Antes → depois: um `keydown` repetido de uma tecla já segurada reordenava `keyOrder` e podia roubar prioridade da direção fisicamente pressionada por último; agora a repetição continua sendo capturada/prevenida normalmente, mas retorna após manter `keysDown`, sem enfileirar novo press nem reordenar a direção.
+- Evidência focal: `latestPhysicalPress="right"`, `afterOlderKeyRepeat="right"`, `repeatDidNotQueuePress=true`, `fallbackToHeldDirection="up"`, `pass=true`.
+- Validação: `npm run compile:esm`; `node tests/input-repeat-direction-priority-check.mjs`; `node tests/input-transition-check.mjs`; `node tests/local-input-alias-check.mjs`; `node tests/input-visibility-clear-check.mjs`; `node tests/input-page-scroll-check.mjs`; `npm run build`; `git diff --check -- src/Engine/input.ts tests/input-repeat-direction-priority-check.mjs SwarmLedger-gameplay.md` — todos concluídos com código 0; somente aviso de conversão LF→CRLF no ledger.
+
 ## 2026-07-12 — align-bot-sudden-death-tick-900ms
 
 - Claim/escopo antes da intervenção: alinhar exclusivamente `SUDDEN_DEATH_TICK_MS` do bot ao runtime autoritativo já configurado em 900 ms; adicionar teste focal mínimo; preservar demais timings, comportamento e mudanças existentes; sem commit.
