@@ -144,6 +144,12 @@ const hasDiminishingSpeedReturns = speedScores[0] === 460
     return score - 120 === previousBonus / 2;
   });
 
+const shortFuseScores = [0, 1, 2].map((shortFuseLevel) => {
+  bot.shortFuseLevel = shortFuseLevel;
+  return getPowerUpPriorityScore(bot, "short-fuse-up");
+});
+const hasDiminishingShortFuseReturns = JSON.stringify(shortFuseScores) === JSON.stringify([260, 150, 0]);
+
 const report = {
   preferSpeedDecision,
   preferFirstShieldDecision,
@@ -155,11 +161,14 @@ const report = {
   skipsSaturatedBombForSurvival,
   speedScores,
   hasDiminishingSpeedReturns,
+  shortFuseScores,
+  hasDiminishingShortFuseReturns,
 };
 
 console.log(JSON.stringify(report, null, 2));
 
 if (!prefersBaseMobility || !prefersFirstShield || !skipsUselessSpeedUp
-  || !skipsSaturatedBombForSurvival || !hasDiminishingSpeedReturns) {
+  || !skipsSaturatedBombForSurvival || !hasDiminishingSpeedReturns
+  || !hasDiminishingShortFuseReturns) {
   process.exit(1);
 }

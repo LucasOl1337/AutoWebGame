@@ -1,5 +1,13 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-12 — bot-short-fuse-diminishing-returns
+
+- Claim/escopo antes da intervenção: aplicar retorno decrescente exclusivamente ao score de `short-fuse-up` para bots, preservando nível 0 em 260, reduzindo nível 1 para 150 e mantendo saturação no nível 2 em 0; sem alterar fuse real, níveis máximos, drops, coleta, rede ou demais prioridades.
+- Arquivos: `src/Gameplay/powerups.ts`, `tests/bot-powerup-priority-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.
+- Preservação: toda sujeira e mudanças alheias permanecem intocadas; sem commit.
+- Resultado focal: `shortFuseScores=[260,150,0]` e `hasDiminishingShortFuseReturns=true`; nível 0 preservado, nível 1 reduzido e nível 2 saturado em 0.
+- Validação: `npm run compile:esm`; `node tests/bot-powerup-priority-check.mjs`; `node tests/bot-own-blast-escape-check.mjs`; `node tests/bot-survival-10s-check.mjs`; `node tests/bot-target-selection-check.mjs`; `npm run build`; `git diff --check -- src/Gameplay/powerups.ts tests/bot-powerup-priority-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` — todos concluídos com código 0; somente avisos LF→CRLF. Sem commit.
+
 ## 2026-07-12 — input-repeat-preserves-latest-direction
 
 - Claim/escopo antes da intervenção: ajustar exclusivamente `InputManager` para que `keydown` repetido pelo sistema operacional não reordene a prioridade direcional; preservar fila de presses, atalhos reservados, prevenção de scroll, aliases, blur/visibilidade e controles em campos interativos.

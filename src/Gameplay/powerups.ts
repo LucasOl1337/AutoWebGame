@@ -214,7 +214,7 @@ export function getPowerUpPriorityScore(player: PlayerState, type: PowerUpType):
     if (player.shortFuseLevel >= MAX_SHORT_FUSE_LEVEL) {
       return 0;
     }
-    return 200 + (MAX_SHORT_FUSE_LEVEL - player.shortFuseLevel) * 30;
+    return player.shortFuseLevel === 0 ? 260 : 150;
   }
   if (player.speedLevel >= MAX_SPEED_LEVEL) {
     return 0;

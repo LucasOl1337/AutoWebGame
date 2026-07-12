@@ -4,6 +4,8 @@ Shared coordination file for recurring Codex swarm sessions. Each session should
 
 ## Active claims
 
+CLAIM | 2026-07-12 | sessao=bot-short-fuse-diminishing-returns | tipo=intervencao-gameplay-bot-minima | arquivos=src/Gameplay/powerups.ts, tests/bot-powerup-priority-check.mjs, DocsDev/swarm-coordination.md, SwarmLedger-gameplay.md | status=feito | observacao=retorno decrescente restrito ao short-fuse: scores [260,150,0] para niveis [0,1,2]; compile, teste focal, bot escape/survival/target, build e diff-check aprovados; demais prioridades e sujeira alheia preservadas; sem commit
+
 CLAIM | 2026-07-12 | sessao=explicit-state-based-remote-speed-distribution | tipo=intervencao-balanceamento-minima | arquivos=src/Arenas/arena.ts, tests/powerup-drop-rate-check.mjs, DocsDev/swarm-coordination.md | status=feito | observacao=antes pool tinha pesos implicitos (5 slots speed/2 remote) e teste apenas contagem geral; depois comentario fixa o estado ponderado/ordem e teste afirma explicitamente remote=2 versus speed=8; drop-rate, arena-runtime e build aprovados; game-app/index/remote test e sujeira alheia intocados
 
 CLAIM | 2026-07-12 | sessao=ux-local-bomb-action-clarity | tipo=ux-copy-i18n-minima | arquivos=src/UiLayouts/i18n.ts, DocsDev/swarm-coordination.md | status=feito | observacao=antes PT/EN usavam metafora vaga Criar pressao/Create pressure; depois exibem a acao real Colocar bomba/Place bomb; runtime e controles preservados; npm run build e git diff --check focal aprovados; index.html, src/Engine/game-app.ts e tests/remote-detonation-check.mjs intocados; sem commit
