@@ -30,7 +30,17 @@
     "Expanded funnel telemetry",
     "New branded social/hero asset"
   ],
-  "publicationStatus": "prepared-awaiting-explicit-authorization",
+  "publicationStatus": "published-and-smoke-verified",
+  "publication": {
+    "pullRequest": 2,
+    "releaseCommit": "20eb22facd0314ccd4889904bc05b18f599b044a",
+    "initialMergeCommit": "1bccda7bd2b21cd62ad49a4dfb4a7e80f560322c",
+    "domains": ["bombapvp.com", "bombpvp.com"],
+    "worker": "autowebgame-online",
+    "assets": 740,
+    "smoke": "passed",
+    "assetParity": "sampled-sha256-identical"
+  },
   "artifacts": [
     "DocsDev/releases/PRD-v0.4.0.md",
     "DocsDev/releases/before-after-v0.4.0.md",

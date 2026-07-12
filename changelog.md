@@ -1,6 +1,6 @@
 # Changelog
 
-## [2026-07-12] — v0.4.0 Release Candidate
+## [2026-07-12] — v0.4.0
 
 - Consolidadas 20 rodadas Trae de gameplay/bots sobre `v0.3.0`.
 - Recuperadas correções órfãs e snapshots úteis de input, áudio, convite, mobile e Worker.
@@ -10,7 +10,7 @@
 - Agent-First foi preservado como protótipo e adiado por riscos arquiteturais comprovados.
 - Validação: 136/136 checks, build, audit, Wrangler dry-run e Chrome desktop/mobile.
 
-Estado: preparado localmente; commit/push/deploy aguardam autorização explícita.
+Estado: publicado em produção nos dois domínios e validado por smoke test e paridade SHA-256 amostrada dos assets.
 
 Relatório: `DocsDev/releases/release-v0.4.0.md`.
 

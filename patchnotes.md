@@ -1,8 +1,8 @@
-# Patch Notes — 2026-07-12 v0.4.0 Release Candidate
+# Patch Notes — 2026-07-12 v0.4.0
 
 **Projeto:** AutoWebGame / BOMBA PvP
 **Baseline:** `v0.3.0` (`15b3721`)
-**Estado:** preparado; aguardando autorização de commit e deploy
+**Estado:** publicado e validado em `bombapvp.com` e `bombpvp.com`
 
 ## Para quem joga
 
