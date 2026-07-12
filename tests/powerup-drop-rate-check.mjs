@@ -115,8 +115,8 @@ const expectedDropRatio = 0.611;
 const expectedDropTypeCounts = {
   "bomb-up": 0,
   "flame-up": 2,
-  "speed-up": 10,
-  "remote-up": 0,
+  "speed-up": 8,
+  "remote-up": 2,
   "shield-up": 4,
   "short-fuse-up": 2,
   "bomb-pass-up": 4,

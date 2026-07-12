@@ -4,6 +4,8 @@ Shared coordination file for recurring Codex swarm sessions. Each session should
 
 ## Active claims
 
+CLAIM | 2026-07-12 | sessao=drop-pool-speed-to-remote | tipo=intervencao-balanceamento-minima | arquivos=src/Arenas/arena.ts, tests/powerup-drop-rate-check.mjs, DocsDev/swarm-coordination.md | status=feito | observacao=uma ocorrencia de speed-up substituida por remote-up no dropPool; tamanho, algoritmo e simetria por pares preservados; drop-rate, arena-runtime, build e diff-check aprovados; test:remote bloqueado por fixture preexistente sem ctx.translate; sujeira alheia intocada
+
 CLAIM | 2026-07-12 | sessao=bot-speed-diminishing-returns | tipo=intervencao-gameplay-bot | arquivos=src/Gameplay/powerups.ts, tests/bot-powerup-priority-check.mjs, DocsDev/swarm-coordination.md, SwarmLedger-gameplay.md | status=feito | observacao=primeiro speed-up mantem score 460; niveis posteriores retornam 240, 180 e 150 antes da saturacao 0, reduzindo pela metade o bonus sobre a base 120; compile, bot-powerup, bot-survival, bot-target, build e diff-check aprovados; index.html e sujeira alheia preservados
 
 CLAIM | 2026-07-11 | sessao=bot-stable-pickup-direction-tiebreak | tipo=intervencao-gameplay-bot | arquivos=src/Engine/bot-ai.ts, tests/bot-pickup-direction-tiebreak-check.mjs, DocsDev/swarm-coordination.md, SwarmLedger-gameplay.md | status=feito | observacao=pickups igualmente uteis/equidistantes/seguros preservam direcao comprometida; sem compromisso mantem ordem deterministica; testes focais/regressoes de bot, build e diff-check aprovados; sujeira alheia preservada

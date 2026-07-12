@@ -334,7 +334,7 @@ function createPowerUpsFromBreakables(breakable: Set<string>, config: ArenaRunti
   const dropPool: readonly PowerUpType[] = [
     "speed-up",
     "speed-up",
-    "speed-up",
+    "remote-up",
     "bomb-up",
     "bomb-up",
     "flame-up",
