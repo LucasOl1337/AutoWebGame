@@ -4,6 +4,8 @@ Shared coordination file for recurring Codex swarm sessions. Each session should
 
 ## Active claims
 
+CLAIM | 2026-07-12 | sessao=ux-local-bomb-action-clarity | tipo=ux-copy-i18n-minima | arquivos=src/UiLayouts/i18n.ts, DocsDev/swarm-coordination.md | status=feito | observacao=antes PT/EN usavam metafora vaga Criar pressao/Create pressure; depois exibem a acao real Colocar bomba/Place bomb; runtime e controles preservados; npm run build e git diff --check focal aprovados; index.html, src/Engine/game-app.ts e tests/remote-detonation-check.mjs intocados; sem commit
+
 CLAIM | 2026-07-12 | sessao=align-bot-sudden-death-tick-900ms | tipo=intervencao-gameplay-bot-minima | arquivos=src/Engine/bot-ai.ts, tests/bot-sudden-death-tick-alignment-check.mjs, DocsDev/swarm-coordination.md, SwarmLedger-gameplay.md | status=feito | observacao=SUDDEN_DEATH_TICK_MS do bot alinhado 800→900 conforme runtime; teste focal, compile, regressão sudden-death BFS, build e diff-check aprovados; mudanças existentes preservadas; sem commit
 
 CLAIM | 2026-07-12 | sessao=fix-remote-test-canvas-translate | tipo=correcao-fixture-teste | arquivos=tests/remote-detonation-check.mjs, DocsDev/swarm-coordination.md, SwarmLedger-geral.md | status=bloqueado | observacao=translate noop implementado; node --check e diff-check aprovados; test:remote/build bloqueados antes do harness por TS6133 em POWER_UP_SPAWN_POP_MS no src/Engine/game-app.ts do claim concorrente ux-powerup-spawn-pop-120ms; sem commit e sem tocar sujeira alheia

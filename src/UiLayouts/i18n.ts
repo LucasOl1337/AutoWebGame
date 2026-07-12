@@ -375,7 +375,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       localControlsTitle: "Antes da primeira bomba",
       localControlsHint: "Objetivo: seja o último bomber vivo. A partida contra bots usa o personagem selecionado ao lado.",
       localControlsMove: "Mover pelo labirinto",
-      localControlsBomb: "Criar pressao",
+      localControlsBomb: "Colocar bomba",
       localControlsUltimate: "Virar a rodada",
     },
     lobbies: {
@@ -641,7 +641,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       localControlsTitle: "Before the first bomb",
       localControlsHint: "Objective: be the last bomber alive. Bot matches use the character selected on the side.",
       localControlsMove: "Move through the maze",
-      localControlsBomb: "Create pressure",
+      localControlsBomb: "Place bomb",
       localControlsUltimate: "Turn the round",
     },
     lobbies: {
