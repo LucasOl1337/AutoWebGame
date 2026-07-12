@@ -1,0 +1,30 @@
+## 2026-07-12 - Correcao de referencia do manifesto no README
+
+- Escopo reservado: corrigir somente o caminho obsoleto do manifesto de personagens em `README.md` e validar a documentacao contra o arquivo real, sem tocar nas mudancas preexistentes.
+- Evidencia inicial: `README.md` aponta para `public/Assets/Characters/Animations/manifest.approved.json`, enquanto o inventario CodeGraph registra `public/assets/characters/manifest.approved.json`.
+- Validacoes planejadas: existencia do destino, teste de sincronizacao do roster, build, diff-check e revisao seletiva do escopo.
+- Implementacao: referencia em `README.md` atualizada para `public/assets/characters/manifest.approved.json`; nenhuma mudanca preexistente foi alterada.
+- Validacao concluida: `npm run test:roster-sync` passou (`pass: true`), `npm run build` passou (42 modulos), e `git diff --check -- README.md SwarmLedger-documentacao.md` passou.
+- Revisao de escopo: diff funcional limitado a uma linha em `README.md`; este ledger registra reserva e resultado. Commit seletivo autorizado apenas para esses dois arquivos.
+
+## 2026-07-09 - Automacao documentacao
+
+- Branch: `swarm/autowebgame/documentacao` criada a partir de `main`.
+- Bloqueio: repositorio ja estava sujo antes desta execucao.
+- Arquivos preexistentes detectados: `index.html` modificado e `DocsDev/qa-browser-loop.md` nao rastreado.
+- Acao tomada: nenhum documento operacional foi alterado alem deste ledger; encerrado para nao misturar trabalho de outro fluxo.
+
+## 2026-07-09 - Automacao documentacao
+
+- Branch confirmada: `swarm/autowebgame/documentacao`.
+- Bloqueio: repositorio ainda iniciou sujo antes de qualquer edicao desta execucao.
+- Evidencia `git status --short --branch`: `index.html` modificado; nao rastreados `DocsDev/qa-browser-loop.md`, `SwarmLedger-bugs.md`, `SwarmLedger-documentacao.md`, `SwarmLedger-geral.md`, `SwarmLedger-landing.md`, `SwarmLedger-migracao-visual.md`, `SwarmLedger-performance.md`, `SwarmLedger-ready-to-ship.md`.
+- Acao tomada: somente este ledger foi atualizado; nenhuma documentacao operacional foi alterada para evitar misturar fluxos.
+
+## 2026-07-09 00:55:11 -03:00 - Automacao documentacao
+
+- Branch confirmada: `swarm/autowebgame/documentacao`.
+- CodeGraph de `C:\Projetos\AutoWebGame` conferido e atualizado.
+- Bloqueio: repositorio iniciou sujo antes de qualquer edicao desta execucao.
+- Evidencia `git status --short --branch`: `index.html` modificado; nao rastreados `DocsDev/qa-browser-loop.md`, `SwarmLedger-bugs.md`, `SwarmLedger-documentacao.md`, `SwarmLedger-geral.md`, `SwarmLedger-landing.md`, `SwarmLedger-migracao-visual.md`, `SwarmLedger-performance.md`, `SwarmLedger-ready-to-ship.md`.
+- Acao tomada: somente este ledger foi atualizado; nenhuma documentacao operacional foi alterada para evitar misturar fluxos.
