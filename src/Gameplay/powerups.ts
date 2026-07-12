@@ -16,14 +16,14 @@ const SHORT_FUSE_STEP_MS = 350;
 const MIN_SHORT_FUSE_MS = 1_200;
 
 export interface PowerUpDefinition {
-  type: PowerUpType;
-  label: string;
-  shortLabel: string;
-  tint: string;
-  maxLevel: number;
+  readonly type: PowerUpType;
+  readonly label: string;
+  readonly shortLabel: string;
+  readonly tint: string;
+  readonly maxLevel: number;
 }
 
-const POWER_UP_DEFINITIONS: Record<PowerUpType, PowerUpDefinition> = {
+const POWER_UP_DEFINITIONS: Readonly<Record<PowerUpType, PowerUpDefinition>> = {
   "bomb-up": {
     type: "bomb-up",
     label: "Bomb Capacity",
@@ -192,6 +192,10 @@ export function getPowerUpPriorityScore(player: PlayerState, type: PowerUpType):
     if (player.shieldCharges >= MAX_SHIELD_CHARGES) {
       return 0;
     }
+    // A bot sem proteção deve priorizar a sobrevivência antes de upgrades ofensivos.
+    if (player.shieldCharges === 0) {
+      return 500;
+    }
     return 210 + (MAX_SHIELD_CHARGES - player.shieldCharges) * 35;
   }
   if (type === "bomb-pass-up") {
@@ -215,7 +219,11 @@ export function getPowerUpPriorityScore(player: PlayerState, type: PowerUpType):
   if (player.speedLevel >= MAX_SPEED_LEVEL) {
     return 0;
   }
-  return 120 + (MAX_SPEED_LEVEL - player.speedLevel) * 25;
+  if (player.speedLevel === 0) {
+    return 460;
+  }
+  // Depois do ganho inicial, cada nível adicional retém metade do bônus estratégico anterior.
+  return 120 + 120 / 2 ** (player.speedLevel - 1);
 }
 
 export function getBombFuseMsForPlayer(player: PlayerState): number {
@@ -223,6 +231,10 @@ export function getBombFuseMsForPlayer(player: PlayerState): number {
     MIN_SHORT_FUSE_MS,
     BOMB_FUSE_MS - player.shortFuseLevel * SHORT_FUSE_STEP_MS,
   );
+}
+
+export function formatBombFuseSeconds(player: PlayerState): string {
+  return `${(getBombFuseMsForPlayer(player) / 1000).toFixed(2)}s`;
 }
 
 export function formatControlKey(code: string): string {

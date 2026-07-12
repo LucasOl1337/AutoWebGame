@@ -103,7 +103,10 @@ const PUBLIC_API_ROUTES = new Map([
   ["/api/billing/webhook", { methods: new Set(["POST"]), targetPath: "/internal/billing/webhook" }],
 ]);
 
-function getStaticAssetCacheControl(pathname, contentType) {
+function getStaticAssetCacheControl(pathname, contentType, status = 200) {
+  if (status >= 400) {
+    return "no-store";
+  }
   if (pathname === "/Assets/Characters/Animations/manifest.json") {
     return "no-store";
   }
@@ -225,7 +228,7 @@ export default {
     const assetResponse = await env.ASSETS.fetch(request);
     const contentType = assetResponse.headers.get("content-type") || "";
     const headers = new Headers(assetResponse.headers);
-    headers.set("cache-control", getStaticAssetCacheControl(url.pathname, contentType));
+    headers.set("cache-control", getStaticAssetCacheControl(url.pathname, contentType, assetResponse.status));
     return new Response(assetResponse.body, {
       status: assetResponse.status,
       statusText: assetResponse.statusText,
@@ -1818,7 +1821,7 @@ export class GlobalLobby extends DurableObject {
    * @returns {Promise<Response>}
    */
   async handleActiveArena() {
-    const arena = cloneArenaDefinition(await this.readActiveArenaDefinition());
+    const arena = cloneArenaDefinition(this.activeArenaDefinition);
     return Response.json(
       { arena },
       {
@@ -2201,13 +2204,12 @@ export class GlobalLobby extends DurableObject {
    */
   async buildAdminSummary() {
     const todayKey = formatDateKey(Date.now());
-    const todaySummary = await this.readAnalyticsDay(todayKey);
-    const recentDays = [];
-
-    for (let index = 0; index < ANALYTICS_LOOKBACK_DAYS; index += 1) {
-      const dateKey = shiftDateKey(todayKey, -index);
-      recentDays.push(await this.readAnalyticsDay(dateKey));
-    }
+    const recentDays = await Promise.all(
+      Array.from({ length: ANALYTICS_LOOKBACK_DAYS }, (_, index) => (
+        this.readAnalyticsDay(shiftDateKey(todayKey, -index))
+      )),
+    );
+    const todaySummary = recentDays[0];
 
     const openRooms = [];
     let playingRooms = 0;

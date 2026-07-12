@@ -26,6 +26,10 @@ Use this index as the first stop for release, gameplay, visual, and operations d
 
 ## Release Records
 
+- [PRD v0.4.0](../DocsDev/releases/PRD-v0.4.0.md)
+- [Before/After v0.4.0](../DocsDev/releases/before-after-v0.4.0.md)
+- [Release v0.4.0](../DocsDev/releases/release-v0.4.0.md)
+- [Release v0.3.0](../DocsDev/releases/release-v0.3.0.md)
 - [Billing Checkout Readiness](../DocsDev/releases/billing-checkout-readiness.md)
 - [Release v0.2.0](../DocsDev/releases/release-v0.2.0.md)
 - [Release v0.2.1](../DocsDev/releases/release-v0.2.1.md)

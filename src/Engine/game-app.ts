@@ -63,10 +63,12 @@ import {
 } from "../Arenas/arena";
 import {
   applyPowerUpToPlayer,
+  formatBombFuseSeconds,
   formatControlKey,
   getBombFuseMsForPlayer,
   getPowerUpDefinition,
   getPowerUpLevel,
+  isPowerUpMaxed,
   type SkillPowerUpType,
   SKILL_POWER_UP_TYPES,
 } from "../Gameplay/powerups";
@@ -167,12 +169,12 @@ const directionDelta: Record<Direction, TileCoord> = {
   left: { x: -1, y: 0 },
   right: { x: 1, y: 0 },
 };
-
-interface CenterOverlayState {
-  title: string;
-  subtitle: string;
-  footer: string | null;
-}
+const cardinalDirectionDeltas: readonly TileCoord[] = [
+  directionDelta.up,
+  directionDelta.down,
+  directionDelta.left,
+  directionDelta.right,
+];
 
 const PLAYER_HITBOX_HALF = TILE_SIZE * 0.5;
 const LANE_SNAP_THRESHOLD = TILE_SIZE * 0.45;
@@ -2799,7 +2801,7 @@ export class GameApp {
     const range = bomb.flameRange;
     flameTiles.add(tileKey(bomb.tile.x, bomb.tile.y));
 
-    for (const direction of Object.values(directionDelta)) {
+    for (const direction of cardinalDirectionDeltas) {
       for (let step = 1; step <= range; step += 1) {
         const x = bomb.tile.x + direction.x * step;
         const y = bomb.tile.y + direction.y * step;
@@ -3148,6 +3150,10 @@ export class GameApp {
           continue;
         }
         if (powerUp.tile.x === tile.x && powerUp.tile.y === tile.y) {
+          if (isPowerUpMaxed(player, powerUp.type)) {
+            this.addPowerUpPickupNotice(id, powerUp.type, false, "MAX");
+            continue;
+          }
           powerUp.collected = true;
           applyPowerUpToPlayer(player, powerUp.type);
           const chainGuard = registerPickupForChain(this.pickupChains[id], powerUp.type);
@@ -3863,7 +3869,9 @@ export class GameApp {
       : rawLevel;
     const valueLabel = type === "remote-up"
       ? (level > 0 ? "ON" : "--")
-      : `x${level}`;
+      : type === "short-fuse-up"
+        ? formatBombFuseSeconds(player)
+        : `x${level}`;
     const pickupNotice = this.getPowerUpPickupNotice(playerId, type);
 
     return {
@@ -3883,12 +3891,13 @@ export class GameApp {
     playerId: PlayerId,
     type: SkillPowerUpType,
     chainGuard = false,
+    valueLabel?: string,
   ): void {
     const slot = this.getHudSkillSlot(playerId, type);
     const notice: PowerUpPickupNotice = {
       playerId,
       type,
-      valueLabel: slot.valueLabel,
+      valueLabel: valueLabel ?? slot.valueLabel,
       chainGuard,
       elapsedMs: 0,
       remainingMs: POWER_UP_PICKUP_NOTICE_MS,
@@ -4583,7 +4592,16 @@ export class GameApp {
     const y = powerUp.tile.y * TILE_SIZE;
     const sprite = this.assets.powerUps[powerUp.type];
     if (sprite) {
-      this.ctx.drawImage(sprite, x, y, TILE_SIZE, TILE_SIZE);
+      this.ctx.save();
+      this.ctx.fillStyle = "rgba(8, 10, 14, 0.66)";
+      this.ctx.beginPath();
+      this.ctx.arc(x + 16, y + 16, 13, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.strokeStyle = "rgba(255, 244, 214, 0.82)";
+      this.ctx.lineWidth = 1.5;
+      this.ctx.stroke();
+      this.ctx.drawImage(sprite, x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+      this.ctx.restore();
       return;
     }
     const definition = getPowerUpDefinition(powerUp.type);
@@ -4602,6 +4620,18 @@ export class GameApp {
     const pulse = 0.6 + 0.4 * Math.sin((bomb.fuseMs / 80) * Math.PI);
     const x = bomb.tile.x * TILE_SIZE;
     const y = bomb.tile.y * TILE_SIZE;
+    const isFinalFuse = bomb.fuseMs <= 450;
+    if (isFinalFuse) {
+      const urgency = 1 - Math.max(0, bomb.fuseMs) / 450;
+      const ringRadius = 12 + urgency * 5;
+      this.ctx.save();
+      this.ctx.strokeStyle = `rgba(255, 74, 42, ${0.68 + urgency * 0.32})`;
+      this.ctx.lineWidth = 2 + urgency * 2;
+      this.ctx.beginPath();
+      this.ctx.arc(x + 16, y + 16, ringRadius, 0, Math.PI * 2);
+      this.ctx.stroke();
+      this.ctx.restore();
+    }
     if (this.assets.props.bomb) {
       this.ctx.save();
       this.ctx.globalAlpha = Math.max(0.7, pulse);

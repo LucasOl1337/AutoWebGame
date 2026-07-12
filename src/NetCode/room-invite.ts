@@ -1,7 +1,34 @@
-import { buildLocalizedUrl, type SiteLanguage } from "../UiLayouts/i18n";
+import { buildLocalizedUrl, type SiteCopy, type SiteLanguage } from "../UiLayouts/i18n";
 
 function normalizeRoomCodeToken(roomCode: string | null | undefined): string {
-  return String(roomCode || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+  return normalizeRoomCodeCharacters(roomCode).slice(0, 6);
+}
+
+function normalizeRoomCodeCharacters(roomCode: string | null | undefined): string {
+  return String(roomCode || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function readStandaloneRoomCode(value: string): string | null {
+  const exactMatches = [...value.toUpperCase().matchAll(/(?:^|[^A-Z0-9])([A-Z0-9]{6})(?=$|[^A-Z0-9])/g)]
+    .map((match) => match[1]);
+  const exactWithDigit = exactMatches.find((candidate) => /\d/.test(candidate));
+  if (exactWithDigit) {
+    return exactWithDigit;
+  }
+
+  const looseTokens = value.match(/[A-Z0-9][A-Z0-9_-]{0,14}[A-Z0-9]/gi) ?? [];
+  const looseCandidates: string[] = [];
+  for (const token of looseTokens) {
+    const normalizedToken = normalizeRoomCodeCharacters(token);
+    if (normalizedToken.length === 6) {
+      looseCandidates.push(normalizedToken);
+    }
+  }
+
+  return looseCandidates.find((candidate) => /\d/.test(candidate))
+    ?? exactMatches.at(-1)
+    ?? looseCandidates.at(-1)
+    ?? null;
 }
 
 function readNestedRoomCode(value: string, depth = 0): string | null {
@@ -32,6 +59,11 @@ function readNestedRoomCode(value: string, depth = 0): string | null {
         return nestedRoomCode;
       }
 
+      const standaloneRoomCode = readStandaloneRoomCode(roomQuery);
+      if (standaloneRoomCode) {
+        return standaloneRoomCode;
+      }
+
       const normalizedRoomCode = normalizeRoomCodeToken(roomQuery);
       if (normalizedRoomCode) {
         return normalizedRoomCode;
@@ -46,7 +78,9 @@ function readNestedRoomCode(value: string, depth = 0): string | null {
 
 export function normalizeRoomCode(roomCode: string | null | undefined): string {
   const rawRoomCode = String(roomCode || "").trim();
-  return readNestedRoomCode(rawRoomCode) ?? normalizeRoomCodeToken(rawRoomCode);
+  return readNestedRoomCode(rawRoomCode)
+    ?? readStandaloneRoomCode(rawRoomCode)
+    ?? normalizeRoomCodeToken(rawRoomCode);
 }
 
 export function resolveManualLobbyJoinCode(roomCode: string | null | undefined): string | null {
@@ -81,6 +115,11 @@ export function buildRoomInviteUrl(language: SiteLanguage, roomCode: string | nu
     url.searchParams.delete("room");
   }
   return url.toString();
+}
+
+export function formatInviteCopyManualStatus(copy: SiteCopy, roomCode: string | null | undefined): string {
+  const normalizedRoomCode = normalizeRoomCode(roomCode);
+  return normalizedRoomCode ? copy.status.inviteCopyManual(normalizedRoomCode) : copy.status.inviteCopyFailed;
 }
 
 type ClipboardFallbackEnvironment = {

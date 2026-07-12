@@ -17,6 +17,16 @@ const entryCases = [
     expected: "CD34EF",
   },
   {
+    name: "joins from a chat message with a standalone code",
+    actual: resolveManualLobbyJoinCode("entra ai: sala GH78JK"),
+    expected: "GH78JK",
+  },
+  {
+    name: "joins from a chat message with a separated code",
+    actual: resolveManualLobbyJoinCode("codigo da sala: zx-91-km"),
+    expected: "ZX91KM",
+  },
+  {
     name: "ignores empty manual input",
     actual: resolveManualLobbyJoinCode("   "),
     expected: null,
@@ -51,6 +61,12 @@ const sourceChecks = {
   pasteHandler: source.includes("this.elements.lobbyCodeInput.addEventListener(\"paste\""),
   pasteUsesStrictResolver: source.includes("resolvePastedLobbyJoinCode(event.clipboardData?.getData(\"text\"))"),
   pasteReplacesAndJoins: /event\.preventDefault\(\);\s*this\.elements\.lobbyCodeInput\.value = roomCode;\s*this\.joinLobbyFromCodeEntry\(\);/m.test(source),
+  disablesAutocomplete: source.includes("lobbyCodeInput.autocomplete = \"off\";"),
+  disablesSpellcheck: source.includes("lobbyCodeInput.spellcheck = false;"),
+  keepsTextInputMode: source.includes("lobbyCodeInput.inputMode = \"text\";"),
+  usesCharacterAutocapitalize: source.includes("lobbyCodeInput.setAttribute(\"autocapitalize\", \"characters\")"),
+  disablesMobileAutocorrect: source.includes("lobbyCodeInput.setAttribute(\"autocorrect\", \"off\")"),
+  showsJoinEnterKeyHint: source.includes("lobbyCodeInput.setAttribute(\"enterkeyhint\", \"join\")"),
 };
 
 const failedEntryCases = entryCases.filter((entry) => entry.actual !== entry.expected);

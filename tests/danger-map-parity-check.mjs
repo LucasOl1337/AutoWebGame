@@ -2,6 +2,7 @@ import fs from "node:fs";
 
 const { GameApp } = await import("../output/esm/Engine/game-app.js");
 const { buildBotDangerMap } = await import("../output/esm/Engine/bot-ai.js");
+const { SUDDEN_DEATH_TICK_MS } = await import("../output/esm/Engine/danger-map.js");
 
 const noop = () => {};
 const emptySprites = {
@@ -63,7 +64,8 @@ const expectedDanger = {
   extraBombProjected: gameDanger.get("7,7") === 777 && gameDanger.get("7,6") === 777,
   distantBombIgnored: !gameDanger.has("8,2"),
   closureCountdown: gameDanger.get("8,8") === 240 && !gameDanger.has("6,8"),
-  suddenDeathPath: gameDanger.get("9,8") === 250 && gameDanger.get("9,9") === 1_050,
+  suddenDeathPath: gameDanger.get("9,8") === 250
+    && gameDanger.get("9,9") === 250 + SUDDEN_DEATH_TICK_MS,
 };
 const observedCriticalEtaMs = {
   blockedCrate: gameDanger.get("3,5"),

@@ -9,7 +9,14 @@ import { tileKey } from "../Arenas/arena";
 
 export const DANGER_FORECAST_BOMB_FUSE_BUFFER_MS = 1000;
 export const SUDDEN_DEATH_FALL_MS = 340;
-export const SUDDEN_DEATH_TICK_MS = 800;
+export const SUDDEN_DEATH_TICK_MS = 900;
+
+const BOMB_BLAST_DIRECTION_DELTAS: readonly TileCoord[] = [
+  { x: 0, y: -1 },
+  { x: 0, y: 1 },
+  { x: -1, y: 0 },
+  { x: 1, y: 0 },
+];
 
 export interface DangerMapContext {
   bombs: BombState[];
@@ -113,14 +120,7 @@ export function getBombBlastKeys(
   const keys = new Set<string>([tileKey(origin.x, origin.y)]);
   const arenaWidth = arena.config.grid.width;
   const arenaHeight = arena.config.grid.height;
-  const directionDeltas: TileCoord[] = [
-    { x: 0, y: -1 },
-    { x: 0, y: 1 },
-    { x: -1, y: 0 },
-    { x: 1, y: 0 },
-  ];
-
-  for (const delta of directionDeltas) {
+  for (const delta of BOMB_BLAST_DIRECTION_DELTAS) {
     for (let step = 1; step <= range; step += 1) {
       const x = origin.x + delta.x * step;
       const y = origin.y + delta.y * step;

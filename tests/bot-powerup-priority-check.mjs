@@ -48,7 +48,8 @@ globalThis.window = {
 };
 
 const { GameApp } = await import("../output/esm/Engine/game-app.js");
-const { MAX_SPEED_LEVEL, TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
+const { MAX_BOMBS, MAX_SPEED_LEVEL, TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
+const { getPowerUpPriorityScore } = await import("../output/esm/Gameplay/powerups.js");
 
 const root = { appendChild: noop };
 const assets = {
@@ -89,8 +90,21 @@ game.arena.powerUps.push(
   { type: "speed-up", tile: { x: 4, y: 3 }, revealed: true, collected: false },
   { type: "bomb-up", tile: { x: 4, y: 5 }, revealed: true, collected: false },
 );
-const preferBombDecision = game.getBotDecision(bot);
-const prefersHighValuePowerUp = preferBombDecision.placeBomb === false && preferBombDecision.direction === "down";
+const preferSpeedDecision = game.getBotDecision(bot);
+const prefersBaseMobility = preferSpeedDecision.placeBomb === false && preferSpeedDecision.direction === "up";
+
+for (const powerUp of game.arena.powerUps) {
+  powerUp.collected = true;
+  powerUp.revealed = false;
+}
+game.arena.powerUps.push(
+  { type: "shield-up", tile: { x: 4, y: 3 }, revealed: true, collected: false },
+  { type: "bomb-up", tile: { x: 4, y: 5 }, revealed: true, collected: false },
+);
+bot.shieldCharges = 0;
+setPlayerTile(bot, { x: 4, y: 4 });
+const preferFirstShieldDecision = game.getBotDecision(bot);
+const prefersFirstShield = preferFirstShieldDecision.placeBomb === false && preferFirstShieldDecision.direction === "up";
 
 for (const powerUp of game.arena.powerUps) {
   powerUp.collected = true;
@@ -103,15 +117,49 @@ setPlayerTile(enemy, { x: 4, y: 7 });
 const skipUselessDecision = game.getBotDecision(bot);
 const skipsUselessSpeedUp = skipUselessDecision.direction !== "up";
 
+for (const powerUp of game.arena.powerUps) {
+  powerUp.collected = true;
+  powerUp.revealed = false;
+}
+game.arena.powerUps.push(
+  { type: "bomb-up", tile: { x: 4, y: 3 }, revealed: true, collected: false },
+  { type: "shield-up", tile: { x: 4, y: 5 }, revealed: true, collected: false },
+);
+bot.maxBombs = MAX_BOMBS;
+bot.shieldCharges = 0;
+setPlayerTile(bot, { x: 4, y: 4 });
+const saturatedAttributeDecision = game.getBotDecision(bot);
+const skipsSaturatedBombForSurvival = saturatedAttributeDecision.placeBomb === false
+  && saturatedAttributeDecision.direction === "down";
+
+const speedScores = Array.from({ length: MAX_SPEED_LEVEL + 1 }, (_, speedLevel) => {
+  bot.speedLevel = speedLevel;
+  return getPowerUpPriorityScore(bot, "speed-up");
+});
+const hasDiminishingSpeedReturns = speedScores[0] === 460
+  && speedScores[MAX_SPEED_LEVEL] === 0
+  && speedScores.slice(1, -1).every((score, index, scores) => index === 0 || score < scores[index - 1])
+  && speedScores.slice(2, -1).every((score, index) => {
+    const previousBonus = speedScores[index + 1] - 120;
+    return score - 120 === previousBonus / 2;
+  });
+
 const report = {
-  preferBombDecision,
+  preferSpeedDecision,
+  preferFirstShieldDecision,
   skipUselessDecision,
-  prefersHighValuePowerUp,
+  saturatedAttributeDecision,
+  prefersBaseMobility,
+  prefersFirstShield,
   skipsUselessSpeedUp,
+  skipsSaturatedBombForSurvival,
+  speedScores,
+  hasDiminishingSpeedReturns,
 };
 
 console.log(JSON.stringify(report, null, 2));
 
-if (!prefersHighValuePowerUp || !skipsUselessSpeedUp) {
+if (!prefersBaseMobility || !prefersFirstShield || !skipsUselessSpeedUp
+  || !skipsSaturatedBombForSurvival || !hasDiminishingSpeedReturns) {
   process.exit(1);
 }

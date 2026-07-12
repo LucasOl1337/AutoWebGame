@@ -1,6 +1,7 @@
 Object.defineProperty(globalThis, "navigator", { value: { webdriver: false }, configurable: true });
 
 const noop = () => {};
+globalThis.HTMLElement = class HTMLElement {};
 const listeners = new Map();
 
 function on(type, handler) {
@@ -20,7 +21,7 @@ function keyEvent(code) {
   return { code, preventDefault: noop };
 }
 
-const fakeCtx = {
+const fakeCtx = new Proxy({
   imageSmoothingEnabled: false,
   clearRect: noop,
   fillRect: noop,
@@ -41,13 +42,14 @@ const fakeCtx = {
   setTransform: noop,
   createLinearGradient: () => ({ addColorStop: noop }),
   createRadialGradient: () => ({ addColorStop: noop }),
-};
+}, { get: (target, key) => target[key] ?? noop });
 
 const fakeCanvas = {
   width: 0,
   height: 0,
   style: {},
   setAttribute: noop,
+  closest: () => null,
   getContext: () => fakeCtx,
   requestFullscreen: async () => {},
 };

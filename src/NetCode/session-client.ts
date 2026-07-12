@@ -37,6 +37,7 @@ import { buildReconnectWebSocketUrl } from "./reconnect-session";
 import {
   buildRoomInviteUrl,
   copyTextWithFallback,
+  formatInviteCopyManualStatus,
   normalizeRoomCode,
   readRoomCodeFromUrl,
   resolveManualLobbyJoinCode,
@@ -45,6 +46,7 @@ import {
 export {
   buildRoomInviteUrl,
   copyTextWithFallback,
+  formatInviteCopyManualStatus,
   normalizeRoomCode,
   readRoomCodeFromUrl,
   resolveManualLobbyJoinCode,
@@ -1129,18 +1131,20 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     if (!this.currentLobby) {
       return;
     }
+    const roomCode = this.currentLobby.roomCode;
+    const inviteUrl = buildRoomInviteUrl(this.language, roomCode);
     try {
-      const copied = await copyTextWithFallback(buildRoomInviteUrl(this.language, this.currentLobby.roomCode));
+      const copied = await copyTextWithFallback(inviteUrl);
       if (!copied) {
-        this.setStatus(this.copy.status.inviteCopyFailed);
+        this.setStatus(formatInviteCopyManualStatus(this.copy, roomCode));
         return;
       }
       this.telemetry.track("invite_copied", {
-        context: { roomCode: this.currentLobby.roomCode, screen: this.getScreen() },
+        context: { roomCode, screen: this.getScreen() },
       });
       this.setStatus(this.copy.status.inviteCopied);
     } catch {
-      this.setStatus(this.copy.status.inviteCopyFailed);
+      this.setStatus(formatInviteCopyManualStatus(this.copy, roomCode));
     }
   }
 
@@ -1881,6 +1885,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     lobbyCodeInput.autocomplete = "off";
     lobbyCodeInput.inputMode = "text";
     lobbyCodeInput.spellcheck = false;
+    lobbyCodeInput.setAttribute("autocapitalize", "characters");
+    lobbyCodeInput.setAttribute("autocorrect", "off");
+    lobbyCodeInput.setAttribute("enterkeyhint", "join");
     lobbyCodeInput.placeholder = copy.lobbies.joinCodePlaceholder;
     lobbyCodeInput.setAttribute("aria-describedby", lobbyCodeHint.id);
 

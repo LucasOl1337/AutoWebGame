@@ -1,5 +1,21 @@
 # Changelog
 
+## [2026-07-12] — v0.4.0 Release Candidate
+
+- Consolidadas 20 rodadas Trae de gameplay/bots sobre `v0.3.0`.
+- Recuperadas correções órfãs e snapshots úteis de input, áudio, convite, mobile e Worker.
+- Melhorados telegraph, pickup/HUD, drop pool, Sudden Death e prioridades dos bots.
+- Corrigida a landing para 9 arenas/4 jogadores; adicionados safe areas, robots e sitemap.
+- Worker ganhou cache de erro correto, arena ativa em memória e admin analytics sem leitura duplicada.
+- Agent-First foi preservado como protótipo e adiado por riscos arquiteturais comprovados.
+- Validação: 136/136 checks, build, audit, Wrangler dry-run e Chrome desktop/mobile.
+
+Estado: preparado localmente; commit/push/deploy aguardam autorização explícita.
+
+Relatório: `DocsDev/releases/release-v0.4.0.md`.
+
+---
+
 ## [2026-07-10] - v0.3.0 Official Minor Release (Arenas, retomada online e combate mais legivel)
 
 **Project:** AutoWebGame / BOMBA PvP  |  **Branch:** main  |  **State:** approved release

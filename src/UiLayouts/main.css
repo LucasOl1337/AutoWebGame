@@ -2,6 +2,12 @@
   color-scheme: dark;
   font-family: "Inter", "Segoe UI Variable Text", "Segoe UI", sans-serif;
   --font-display: "Playfair Display", Georgia, serif;
+  --experience-viewport-height: 100vh;
+  --experience-small-viewport-height: 100vh;
+  --experience-safe-area-top: env(safe-area-inset-top, 0px);
+  --experience-safe-area-right: env(safe-area-inset-right, 0px);
+  --experience-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --experience-safe-area-left: env(safe-area-inset-left, 0px);
   /* Mint-cyan tech accent — digital, clean, HUD-like */
   --accent-rgb: 0, 229, 160;            /* #00e5a0 — electric mint */
   --accent-deep-rgb: 0, 168, 112;       /* #00a870 — deep teal-green */
@@ -34,6 +40,18 @@
   color: var(--text);
 }
 
+@supports (height: 100svh) {
+  :root {
+    --experience-small-viewport-height: 100svh;
+  }
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --experience-viewport-height: 100dvh;
+  }
+}
+
 *,
 *::before,
 *::after {
@@ -51,6 +69,7 @@ html {
 }
 
 body {
+  min-height: var(--experience-small-viewport-height);
   overflow: hidden;
   position: relative;
   background-color: var(--bg-0);
@@ -94,8 +113,8 @@ button {
 
 #app {
   position: relative;
-  min-height: 100vh;
-  height: 100dvh;
+  min-height: var(--experience-small-viewport-height);
+  height: var(--experience-viewport-height);
   z-index: 1;
 }
 
@@ -215,8 +234,8 @@ button {
 
 .experience-shell {
   position: relative;
-  min-height: 100vh;
-  height: 100dvh;
+  min-height: var(--experience-small-viewport-height);
+  height: var(--experience-viewport-height);
   overflow: hidden;
 }
 
@@ -1791,7 +1810,7 @@ button {
 
 .experience-screen--match {
   min-height: 100%;
-  height: 100dvh;
+  height: var(--experience-viewport-height);
   padding: 0;
   position: relative;
   overflow: hidden;
@@ -1826,9 +1845,9 @@ button {
 
 .experience-match__overlay {
   position: absolute;
-  top: 12px;
-  left: 16px;
-  right: 180px;
+  top: calc(12px + var(--experience-safe-area-top));
+  left: calc(16px + var(--experience-safe-area-left));
+  right: calc(180px + var(--experience-safe-area-right));
   z-index: 5;
   display: flex;
   align-items: center;
@@ -1844,8 +1863,8 @@ button {
 
 .experience-match__dock {
   position: absolute;
-  top: 12px;
-  right: 16px;
+  top: calc(12px + var(--experience-safe-area-top));
+  right: calc(16px + var(--experience-safe-area-right));
   bottom: auto;
   z-index: 6;
   width: auto;
@@ -3230,7 +3249,7 @@ button {
   #app,
   .experience-shell {
     height: auto;
-    min-height: 100vh;
+    min-height: var(--experience-small-viewport-height);
   }
 
   .experience-hero,
@@ -3332,9 +3351,9 @@ button {
 
   .experience-match__dock {
     top: auto;
-    right: 10px;
-    left: 10px;
-    bottom: 10px;
+    right: calc(10px + var(--experience-safe-area-right));
+    left: calc(10px + var(--experience-safe-area-left));
+    bottom: calc(10px + var(--experience-safe-area-bottom));
     width: auto;
     height: min(220px, 34vh);
   }
@@ -3453,9 +3472,9 @@ button {
 }
 
 .experience-match__overlay {
-  top: 8px;
-  left: 8px;
-  right: 152px;
+  top: calc(8px + var(--experience-safe-area-top));
+  left: calc(8px + var(--experience-safe-area-left));
+  right: calc(152px + var(--experience-safe-area-right));
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -3487,8 +3506,8 @@ button {
 }
 
 .experience-match__dock {
-  top: 8px;
-  right: 8px;
+  top: calc(8px + var(--experience-safe-area-top));
+  right: calc(8px + var(--experience-safe-area-right));
   bottom: auto;
   width: auto;
   height: auto;
@@ -3612,15 +3631,15 @@ button {
 
 @media (max-width: 1080px) {
   .experience-match__overlay {
-    top: 8px;
-    left: 8px;
-    right: 130px;
+    top: calc(8px + var(--experience-safe-area-top));
+    left: calc(8px + var(--experience-safe-area-left));
+    right: calc(130px + var(--experience-safe-area-right));
     max-width: none;
   }
 
   .experience-match__dock {
-    top: 8px;
-    right: 8px;
+    top: calc(8px + var(--experience-safe-area-top));
+    right: calc(8px + var(--experience-safe-area-right));
     bottom: auto;
   }
 
@@ -3635,18 +3654,21 @@ button {
   }
 
   .experience-match__overlay {
-    top: 8px;
-    left: 8px;
-    right: 8px;
+    top: calc(8px + var(--experience-safe-area-top));
+    left: calc(8px + var(--experience-safe-area-left));
+    right: calc(8px + var(--experience-safe-area-right));
     width: auto;
     max-width: none;
   }
 
   .experience-match__dock {
-    left: auto;
-    right: 8px;
-    top: 56px;
-    bottom: 10px;
+    left: calc(8px + var(--experience-safe-area-left));
+    right: calc(8px + var(--experience-safe-area-right));
+    top: auto;
+    bottom: calc(10px + var(--experience-safe-area-bottom));
+    width: auto;
+    height: auto;
+    align-content: end;
     justify-items: end;
   }
 
@@ -3691,9 +3713,9 @@ button {
 }
 
 .experience-match__stage[data-fullscreen="true"] .experience-match__overlay {
-  top: 6px;
-  left: 6px;
-  right: 120px;
+  top: calc(6px + var(--experience-safe-area-top));
+  left: calc(6px + var(--experience-safe-area-left));
+  right: calc(120px + var(--experience-safe-area-right));
   gap: 4px;
   padding: 0;
   border-radius: 0;
@@ -3717,8 +3739,8 @@ button {
 }
 
 .experience-match__stage[data-fullscreen="true"] .experience-match__dock {
-  top: 6px;
-  right: 6px;
+  top: calc(6px + var(--experience-safe-area-top));
+  right: calc(6px + var(--experience-safe-area-right));
   bottom: auto;
 }
 
