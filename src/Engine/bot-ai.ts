@@ -29,7 +29,7 @@ const BOT_DIRECTION_CONFIRM_FRAMES = 2;
 
 // Sudden death constants
 const SUDDEN_DEATH_FALL_MS = 340;
-const SUDDEN_DEATH_TICK_MS = 800;
+const SUDDEN_DEATH_TICK_MS = 900;
 
 // Direction delta mapping
 const directionDelta: Record<Direction, TileCoord> = {

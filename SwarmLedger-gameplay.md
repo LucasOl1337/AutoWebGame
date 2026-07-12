@@ -1,5 +1,13 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-12 — align-bot-sudden-death-tick-900ms
+
+- Claim/escopo antes da intervenção: alinhar exclusivamente `SUDDEN_DEATH_TICK_MS` do bot ao runtime autoritativo já configurado em 900 ms; adicionar teste focal mínimo; preservar demais timings, comportamento e mudanças existentes; sem commit.
+- Arquivos: `src/Engine/bot-ai.ts`, `tests/bot-sudden-death-tick-alignment-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.
+- Antes → depois: a projeção de impacto do sudden death na IA usava passos de 800 ms, enquanto `src/Engine/game-app.ts` executava o fechamento em passos de 900 ms; o bot agora usa 900 ms, eliminando a divergência de 100 ms por passo sem alterar o runtime.
+- Evidência focal: teste lê as declarações fonte, fixa o runtime em 900 ms e exige igualdade do bot com o runtime (`botTickMs=900`, `runtimeTickMs=900`, `aligned=true`).
+- Validação: `node tests/bot-sudden-death-tick-alignment-check.mjs`; `npm run compile:esm`; `node tests/bot-sudden-death-direction-tiebreak-check.mjs`; `npm run build`; `git diff --check -- src/Engine/bot-ai.ts tests/bot-sudden-death-tick-alignment-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` — todos concluídos com código 0; somente avisos de conversão LF→CRLF nos dois documentos. Sem commit.
+
 ## 2026-07-12 — sudden-death-bfs-committed-direction-tiebreak
 
 - Claim/escopo antes da intervenção: ajustar somente o desempate da BFS de sudden death em `src/Engine/bot-ai.ts`, favorecendo `botCommittedDirection` apenas quando os alvos têm distância e mérito equivalentes; criar teste focal e preservar fuga, segurança, prioridades estratégicas, ordem determinística sem compromisso e demais chamadas da BFS.
