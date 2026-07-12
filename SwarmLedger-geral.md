@@ -1,5 +1,25 @@
 # Swarm Ledger - Geral
 
+## 2026-07-12 - Script npm para normalizacao de codigo de sala
+
+- Automacao: `autowebgame-enxame-geral`.
+- Escopo registrado: expor um teste existente e orfao via `package.json`, sem alterar runtime, gameplay, rede ou arquivos ja modificados por trabalhos concorrentes.
+- Evidencia antes: `tests/room-code-entry-normalization-check.mjs` existia e passava com execucao direta, mas nao era referenciado por nenhum script do `package.json`.
+- Mudanca: adicionado `test:room-code-normalization`, executando `node tests/room-code-entry-normalization-check.mjs`.
+- Evidencia depois: `npm run test:room-code-normalization` passou com 6 casos e `failedCases: []`; `npm run build` passou (TypeScript + Vite, 42 modulos); `git diff --check -- package.json` passou.
+- Revisao de escopo: commit seletivo contem somente uma insercao em `package.json`; mudancas preexistentes em `index.html`, `src/Engine/game-app.ts`, `tests/remote-detonation-check.mjs` e demais ledgers/documentos nao foram revertidas nem incluidas.
+- Commit: `0ee4781bad625cab70095d3397433de4fd9c7cf9` (`test(online): expose room code normalization check`).
+
+## 2026-07-12 - Fixture headless de detonacao remota
+
+- Automacao: `autowebgame-enxame-geral`
+- Classificacao: correcao de infraestrutura de teste, baixo risco, sem alteracao de runtime.
+- Evidencia: `DocsDev/swarm-coordination.md` registrava `test:remote` bloqueado porque o contexto Canvas falso nao implementava `translate`, metodo agora usado pelo renderer.
+- Escopo: somente adicionar `translate: noop` a `tests/remote-detonation-check.mjs`; gameplay, rede, producao e `index.html` preservados.
+- Validacao parcial: `node --check tests/remote-detonation-check.mjs` e `git diff --check -- tests/remote-detonation-check.mjs DocsDev/swarm-coordination.md SwarmLedger-geral.md` passaram.
+- Bloqueio: `npm run test:remote` nao chegou ao harness porque `compile:esm` falhou em `src/Engine/game-app.ts(185,7)` com `POWER_UP_SPAWN_POP_MS` ainda nao usada, arquivo pertencente ao claim concorrente `ux-powerup-spawn-pop-120ms`. Build integral fica bloqueado pela mesma falha; nenhuma alteracao de terceiros foi revertida.
+- Commit: nao criado, pois teste focal e build integral nao ficaram validados.
+
 ## 2026-07-11 - Bot prioriza o primeiro escudo
 
 - Automacao: `autowebgame-enxame-geral`
