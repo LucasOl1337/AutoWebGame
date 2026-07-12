@@ -9,7 +9,7 @@
 - Preservação: não houve mudança em `PowerUpState`, tile, colisão, coleta, criação/drop ou payload de rede; sprite e fallback textual passam pela mesma transformação visual. `index.html` e alterações concorrentes/preexistentes permaneceram intocados e fora do commit seletivo.
 - Evidência focal: `durationMs=120`, `tracksRevealOnlyOnTransition=true`, `renderOnlyTransform=true`, `preservesFallback=true`, `doesNotChangeGeometry=true`.
 - Validação: `npm run compile:esm`; `node tests/powerup-spawn-pop-check.mjs`; `node tests/powerup-render-legibility-check.mjs`; `node tests/powerup-max-level-preservation-check.mjs`; `node tests/powerup-drop-rate-check.mjs`; `npm run build`; `git diff --check -- src/Engine/game-app.ts tests/powerup-spawn-pop-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` — todos concluídos com código 0.
-- Commit: pendente de criação seletiva após esta atualização final do ledger.
+- Commit de implementação seletivo: `c16193a43390d56ece95360f1630e7bf78328324` (`feat(gameplay): add power-up spawn pop`); atualização final de evidência do ledger registrada em commit documental subsequente.
 
 ## 2026-07-12 — bot-speed-diminishing-returns
 
