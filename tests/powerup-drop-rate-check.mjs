@@ -96,6 +96,7 @@ window.advanceTime(34);
 const breakableCount = game.arena.breakable.size;
 const dropCount = game.arena.powerUps.length;
 const dropRatio = breakableCount > 0 ? dropCount / breakableCount : 0;
+const roundedDropRatio = Math.round(dropRatio * 1000) / 1000;
 const speedDropCount = game.arena.powerUps.filter((powerUp) => powerUp.type === "speed-up").length;
 const utilityDropTypes = ["shield-up", "bomb-pass-up", "kick-up"];
 const tacticalDropTypes = ["short-fuse-up"];
@@ -109,20 +110,46 @@ const hasTacticalDrops = tacticalDropTypes.every((type) => utilityDropCounts[typ
 const specialDropCount = [...utilityDropTypes, ...tacticalDropTypes]
   .reduce((total, type) => total + utilityDropCounts[type], 0);
 const hasDenseBreakables = breakableCount >= 24;
+const expectedDropCount = 22;
+const expectedDropRatio = 0.611;
+const expectedDropTypeCounts = {
+  "bomb-up": 0,
+  "flame-up": 2,
+  "speed-up": 10,
+  "remote-up": 0,
+  "shield-up": 4,
+  "short-fuse-up": 2,
+  "bomb-pass-up": 4,
+  "kick-up": 0,
+};
+const actualDropTypeCounts = Object.fromEntries(
+  Object.keys(expectedDropTypeCounts).map((type) => [
+    type,
+    game.arena.powerUps.filter((powerUp) => powerUp.type === type).length,
+  ]),
+);
+const hasExpectedDeterministicDistribution = Object.entries(expectedDropTypeCounts)
+  .every(([type, count]) => actualDropTypeCounts[type] === count);
 
 const report = {
   breakableCount,
   dropCount,
-  dropRatio: Math.round(dropRatio * 1000) / 1000,
+  expectedDropCount,
+  dropRatio: roundedDropRatio,
+  expectedDropRatio,
   speedDropCount,
   utilityDropCounts,
+  actualDropTypeCounts,
+  expectedDropTypeCounts,
+  hasExpectedDeterministicDistribution,
   hasTacticalDrops,
   specialDropCount,
   hasDenseBreakables,
   pass: (
     hasDenseBreakables
-    && dropRatio >= 0.85
-    && dropRatio <= 0.95
+    && dropCount === expectedDropCount
+    && roundedDropRatio === expectedDropRatio
+    && hasExpectedDeterministicDistribution
     && speedDropCount > 0
     && specialDropCount >= 8
     && hasTacticalDrops

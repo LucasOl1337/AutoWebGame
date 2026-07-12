@@ -1,0 +1,96 @@
+# Swarm Ledger — Gameplay
+
+## 2026-07-12 — bot-speed-diminishing-returns
+
+- Claim/escopo antes da intervenção: aplicar retorno decrescente somente ao score de `speed-up` do bot depois do primeiro nível; preservar a prioridade excepcional do primeiro ganho, saturação, demais power-ups, sobrevivência, seleção de alvo, drops, coleta, estado e rede.
+- Arquivos: `src/Gameplay/powerups.ts`, `tests/bot-powerup-priority-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.
+- Preservação: `index.html` modificado e arquivos não rastreados alheios permaneceram intocados; sem commit.
+- Antes → depois: os níveis intermediários usavam a fórmula linear `120 + (MAX_SPEED_LEVEL - speedLevel) * 25`, produzindo scores 195, 170 e 145; agora o bônus acima da base 120 cai pela metade a cada nível, produzindo 240, 180 e 150. O primeiro nível continua em 460 e o máximo continua em 0.
+- Evidência focal: `speedScores=[460,240,180,150,0]`, `hasDiminishingSpeedReturns=true`; o bot no nível base ainda escolheu `speed-up` sobre `bomb-up`, shield sem carga manteve precedência e atributos saturados continuaram ignorados.
+- Validação: `npm run compile:esm`; `node tests/bot-powerup-priority-check.mjs`; `node tests/bot-survival-10s-check.mjs`; `node tests/bot-target-selection-check.mjs`; `npm run build`; `git diff --check -- src/Gameplay/powerups.ts tests/bot-powerup-priority-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` — todos concluídos com código 0.
+
+## 2026-07-11 — bot-stable-pickup-direction-tiebreak
+
+- Claim/escopo antes da intervenção: entre pickups revelados com a mesma utilidade, distância e janela de segurança, preferir somente como desempate a rota cuja primeira etapa mantém `botCommittedDirection`; preservar prioridades de utilidade, fuga, perigo, ataque, abertura, pathfinding e estabilização geral.
+- Arquivos previstos: `src/Engine/bot-ai.ts`, `tests/bot-pickup-direction-tiebreak-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.
+- Evidência da lacuna: `findValuablePowerUpDirection` agrupa por score, mas chama BFS sem `tieBreakerScore`; a BFS retorna o primeiro alvo equivalente conforme ordem fixa `up/down/left/right`, apesar de `botCommittedDirection` já existir no contexto.
+- Preservação: mudanças alheias já presentes em arena, drop-rate, landing e ledgers foram mantidas e não entram no commit seletivo.
+- Resultado: o desempate da BFS pode receber a primeira direção da rota; somente a busca de pickups equivalentes atribui score `1` à rota que mantém `botCommittedDirection` e `0` às demais. Sem direção comprometida, a ordem determinística anterior permanece.
+- Evidência: cenário focal com dois `bomb-up` igualmente úteis, adjacentes e seguros escolheu `down` quando comprometido em `down`, e voltou a `up` pela ordem fixa quando o compromisso foi removido. Passaram `compile:esm`, teste focal, prioridade de power-up, estabilidade direcional, fuga de explosão própria, seleção de alvo, `build` e `git diff --check`.
+
+## 2026-07-11 — remote-up-rarer-deterministic-pool
+
+- Claim/escopo antes da intervenção: tornar `remote-up` mais raro somente no pool determinístico em `src/Arenas/arena.ts` e atualizar a expectativa correspondente em `tests/powerup-drop-rate-check.mjs`; preservar taxa global de drops, pareamento espelhado, geração de caixas, demais tipos, gameplay, IA e rede.
+- Arquivos previstos: `src/Arenas/arena.ts`, `tests/powerup-drop-rate-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.
+- Preservação: `index.html` modificado e documentos não rastreados alheios não serão tocados nem incluídos.
+- Antes: `remote-up` ocupava 1 de 12 posições do pool determinístico (8,33%).
+- Depois: o pool foi ampliado para 23 entradas sem repetir `remote-up`, reduzindo seu peso nominal para 1/23 (4,35%); a taxa global de 0,65 e a seleção/espelhamento determinísticos permanecem inalterados.
+- Resultado determinístico na arena padrão: 22 drops em 36 caixas (0,611), com `speed-up=10`, `flame-up=2`, `shield-up=4`, `short-fuse-up=2`, `bomb-pass-up=4` e zero nos demais tipos para esta seed/configuração.
+- Validação: `npm run compile:esm`; `node tests/powerup-drop-rate-check.mjs`; `node tests/arena-runtime-contract-check.mjs`; `node tests/demolition-combo-drop-check.mjs`; `npm run build`; `git diff --check -- src/Arenas/arena.ts tests/powerup-drop-rate-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` — todos concluídos com código 0.
+
+## 2026-07-11 — bot-base-speed-survival-priority
+
+- Claim/escopo antes da intervenção: ajustar somente o score de `speed-up` para bots ainda no nível base, fazendo mobilidade inicial concorrer acima de upgrades ofensivos; preservar fuga, segurança de rota, drops, coleta, níveis máximos, estado e rede.
+- Evidência de escolha: `getPowerUpPriorityScore` já centraliza a decisão estratégica de pickups, mas no nível base retorna 195 para velocidade, abaixo de `bomb-up` (420), `flame-up` (380) e `short-fuse-up` (260), apesar de mobilidade sustentar fuga no loop principal.
+- Arquivos previstos: `src/Gameplay/powerups.ts`, `tests/bot-powerup-priority-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.
+- Preservação: `index.html` modificado e documentos não rastreados alheios não foram tocados nem incluídos.
+- Antes → depois: com `speedLevel=0`, `speed-up` tinha score 195 e perdia para `bomb-up` 420; agora o primeiro `speed-up` vale 460, enquanto níveis intermediários, saturação e todos os demais tipos mantêm os scores existentes.
+- Evidência: no cenário equidistante, `preferSpeedDecision={direction:"up",placeBomb:false}` e `prefersBaseMobility=true`; shield sem carga continuou priorizado, speed saturado foi ignorado e bomb saturada cedeu ao shield.
+- Validação: `npm run compile:esm`; `node tests/bot-powerup-priority-check.mjs`; `node tests/bot-own-blast-escape-check.mjs`; `node tests/bot-survival-10s-check.mjs`; `node tests/bot-target-selection-check.mjs`; `npm run build`; `git diff --check -- src/Gameplay/powerups.ts tests/bot-powerup-priority-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` — todos com código 0. Diff revisado e limitado aos quatro arquivos reivindicados.
+
+## 2026-07-11 — ux-maxed-powerup-hud-feedback
+
+- Claim/escopo antes da intervenção: alterar somente o feedback de toque em power-up já maximizado em `src/Engine/game-app.ts`, com teste focal novo; preservar item, níveis máximos, aplicação, drops, áudio, rede e demais regras.
+- Antes → depois: o item saturado já permanecia no mapa, mas o toque não tinha resposta; agora o fluxo reutiliza `PowerUpPickupNotice` por 2200 ms e mostra `MAX` no HUD, sem marcar o item como coletado nem alterar o atributo do jogador.
+- Arquivos: `src/Engine/game-app.ts`, `tests/powerup-max-hud-feedback-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.
+- Evidência: teste focal retornou `maxFeedback=true`, `itemPreserved=true`, `rulesPreserved=true`; teste de preservação confirmou item disponível e coleta posterior quando útil; regressão de slots/expiração do HUD passou.
+- Validação: `codegraph status .`; `codegraph context "power-up pickup maximized HUD feedback"`; `npm run compile:esm`; `node tests/powerup-max-hud-feedback-check.mjs`; `node tests/powerup-max-level-preservation-check.mjs`; `node tests/powerup-hud-slots-check.mjs`; `npm run build`; `git diff --check -- src/Engine/game-app.ts tests/powerup-max-hud-feedback-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` — todos com código 0. Diff revisado; `index.html` e arquivos não rastreados alheios permaneceram intactos.
+
+## 2026-07-11 — bot-skip-saturated-pickup
+
+- Claim/escopo antes da intervenção: ajustar somente a seleção de pickups do bot em `src/Engine/bot-ai.ts`, reutilizando o teste existente `tests/bot-powerup-priority-check.mjs`, para ignorar como alvo prioritário o item cujo atributo correspondente já atingiu o limite; prioridades de fuga/sobrevivência, ataque, drops, coleta e estado permanecem inalteradas.
+- Preservação: `index.html` modificado e arquivos não rastreados alheios não foram tocados; sem commit.
+- Antes → depois: a busca estratégica dependia apenas do score de prioridade para descartar upgrades no limite; agora exclui explicitamente, antes de agrupar/rotear, qualquer pickup cujo atributo correspondente esteja saturado via contrato compartilhado `isPowerUpMaxed`, enquanto pickups úteis continuam concorrendo por prioridade e segurança.
+- Evidência: o cenário existente ampliado produziu `saturatedAttributeDecision={direction:"down",placeBomb:false}`, ignorando `bomb-up` ao norte com `maxBombs=MAX_BOMBS` e preferindo o primeiro `shield-up` ao sul (`shieldCharges=0`). `codegraph status .` confirmou índice atualizado; `codegraph context "bot powerup priority saturated max level survival"`, `codegraph impact bot-ai.ts` e `codegraph impact isPowerUpMaxed` limitaram a mudança à seleção do bot e ao helper compartilhado já existente.
+- Validação: `npm run compile:esm`; `node tests/bot-powerup-priority-check.mjs`; `node tests/bot-own-blast-escape-check.mjs`; `node tests/bot-survival-10s-check.mjs`; `node tests/bot-target-selection-check.mjs`; `npm run build`; `git diff --check -- src/Engine/bot-ai.ts tests/bot-powerup-priority-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` — todos concluídos com código 0. Diff revisado; apenas os quatro arquivos reivindicados foram alterados por esta intervenção.
+
+## 2026-07-11 — ux-powerup-render-legibility
+
+- Claim/escopo antes da intervenção: melhorar exclusivamente a legibilidade visual dos power-ups em `drawPowerUp`; sem alterar balanceamento, estado, drops, coleta, tipos ou rede.
+- Arquivos: `src/Engine/game-app.ts`, `tests/powerup-render-legibility-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.
+- Antes: quando havia sprite, `drawPowerUp` desenhava a imagem em todo o tile, sem uma camada de contraste própria para separá-la visualmente dos pisos e temas da arena.
+- Depois: o ramo de sprite desenha uma silhueta circular escura com contorno claro e aplica inset de 2 px ao sprite; o fallback existente, definições, estado e regras permanecem inalterados.
+- Evidência comprovada: `codegraph status .` indicou índice atualizado; `codegraph context "drawPowerUp power-up rendering visual direction"` localizou o método; `codegraph impact drawPowerUp` limitou o impacto estrutural a 5 símbolos de render. `node tests/powerup-render-legibility-check.mjs`, `npm run compile:esm`, `node tests/powerup-hud-slots-check.mjs`, `node tests/powerup-drop-rate-check.mjs`, `npm run build` e `git diff --check -- src/Engine/game-app.ts tests/powerup-render-legibility-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` passaram.
+- Avaliação: comprovado por inspeção/teste que há fundo escuro, contorno claro, margem e nenhuma atribuição a estado dentro de `drawPowerUp`; ganho perceptual em jogo é experimental, pois não foi feita inspeção visual humana/browser nesta intervenção.
+- Preservação: `index.html` modificado e arquivos não rastreados alheios permaneceram intactos; sem commit.
+
+## 2026-07-11 — breakable-powerup-drop-rate-065
+
+- Escopo antes da intervenção: reduzir experimentalmente `BREAKABLE_POWERUP_DROP_RATE` de `0.75` para `0.65`, atualizar somente as expectativas determinísticas afetadas pelo resultado real e validar regressões focadas; sem alterar pesos por tipo, geração de caixas, IA, combos ou código de rede.
+- Arquivos previstos: `src/Arenas/arena.ts`, `tests/powerup-drop-rate-check.mjs`, `SwarmLedger-gameplay.md`.
+- Preservação: mudanças alheias preexistentes em `index.html` e arquivos não rastreados fora deste escopo não serão alteradas.
+- Resultado: a taxa `0.65` gerou deterministicamente 22 drops em 36 caixas (`0.611`), contra 26/36 (`0.722`) na expectativa anterior; contagens por tipo: `bomb-up=0`, `flame-up=8`, `speed-up=4`, `remote-up=0`, `shield-up=0`, `short-fuse-up=2`, `bomb-pass-up=6`, `kick-up=2`.
+- Evidências: `npm run test:powerup-drop-rate`, `npm run test:bot-powerup`, `npm run test:demolition-combo` e `npm run build` passaram sequencialmente; o teste de drop confirmou `hasExpectedDeterministicDistribution=true`, `hasTacticalDrops=true`, `specialDropCount=10` e `pass=true`.
+
+## 2026-07-11 — immutable-powerup-definitions
+
+- Classificação: robustez de gameplay, baixo risco, alteração isolada de contrato.
+- Evidência: `getPowerUpDefinition` expõe objetos usados para limites de coleta, prioridade de bot, HUD e render; o CodeGraph apontou 8 símbolos afetados. Como o retorno era mutável, qualquer consumidor podia alterar em runtime `maxLevel`, `tint` ou identidade e desalinhar regras compartilhadas.
+- Escopo: tornar propriedades de `PowerUpDefinition` e o registro de definições somente leitura em TypeScript; sem alterar valores, drops, aplicação, balanceamento, rede, UI ou render.
+- Arquivos: `src/Gameplay/powerups.ts`, `SwarmLedger-gameplay.md`.
+- Validação: `npm run compile:esm`, testes focados de preservação/prioridade/HUD de power-ups, `npm run build` e `git diff --check` passaram; `npm test` não existe no `package.json`.
+- Estado preexistente preservado: `index.html` modificado e documentos/ledgers não rastreados não foram alterados nem incluídos.
+
+## 2026-07-11 — preserve-maxed-powerup
+
+- Escopo: impedir que um jogador no nível máximo consuma um power-up que não produz efeito, preservando-o para outro jogador; sem alterar drops, níveis máximos, rede ou renderização.
+- Antes: `collectPowerUps` marcava todo item tocado como coletado antes de aplicar o limite, então um `bomb-up` sumia mesmo com `maxBombs` já no máximo.
+- Depois: itens cujo tipo já está maximizado são deixados no mapa; assim que o jogador pode se beneficiar, a coleta e o incremento normais continuam.
+- Arquivos: `src/Engine/game-app.ts`, `tests/powerup-max-level-preservation-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.
+
+## 2026-07-11 — bot-safe-crate-powerup-tiebreak
+
+- Antes: entre posições seguras e equidistantes para abrir caixas, a BFS mantinha apenas a ordem fixa de vizinhos; no cenário dedicado, escolhia `right` embora a caixa à esquerda contivesse um power-up precomputado.
+- Depois: somente no estágio de busca por caixa, candidatos seguros na mesma distância recebem desempate binário pela presença de power-up oculto/precomputado na caixa adjacente; sobrevivência, detonação remota e posicionamento de ataque continuam executados antes e sem novo score.
+- Evidência determinística: `crateTieDecision={direction:"left",placeBomb:false}` e `vulnerableTargetDecision={direction:"down",placeBomb:false}`.
+- Arquivos: `src/Engine/bot-ai.ts`, `tests/bot-breakable-safe-tiebreak-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.

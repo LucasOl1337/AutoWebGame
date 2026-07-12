@@ -82,6 +82,10 @@ export class InputManager {
       this.clearHeldState();
     });
 
+    target.addEventListener("pagehide", () => {
+      this.clearHeldState();
+    });
+
     target.document?.addEventListener("visibilitychange", () => {
       if (target.document.visibilityState === "hidden") {
         this.clearHeldState();

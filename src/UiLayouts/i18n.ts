@@ -224,6 +224,7 @@ export interface SiteCopy {
     lobbyActionUnavailable: string;
     inviteCopied: string;
     inviteCopyFailed: string;
+    inviteCopyManual: (roomCode: string) => string;
     chatUnavailable: string;
     enteringLobby: string;
     chooseStart: string;
@@ -291,7 +292,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedback: "Enviar feedback",
       searching: "Procurando a melhor sala para voce entrar.",
       meta: (queuedRooms, onlineUsers) => `${queuedRooms} salas abertas agora | ${onlineUsers} jogadores online`,
-      releaseBadge: "v0.2.2 no ar",
+      releaseBadge: "v0.4.0 no ar",
       releaseTitle: "Novidades do patch",
       releaseItems: [
         "Escolha 1, 2 ou 3 bots antes da partida local.",
@@ -384,7 +385,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
         return summaries[themeId] ?? fallback;
       },
       localControlsTitle: "Antes da primeira bomba",
-      localControlsHint: "A partida contra bots usa o personagem selecionado ao lado.",
+      localControlsHint: "Objetivo: seja o último bomber vivo. A partida contra bots usa o personagem selecionado ao lado.",
       localControlsMove: "Mover pelo labirinto",
       localControlsBomb: "Criar pressao",
       localControlsUltimate: "Virar a rodada",
@@ -514,6 +515,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       lobbyActionUnavailable: "Conexao do lobby indisponivel. Reconectando...",
       inviteCopied: "Convite copiado.",
       inviteCopyFailed: "Nao foi possivel copiar o convite.",
+      inviteCopyManual: (roomCode) => `Nao foi possivel copiar. Compartilhe o codigo ${roomCode}.`,
       chatUnavailable: "Chat indisponivel no momento.",
       enteringLobby: "Entrando no lobby...",
       chooseStart: "Escolha partida rapida, bots ou entre em um lobby.",
@@ -579,7 +581,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedback: "Send feedback",
       searching: "Looking for the best room for you.",
       meta: (queuedRooms, onlineUsers) => `${queuedRooms} open rooms right now | ${onlineUsers} players online`,
-      releaseBadge: "v0.2.2 live",
+      releaseBadge: "v0.4.0 live",
       releaseTitle: "Patch highlights",
       releaseItems: [
         "Choose 1, 2, or 3 bots before a local match.",
@@ -661,7 +663,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       arenaThemeActive: "active",
       arenaThemeSummary: (_themeId, fallback) => fallback,
       localControlsTitle: "Before the first bomb",
-      localControlsHint: "Bot matches use the character selected on the side.",
+      localControlsHint: "Objective: be the last bomber alive. Bot matches use the character selected on the side.",
       localControlsMove: "Move through the maze",
       localControlsBomb: "Create pressure",
       localControlsUltimate: "Turn the round",
@@ -791,6 +793,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       lobbyActionUnavailable: "Lobby connection is unavailable. Reconnecting...",
       inviteCopied: "Invite copied.",
       inviteCopyFailed: "Could not copy the invite.",
+      inviteCopyManual: (roomCode) => `Could not copy. Share room code ${roomCode}.`,
       chatUnavailable: "Chat is unavailable right now.",
       enteringLobby: "Joining lobby...",
       chooseStart: "Choose quick match, bots, or join a lobby.",

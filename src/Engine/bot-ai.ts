@@ -16,7 +16,7 @@ import type {
   TileCoord,
 } from "../Gameplay/types";
 import { tileKey } from "../Arenas/arena";
-import { getPowerUpPriorityScore } from "../Gameplay/powerups";
+import { getPowerUpPriorityScore, isPowerUpMaxed } from "../Gameplay/powerups";
 import {
   buildDangerMap,
   getBombBlastKeys as projectBombBlastKeys,
@@ -244,8 +244,16 @@ export function getBotDecision(player: PlayerState, context: BotContext): BotDec
     && canBombReachTile(playerTile, enemy.tile, player.flameRange, context),
   );
   const adjacentBreakable = hasAdjacentBreakable(playerTile, context);
+  const ownedBombAlreadyCoversEnemy = Boolean(
+    enemy
+    && enemyVulnerable
+    && context.bombs.some((bomb) => (
+      bomb.ownerId === player.id
+      && getBombBlastKeys(bomb.tile, bomb.flameRange, context).has(tileKey(enemy.tile.x, enemy.tile.y))
+    )),
+  );
   const shouldDropBomb = !openingProtected
-    && (adjacentEnemy || adjacentBreakable || enemyInBombLine)
+    && (adjacentBreakable || (!ownedBombAlreadyCoversEnemy && (adjacentEnemy || enemyInBombLine)))
     && canBotPlaceBomb(player, context);
   if (shouldDropBomb) {
     return { direction: null, placeBomb: true };
@@ -263,19 +271,20 @@ export function getBotDecision(player: PlayerState, context: BotContext): BotDec
     return { direction: powerUpTarget, placeBomb: false };
   }
 
+  const attackPositionTarget = findEnemyBombLineDirection(player, enemy, enemyVulnerable, strategicSafetyWindowMs, context);
+  if (attackPositionTarget) {
+    return { direction: attackPositionTarget, placeBomb: false };
+  }
+
   const breakableTarget = findNearestReachableTarget(
     player,
     (tile) => hasAdjacentBreakable(tile, context) && canBotPlaceBombAtTile(player, tile, false, context),
     strategicSafetyWindowMs,
     context,
+    (tile) => hasAdjacentBreakableWithPrecomputedPowerUp(tile, context) ? 1 : 0,
   );
   if (breakableTarget) {
     return { direction: breakableTarget, placeBomb: false };
-  }
-
-  const attackPositionTarget = findEnemyBombLineDirection(player, enemy, enemyVulnerable, strategicSafetyWindowMs, context);
-  if (attackPositionTarget) {
-    return { direction: attackPositionTarget, placeBomb: false };
   }
 
   const chaseEnemy = enemy && enemyVulnerable
@@ -447,9 +456,10 @@ function findNearestReachableTarget(
   predicate: (tile: TileCoord) => boolean,
   minSafetyWindowMs = BOT_DANGER_ARRIVAL_BUFFER_MS,
   context: BotContext,
+  tieBreakerScore?: (tile: TileCoord, firstDirection: Direction | null) => number,
 ): Direction | null {
   const dangerMap = resolveDangerMap(context);
-  return findDirectionToNearestTile(player, predicate, dangerMap, context, minSafetyWindowMs);
+  return findDirectionToNearestTile(player, predicate, dangerMap, context, minSafetyWindowMs, tieBreakerScore);
 }
 
 /**
@@ -461,6 +471,7 @@ function findDirectionToNearestTile(
   blockedDanger?: Map<string, number>,
   context?: BotContext,
   minSafetyWindowMs = BOT_DANGER_ARRIVAL_BUFFER_MS,
+  tieBreakerScore?: (tile: TileCoord, firstDirection: Direction | null) => number,
 ): Direction | null {
   // Handle overloaded parameter signature
   let actualContext: BotContext;
@@ -489,6 +500,30 @@ function findDirectionToNearestTile(
   const moveDuration = getMoveDuration(player);
 
   while (queue.length > 0) {
+    const distance = queue[0]?.distance;
+    if (tieBreakerScore && distance !== undefined) {
+      const candidates = queue.filter((entry) => entry.distance === distance);
+      let bestCandidate: typeof candidates[number] | null = null;
+      let bestScore = Number.NEGATIVE_INFINITY;
+      for (const candidate of candidates) {
+        const arrivalMs = candidate.distance * moveDuration;
+        if (
+          (candidate.tile.x !== start.x || candidate.tile.y !== start.y)
+          && isTileSafeForArrivalWithWindow(danger, candidate.tile, arrivalMs, actualMinSafetyWindowMs)
+          && predicate(candidate.tile)
+        ) {
+          const score = tieBreakerScore(candidate.tile, candidate.first);
+          if (score > bestScore) {
+            bestScore = score;
+            bestCandidate = candidate;
+          }
+        }
+      }
+      if (bestCandidate) {
+        return bestCandidate.first;
+      }
+    }
+
     const current = queue.shift();
     if (!current) {
       break;
@@ -605,13 +640,28 @@ function canBombReachTile(origin: TileCoord, target: TileCoord, range: number, c
  * Check if a tile has an adjacent breakable
  */
 function hasAdjacentBreakable(tile: TileCoord, context: BotContext): boolean {
+  return getAdjacentBreakables(tile, context).length > 0;
+}
+
+function hasAdjacentBreakableWithPrecomputedPowerUp(tile: TileCoord, context: BotContext): boolean {
+  const adjacentBreakableKeys = new Set(
+    getAdjacentBreakables(tile, context).map((neighbor) => tileKey(neighbor.x, neighbor.y)),
+  );
+  return context.arena.powerUps.some((powerUp) => (
+    !powerUp.revealed
+    && !powerUp.collected
+    && adjacentBreakableKeys.has(tileKey(powerUp.tile.x, powerUp.tile.y))
+  ));
+}
+
+function getAdjacentBreakables(tile: TileCoord, context: BotContext): TileCoord[] {
   const neighbors = [
     { x: tile.x + 1, y: tile.y },
     { x: tile.x - 1, y: tile.y },
     { x: tile.x, y: tile.y + 1 },
     { x: tile.x, y: tile.y - 1 },
   ];
-  return neighbors.some((neighbor) => context.arena.breakable.has(tileKey(neighbor.x, neighbor.y)));
+  return neighbors.filter((neighbor) => context.arena.breakable.has(tileKey(neighbor.x, neighbor.y)));
 }
 
 /**
@@ -620,7 +670,7 @@ function hasAdjacentBreakable(tile: TileCoord, context: BotContext): boolean {
 function findValuablePowerUpDirection(player: PlayerState, minSafetyWindowMs: number, context: BotContext): Direction | null {
   const priorityGroups = new Map<number, Set<string>>();
   for (const powerUp of context.arena.powerUps) {
-    if (!powerUp.revealed || powerUp.collected) {
+    if (!powerUp.revealed || powerUp.collected || isPowerUpMaxed(player, powerUp.type)) {
       continue;
     }
     const value = getPowerUpPriority(player, powerUp.type);
@@ -645,6 +695,7 @@ function findValuablePowerUpDirection(player: PlayerState, minSafetyWindowMs: nu
       (tile) => targetTiles.has(tileKey(tile.x, tile.y)),
       minSafetyWindowMs,
       context,
+      (_tile, firstDirection) => firstDirection === context.botCommittedDirection[player.id] ? 1 : 0,
     );
     if (direction) {
       return direction;

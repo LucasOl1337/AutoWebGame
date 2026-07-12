@@ -1,3 +1,36 @@
+# Patch Notes — 2026-07-12 v0.4.0 Release Candidate
+
+**Projeto:** AutoWebGame / BOMBA PvP
+**Baseline:** `v0.3.0` (`15b3721`)
+**Estado:** preparado; aguardando autorização de commit e deploy
+
+## Para quem joga
+
+- Bombas avisam melhor os 450 ms finais e pickups se destacam do piso.
+- Powerup já maximizado permanece na arena e mostra `MAX` no HUD.
+- Drops ficaram menos densos, remote-up mais raro e Sudden Death um pouco menos agressivo.
+- Bots priorizam mobilidade/sobrevivência, ignoram upgrades saturados e evitam bombas ofensivas redundantes.
+- Convites aceitam códigos dentro de mensagens; quando copiar falha, o código aparece para compartilhamento manual.
+- Mobile respeita notch/safe areas e a landing informa corretamente 9 arenas e até 4 jogadores online.
+
+## Invisível, mas importante
+
+- Input é limpo em `pagehide`; áudio se recupera de falha e remove listeners órfãos.
+- Worker não guarda 404 de chunks como immutable, reutiliza arena ativa em memória e reduz leituras do admin.
+- Deltas de blast são reutilizados em vez de alocados a cada explosão/projeção.
+- Robots/sitemap cobrem as páginas públicas e os dois domínios.
+
+## Qualidade e decisões
+
+- Build aprovado, 136/136 checks, audit com 0 vulnerabilidades e Wrangler dry-run aprovado.
+- QA Chrome desktop/mobile sem overflow ou erro de console.
+- Agent-First, suporte/SLA, billing live, telemetria ampliada e novos assets genéricos ficaram fora até atenderem os gates do PRD.
+- Sem breaking change ou migração de Durable Object.
+
+Relatórios: `DocsDev/releases/release-v0.4.0.md`, `PRD-v0.4.0.md` e `before-after-v0.4.0.md`.
+
+---
+
 # Patch Notes - 2026-07-10 v0.3.0 Official Minor Release
 
 **Project:** AutoWebGame / BOMBA PvP

@@ -2,14 +2,17 @@ const inviteModule = await import("../output/esm/NetCode/room-invite.js");
 const {
   buildRoomInviteUrl,
   copyTextWithFallback,
+  formatInviteCopyManualStatus,
   normalizeRoomCode,
   readRoomCodeFromUrl,
 } = inviteModule;
 const sessionClientModule = await import("../output/esm/NetCode/session-client.js");
+const { SITE_COPY } = await import("../output/esm/UiLayouts/i18n.js");
 
 const compatibilityPass = [
   "buildRoomInviteUrl",
   "copyTextWithFallback",
+  "formatInviteCopyManualStatus",
   "normalizeRoomCode",
   "readRoomCodeFromUrl",
   "resolveManualLobbyJoinCode",
@@ -157,6 +160,17 @@ const unavailablePass = await copyTextWithFallback("no-copy", {
   document: null,
 }) === false;
 
+const manualRecovery = {
+  pt: formatInviteCopyManualStatus(SITE_COPY.pt, " ab-12 c "),
+  en: formatInviteCopyManualStatus(SITE_COPY.en, "xy 98"),
+  fallback: formatInviteCopyManualStatus(SITE_COPY.en, ""),
+};
+
+const manualRecoveryPass = manualRecovery.pt.includes("AB12C")
+  && manualRecovery.en.includes("XY98")
+  && manualRecovery.pt !== manualRecovery.en
+  && manualRecovery.fallback === SITE_COPY.en.status.inviteCopyFailed;
+
 const copyPass = clipboardPass
   && clipboardWrites[0] === "https://bomba.test/?room=AB12C"
   && fallbackPass
@@ -172,7 +186,7 @@ const copyPass = clipboardPass
   && legacyTextarea?.removedByParent
   && unavailablePass;
 
-const pass = compatibilityPass && normalizationPass && urlReadPass && invitePass && copyPass;
+const pass = compatibilityPass && normalizationPass && urlReadPass && invitePass && copyPass && manualRecoveryPass;
 
 console.log(JSON.stringify({
   normalizedCases: normalizedCases.map((entry) => ({
@@ -202,6 +216,8 @@ console.log(JSON.stringify({
     },
     unavailablePass,
   },
+  manualRecovery,
+  manualRecoveryPass,
   compatibilityPass,
   pass,
 }, null, 2));

@@ -2,7 +2,7 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>BOMBA PvP — O jogo de bombas competitivo</title>
     <meta name="description" content="Plante bombas. Destrua tudo. Sobreviva. BOMBA é o jogo de bombas competitivo com personagens únicos, arenas temáticas e partidas online.">
     <link rel="icon" href="/Assets/UiLayouts/ICON.png" />
@@ -902,6 +902,24 @@
         .sidenav { display: none; }
         .topbar { padding: 0 18px; }
         .topbar-links { display: none; }
+        .hero {
+          min-height: auto;
+          padding: 96px 18px 52px;
+        }
+        .hero-eyebrow { margin-bottom: 28px; }
+        .hero-desc {
+          margin-top: 24px;
+          line-height: 1.55;
+        }
+        .stats-row { margin-top: 34px; }
+        .hero-actions {
+          margin-top: 34px;
+          gap: 12px;
+        }
+        .btn-explore {
+          min-height: 44px;
+          padding: 0 18px;
+        }
         .mechanic-grid { grid-template-columns: 1fr 1fr; }
         .mechanic-card:nth-child(3n) { border-right: 1px solid var(--border); }
         .mechanic-card:nth-child(2n) { border-right: none; }
@@ -976,12 +994,12 @@
           <span class="stat-l">Personagens</span>
         </div>
         <div class="stat">
-          <span class="stat-n">7</span>
+          <span class="stat-n">9</span>
           <span class="stat-l">Arenas</span>
         </div>
         <div class="stat">
-          <span class="stat-n">4v4</span>
-          <span class="stat-l">Online</span>
+          <span class="stat-n">4</span>
+          <span class="stat-l">Jogadores online</span>
         </div>
         <div class="stat">
           <span class="stat-n">∞</span>
@@ -1133,7 +1151,7 @@
     <section class="section reveal" id="arenas">
       <div class="section-head" data-num="03">
         <span class="section-kicker">03 — Arenas</span>
-        <h2>7 cenários.<br>7 atmosferas.</h2>
+        <h2>9 cenários.<br>9 atmosferas.</h2>
         <p class="section-desc">Cada arena tem paleta de cores, motivo visual e estilo arquitetônico próprio.</p>
       </div>
 
