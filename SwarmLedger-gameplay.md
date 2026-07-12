@@ -1,5 +1,15 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-12 — bot-flame-diminishing-returns
+
+- Claim/escopo antes da intervenção: aplicar retorno decrescente exclusivamente ao score de `flame-up` para bots, preservando score inicial de 460, saturação em 0, alcance real, limites, drops, coleta, rede, segurança e demais prioridades.
+- Arquivos previstos: `src/Gameplay/powerups.ts`, `tests/bot-powerup-priority-check.mjs`, `SwarmLedger-gameplay.md`.
+- Antes/evidência da lacuna: a fórmula linear `260 + (MAX_RANGE - flameRange) * 40` produzia scores 460, 420, 380, 340 e 300 antes da saturação, mantendo ganhos tardios quase tão valiosos quanto o primeiro.
+- Antes → depois: scores por alcance `[1..5]` mudaram de `[460,420,380,340,0]` para `[460,420,340,300,0]`; o primeiro ganho e a saturação foram preservados, enquanto o bônus acima da base 260 passa a cair pela metade.
+- Evidência focal: `flameScores=[460,420,340,300,0]` e `hasDiminishingFlameReturns=true`; prioridades de mobilidade inicial, primeiro shield, descarte de atributos saturados, speed e short-fuse permaneceram aprovadas.
+- Validação: `npm run compile:esm`; `node tests/bot-powerup-priority-check.mjs`; `node tests/bot-own-blast-escape-check.mjs`; `node tests/bot-survival-10s-check.mjs`; `node tests/bot-target-selection-check.mjs`; `npm run build`; `git diff --check -- src/Gameplay/powerups.ts tests/bot-powerup-priority-check.mjs SwarmLedger-gameplay.md` — todos concluídos com código 0; somente avisos LF→CRLF.
+- Preservação/revisão de escopo: mudanças preexistentes em `index.html`, `src/Engine/game-app.ts`, `tests/remote-detonation-check.mjs`, `DocsDev/swarm-coordination.md` e arquivos não rastreados permaneceram intocadas e fora do commit seletivo.
+
 ## 2026-07-12 — bot-short-fuse-diminishing-returns
 
 - Claim/escopo antes da intervenção: aplicar retorno decrescente exclusivamente ao score de `short-fuse-up` para bots, preservando nível 0 em 260, reduzindo nível 1 para 150 e mantendo saturação no nível 2 em 0; sem alterar fuse real, níveis máximos, drops, coleta, rede ou demais prioridades.

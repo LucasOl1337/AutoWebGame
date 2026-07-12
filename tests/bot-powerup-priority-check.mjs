@@ -48,7 +48,7 @@ globalThis.window = {
 };
 
 const { GameApp } = await import("../output/esm/Engine/game-app.js");
-const { MAX_BOMBS, MAX_SPEED_LEVEL, TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
+const { MAX_BOMBS, MAX_RANGE, MAX_SPEED_LEVEL, TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
 const { getPowerUpPriorityScore } = await import("../output/esm/Gameplay/powerups.js");
 
 const root = { appendChild: noop };
@@ -144,6 +144,18 @@ const hasDiminishingSpeedReturns = speedScores[0] === 460
     return score - 120 === previousBonus / 2;
   });
 
+const flameScores = Array.from({ length: MAX_RANGE }, (_, index) => {
+  bot.flameRange = index + 1;
+  return getPowerUpPriorityScore(bot, "flame-up");
+});
+const hasDiminishingFlameReturns = flameScores[0] === 460
+  && flameScores[MAX_RANGE - 1] === 0
+  && flameScores.slice(1, -1).every((score, index, scores) => index === 0 || score < scores[index - 1])
+  && flameScores.slice(2, -1).every((score, index) => {
+    const previousBonus = flameScores[index + 1] - 260;
+    return score - 260 === previousBonus / 2;
+  });
+
 const shortFuseScores = [0, 1, 2].map((shortFuseLevel) => {
   bot.shortFuseLevel = shortFuseLevel;
   return getPowerUpPriorityScore(bot, "short-fuse-up");
@@ -161,6 +173,8 @@ const report = {
   skipsSaturatedBombForSurvival,
   speedScores,
   hasDiminishingSpeedReturns,
+  flameScores,
+  hasDiminishingFlameReturns,
   shortFuseScores,
   hasDiminishingShortFuseReturns,
 };
@@ -169,6 +183,6 @@ console.log(JSON.stringify(report, null, 2));
 
 if (!prefersBaseMobility || !prefersFirstShield || !skipsUselessSpeedUp
   || !skipsSaturatedBombForSurvival || !hasDiminishingSpeedReturns
-  || !hasDiminishingShortFuseReturns) {
+  || !hasDiminishingFlameReturns || !hasDiminishingShortFuseReturns) {
   process.exit(1);
 }
