@@ -1,5 +1,16 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-12 — ux-powerup-spawn-pop-120ms
+
+- Claim/escopo antes da intervenção: adicionar somente um pop visual de surgimento de power-up por aproximadamente 120 ms; preservar coleta, hitbox, distribuição/drop, sincronização online, fallback sem sprite e estado autoritativo.
+- Arquivos: `src/Engine/game-app.ts`, `tests/powerup-spawn-pop-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.
+- CodeGraph: `codegraph status .` confirmou índice atualizado; `codegraph context "power-up spawn visual pop animation rendering collection hitbox drop sync fallback"` localizou `drawPowerUp` e os contratos; `codegraph impact drawPowerUp` limitou o impacto a 5 símbolos do pipeline de render (`drawPowerUp`, `renderArena`, `render`, `renderMenu`, `GameApp`).
+- Antes → depois: o pickup aparecia imediatamente em escala final; agora a revelação local registra somente um timestamp visual e `drawPowerUp` aplica escala centralizada de `0.72` até cerca de `1.10`, assentando em `1` após 120 ms. Pickups vindos de snapshot/sync sem timestamp são renderizados diretamente em escala 1, evitando reanimar reconciliações.
+- Preservação: não houve mudança em `PowerUpState`, tile, colisão, coleta, criação/drop ou payload de rede; sprite e fallback textual passam pela mesma transformação visual. `index.html` e alterações concorrentes/preexistentes permaneceram intocados e fora do commit seletivo.
+- Evidência focal: `durationMs=120`, `tracksRevealOnlyOnTransition=true`, `renderOnlyTransform=true`, `preservesFallback=true`, `doesNotChangeGeometry=true`.
+- Validação: `npm run compile:esm`; `node tests/powerup-spawn-pop-check.mjs`; `node tests/powerup-render-legibility-check.mjs`; `node tests/powerup-max-level-preservation-check.mjs`; `node tests/powerup-drop-rate-check.mjs`; `npm run build`; `git diff --check -- src/Engine/game-app.ts tests/powerup-spawn-pop-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` — todos concluídos com código 0.
+- Commit: pendente de criação seletiva após esta atualização final do ledger.
+
 ## 2026-07-12 — bot-speed-diminishing-returns
 
 - Claim/escopo antes da intervenção: aplicar retorno decrescente somente ao score de `speed-up` do bot depois do primeiro nível; preservar a prioridade excepcional do primeiro ganho, saturação, demais power-ups, sobrevivência, seleção de alvo, drops, coleta, estado e rede.

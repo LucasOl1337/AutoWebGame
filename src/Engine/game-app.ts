@@ -182,6 +182,7 @@ const WALK_FRAME_MS = 100;
 const SKILL_FRAME_MS = 100;
 const DEATH_FRAME_MS = 90;
 const CRATE_BREAK_DURATION_MS = 220;
+const POWER_UP_SPAWN_POP_MS = 120;
 const SPAWN_PROTECTION_MS = 2200;
 const PERFECT_START_WINDOW_MS = 320;
 const PERFECT_START_BOOST_MS = 640;
@@ -442,6 +443,7 @@ export class GameApp {
   private botPendingReverseFrames: Record<PlayerId, number> = createNumberPlayerRecord(0);
   private animationClockMs = 0;
   private crateBreakAnimations: CrateBreakAnimation[] = [];
+  private powerUpRevealStartedAtMs = new Map<PowerUpState, number>();
   private powerUpPickupNotices: PowerUpPickupNotice[] = [];
   private playerDeathAnimations: Record<PlayerId, PlayerDeathAnimationState | null> = createPlayerRecord(() => null);
   private suddenDeathActive = false;
@@ -1925,6 +1927,7 @@ export class GameApp {
     this.flames = [];
     this.magicBeams = [];
     this.crateBreakAnimations = [];
+    this.powerUpRevealStartedAtMs.clear();
     this.powerUpPickupNotices = [];
     this.playerDeathAnimations = createPlayerRecord(() => null);
     this.nextBombId = 1;
@@ -2895,8 +2898,9 @@ export class GameApp {
 
   private revealPowerUpAt(key: string): void {
     const item = this.arena.powerUps.find((powerUp) => tileKey(powerUp.tile.x, powerUp.tile.y) === key);
-    if (item) {
+    if (item && !item.revealed) {
       item.revealed = true;
+      this.powerUpRevealStartedAtMs.set(item, this.animationClockMs);
     }
   }
 
@@ -4622,6 +4626,21 @@ export class GameApp {
   private drawPowerUp(powerUp: PowerUpState): void {
     const x = powerUp.tile.x * TILE_SIZE;
     const y = powerUp.tile.y * TILE_SIZE;
+    const revealStartedAtMs = this.powerUpRevealStartedAtMs.get(powerUp);
+    const revealElapsedMs = revealStartedAtMs === undefined
+      ? POWER_UP_SPAWN_POP_MS
+      : Math.max(0, this.animationClockMs - revealStartedAtMs);
+    const revealProgress = Math.min(1, revealElapsedMs / POWER_UP_SPAWN_POP_MS);
+    const popScale = revealProgress < 1
+      ? 0.72 + (0.38 * Math.sin(revealProgress * Math.PI * 0.5))
+      : 1;
+
+    this.ctx.save();
+    if (popScale !== 1) {
+      this.ctx.translate(x + TILE_SIZE * 0.5, y + TILE_SIZE * 0.5);
+      this.ctx.scale(popScale, popScale);
+      this.ctx.translate(-(x + TILE_SIZE * 0.5), -(y + TILE_SIZE * 0.5));
+    }
     const sprite = this.assets.powerUps[powerUp.type];
     if (sprite) {
       this.ctx.save();
@@ -4633,6 +4652,7 @@ export class GameApp {
       this.ctx.lineWidth = 1.5;
       this.ctx.stroke();
       this.ctx.drawImage(sprite, x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+      this.ctx.restore();
       this.ctx.restore();
       return;
     }
@@ -4646,6 +4666,7 @@ export class GameApp {
     this.ctx.font = "700 10px Inter";
     this.ctx.textAlign = "center";
     this.ctx.fillText(definition.shortLabel, x + 16, y + 19);
+    this.ctx.restore();
   }
 
   private drawBomb(bomb: BombState): void {
