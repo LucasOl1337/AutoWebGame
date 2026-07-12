@@ -4,6 +4,10 @@ Shared coordination file for recurring Codex swarm sessions. Each session should
 
 ## Active claims
 
+CLAIM | 2026-07-11 | sessao=bot-stable-pickup-direction-tiebreak | tipo=intervencao-gameplay-bot | arquivos=src/Engine/bot-ai.ts, tests/bot-pickup-direction-tiebreak-check.mjs, DocsDev/swarm-coordination.md, SwarmLedger-gameplay.md | status=feito | observacao=pickups igualmente uteis/equidistantes/seguros preservam direcao comprometida; sem compromisso mantem ordem deterministica; testes focais/regressoes de bot, build e diff-check aprovados; sujeira alheia preservada
+
+CLAIM | 2026-07-11 | sessao=remote-up-rarer-deterministic-pool | tipo=intervencao-balanceamento-minima | arquivos=src/Arenas/arena.ts, tests/powerup-drop-rate-check.mjs, DocsDev/swarm-coordination.md, SwarmLedger-gameplay.md | status=feito | observacao=remote-up removido da segunda metade espelhada do pool deterministico; taxa global e pareamento preservados; compile, drop-rate, arena-runtime, demolition-combo, build e diff-check aprovados; sujeira alheia preservada
+
 CLAIM | 2026-07-11 | sessao=bot-base-speed-survival-priority | tipo=intervencao-gameplay-bot | arquivos=src/Gameplay/powerups.ts, tests/bot-powerup-priority-check.mjs, DocsDev/swarm-coordination.md, SwarmLedger-gameplay.md | status=feito | observacao=bot no nivel base prefere primeiro speed-up a bomb-up equidistante; shield sem carga, descarte de saturados, fuga, sobrevivencia e alvo preservados; compile, testes focais, build e diff-check aprovados; sujeira alheia intocada
 
 CLAIM | 2026-07-11 | sessao=ux-maxed-powerup-hud-feedback | tipo=intervencao-ux-gameplay | arquivos=src/Engine/game-app.ts, tests/powerup-max-hud-feedback-check.mjs, DocsDev/swarm-coordination.md, SwarmLedger-gameplay.md | status=feito | observacao=feedback HUD transitorio MAX reutiliza notice existente ao tocar pickup saturado; item, nivel e regras preservados; compile, teste focal, preservacao, HUD, build e diff-check aprovados; index.html e arquivos alheios intocados

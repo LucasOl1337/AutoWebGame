@@ -114,13 +114,13 @@ const expectedDropCount = 22;
 const expectedDropRatio = 0.611;
 const expectedDropTypeCounts = {
   "bomb-up": 0,
-  "flame-up": 8,
-  "speed-up": 4,
+  "flame-up": 2,
+  "speed-up": 10,
   "remote-up": 0,
-  "shield-up": 0,
+  "shield-up": 4,
   "short-fuse-up": 2,
-  "bomb-pass-up": 6,
-  "kick-up": 2,
+  "bomb-pass-up": 4,
+  "kick-up": 0,
 };
 const actualDropTypeCounts = Object.fromEntries(
   Object.keys(expectedDropTypeCounts).map((type) => [

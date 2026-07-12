@@ -1,5 +1,24 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-11 — bot-stable-pickup-direction-tiebreak
+
+- Claim/escopo antes da intervenção: entre pickups revelados com a mesma utilidade, distância e janela de segurança, preferir somente como desempate a rota cuja primeira etapa mantém `botCommittedDirection`; preservar prioridades de utilidade, fuga, perigo, ataque, abertura, pathfinding e estabilização geral.
+- Arquivos previstos: `src/Engine/bot-ai.ts`, `tests/bot-pickup-direction-tiebreak-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.
+- Evidência da lacuna: `findValuablePowerUpDirection` agrupa por score, mas chama BFS sem `tieBreakerScore`; a BFS retorna o primeiro alvo equivalente conforme ordem fixa `up/down/left/right`, apesar de `botCommittedDirection` já existir no contexto.
+- Preservação: mudanças alheias já presentes em arena, drop-rate, landing e ledgers foram mantidas e não entram no commit seletivo.
+- Resultado: o desempate da BFS pode receber a primeira direção da rota; somente a busca de pickups equivalentes atribui score `1` à rota que mantém `botCommittedDirection` e `0` às demais. Sem direção comprometida, a ordem determinística anterior permanece.
+- Evidência: cenário focal com dois `bomb-up` igualmente úteis, adjacentes e seguros escolheu `down` quando comprometido em `down`, e voltou a `up` pela ordem fixa quando o compromisso foi removido. Passaram `compile:esm`, teste focal, prioridade de power-up, estabilidade direcional, fuga de explosão própria, seleção de alvo, `build` e `git diff --check`.
+
+## 2026-07-11 — remote-up-rarer-deterministic-pool
+
+- Claim/escopo antes da intervenção: tornar `remote-up` mais raro somente no pool determinístico em `src/Arenas/arena.ts` e atualizar a expectativa correspondente em `tests/powerup-drop-rate-check.mjs`; preservar taxa global de drops, pareamento espelhado, geração de caixas, demais tipos, gameplay, IA e rede.
+- Arquivos previstos: `src/Arenas/arena.ts`, `tests/powerup-drop-rate-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.
+- Preservação: `index.html` modificado e documentos não rastreados alheios não serão tocados nem incluídos.
+- Antes: `remote-up` ocupava 1 de 12 posições do pool determinístico (8,33%).
+- Depois: o pool foi ampliado para 23 entradas sem repetir `remote-up`, reduzindo seu peso nominal para 1/23 (4,35%); a taxa global de 0,65 e a seleção/espelhamento determinísticos permanecem inalterados.
+- Resultado determinístico na arena padrão: 22 drops em 36 caixas (0,611), com `speed-up=10`, `flame-up=2`, `shield-up=4`, `short-fuse-up=2`, `bomb-pass-up=4` e zero nos demais tipos para esta seed/configuração.
+- Validação: `npm run compile:esm`; `node tests/powerup-drop-rate-check.mjs`; `node tests/arena-runtime-contract-check.mjs`; `node tests/demolition-combo-drop-check.mjs`; `npm run build`; `git diff --check -- src/Arenas/arena.ts tests/powerup-drop-rate-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` — todos concluídos com código 0.
+
 ## 2026-07-11 — bot-base-speed-survival-priority
 
 - Claim/escopo antes da intervenção: ajustar somente o score de `speed-up` para bots ainda no nível base, fazendo mobilidade inicial concorrer acima de upgrades ofensivos; preservar fuga, segurança de rota, drops, coleta, níveis máximos, estado e rede.
