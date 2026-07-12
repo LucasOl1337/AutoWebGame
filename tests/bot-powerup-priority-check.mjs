@@ -132,6 +132,18 @@ const saturatedAttributeDecision = game.getBotDecision(bot);
 const skipsSaturatedBombForSurvival = saturatedAttributeDecision.placeBomb === false
   && saturatedAttributeDecision.direction === "down";
 
+const bombScores = Array.from({ length: MAX_BOMBS }, (_, index) => {
+  bot.maxBombs = index + 1;
+  return getPowerUpPriorityScore(bot, "bomb-up");
+});
+const hasDiminishingBombReturns = bombScores[0] === 460
+  && bombScores[MAX_BOMBS - 1] === 0
+  && bombScores.slice(1, -1).every((score, index, scores) => index === 0 || score < scores[index - 1])
+  && bombScores.slice(2, -1).every((score, index) => {
+    const previousBonus = bombScores[index + 1] - 300;
+    return score - 300 === previousBonus / 2;
+  });
+
 const speedScores = Array.from({ length: MAX_SPEED_LEVEL + 1 }, (_, speedLevel) => {
   bot.speedLevel = speedLevel;
   return getPowerUpPriorityScore(bot, "speed-up");
@@ -171,6 +183,8 @@ const report = {
   prefersFirstShield,
   skipsUselessSpeedUp,
   skipsSaturatedBombForSurvival,
+  bombScores,
+  hasDiminishingBombReturns,
   speedScores,
   hasDiminishingSpeedReturns,
   flameScores,
@@ -182,7 +196,8 @@ const report = {
 console.log(JSON.stringify(report, null, 2));
 
 if (!prefersBaseMobility || !prefersFirstShield || !skipsUselessSpeedUp
-  || !skipsSaturatedBombForSurvival || !hasDiminishingSpeedReturns
-  || !hasDiminishingFlameReturns || !hasDiminishingShortFuseReturns) {
+  || !skipsSaturatedBombForSurvival || !hasDiminishingBombReturns
+  || !hasDiminishingSpeedReturns || !hasDiminishingFlameReturns
+  || !hasDiminishingShortFuseReturns) {
   process.exit(1);
 }

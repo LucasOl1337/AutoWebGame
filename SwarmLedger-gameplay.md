@@ -1,5 +1,14 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-12 — bot-bomb-diminishing-returns
+
+- Claim/escopo antes da intervenção: aplicar retorno decrescente exclusivamente ao score de `bomb-up` para bots, preservando o primeiro score alto, saturação em 0 no máximo, capacidade real, limites, drops, coleta, rede, segurança e demais prioridades.
+- Arquivos previstos: `src/Gameplay/powerups.ts`, `tests/bot-powerup-priority-check.mjs`, `SwarmLedger-gameplay.md`.
+- Preservação: mudanças preexistentes fora desses três arquivos permaneceram intocadas e fora do commit seletivo.
+- Antes → depois: a fórmula linear produzia `[460,420,380,340,0]` para capacidades `[1..5]`; agora o bônus acima da base 300 cai pela metade após o primeiro nível, produzindo `[460,380,340,320,0]`.
+- Evidência focal: `bombScores=[460,380,340,320,0]` e `hasDiminishingBombReturns=true`; primeiro score alto e saturação em 0 foram preservados, assim como as verificações existentes de speed, flame, short-fuse, shield e atributos saturados.
+- Validação: `npm run compile:esm`; `node tests/bot-powerup-priority-check.mjs`; `node tests/bot-own-blast-escape-check.mjs`; `node tests/bot-survival-10s-check.mjs`; `node tests/bot-target-selection-check.mjs`; `npm run build`; `git diff --check -- src/Gameplay/powerups.ts tests/bot-powerup-priority-check.mjs SwarmLedger-gameplay.md` — todos concluídos com código 0; somente avisos LF→CRLF.
+
 ## 2026-07-12 — bot-flame-diminishing-returns
 
 - Claim/escopo antes da intervenção: aplicar retorno decrescente exclusivamente ao score de `flame-up` para bots, preservando score inicial de 460, saturação em 0, alcance real, limites, drops, coleta, rede, segurança e demais prioridades.

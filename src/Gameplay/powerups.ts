@@ -174,7 +174,8 @@ export function getPowerUpPriorityScore(player: PlayerState, type: PowerUpType):
     if (player.maxBombs >= MAX_BOMBS) {
       return 0;
     }
-    return 300 + (MAX_BOMBS - player.maxBombs) * 40;
+    const levelsAfterFirst = Math.max(0, player.maxBombs - 1);
+    return 300 + 160 / (2 ** levelsAfterFirst);
   }
   if (type === "flame-up") {
     if (player.flameRange >= MAX_RANGE) {
