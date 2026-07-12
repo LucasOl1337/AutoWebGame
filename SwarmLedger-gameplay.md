@@ -1,5 +1,15 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-12 — sudden-death-bfs-committed-direction-tiebreak
+
+- Claim/escopo antes da intervenção: ajustar somente o desempate da BFS de sudden death em `src/Engine/bot-ai.ts`, favorecendo `botCommittedDirection` apenas quando os alvos têm distância e mérito equivalentes; criar teste focal e preservar fuga, segurança, prioridades estratégicas, ordem determinística sem compromisso e demais chamadas da BFS.
+- Arquivos previstos: `src/Engine/bot-ai.ts`, novo teste focal em `tests/` e `SwarmLedger-gameplay.md`.
+- Coordenação: nenhuma edição em `DocsDev`; mudanças alheias preexistentes foram preservadas, sem commit.
+- Antes → depois: a busca de pressão de sudden death entregava o primeiro alvo válido na ordem fixa da BFS; agora passa um score binário que favorece a primeira etapa igual a `botCommittedDirection`, mas a BFS só compara candidatos da mesma distância que já satisfazem exatamente o mesmo predicado de segurança/mérito. Alvos mais próximos ou não equivalentes continuam prevalecendo; sem compromisso, a ordem anterior permanece.
+- Evidência focal: `passesCommittedDirectionTieBreaker=true`, `bfsRestrictsTieBreakToSameDistance=true`, `predicateRunsBeforeTieBreaker=true`.
+- Validação: `npm run compile:esm`; `node tests/bot-sudden-death-direction-tiebreak-check.mjs`; `node tests/bot-pickup-direction-tiebreak-check.mjs`; `node tests/bot-target-selection-check.mjs`; `npm run build` — todos concluídos com código 0 após corrigir duas vezes a extração do corpo no teste focal; a implementação compilou desde a primeira execução.
+- Resultado validado e registrado no commit `64e8f26` (`feat(gameplay): stabilize sudden death bot movement`).
+
 ## 2026-07-12 — ux-powerup-spawn-pop-120ms
 
 - Claim/escopo antes da intervenção: adicionar somente um pop visual de surgimento de power-up por aproximadamente 120 ms; preservar coleta, hitbox, distribuição/drop, sincronização online, fallback sem sprite e estado autoritativo.

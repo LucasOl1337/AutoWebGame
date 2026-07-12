@@ -751,6 +751,8 @@ function getSuddenDeathPressureDirection(player: PlayerState, danger: Map<string
     },
     danger,
     context,
+    desiredSafetyWindowMs,
+    (_tile, firstDirection) => firstDirection === context.botCommittedDirection[player.id] ? 1 : 0,
   );
 }
 
