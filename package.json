@@ -29,6 +29,7 @@
     "test:bot-opening": "npm run compile:esm && node tests/bot-opening-discipline-check.mjs",
     "test:menu-bot-fill": "npm run compile:esm && node tests/menu-bot-fill-check.mjs",
     "test:arena-theme-selection": "npm run compile:esm && node tests/arena-theme-selection-check.mjs",
+    "test:arena-theme-library": "npm run compile:esm && node tests/arena-theme-library-check.mjs",
     "test:input-alias": "npm run compile:esm && node tests/local-input-alias-check.mjs",
     "test:input-visibility": "npm run compile:esm && node tests/input-visibility-clear-check.mjs",
     "test:game-visibility-pause": "npm run compile:esm && node tests/game-visibility-auto-pause-check.mjs",

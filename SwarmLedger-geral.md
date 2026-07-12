@@ -1,5 +1,15 @@
 # Swarm Ledger - Geral
 
+## 2026-07-12 - Script npm para biblioteca de temas
+
+- Automacao: `autowebgame-enxame-geral`.
+- Escopo: expor o teste existente `tests/arena-theme-library-check.mjs` via um unico script em `package.json`; sem alterar runtime, gameplay, rede ou arquivos com mudancas concorrentes.
+- Evidencia antes: o teste focal existia, mas nao era referenciado pelos scripts npm.
+- Mudanca: adicionado `test:arena-theme-library`, executando compile ESM e o check dedicado.
+- Validacao: `npm run test:arena-theme-library` passou (`themeCount: 7`, `missingFiles: []`, `pass: true`); `npm run build` passou (TypeScript + Vite, 42 modulos); `git diff --check -- package.json SwarmLedger-geral.md` passou.
+- Revisao de escopo: diff funcional contem somente uma insercao em `package.json`; mudancas preexistentes em `DocsDev/swarm-coordination.md`, `index.html`, `src/Engine/game-app.ts`, `tests/remote-detonation-check.mjs` e ledgers alheios foram preservadas e excluidas do staging.
+- Commit: pendente de criacao seletiva.
+
 ## 2026-07-12 - Script npm para normalizacao de codigo de sala
 
 - Automacao: `autowebgame-enxame-geral`.
