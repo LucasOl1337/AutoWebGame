@@ -1,5 +1,14 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-12 — bot-speed-diminishing-returns
+
+- Claim/escopo antes da intervenção: aplicar retorno decrescente somente ao score de `speed-up` do bot depois do primeiro nível; preservar a prioridade excepcional do primeiro ganho, saturação, demais power-ups, sobrevivência, seleção de alvo, drops, coleta, estado e rede.
+- Arquivos: `src/Gameplay/powerups.ts`, `tests/bot-powerup-priority-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.
+- Preservação: `index.html` modificado e arquivos não rastreados alheios permaneceram intocados; sem commit.
+- Antes → depois: os níveis intermediários usavam a fórmula linear `120 + (MAX_SPEED_LEVEL - speedLevel) * 25`, produzindo scores 195, 170 e 145; agora o bônus acima da base 120 cai pela metade a cada nível, produzindo 240, 180 e 150. O primeiro nível continua em 460 e o máximo continua em 0.
+- Evidência focal: `speedScores=[460,240,180,150,0]`, `hasDiminishingSpeedReturns=true`; o bot no nível base ainda escolheu `speed-up` sobre `bomb-up`, shield sem carga manteve precedência e atributos saturados continuaram ignorados.
+- Validação: `npm run compile:esm`; `node tests/bot-powerup-priority-check.mjs`; `node tests/bot-survival-10s-check.mjs`; `node tests/bot-target-selection-check.mjs`; `npm run build`; `git diff --check -- src/Gameplay/powerups.ts tests/bot-powerup-priority-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` — todos concluídos com código 0.
+
 ## 2026-07-11 — bot-stable-pickup-direction-tiebreak
 
 - Claim/escopo antes da intervenção: entre pickups revelados com a mesma utilidade, distância e janela de segurança, preferir somente como desempate a rota cuja primeira etapa mantém `botCommittedDirection`; preservar prioridades de utilidade, fuga, perigo, ataque, abertura, pathfinding e estabilização geral.

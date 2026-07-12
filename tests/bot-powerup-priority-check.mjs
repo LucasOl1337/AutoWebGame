@@ -49,6 +49,7 @@ globalThis.window = {
 
 const { GameApp } = await import("../output/esm/Engine/game-app.js");
 const { MAX_BOMBS, MAX_SPEED_LEVEL, TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
+const { getPowerUpPriorityScore } = await import("../output/esm/Gameplay/powerups.js");
 
 const root = { appendChild: noop };
 const assets = {
@@ -131,6 +132,18 @@ const saturatedAttributeDecision = game.getBotDecision(bot);
 const skipsSaturatedBombForSurvival = saturatedAttributeDecision.placeBomb === false
   && saturatedAttributeDecision.direction === "down";
 
+const speedScores = Array.from({ length: MAX_SPEED_LEVEL + 1 }, (_, speedLevel) => {
+  bot.speedLevel = speedLevel;
+  return getPowerUpPriorityScore(bot, "speed-up");
+});
+const hasDiminishingSpeedReturns = speedScores[0] === 460
+  && speedScores[MAX_SPEED_LEVEL] === 0
+  && speedScores.slice(1, -1).every((score, index, scores) => index === 0 || score < scores[index - 1])
+  && speedScores.slice(2, -1).every((score, index) => {
+    const previousBonus = speedScores[index + 1] - 120;
+    return score - 120 === previousBonus / 2;
+  });
+
 const report = {
   preferSpeedDecision,
   preferFirstShieldDecision,
@@ -140,10 +153,13 @@ const report = {
   prefersFirstShield,
   skipsUselessSpeedUp,
   skipsSaturatedBombForSurvival,
+  speedScores,
+  hasDiminishingSpeedReturns,
 };
 
 console.log(JSON.stringify(report, null, 2));
 
-if (!prefersBaseMobility || !prefersFirstShield || !skipsUselessSpeedUp || !skipsSaturatedBombForSurvival) {
+if (!prefersBaseMobility || !prefersFirstShield || !skipsUselessSpeedUp
+  || !skipsSaturatedBombForSurvival || !hasDiminishingSpeedReturns) {
   process.exit(1);
 }
