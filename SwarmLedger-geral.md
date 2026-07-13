@@ -1,5 +1,17 @@
 # Swarm Ledger - Geral
 
+## 2026-07-13 - Feedback de apontador no volume
+
+- Automacao: `SOLO`.
+- Intencao registrada: entregar uma intervencao visual pequena e perceptivel no controle de volume, sem alterar audio, gameplay, rede ou modulos de orquestracao e sem incorporar mudancas concorrentes.
+- Classificacao inicial: comprovavel por contrato CSS; a inspecao atual mostrou que `.experience-audio__range` tinha somente layout e `accent-color`, embora o foco por teclado ja estivesse coberto.
+- Antes -> depois: o slider nao comunicava interacao ao mouse alem do controle nativo; agora mostra cursor de apontador, clareia no hover e escurece durante o arraste/clique, com transicao curta de 140 ms.
+- Arquivos previstos: `src/UiLayouts/main.css`, `tests/audio-range-focus-check.mjs` e este ledger.
+- Criterio de sucesso: teste focal deve comprovar foco preservado e os novos estados de apontador; build e diff-check seletivo devem passar antes de commit seletivo.
+- Resultado: `npm run test:audio-range-focus` passou com foco, cursor/transicao e estados hover/active verdadeiros; `node tests/touch-focus-css-check.mjs` e `node tests/reduced-motion-css-check.mjs` passaram; `npm run build` passou com 42 modulos transformados; `git diff --check` seletivo passou (somente avisos LF -> CRLF).
+- Classificacao final: comprovada para feedback visual de apontador e preservacao dos contratos CSS automatizados; impacto subjetivo e aparencia entre navegadores nao foram medidos manualmente.
+- Revisao de escopo: diff funcional limitado ao CSS do range e ao fortalecimento do teste existente; este registro documenta a rodada, e todas as mudancas alheias permaneceram fora do staging seletivo.
+
 ## 2026-07-13 - Script npm para foco acessivel do controle de audio
 
 - Automacao: `SOLO`.

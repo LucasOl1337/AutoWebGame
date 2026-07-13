@@ -3655,7 +3655,14 @@ button {
 }
 
 .experience-audio__mute { min-width: 112px; }
-.experience-audio__range { flex: 1 1 180px; accent-color: var(--accent); }
+.experience-audio__range {
+  flex: 1 1 180px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  transition: filter 140ms ease;
+}
+.experience-audio__range:hover { filter: brightness(1.24); }
+.experience-audio__range:active { filter: brightness(0.86); }
 .experience-dev-lab > span { flex: 1 1 260px; color: var(--ink-muted); }
 .experience-dev-lab[hidden] { display: none; }
 

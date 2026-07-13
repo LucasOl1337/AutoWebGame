@@ -10,6 +10,11 @@ const checks = {
   hasFocusVisibleSelector: css.includes(selector),
   hasTwoPixelOutline: /outline:\s*2px\s+solid\s+rgba\(var\(--accent-rgb\),\s*0\.82\);/.test(declarations),
   hasTwoPixelOutlineOffset: /outline-offset:\s*2px;/.test(declarations),
+  pointerSignalsInteractivity: css.includes(".experience-audio__range {")
+    && css.includes("cursor: pointer;")
+    && css.includes("transition: filter 140ms ease;"),
+  pointerStatesChangeTone: css.includes(".experience-audio__range:hover { filter: brightness(1.24); }")
+    && css.includes(".experience-audio__range:active { filter: brightness(0.86); }"),
 };
 
 const pass = Object.values(checks).every(Boolean);
