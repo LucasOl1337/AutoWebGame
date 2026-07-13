@@ -1,5 +1,14 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-13 — ux-how-to-play-round-scoring
+
+- Claim/escopo antes da intervenção: alterar exclusivamente o card existente `Jogue a rodada` para declarar que vence o último bomber vivo e que Double KO não concede ponto; preservar runtime, pontuação, demais textos e mudanças alheias.
+- Arquivos previstos: `how-to-play.html`, `tests/how-to-play-page-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.
+- Coerência de gameplay: `evaluateRoundState` chama `finishRound(null, "double-ko", ...)` quando não há sobreviventes; `finishRound` incrementa o placar somente quando `winner` existe.
+- Critério de sucesso: teste focal protege as duas regras no card; teste do guia, build e diff-check seletivo devem passar antes de commit seletivo.
+- Antes → depois: o card falava apenas da vantagem acumulada por powerups; agora informa diretamente que o último bomber vivo vence a rodada e que uma eliminação simultânea é Double KO sem ponto.
+- Resultado/validação: `npm run test:how-to-play-page`; `npm run build`; `git diff --check -- how-to-play.html tests/how-to-play-page-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` — todos concluídos com código 0. Diff seletivo revisado e limitado às linhas da intervenção dentro dos quatro arquivos reivindicados; mudanças alheias permaneceram intocadas.
+
 ## 2026-07-13 — crate-break-fallback-fragments
 
 - Claim/escopo antes da intervenção: acrescentar exclusivamente 3–4 fragmentos pixelados ao fallback de `drawCrateBreakAnimation`, reutilizando o mesmo `progress`/duração; preservar estado, timing, sprites, gameplay e mudanças alheias.

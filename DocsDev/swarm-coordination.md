@@ -4,6 +4,8 @@ Shared coordination file for recurring Codex swarm sessions. Each session should
 
 ## Active claims
 
+CLAIM | 2026-07-13 | sessao=ux-how-to-play-round-scoring | tipo=ux-onboarding-minimo | arquivos=how-to-play.html, tests/how-to-play-page-check.mjs, DocsDev/swarm-coordination.md, SwarmLedger-gameplay.md | status=feito | observacao=card Jogue a rodada agora declara ultimo bomber vivo como vencedor e Double KO sem ponto, coerente com evaluateRoundState/finishRound; teste do guia e build aprovados; diff-check e revisao seletiva aprovados; runtime e sujeira alheia preservados; commit seletivo realizado.
+
 CLAIM | 2026-07-13 | sessao=ux-utility-powerup-hud-labels | tipo=intervencao-ux-gameplay-minima | arquivos=src/Gameplay/powerups.ts, tests/powerup-hud-slots-check.mjs, DocsDev/swarm-coordination.md | status=feito | observacao=labels utilitarias G/P/Q clareadas para SH/BP/SF e K preservado; teste focal afirma explicitamente SH/BP/K/SF; npm run test:powerup-hud e npm run build aprovados; classificacao comprovada por docs/VisualDesignRules.md linhas 4, 7 e 29-34; diff-check e revisao seletiva aprovados; sujeira alheia fora do escopo
 
 CLAIM | 2026-07-13 | sessao=ux-how-to-play-utility-powerups | tipo=ux-onboarding-minimo | arquivos=how-to-play.html, tests/how-to-play-page-check.mjs, DocsDev/swarm-coordination.md | status=feito | observacao=antes o guia reduzia escolhas de powerup a velocidade/alcance; depois o card existente explica escudo, passagem/chute de bombas, remoto e pavio curto como decisoes situacionais; teste focal e build aprovados; preview Vite iniciou em localhost, abertura automatizada ficou inconclusiva por falha do browser; diff-check aprovado; runtime e sujeira alheia intocados; commit seletivo pendente
