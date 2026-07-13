@@ -12,6 +12,7 @@ export {
 } from "../../ultimate/skill-registry";
 
 export const RANNI_SKILL_CHANNEL_MS = 1_500;
+export const RANNI_NO_DISPLACEMENT_COOLDOWN_MS = 300;
 
 export function startRanniIceBlink(player: PlayerState): void {
   player.skill.phase = "channeling";
@@ -66,7 +67,10 @@ export function finishRanniBlink(player: PlayerState, context: SkillContext): vo
     return;
   }
   const target = player.skill.projectedPosition ?? player.position;
-  if (context.canOccupyPosition(player, target)) {
+  const canMoveToTarget = context.canOccupyPosition(player, target);
+  const moved = canMoveToTarget
+    && (target.x !== player.position.x || target.y !== player.position.y);
+  if (canMoveToTarget) {
     player.position = { ...target };
     player.tile = context.getTileFromPosition(player.position);
   }
@@ -78,7 +82,9 @@ export function finishRanniBlink(player: PlayerState, context: SkillContext): vo
   player.velocity.y = 0;
   player.skill.phase = "cooldown";
   player.skill.channelRemainingMs = 0;
-  player.skill.cooldownRemainingMs = RANNI_SKILL_COOLDOWN_MS;
+  player.skill.cooldownRemainingMs = moved
+    ? RANNI_SKILL_COOLDOWN_MS
+    : RANNI_NO_DISPLACEMENT_COOLDOWN_MS;
   player.skill.castElapsedMs = 0;
   player.skill.projectedPosition = null;
   player.skill.projectedLastMoveDirection = null;

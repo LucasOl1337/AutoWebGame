@@ -194,6 +194,30 @@ const expectedCancelFinishX = cancelRunner.position.x;
 const canceledEarly = cancelSkill.phase === "cooldown" && cancelElapsedMs < channelElapsedMs;
 const canceledToProjectedTrack = Math.abs(cancelFinishX - expectedCancelFinishX) < 1.5;
 
+const stationaryGame = createServerMatch({ 1: 0, 2: 1, 3: 0, 4: 1 });
+const stationaryRanni = stationaryGame.players[1];
+stationaryRanni.position = { x: beforeX, y: p1.position.y };
+stationaryRanni.tile = { x: 4, y: 4 };
+stationaryRanni.spawnProtectionMs = 0;
+stationaryGame.setServerPlayerInput(1, {
+  direction: null,
+  ...neutralInput,
+  skillPressed: true,
+});
+stationaryGame.advanceServerSimulation(17);
+for (let elapsed = 17; elapsed < RANNI_CHANNEL_MS + 34; elapsed += 17) {
+  stationaryGame.setServerPlayerInput(1, {
+    direction: null,
+    ...neutralInput,
+  });
+  stationaryGame.advanceServerSimulation(17);
+}
+const stationaryFinishX = stationaryRanni.position.x;
+const stationaryBlinkStayedInPlace = Math.abs(stationaryFinishX - beforeX) < 1.5;
+const stationaryBlinkShortCooldown = stationaryRanni.skill.phase === "cooldown"
+  && stationaryRanni.skill.cooldownRemainingMs > 0
+  && stationaryRanni.skill.cooldownRemainingMs <= 300;
+
 const report = {
   beforeX,
   midX,
@@ -215,6 +239,10 @@ const report = {
   expectedCancelFinishX,
   canceledEarly,
   canceledToProjectedTrack,
+  stationaryFinishX,
+  stationaryBlinkStayedInPlace,
+  stationaryBlinkCooldownRemainingMs: stationaryRanni.skill.cooldownRemainingMs,
+  stationaryBlinkShortCooldown,
   pass: frozenInPlace
     && projectedMovedDuringChannel
     && teleportedAfterChannel
@@ -224,6 +252,8 @@ const report = {
     && immuneDuringChannel
     && canceledEarly
     && canceledToProjectedTrack
+    && stationaryBlinkStayedInPlace
+    && stationaryBlinkShortCooldown
 };
 
 console.log(JSON.stringify(report, null, 2));
