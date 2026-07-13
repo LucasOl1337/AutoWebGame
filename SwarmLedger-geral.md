@@ -1,5 +1,17 @@
 # Swarm Ledger - Geral
 
+## 2026-07-13 - Tema surpresa estavel por URL
+
+- Automacao: `SOLO`.
+- Intencao registrada antes da implementacao: adicionar um pequeno easter egg isolado ao seletor de arena, aceitando `?arenaTheme=surprise` e escolhendo um tema de forma deterministica a partir da URL; preservar todos os parametros, evitar os modulos de alto risco e nao tocar arquivos ja modificados.
+- Classificacao: intervencao criativa pequena de UI/configuracao, sem alterar simulacao, colisao, rede autoritativa ou assets.
+- Resultado: `resolveArenaThemeSelection` agora reconhece `arenaTheme=surprise`, deriva um tema valido por hash FNV-1a da rota e query e mantem a escolha estavel para a mesma URL; `buildArenaThemeUrl` preserva o token `surprise` e os demais parametros.
+- Cobertura: o check de selecao de tema valida tema conhecido, estabilidade independente do fallback e preservacao de `room`/`utm` na URL surpresa.
+- Validacao: `npm run test:arena-theme-selection` passou com 13 checks verdadeiros e `pass: true`; `npm run build` passou (TypeScript + Vite, 42 modulos); `git diff --check` seletivo passou.
+- Antes -> depois: antes, `surprise` era tratado como ID invalido e caia no fallback; depois, a mesma URL resolve sempre um tema oficial e compartilhavel, preservando a intencao e os demais parametros.
+- Revisao de escopo: somente `src/Arenas/arena-theme-selection.ts`, `tests/arena-theme-selection-check.mjs` e este ledger; mudancas concorrentes foram preservadas e excluidas do staging.
+- Commit: sera criado seletivamente apos esta atualizacao.
+
 ## 2026-07-13 - Script npm para variacao de efeitos sonoros
 
 - Automacao: `autowebgame-enxame-geral`.

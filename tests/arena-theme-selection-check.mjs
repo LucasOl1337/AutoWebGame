@@ -28,12 +28,16 @@ const selectedArena = applyArenaThemeSelection(
 const invalidArena = applyArenaThemeSelection(baseArena, "?arenaTheme=missing-theme");
 const selectedTheme = resolveArenaThemeSelection("?arenaTheme=verdant-ruins", "royal-marble");
 const fallbackTheme = resolveArenaThemeSelection("?arenaTheme=missing-theme", "royal-marble");
+const surpriseHref = "https://bomba.test/play?room=LUCKY&arenaTheme=surprise";
+const surpriseTheme = resolveArenaThemeSelection(surpriseHref, "royal-marble");
+const repeatedSurpriseTheme = resolveArenaThemeSelection(surpriseHref, "tournament-clean");
 
 const themeUrl = new URL(buildArenaThemeUrl(
   "arcane-citadel",
   "https://bomba.test/en/play?room=ABCD&utm=friend&arenaTheme=old",
 ));
 const defaultedUrl = new URL(buildArenaThemeUrl("missing-theme", "https://bomba.test/play?room=ZZ99"));
+const surpriseUrl = new URL(buildArenaThemeUrl("surprise", "https://bomba.test/play?room=LUCKY&utm=friend"));
 
 const css = await readFile(new URL("../src/UiLayouts/main.css", import.meta.url), "utf8");
 const sessionClient = await readFile(new URL("../src/NetCode/session-client.ts", import.meta.url), "utf8");
@@ -45,6 +49,11 @@ const checks = {
   invalidQueryKeepsActiveArena: invalidArena.themeId === "royal-marble",
   resolverUsesQueryBeforeFallback: selectedTheme.id === "verdant-ruins",
   resolverUsesFallbackAfterInvalidQuery: fallbackTheme.id === "royal-marble",
+  surpriseThemeIsKnown: ARENA_THEME_LIBRARY.some((theme) => theme.id === surpriseTheme.id),
+  surpriseThemeIsStableForUrl: repeatedSurpriseTheme.id === surpriseTheme.id,
+  surpriseUrlPreservesIntent: surpriseUrl.searchParams.get("arenaTheme") === "surprise"
+    && surpriseUrl.searchParams.get("room") === "LUCKY"
+    && surpriseUrl.searchParams.get("utm") === "friend",
   urlPreservesPathAndParams: themeUrl.pathname === "/en/play"
     && themeUrl.searchParams.get("room") === "ABCD"
     && themeUrl.searchParams.get("utm") === "friend"
@@ -68,7 +77,9 @@ console.log(JSON.stringify({
   invalidArenaTheme: invalidArena.themeId,
   selectedTheme: selectedTheme.id,
   fallbackTheme: fallbackTheme.id,
+  surpriseTheme: surpriseTheme.id,
   themeUrl: themeUrl.toString(),
+  surpriseUrl: surpriseUrl.toString(),
   defaultedUrl: defaultedUrl.toString(),
   pass,
 }, null, 2));
