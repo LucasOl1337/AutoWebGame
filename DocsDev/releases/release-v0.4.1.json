@@ -1,0 +1,176 @@
+{
+  "brand": {
+    "name": "AutoWebGame",
+    "vendor": "BOMBA PvP"
+  },
+  "version": "v0.4.1",
+  "date": "13 de julho de 2026",
+  "title": "Estabilidade de input, áudio e integração auditada",
+  "baseline": {
+    "version": "v0.4.0",
+    "commit": "da613c7bd2b21cd62ad49a4dfb4a7e80f560322c"
+  },
+  "semverDecision": "patch",
+  "publicationStatus": "prepared-local-not-published",
+  "constraints": {
+    "artGenerated": false,
+    "pushed": false,
+    "deployed": false,
+    "swarmIncluded": false,
+    "swarmEvidence": "preserved-in-snapshot"
+  },
+  "breakingChanges": [],
+  "migrationSteps": [],
+  "agentAudit": [
+    {
+      "agent": "CLAUDE",
+      "sessions": [],
+      "changes": [],
+      "result": "no attributable versioned evidence found"
+    },
+    {
+      "agent": "CODEX",
+      "sessions": [
+        {
+          "id": "input-repeat",
+          "commits": [
+            "6a23325",
+            "8a71bdc",
+            "70c00bd"
+          ],
+          "changes": [
+            "preserve latest direction during key repeat",
+            "ignore orphan key repeats",
+            "expose regression check"
+          ]
+        },
+        {
+          "id": "local-improvements-snapshot",
+          "commits": [
+            "2481547"
+          ],
+          "changes": [
+            "sprite fallback robustness",
+            "growth telemetry retry and UUID fallback",
+            "landing audio dev lab and how-to-play coverage",
+            "Worker route dispatch test maintenance"
+          ]
+        },
+        {
+          "id": "audio-reconciliation",
+          "commits": [
+            "8ce079a",
+            "7a88003"
+          ],
+          "changes": [
+            "restore unlock listener cleanup",
+            "retry playback after transient failure"
+          ]
+        },
+        {
+          "id": "agent-api-experiment",
+          "commits": [
+            "b8343a7",
+            "c7d79ba"
+          ],
+          "changes": [
+            "prototype preserved then fully reverted; excluded from release"
+          ]
+        }
+      ],
+      "changes": [
+        "input stability",
+        "audio recovery",
+        "telemetry resilience",
+        "test coverage"
+      ],
+      "result": "integrated selected production-safe changes"
+    },
+    {
+      "agent": "ZCODE",
+      "sessions": [],
+      "changes": [],
+      "result": "no attributable versioned evidence found"
+    },
+    {
+      "agent": "TRAEWORK",
+      "sessions": [
+        {
+          "id": "swarm-autowebgame-documentacao",
+          "branch": "swarm/autowebgame/documentacao",
+          "changes": [
+            "parallel gameplay/HUD ledger work remains outside this patch"
+          ]
+        }
+      ],
+      "changes": [],
+      "result": "inspected; no additional transplant into v0.4.1"
+    },
+    {
+      "agent": "OPENCODE",
+      "sessions": [],
+      "changes": [],
+      "result": "no attributable versioned evidence found"
+    },
+    {
+      "agent": "WISPR FLOW",
+      "sessions": [],
+      "changes": [],
+      "result": "no attributable versioned evidence found"
+    }
+  ],
+  "sessionChanges": [
+    {
+      "session": "input-repeat",
+      "status": "included",
+      "commits": [
+        "6a23325",
+        "8a71bdc",
+        "70c00bd"
+      ]
+    },
+    {
+      "session": "local-improvements-snapshot",
+      "status": "included",
+      "commits": [
+        "2481547"
+      ]
+    },
+    {
+      "session": "audio-reconciliation",
+      "status": "included",
+      "commits": [
+        "8ce079a",
+        "7a88003"
+      ]
+    },
+    {
+      "session": "agent-api-experiment",
+      "status": "excluded-by-revert",
+      "commits": [
+        "b8343a7",
+        "c7d79ba"
+      ]
+    },
+    {
+      "session": "internal-swarm-mission",
+      "status": "removed-from-patch",
+      "evidence": "snapshot preserved"
+    }
+  ],
+  "validation": {
+    "build": "passed (48 modules)",
+    "releaseVisibility": "passed",
+    "docsIndexLinks": "passed (29 links)",
+    "readmeReleaseGates": "passed",
+    "focusedRegressionChecks": "5/5 passed",
+    "dependencyAudit": "0 vulnerabilities",
+    "workerSyntax": "passed"
+  },
+  "artifacts": [
+    "DocsDev/releases/release-v0.4.1.md",
+    "DocsDev/releases/release-v0.4.1.json",
+    "patchnotes.md",
+    "changelog.md"
+  ]
+}

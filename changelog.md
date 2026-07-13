@@ -1,5 +1,17 @@
 # Changelog
 
+## [2026-07-13] — v0.4.1
+
+- Corrigida a prioridade de direção durante key repeat e ignoradas repetições órfãs.
+- Restauradas limpeza de listeners e nova tentativa de playback no gerenciador de áudio.
+- Reforçados retry/UUID de telemetria, fallback de sprites e testes de onboarding/Worker.
+- Excluídos o protótipo Agent API revertido e o diretório interno `.swarm`.
+- Release preparada localmente sem arte, push ou deploy.
+
+Relatório: `DocsDev/releases/release-v0.4.1.md`.
+
+---
+
 ## [2026-07-12] — v0.4.0
 
 - Consolidadas 20 rodadas Trae de gameplay/bots sobre `v0.3.0`.

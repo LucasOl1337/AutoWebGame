@@ -1,3 +1,26 @@
+# Patch Notes — 2026-07-13 v0.4.1
+
+**Projeto:** AutoWebGame / BOMBA PvP
+**Baseline:** 0.4.0 (da613c7)
+**Estado:** preparado localmente; não publicado
+
+## Para quem joga
+
+- Controles locais mantêm a direção mais recente durante repetição de teclas e ignoram repetições órfãs.
+- Áudio recupera reprodução após falhas transitórias e limpa listeners de desbloqueio sem vazamentos.
+- Telemetria, carregamento de sprites e superfícies de onboarding receberam correções de resiliência.
+
+## Qualidade e escopo
+
+- Cobertura nova para prioridade de input, retry de áudio/telemetria, UUID fallback, dev lab e Worker dispatch.
+- Protótipo Agent API foi revertido e não integra o patch.
+- `.swarm` interno foi removido desta unidade; evidência preservada em snapshot.
+- Sem arte nova, push, deploy, breaking change ou migração.
+
+Relatórios: `DocsDev/releases/release-v0.4.1.md` e `DocsDev/releases/release-v0.4.1.json`.
+
+---
+
 # Patch Notes — 2026-07-12 v0.4.0
 
 **Projeto:** AutoWebGame / BOMBA PvP
