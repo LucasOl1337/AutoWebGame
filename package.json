@@ -77,6 +77,7 @@
     "test:mobile-viewport-safe-area": "node tests/mobile-viewport-safe-area-check.mjs",
     "test:landing-page": "node tests/landing-page-contract-check.mjs",
     "test:how-to-play-page": "node tests/how-to-play-page-check.mjs",
+    "test:frontend-architecture": "node tests/frontend-architecture-spa-check.mjs",
     "test:bootstrap-load-recovery": "node tests/bootstrap-load-recovery-check.mjs",
     "test:worker-api-route-dispatch": "node tests/worker-api-route-dispatch-check.mjs",
     "test:worker-cache-headers": "node tests/worker-cache-headers-check.mjs",

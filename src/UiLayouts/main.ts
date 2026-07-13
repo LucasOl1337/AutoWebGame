@@ -1,12 +1,16 @@
 import "./main.css";
 import { fetchActiveArenaDefinition } from "../Arenas/arena";
 import { applyArenaThemeSelection } from "../Arenas/arena-theme-selection";
+import { LauncherShell } from "./launcher-shell";
+import { resolveFrontendRoute } from "./frontend-router";
+import { FrontendStore } from "./frontend-store";
 
-const root = document.querySelector<HTMLDivElement>("#app");
+const rootElement = document.querySelector<HTMLDivElement>("#app");
 
-if (!root) {
+if (!rootElement) {
   throw new Error("#app root not found");
 }
+const root: HTMLDivElement = rootElement;
 
 type BootstrapCopy = {
   eyebrow: string;
@@ -133,9 +137,40 @@ async function bootstrapGame(rootElement: HTMLDivElement): Promise<void> {
   }
 }
 
-try {
-  await bootstrapGame(root);
-} catch (error) {
-  console.error("AutoWebGame bootstrap failed", error);
-  renderBootstrapFailure(root);
+let gameBootPromise: Promise<void> | null = null;
+
+function bootGameOnce(rootElement: HTMLDivElement): Promise<void> {
+  gameBootPromise ??= bootstrapGame(rootElement);
+  return gameBootPromise;
 }
+
+const initialRoute = resolveFrontendRoute(window.location.pathname);
+const frontendStore = new FrontendStore(initialRoute);
+let launcherShell: LauncherShell | null = null;
+
+async function renderRoute(): Promise<void> {
+  const route = resolveFrontendRoute(window.location.pathname);
+  frontendStore.setRoute(route);
+  if (route === "launcher") {
+    launcherShell?.destroy();
+    launcherShell = new LauncherShell(root, frontendStore);
+    launcherShell.mount();
+    return;
+  }
+
+  launcherShell?.destroy();
+  launcherShell = null;
+  frontendStore.setBootingGame(true);
+  try {
+    await bootGameOnce(root);
+  } catch (error) {
+    gameBootPromise = null;
+    console.error("AutoWebGame bootstrap failed", error);
+    renderBootstrapFailure(root);
+  } finally {
+    frontendStore.setBootingGame(false);
+  }
+}
+
+window.addEventListener("popstate", () => void renderRoute());
+await renderRoute();
