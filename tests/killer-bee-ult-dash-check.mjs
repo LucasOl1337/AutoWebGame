@@ -113,12 +113,37 @@ for (let elapsedMs = 17; elapsedMs < 1000 && blockedBee.skill.phase === "channel
 const blockedFinishX = blockedBee.position.x;
 const blockedTile = { ...blockedBee.tile };
 
+const trappedGame = createServerMatch({ 1: 0, 2: 1, 3: 0, 4: 1 });
+const trappedBee = trappedGame.players[1];
+trappedBee.position = { x: 4 * TILE_SIZE + TILE_SIZE * 0.5, y: 4 * TILE_SIZE + TILE_SIZE * 0.5 };
+trappedBee.tile = { x: 4, y: 4 };
+trappedBee.spawnProtectionMs = 0;
+trappedBee.skill.projectedPosition = { x: trappedBee.position.x + TILE_SIZE, y: trappedBee.position.y };
+trappedBee.skill.projectedLastMoveDirection = "left";
+trappedGame.arena.solid.add("5,4");
+const trappedBefore = { ...trappedBee.position };
+trappedGame.setServerPlayerInput(1, {
+  direction: "right",
+  ...neutralInput,
+  skillPressed: true,
+});
+trappedGame.advanceServerSimulation(17);
+const trappedAfter = { ...trappedBee.position };
+const trappedSkill = {
+  ...trappedBee.skill,
+  projectedPosition: trappedBee.skill.projectedPosition ? { ...trappedBee.skill.projectedPosition } : null,
+};
+
 const dashStarted = firstSkill.phase === "channeling";
 const dashMovedOnFirstFrame = firstStepX > beforeX + 1 && firstStepX < beforeX + KILLER_BEE_DASH_DISTANCE_PX - 1;
 const dashReachedFullDistance = Math.abs(finishX - (beforeX + KILLER_BEE_DASH_DISTANCE_PX)) < 1.5;
 const dashEndedInCooldown = finishSkill.phase === "cooldown";
 const dashCooldownApplied = finishSkill.cooldownRemainingMs === 4_000;
 const blockedByWall = blockedTile.x === 5 && blockedTile.y === 4 && blockedFinishX < beforeX + KILLER_BEE_DASH_DISTANCE_PX - 20;
+const trappedDashUsesShortCooldown = trappedSkill.phase === "cooldown" && trappedSkill.cooldownRemainingMs === 300;
+const trappedDashKeepsPosition = trappedAfter.x === trappedBefore.x && trappedAfter.y === trappedBefore.y;
+const trappedDashClearsProjection = trappedSkill.projectedPosition === null
+  && trappedSkill.projectedLastMoveDirection === null;
 
 const castMarker = { id: "bee-cast" };
 const runMarker = { id: "bee-run" };
@@ -171,12 +196,18 @@ const report = {
   finishSkill,
   blockedFinishX,
   blockedTile,
+  trappedBefore,
+  trappedAfter,
+  trappedSkill,
   dashStarted,
   dashMovedOnFirstFrame,
   dashReachedFullDistance,
   dashEndedInCooldown,
   dashCooldownApplied,
   blockedByWall,
+  trappedDashUsesShortCooldown,
+  trappedDashKeepsPosition,
+  trappedDashClearsProjection,
   usesCustomDashAnimation,
   pass: dashStarted
     && dashMovedOnFirstFrame
@@ -184,6 +215,9 @@ const report = {
     && dashEndedInCooldown
     && dashCooldownApplied
     && blockedByWall
+    && trappedDashUsesShortCooldown
+    && trappedDashKeepsPosition
+    && trappedDashClearsProjection
     && usesCustomDashAnimation,
 };
 

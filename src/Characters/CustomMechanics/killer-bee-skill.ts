@@ -20,6 +20,7 @@ export {
 export const KILLER_BEE_DASH_DISTANCE_PX = TILE_SIZE * 3;
 export const KILLER_BEE_DASH_DURATION_MS = 240;
 export const KILLER_BEE_DASH_MIN_DURATION_MS = 90;
+export const KILLER_BEE_DASH_BLOCKED_COOLDOWN_MS = 300;
 export const KILLER_BEE_DASH_FRAME_MS = 60;
 
 export function startKillerBeeDash(
@@ -34,6 +35,14 @@ export function startKillerBeeDash(
   const target = computeKillerBeeDashTarget(player, dashDirection, context);
   const dashDistance = getDashDistancePx(player.position, target, dashDirection, context);
   if (dashDistance < 1) {
+    player.skill.phase = "cooldown";
+    player.skill.channelRemainingMs = 0;
+    player.skill.cooldownRemainingMs = KILLER_BEE_DASH_BLOCKED_COOLDOWN_MS;
+    player.skill.castElapsedMs = 0;
+    player.skill.projectedPosition = null;
+    player.skill.projectedLastMoveDirection = null;
+    player.velocity.x = 0;
+    player.velocity.y = 0;
     return;
   }
   const durationMs = Math.max(
