@@ -4678,6 +4678,19 @@ export class GameApp {
     this.ctx.beginPath();
     this.ctx.arc(x + TILE_SIZE * 0.5, y + TILE_SIZE * 0.55, radius, 0, Math.PI * 2);
     this.ctx.fill();
+
+    const fragments = [
+      { offsetX: -8, offsetY: -4, driftX: -8, driftY: -7, size: 3 },
+      { offsetX: 7, offsetY: -5, driftX: 7, driftY: -9, size: 3 },
+      { offsetX: -5, offsetY: 5, driftX: -6, driftY: 5, size: 2 },
+      { offsetX: 6, offsetY: 4, driftX: 8, driftY: 6, size: 2 },
+    ];
+    this.ctx.fillStyle = `rgba(151, 99, 55, ${Math.max(0, 0.82 - progress * 0.7)})`;
+    for (const fragment of fragments) {
+      const fragmentX = Math.round(x + TILE_SIZE * 0.5 + fragment.offsetX + fragment.driftX * progress);
+      const fragmentY = Math.round(y + TILE_SIZE * 0.5 + fragment.offsetY + fragment.driftY * progress);
+      this.ctx.fillRect(fragmentX, fragmentY, fragment.size, fragment.size);
+    }
   }
 
   private drawPowerUp(powerUp: PowerUpState): void {

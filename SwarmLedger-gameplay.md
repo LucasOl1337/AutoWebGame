@@ -1,5 +1,13 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-13 — crate-break-fallback-fragments
+
+- Claim/escopo antes da intervenção: acrescentar exclusivamente 3–4 fragmentos pixelados ao fallback de `drawCrateBreakAnimation`, reutilizando o mesmo `progress`/duração; preservar estado, timing, sprites, gameplay e mudanças alheias.
+- Arquivos previstos: `src/Engine/game-app.ts`, `tests/crate-break-fallback-check.mjs`, `SwarmLedger-gameplay.md`.
+- Critério de sucesso: teste focal comprova 3–4 fragmentos pixelados no fallback, derivados do mesmo progresso e sem alterar duração, estado ou caminho de sprites; `compile:esm`, regressões relevantes e `build` devem passar.
+- Antes → depois: o fallback exibia somente um pulso circular de poeira; agora também desenha quatro fragmentos quadrados que se afastam e dissipam usando o mesmo `progress` calculado de `effect.elapsedMs / CRATE_BREAK_DURATION_MS`.
+- Resultado/validação: `npm run compile:esm`; `node tests/crate-break-fallback-check.mjs`; `node tests/demolition-combo-drop-check.mjs`; `node tests/ranni-ult-animation-hold-check.mjs`; `npm run build`; `git diff --check -- src/Engine/game-app.ts tests/crate-break-fallback-check.mjs SwarmLedger-gameplay.md` — todos concluídos com código 0; diff-check emitiu apenas avisos LF→CRLF. Commit seletivo realizado após validação; mudanças alheias permaneceram intocadas no working tree.
+
 ## 2026-07-13 — onboarding-bomb-final-telegraph
 
 - Claim/escopo antes da intervenção: explicar exclusivamente no guia existente que o anel vermelho da bomba sinaliza os instantes finais do pavio; preservar runtime, janela de 450 ms, timing, renderização, balanceamento, assets, controles e mudanças alheias.
