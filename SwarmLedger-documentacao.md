@@ -1,3 +1,12 @@
+## 2026-07-13 - Correcao da capitalizacao do manifesto no README
+
+- Escopo reservado: corrigir somente a referencia do manifesto de personagens em `README.md` para o caminho realmente rastreado pelo Git e registrar a validacao neste ledger, sem tocar nas mudancas preexistentes.
+- Evidencia inicial: `README.md` apontava para `public/assets/characters/manifest.approved.json`, mas `git ls-tree -r --name-only HEAD public` confirma `public/Assets/Characters/Animations/manifest.approved.json`; a diferenca quebra a referencia em ambientes case-sensitive.
+- Validacoes planejadas: existencia do destino rastreado, `npm run test:roster-sync`, `npm run build`, `git diff --check` e revisao seletiva do escopo.
+- Implementacao: a referencia em `README.md` agora usa `public/Assets/Characters/Animations/manifest.approved.json`, exatamente como o arquivo aparece na arvore rastreada.
+- Validacao concluida: `npm run test:roster-sync` passou (`pass: true`), `npm run build` passou (42 modulos), e `git diff --check -- README.md SwarmLedger-documentacao.md` passou.
+- Revisao de escopo: diff funcional limitado a uma linha em `README.md`; este ledger registra reserva e resultado. Commit seletivo autorizado apenas para esses dois arquivos.
+
 ## 2026-07-12 - Exposicao do teste de fallback UUID da telemetria
 
 - Escopo reservado: adicionar somente um script npm para o teste existente `tests/growth-telemetry-uuid-fallback-check.mjs` em `package.json` e registrar a validacao neste ledger, sem tocar nas mudancas preexistentes.

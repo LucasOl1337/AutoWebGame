@@ -114,7 +114,7 @@ Theme definitions live in [src/Arenas/arena-theme-library.ts](src/Arenas/arena-t
 - [src/Engine/game-app.ts](src/Engine/game-app.ts)
 - [src/NetCode/session-client.ts](src/NetCode/session-client.ts)
 - [worker/index.js](worker/index.js)
-- [public/assets/characters/manifest.approved.json](public/assets/characters/manifest.approved.json)
+- [public/Assets/Characters/Animations/manifest.approved.json](public/Assets/Characters/Animations/manifest.approved.json)
 - [docs/next-map-creation-guide.md](docs/next-map-creation-guide.md)
 
 ## Notes For Future Changes
