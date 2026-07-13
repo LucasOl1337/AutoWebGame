@@ -2,6 +2,7 @@ let uuidSequence = 0;
 let timeoutSequence = 0;
 const scheduledTimers = [];
 const fetchCalls = [];
+const pendingFetches = [];
 const windowListeners = new Map();
 const documentListeners = new Map();
 
@@ -59,13 +60,15 @@ Object.defineProperty(globalThis, "navigator", {
   configurable: true,
 });
 
-globalThis.fetch = async (url, options) => {
+globalThis.fetch = (url, options) => {
   const payload = JSON.parse(options.body);
   fetchCalls.push({ url, payload });
-  if (fetchCalls.length === 1) {
-    throw new Error("temporary network outage");
+  if (fetchCalls.length <= 2) {
+    return new Promise((resolve) => {
+      pendingFetches.push({ resolve });
+    });
   }
-  return { ok: true, status: 202 };
+  return Promise.resolve({ ok: true, status: 202 });
 };
 
 const { GrowthTelemetryClient } = await import("../output/esm/NetCode/growth-telemetry.js");
@@ -76,6 +79,30 @@ client.track("quick_match_clicked", { payload: { entryPoint: "hero" } });
 client.track("lobby_list_opened");
 client.track("lobby_create_clicked");
 client.track("feedback_opened");
+
+const firstBatchEventNames = [
+  "session_start",
+  "landing_view",
+  "quick_match_clicked",
+  "lobby_list_opened",
+  "lobby_create_clicked",
+  "feedback_opened",
+];
+const secondBatchEventNames = [
+  "lobby_join_clicked",
+  "lobby_code_join_submitted",
+  "lobby_joined",
+  "seat_claim_clicked",
+  "ready_clicked",
+  "character_selected",
+];
+
+for (const eventName of secondBatchEventNames) {
+  client.track(eventName);
+}
+
+const serializedBeforeRetry = fetchCalls.length === 1;
+pendingFetches.shift()?.resolve({ ok: false, status: 503 });
 
 await Promise.resolve();
 await Promise.resolve();
@@ -88,12 +115,18 @@ await Promise.resolve();
 
 const firstEventNames = fetchCalls[0]?.payload.map((event) => event.eventName) ?? [];
 const secondEventNames = fetchCalls[1]?.payload.map((event) => event.eventName) ?? [];
+pendingFetches.shift()?.resolve({ ok: true, status: 202 });
+await Promise.resolve();
+await Promise.resolve();
+
 const pass = fetchCalls.length === 2
+  && serializedBeforeRetry
   && fetchCalls.every((call) => call.url === "/api/telemetry")
   && firstEventNames.length === 6
-  && secondEventNames.join("|") === firstEventNames.join("|")
+  && firstEventNames.join("|") === firstBatchEventNames.join("|")
+  && secondEventNames.join("|") === firstBatchEventNames.concat(secondBatchEventNames).join("|")
   && secondEventNames.includes("session_start")
-  && secondEventNames.includes("feedback_opened")
+  && secondEventNames.includes("character_selected")
   && fetchCalls[1].payload.every((event) => event.attribution.utmCampaign === "retry-test")
   && windowListeners.has("pagehide")
   && documentListeners.has("visibilitychange");
@@ -102,6 +135,7 @@ console.log(JSON.stringify({
   fetches: fetchCalls.length,
   firstEventNames,
   secondEventNames,
+  serializedBeforeRetry,
   scheduledTimers: scheduledTimers.length,
   pass,
 }, null, 2));

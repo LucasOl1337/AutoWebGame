@@ -5,7 +5,7 @@ const workerSource = await readFile(new URL("../worker/index.js", import.meta.ur
 const constantsMatch = workerSource.match(
   /const HASHED_VITE_ASSET_RE[\s\S]*?const IMMUTABLE_STATIC_CACHE_CONTROL = "public, max-age=31536000, immutable";/,
 );
-const helperMatch = workerSource.match(/function getStaticAssetCacheControl\(pathname, contentType\) \{[\s\S]*?\n\}/);
+const helperMatch = workerSource.match(/function getStaticAssetCacheControl\(pathname, contentType, status\) \{[\s\S]*?\n\}/);
 
 if (!constantsMatch || !helperMatch) {
   console.error("Could not find static asset cache helper in worker/index.js");
@@ -23,6 +23,7 @@ const cases = [
     label: "hashed js chunk",
     pathname: "/Assets/game-app-CX670W2N.js",
     contentType: "application/javascript",
+    status: 200,
     before: "public, max-age=86400, stale-while-revalidate=604800",
     expected: "public, max-age=31536000, immutable",
   },
@@ -30,6 +31,7 @@ const cases = [
     label: "hashed css chunk",
     pathname: "/Assets/game-BFrr1qZI.css",
     contentType: "text/css",
+    status: 200,
     before: "public, max-age=86400, stale-while-revalidate=604800",
     expected: "public, max-age=31536000, immutable",
   },
@@ -37,6 +39,7 @@ const cases = [
     label: "public image asset",
     pathname: "/Assets/UiLayouts/ICON.png",
     contentType: "image/png",
+    status: 200,
     before: "public, max-age=86400, stale-while-revalidate=604800",
     expected: "public, max-age=86400, stale-while-revalidate=604800",
   },
@@ -44,6 +47,7 @@ const cases = [
     label: "character manifest",
     pathname: "/Assets/Characters/Animations/manifest.json",
     contentType: "application/json",
+    status: 200,
     before: "no-store",
     expected: "no-store",
   },
@@ -51,14 +55,31 @@ const cases = [
     label: "html shell",
     pathname: "/game.html",
     contentType: "text/html; charset=utf-8",
+    status: 200,
     before: "no-store",
+    expected: "no-store",
+  },
+  {
+    label: "missing hashed chunk",
+    pathname: "/Assets/game-app-MISSING1.js",
+    contentType: "application/javascript",
+    status: 404,
+    before: "public, max-age=31536000, immutable",
+    expected: "no-store",
+  },
+  {
+    label: "asset origin error",
+    pathname: "/Assets/UiLayouts/ICON.png",
+    contentType: "text/plain",
+    status: 503,
+    before: "public, max-age=86400, stale-while-revalidate=604800",
     expected: "no-store",
   },
 ];
 
 const results = cases.map((entry) => ({
   ...entry,
-  actual: getStaticAssetCacheControl(entry.pathname, entry.contentType),
+  actual: getStaticAssetCacheControl(entry.pathname, entry.contentType, entry.status),
 }));
 
 const pass = results.every((entry) => entry.actual === entry.expected);

@@ -39,6 +39,7 @@ const fakeCtx = {
   save: noop,
   restore: noop,
   setTransform: noop,
+  translate: noop,
   createLinearGradient: () => ({ addColorStop: noop }),
   createRadialGradient: () => ({ addColorStop: noop }),
 };

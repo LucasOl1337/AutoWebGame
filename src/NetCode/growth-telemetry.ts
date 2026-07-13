@@ -54,24 +54,38 @@ const TELEMETRY_BATCH_SIZE = 6;
 const TELEMETRY_MAX_QUEUE_SIZE = 30;
 
 function createTelemetryId(): string {
-  const cryptoSource = globalThis.crypto;
+  let cryptoSource: Crypto | undefined;
+  try {
+    cryptoSource = globalThis.crypto;
+  } catch {
+    // Some embedded browsers expose crypto through a throwing getter.
+  }
+
   if (typeof cryptoSource?.randomUUID === "function") {
-    return cryptoSource.randomUUID();
+    try {
+      return cryptoSource.randomUUID();
+    } catch {
+      // Fall through to getRandomValues for partial Web Crypto implementations.
+    }
   }
 
   if (typeof cryptoSource?.getRandomValues === "function") {
-    const bytes = new Uint8Array(16);
-    cryptoSource.getRandomValues(bytes);
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
-    return [
-      hex.slice(0, 4).join(""),
-      hex.slice(4, 6).join(""),
-      hex.slice(6, 8).join(""),
-      hex.slice(8, 10).join(""),
-      hex.slice(10, 16).join(""),
-    ].join("-");
+    try {
+      const bytes = new Uint8Array(16);
+      cryptoSource.getRandomValues(bytes);
+      bytes[6] = (bytes[6] & 0x0f) | 0x40;
+      bytes[8] = (bytes[8] & 0x3f) | 0x80;
+      const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
+      return [
+        hex.slice(0, 4).join(""),
+        hex.slice(4, 6).join(""),
+        hex.slice(6, 8).join(""),
+        hex.slice(8, 10).join(""),
+        hex.slice(10, 16).join(""),
+      ].join("-");
+    } catch {
+      // Telemetry IDs must not block gameplay when Web Crypto is unavailable.
+    }
   }
 
   const timestamp = Date.now().toString(36);
@@ -89,6 +103,7 @@ export class GrowthTelemetryClient {
   private landingTracked = false;
   private queuedEvents: GrowthTelemetryEventBody[] = [];
   private flushTimer: number | null = null;
+  private flushInProgress = false;
 
   constructor() {
     this.anonPlayerId = this.readOrCreateAnonPlayerId();
@@ -187,22 +202,38 @@ export class GrowthTelemetryClient {
     if (this.queuedEvents.length === 0) {
       return;
     }
+    if (this.flushInProgress && !useBeacon) {
+      return;
+    }
     if (this.flushTimer !== null) {
       window.clearTimeout(this.flushTimer);
       this.flushTimer = null;
     }
 
     const batch = this.queuedEvents.splice(0, this.queuedEvents.length);
+    if (!useBeacon) {
+      this.flushInProgress = true;
+    }
     void this.sendBatch(batch, useBeacon).then((sent) => {
       if (!sent && !useBeacon) {
         this.requeueFailedBatch(batch);
+      }
+    }).finally(() => {
+      if (useBeacon) {
+        return;
+      }
+      this.flushInProgress = false;
+      if (this.queuedEvents.length >= TELEMETRY_BATCH_SIZE) {
+        this.flushNow(false);
+      } else if (this.queuedEvents.length > 0) {
+        this.scheduleFlush();
       }
     });
   }
 
   private requeueFailedBatch(batch: GrowthTelemetryEventBody[]): void {
-    this.queuedEvents = batch.concat(this.queuedEvents).slice(0, TELEMETRY_MAX_QUEUE_SIZE);
-    this.scheduleFlush();
+    this.queuedEvents = batch.concat(this.queuedEvents);
+    this.trimQueuedEvents();
   }
 
   private trimQueuedEvents(): void {

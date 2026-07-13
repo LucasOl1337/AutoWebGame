@@ -79,7 +79,7 @@ const SHORT_STATIC_CACHE_CONTROL = "public, max-age=86400, stale-while-revalidat
 const IMMUTABLE_STATIC_CACHE_CONTROL = "public, max-age=31536000, immutable";
 const PUBLIC_API_ROUTES = new Map([
   ["/api/telemetry", { methods: new Set(["POST"]), targetPath: "/internal/telemetry" }],
-  ["/api/admin/summary", { methods: null, targetPath: "/internal/admin/summary" }],
+  ["/api/admin/summary", { methods: new Set(["GET"]), targetPath: "/internal/admin/summary" }],
   ["/api/arena/active", { methods: new Set(["GET"]), targetPath: "/internal/arena/active" }],
   ["/api/admin/arenas", { methods: new Set(["GET", "POST"]), targetPath: "/internal/admin/arenas" }],
   ["/api/admin/login", { methods: new Set(["POST"]), targetPath: "/internal/admin/login" }],
@@ -93,7 +93,10 @@ const PUBLIC_API_ROUTES = new Map([
   ["/api/billing/webhook", { methods: new Set(["POST"]), targetPath: "/internal/billing/webhook" }],
 ]);
 
-function getStaticAssetCacheControl(pathname, contentType) {
+function getStaticAssetCacheControl(pathname, contentType, status) {
+  if (status >= 400) {
+    return "no-store";
+  }
   if (pathname === "/Assets/Characters/Animations/manifest.json") {
     return "no-store";
   }
@@ -122,10 +125,11 @@ function resolvePublicApiRoute(pathname, method) {
   }
 
   const arenaId = encodeURIComponent(arenaAdminMatch[1]);
-  const suffix = arenaAdminMatch[2] ? `/${arenaAdminMatch[2]}` : "";
+  const action = arenaAdminMatch[2] || null;
+  const suffix = action ? `/${action}` : "";
   return {
     matched: true,
-    methodAllowed: method === "GET" || method === "PUT" || method === "POST",
+    methodAllowed: action ? method === "POST" : method === "GET" || method === "PUT",
     targetPath: `/internal/admin/arenas/${arenaId}${suffix}`,
   };
 }
@@ -207,7 +211,7 @@ export default {
     const assetResponse = await env.ASSETS.fetch(request);
     const contentType = assetResponse.headers.get("content-type") || "";
     const headers = new Headers(assetResponse.headers);
-    headers.set("cache-control", getStaticAssetCacheControl(url.pathname, contentType));
+    headers.set("cache-control", getStaticAssetCacheControl(url.pathname, contentType, assetResponse.status));
     return new Response(assetResponse.body, {
       status: assetResponse.status,
       statusText: assetResponse.statusText,

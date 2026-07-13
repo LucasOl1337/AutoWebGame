@@ -81,7 +81,12 @@ import type {
   OnlineInputState,
   OnlineSessionBridge,
 } from "../NetCode/protocol";
-import { SoundManager, SFX_MANIFEST } from "./sound-manager";
+import {
+  AUDIO_MUTED_STORAGE_KEY,
+  AUDIO_VOLUME_STORAGE_KEY,
+  SoundManager,
+  SFX_MANIFEST,
+} from "./sound-manager";
 import type { BotContext } from "./bot-ai";
 import {
   getBotDecision as botAI_getBotDecision,
@@ -1080,6 +1085,12 @@ export class GameApp {
     if (this.headless) {
       return;
     }
+    const storage = this.getLocalStorage();
+    const storedVolume = Number(storage?.getItem(AUDIO_VOLUME_STORAGE_KEY));
+    if (Number.isFinite(storedVolume)) {
+      this.soundManager.setVolume(storedVolume);
+    }
+    this.soundManager.setMuted(storage?.getItem(AUDIO_MUTED_STORAGE_KEY) === "true");
     void this.soundManager.loadSounds(SFX_MANIFEST);
     this.root.appendChild(this.canvas);
     if (import.meta.env?.DEV) {
@@ -1131,6 +1142,20 @@ export class GameApp {
     if (!this.headless) {
       this.render();
     }
+  }
+
+  public setAudioVolume(volume: number): void {
+    this.soundManager.setVolume(volume);
+    this.getLocalStorage()?.setItem(AUDIO_VOLUME_STORAGE_KEY, String(this.soundManager.getVolume()));
+  }
+
+  public setAudioMuted(muted: boolean): void {
+    this.soundManager.setMuted(muted);
+    this.getLocalStorage()?.setItem(AUDIO_MUTED_STORAGE_KEY, String(muted));
+  }
+
+  public getAudioSettings(): { volume: number; muted: boolean } {
+    return { volume: this.soundManager.getVolume(), muted: this.soundManager.isMuted() };
   }
 
   public startOfflineBotMatch(botFill = 3, mode: LobbyMode = "classic"): void {
@@ -4460,9 +4485,18 @@ export class GameApp {
       const screenX = tile.x * TILE_SIZE;
       const screenY = tile.y * TILE_SIZE;
       const isOrigin = tile.x === origin.x && tile.y === origin.y;
-      this.ctx.fillStyle = isOrigin ? "rgba(255, 128, 64, 0.34)" : "rgba(245, 96, 26, 0.22)";
+      const isTerminalCrate = this.arena.breakable.has(tileKey(tile.x, tile.y));
+      this.ctx.fillStyle = isOrigin
+        ? "rgba(255, 128, 64, 0.34)"
+        : isTerminalCrate
+          ? "rgba(255, 176, 48, 0.38)"
+          : "rgba(245, 96, 26, 0.22)";
       this.ctx.fillRect(screenX + 6, screenY + 6, TILE_SIZE - 12, TILE_SIZE - 12);
-      this.ctx.strokeStyle = isOrigin ? "rgba(255, 243, 212, 0.82)" : "rgba(236, 214, 168, 0.56)";
+      this.ctx.strokeStyle = isOrigin
+        ? "rgba(255, 243, 212, 0.82)"
+        : isTerminalCrate
+          ? "rgba(255, 238, 168, 0.9)"
+          : "rgba(236, 214, 168, 0.56)";
       this.ctx.strokeRect(screenX + 6.5, screenY + 6.5, TILE_SIZE - 13, TILE_SIZE - 13);
     }
   }

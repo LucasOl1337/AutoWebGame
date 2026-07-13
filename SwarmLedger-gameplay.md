@@ -1,5 +1,14 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-13 — ux-how-to-play-remote-keys
+
+- Claim/escopo antes da intervenção: associar explicitamente no guia existente a detonação remota às teclas reais P1=R e P2=U, preservando estilo, runtime, balanceamento, demais controles e mudanças alheias.
+- Arquivos previstos: `how-to-play.html`, `tests/how-to-play-page-check.mjs`, `SwarmLedger-gameplay.md`.
+- Antes → depois: o guia atribuía a detonação remota genericamente à tecla E; agora exibe R e U no mesmo padrão visual de teclas e informa diretamente que P1 usa R e P2 usa U.
+- Evidência focal: o contrato exige a sequência visual `<kbd>R</kbd><kbd>U</kbd>`, a associação textual P1/R e P2/U e a ausência da associação antiga E/detonação remota.
+- Preservação: arquivos preexistentes sujos fora dos três caminhos reivindicados permaneceram intocados; sem commit.
+- Resultado/validação: `npm run test:how-to-play-page`; `npm run build`; `git diff --check -- how-to-play.html tests/how-to-play-page-check.mjs SwarmLedger-gameplay.md` — todos concluídos com código 0; somente avisos LF→CRLF. Diff revisado e limitado aos três arquivos reivindicados; sem commit.
+
 ## 2026-07-13 — bot-bomb-pass-priority-240
 
 - Claim/escopo antes da intervenção: elevar exclusivamente o score bot de `bomb-pass-up` de 190 para 240, fazendo-o prevalecer sobre `remote-up` (220), preservando saturação em 0 no nível máximo, prioridades maiores, efeitos reais, limites, drops, coleta, rede e mudanças alheias.

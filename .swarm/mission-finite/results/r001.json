@@ -1,0 +1,61 @@
+{
+  "roundId": "r001",
+  "status": "delivered",
+  "delivery": "Fortalecida a telemetria do cliente contra implementacoes parciais de Web Crypto e contra retries concorrentes: excecoes de randomUUID/getRandomValues agora degradam para o proximo gerador disponivel, e flushes HTTP normais sao serializados para preservar ordem e evitar envios concorrentes. Os testes cobrem storage indisponivel, randomUUID que lanca e uma segunda leva de eventos durante retry.",
+  "files": [
+    "src/NetCode/growth-telemetry.ts",
+    "tests/growth-telemetry-event-retry-check.mjs",
+    "tests/growth-telemetry-uuid-fallback-check.mjs",
+    ".swarm/mission-finite/results/r001.json"
+  ],
+  "evidence": [
+    "Antes da correcao, o teste ampliado de retry observou 3 fetches, serializedBeforeRetry=false e pass=false; a segunda leva era enviada enquanto o primeiro lote ainda estava pendente.",
+    "Antes da correcao, o teste de UUID abortou no construtor com Error: randomUUID unavailable in this webview.",
+    "Depois da correcao, o retry observou 2 fetches, serializedBeforeRetry=true e o segundo payload preservou os 12 eventos na ordem original.",
+    "Depois da correcao, o fallback produziu UUIDs v4 deterministas via getRandomValues mesmo com randomUUID e localStorage lancando; o beacon conteve session_start, landing_view e session_end.",
+    "CodeGraph confirmou que createTelemetryId afeta somente o construtor e readOrCreateAnonPlayerId dentro do cliente; GrowthTelemetryClient e consumido por OnlineSessionClient."
+  ],
+  "validation": [
+    {
+      "command": "node node_modules/typescript/bin/tsc --noEmit --target ES2022 --lib ES2022,DOM --module ESNext --moduleResolution Bundler src/NetCode/growth-telemetry.ts",
+      "status": "passed"
+    },
+    {
+      "command": "node tests/growth-telemetry-event-retry-check.mjs",
+      "status": "passed",
+      "details": "fetches=2, serializedBeforeRetry=true, pass=true"
+    },
+    {
+      "command": "node tests/growth-telemetry-uuid-fallback-check.mjs",
+      "status": "passed",
+      "details": "beacons=1, randomUuidAttempts=2, storageReadAttempts=1, pass=true"
+    },
+    {
+      "command": "npm run test:growth-telemetry-uuid-fallback",
+      "status": "passed",
+      "details": "Executado com sucesso apos a correcao antes da interferencia externa."
+    },
+    {
+      "command": "npm run test:growth-telemetry-retry",
+      "status": "blocked",
+      "details": "A repeticao final parou em compile:esm por erros TS preexistentes/concorrentes fora do claim em src/NetCode/session-client.ts: renderAudioControls ausente e SessionElements incompleto. O script de regressao final passou diretamente."
+    },
+    {
+      "command": "npm run build",
+      "status": "blocked",
+      "details": "Nao foi possivel confirmar a bateria global no estado final devido aos mesmos erros concorrentes fora do claim em src/NetCode/session-client.ts."
+    },
+    {
+      "command": "git diff --check -- src/NetCode/growth-telemetry.ts tests/growth-telemetry-event-retry-check.mjs tests/growth-telemetry-uuid-fallback-check.mjs",
+      "status": "passed"
+    }
+  ],
+  "risks": [
+    "A validacao TypeScript/build global permanece pendente ate as mudancas concorrentes em session-client.ts voltarem a um estado compilavel.",
+    "O flush de unload continua best-effort por natureza do ciclo de vida do navegador; o caminho de beacon foi preservado e coberto pelo teste."
+  ],
+  "limitations": [
+    "Nenhum arquivo fora dos writeResources foi alterado por esta rodada.",
+    "Nao foi feita inspecao em browser, commit, branch, worktree, push, deploy ou publicacao."
+  ]
+}
