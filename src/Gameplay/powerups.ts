@@ -200,7 +200,8 @@ export function getPowerUpPriorityScore(player: PlayerState, type: PowerUpType):
     if (player.shieldCharges === 0) {
       return 500;
     }
-    return 210 + (MAX_SHIELD_CHARGES - player.shieldCharges) * 35;
+    // Após a primeira carga, o valor estratégico cai pela metade a cada carga acumulada.
+    return 210 / 2 ** (player.shieldCharges - 1);
   }
   if (type === "bomb-pass-up") {
     if (player.bombPassLevel >= MAX_BOMB_PASS_LEVEL) {

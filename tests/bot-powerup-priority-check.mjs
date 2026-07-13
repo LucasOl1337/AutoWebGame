@@ -48,7 +48,7 @@ globalThis.window = {
 };
 
 const { GameApp } = await import("../output/esm/Engine/game-app.js");
-const { MAX_BOMBS, MAX_RANGE, MAX_SPEED_LEVEL, TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
+const { MAX_BOMBS, MAX_RANGE, MAX_SHIELD_CHARGES, MAX_SPEED_LEVEL, TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
 const { getPowerUpPriorityScore } = await import("../output/esm/Gameplay/powerups.js");
 
 const root = { appendChild: noop };
@@ -174,6 +174,12 @@ const shortFuseScores = [0, 1, 2].map((shortFuseLevel) => {
 });
 const hasDiminishingShortFuseReturns = JSON.stringify(shortFuseScores) === JSON.stringify([260, 150, 0]);
 
+const shieldScores = Array.from({ length: MAX_SHIELD_CHARGES + 1 }, (_, shieldCharges) => {
+  bot.shieldCharges = shieldCharges;
+  return getPowerUpPriorityScore(bot, "shield-up");
+});
+const hasDiminishingShieldReturns = JSON.stringify(shieldScores) === JSON.stringify([500, 210, 0]);
+
 const report = {
   preferSpeedDecision,
   preferFirstShieldDecision,
@@ -191,6 +197,8 @@ const report = {
   hasDiminishingFlameReturns,
   shortFuseScores,
   hasDiminishingShortFuseReturns,
+  shieldScores,
+  hasDiminishingShieldReturns,
 };
 
 console.log(JSON.stringify(report, null, 2));
@@ -198,6 +206,6 @@ console.log(JSON.stringify(report, null, 2));
 if (!prefersBaseMobility || !prefersFirstShield || !skipsUselessSpeedUp
   || !skipsSaturatedBombForSurvival || !hasDiminishingBombReturns
   || !hasDiminishingSpeedReturns || !hasDiminishingFlameReturns
-  || !hasDiminishingShortFuseReturns) {
+  || !hasDiminishingShortFuseReturns || !hasDiminishingShieldReturns) {
   process.exit(1);
 }

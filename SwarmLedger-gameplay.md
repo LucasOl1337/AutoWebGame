@@ -1,5 +1,14 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-12 — bot-shield-diminishing-returns
+
+- Claim/escopo antes da intervenção: aplicar retorno decrescente exclusivamente ao score bot de `shield-up` após a primeira carga, preservando score 500 com zero cargas e saturação em 0 no máximo; sem alterar cargas reais, limites, drops, coleta, rede ou demais prioridades.
+- Arquivos previstos: `src/Gameplay/powerups.ts`, `tests/bot-powerup-priority-check.mjs`, `SwarmLedger-gameplay.md`.
+- Preservação: toda sujeira e mudanças alheias permaneceram intocadas; sem commit.
+- Antes → depois: a fórmula linear após a primeira carga retornava 245 em `shieldCharges=1`; agora o score usa `210 / 2 ** (shieldCharges - 1)`, produzindo `[500,210,0]` para cargas `[0..MAX_SHIELD_CHARGES]`, com 500 em zero e 0 no máximo preservados.
+- Evidência focal: `shieldScores=[500,210,0]` e `hasDiminishingShieldReturns=true`; as verificações existentes de mobilidade inicial, primeiro shield, atributos saturados, bomb, speed, flame e short-fuse permaneceram aprovadas.
+- Validação: `npm run compile:esm`; `node tests/bot-powerup-priority-check.mjs`; `node tests/bot-survival-10s-check.mjs`; `node tests/bot-target-selection-check.mjs`; `node tests/bot-own-blast-escape-check.mjs`; `npm run build`; `git diff --check -- src/Gameplay/powerups.ts tests/bot-powerup-priority-check.mjs SwarmLedger-gameplay.md` — todos concluídos com código 0. Diff revisado e limitado à intervenção nos três arquivos reivindicados; sem commit.
+
 ## 2026-07-12 — input-ignore-orphan-key-repeat
 
 - Claim/escopo antes da intervenção: ignorar exclusivamente `keydown` marcado como repetição quando a tecla não consta como segurada, evitando que eventos órfãos após `keyup`, blur ou mudança de visibilidade recriem movimento/press; preservar repetição legítima de tecla segurada, prioridade direcional, prevenção de scroll, aliases e campos interativos.
