@@ -4267,3 +4267,109 @@ button {
     height: 60px;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .experience-shell,
+  .experience-shell *:not(canvas),
+  .experience-shell *:not(canvas)::before,
+  .experience-shell *:not(canvas)::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .experience-language-switcher__option:hover:not(:disabled),
+  .experience-button:hover:not(:disabled),
+  .experience-bot-intensity__option:hover:not(:disabled),
+  .experience-arena-theme__option:hover,
+  .experience-match__toggle:hover,
+  .experience-character-strip__item:hover {
+    transform: none;
+  }
+
+  .experience-match__panel {
+    transform: none;
+  }
+}
+
+/* Post-launch ignition surface contract */
+.experience-shell[data-screen="lobbies"],
+.experience-shell[data-screen="setup"] {
+  height: 100dvh;
+  min-height: 100vh;
+  overflow-x: clip;
+  overflow-y: auto;
+  background:
+    linear-gradient(90deg, rgba(var(--accent-rgb), 0.035) 1px, transparent 1px) 0 0 / 48px 48px,
+    radial-gradient(circle at 82% 18%, rgba(var(--accent-rgb), 0.12), transparent 30%);
+}
+
+.experience-shell[data-screen="lobbies"] .experience-screen--lobbies,
+.experience-shell[data-screen="setup"] .experience-screen--setup {
+  width: min(1480px, 100%);
+  min-height: 100dvh;
+  padding: clamp(76px, 9vh, 104px) clamp(28px, 4vw, 68px) clamp(40px, 6vh, 80px) clamp(84px, 7vw, 112px);
+  margin-inline: auto;
+}
+
+.experience-shell[data-screen="setup"] .experience-setup-grid {
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+  align-items: stretch;
+  gap: clamp(20px, 3vw, 44px);
+}
+
+.experience-shell[data-screen="setup"] .experience-panel--character {
+  min-width: 0;
+  overflow: visible;
+}
+
+.experience-shell[data-screen="setup"] .experience-character-grid {
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  overflow: visible;
+}
+
+@media (max-width: 1080px) {
+  .experience-shell[data-screen="lobbies"],
+  .experience-shell[data-screen="setup"] {
+    height: auto;
+    overflow-y: visible;
+  }
+
+  .experience-shell[data-screen="lobbies"] .experience-screen--lobbies,
+  .experience-shell[data-screen="setup"] .experience-screen--setup {
+    width: min(1480px, 100%);
+    min-height: 100vh;
+    padding: 76px 24px 48px;
+  }
+
+  .experience-shell[data-screen="setup"] .experience-setup-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .experience-shell[data-screen="setup"] .experience-panel--controls {
+    padding-bottom: 24px;
+  }
+}
+
+@media (max-width: 760px) {
+  .experience-shell[data-screen="lobbies"] .experience-screen--lobbies,
+  .experience-shell[data-screen="setup"] .experience-screen--setup {
+    padding-top: 72px;
+    padding-right: max(14px, env(safe-area-inset-right));
+    padding-bottom: max(32px, env(safe-area-inset-bottom));
+    padding-inline: max(14px, env(safe-area-inset-left));
+  }
+
+  .experience-shell[data-screen="setup"] .experience-character-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .experience-shell[data-screen="setup"] .experience-character-summary {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .experience-shell[data-screen="setup"] .experience-character-summary__portrait {
+    width: 72px;
+    height: 72px;
+  }
+}
