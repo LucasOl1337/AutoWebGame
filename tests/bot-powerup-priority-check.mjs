@@ -180,6 +180,10 @@ const shieldScores = Array.from({ length: MAX_SHIELD_CHARGES + 1 }, (_, shieldCh
 });
 const hasDiminishingShieldReturns = JSON.stringify(shieldScores) === JSON.stringify([500, 210, 0]);
 
+bot.kickLevel = 0;
+const unusedKickScore = getPowerUpPriorityScore(bot, "kick-up");
+const ignoresUnusableKickUpgrade = unusedKickScore === 0;
+
 const report = {
   preferSpeedDecision,
   preferFirstShieldDecision,
@@ -199,6 +203,8 @@ const report = {
   hasDiminishingShortFuseReturns,
   shieldScores,
   hasDiminishingShieldReturns,
+  unusedKickScore,
+  ignoresUnusableKickUpgrade,
 };
 
 console.log(JSON.stringify(report, null, 2));
@@ -206,6 +212,7 @@ console.log(JSON.stringify(report, null, 2));
 if (!prefersBaseMobility || !prefersFirstShield || !skipsUselessSpeedUp
   || !skipsSaturatedBombForSurvival || !hasDiminishingBombReturns
   || !hasDiminishingSpeedReturns || !hasDiminishingFlameReturns
-  || !hasDiminishingShortFuseReturns || !hasDiminishingShieldReturns) {
+  || !hasDiminishingShortFuseReturns || !hasDiminishingShieldReturns
+  || !ignoresUnusableKickUpgrade) {
   process.exit(1);
 }

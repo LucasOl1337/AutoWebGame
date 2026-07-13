@@ -1,5 +1,16 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-13 — bot-ignore-unusable-kick-up
+
+- Claim/escopo antes da intervenção: impedir somente que bots atribuam valor estratégico a `kick-up` enquanto a IA não possui comportamento deliberado de chute; preservar coleta e chute dos jogadores, drops, demais prioridades, pathfinding, combate, rede e mudanças alheias.
+- Classificação inicial: Parcialmente comprovada — o score atual torna o item elegível para perseguição, enquanto o fluxo da IA não consulta `kickLevel`; o impacto em uma partida ainda será avaliado por teste focal e regressões.
+- Arquivos previstos: `src/Gameplay/powerups.ts`, `tests/bot-powerup-priority-check.mjs`, `SwarmLedger-gameplay.md`.
+- Preservação: alterações preexistentes em `index.html`, `src/Engine/game-app.ts`, `tests/remote-detonation-check.mjs` e arquivos não rastreados permaneceram intocadas e fora do commit seletivo.
+- Antes → depois: `kick-up` valia 180 para um bot sem o upgrade e podia desviar sua rota; agora vale 0 enquanto a IA não planeja nem executa chutes deliberadamente. Coleta, efeito para jogadores e todos os outros scores permanecem inalterados.
+- Evidência focal: `unusedKickScore=0` e `ignoresUnusableKickUpgrade=true`; as decisões e curvas existentes de speed, shield, bomb, flame e short-fuse continuaram aprovadas.
+- Validação: `npm run compile:esm`; `node tests/bot-powerup-priority-check.mjs`; `node tests/bot-own-blast-escape-check.mjs`; `node tests/bot-survival-10s-check.mjs`; `node tests/bot-target-selection-check.mjs`; `npm run build`; `git diff --check -- src/Gameplay/powerups.ts tests/bot-powerup-priority-check.mjs SwarmLedger-gameplay.md` — todos concluídos com código 0. Validação jogável direta ficou limitada: o efeito depende de um drop/rota de bot, portanto foi demonstrado deterministicamente no teste focal e nas regressões de IA.
+- Resultado/classificação final: intervenção concluída; oportunidade Comprovada no fluxo de seleção estratégica por código e teste, com impacto perceptual em partidas ainda experimental.
+
 ## 2026-07-12 — bot-shield-diminishing-returns
 
 - Claim/escopo antes da intervenção: aplicar retorno decrescente exclusivamente ao score bot de `shield-up` após a primeira carga, preservando score 500 com zero cargas e saturação em 0 no máximo; sem alterar cargas reais, limites, drops, coleta, rede ou demais prioridades.

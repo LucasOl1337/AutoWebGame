@@ -210,10 +210,8 @@ export function getPowerUpPriorityScore(player: PlayerState, type: PowerUpType):
     return 190;
   }
   if (type === "kick-up") {
-    if (player.kickLevel >= MAX_KICK_LEVEL) {
-      return 0;
-    }
-    return 180;
+    // A IA ainda não planeja chutes; perseguir este item desviaria o bot sem ganho estratégico.
+    return 0;
   }
   if (type === "short-fuse-up") {
     if (player.shortFuseLevel >= MAX_SHORT_FUSE_LEVEL) {
