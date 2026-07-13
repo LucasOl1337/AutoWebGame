@@ -1,5 +1,17 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-13 — ux-how-to-play-sudden-death
+
+- Claim/escopo antes da intervenção: explicar somente no guia existente que a morte súbita fecha as bordas da arena e muda a decisão de posicionamento; preservar runtime, balanceamento, assets, estrutura do guia e mudanças alheias.
+- Classificação inicial: Comprovada — `tests/sudden-death-check.mjs` cobre aviso e início do fechamento, enquanto a seção de leitura da arena em `how-to-play.html` explica paredes, crates, flames, ultimates, powerups e sinais, mas não esse risco decisivo.
+- Arquivos previstos: `how-to-play.html`, `tests/how-to-play-page-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.
+- Critério de sucesso: o guia deve informar de forma observável que as bordas fecham e orientar o jogador a migrar cedo ao centro; o contrato da página, o teste de sudden death, o build e o diff-check devem passar.
+- Preservação: alterações preexistentes em `index.html`, `src/Engine/game-app.ts`, `tests/remote-detonation-check.mjs` e arquivos não rastreados permaneceram intocadas e fora do commit seletivo.
+- Antes → depois: o guia ensinava obstáculos e sinais gerais, mas omitira o fechamento de arena; agora um card coerente com a grade visual existente associa o aviso `SD` à decisão prática de abandonar cedo as bordas.
+- Evidência: `how-to-play.html:622-625`; contrato em `tests/how-to-play-page-check.mjs:24-26`; `tests/sudden-death-check.mjs` confirmou `warningLabel="SD 20s"`, fechamento do primeiro tile e eliminação na borda.
+- Validação: `npm run test:how-to-play-page`; `npm run compile:esm`; `node tests/sudden-death-check.mjs`; `npm run build`; `git diff --check -- how-to-play.html tests/how-to-play-page-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` — todos concluídos com código 0.
+- Resultado/classificação final: intervenção concluída e Comprovada para clareza do onboarding. A melhora de decisão em jogadores reais permanece uma hipótese não medida; não houve alteração de gameplay.
+
 ## 2026-07-13 — bot-ignore-unusable-kick-up
 
 - Claim/escopo antes da intervenção: impedir somente que bots atribuam valor estratégico a `kick-up` enquanto a IA não possui comportamento deliberado de chute; preservar coleta e chute dos jogadores, drops, demais prioridades, pathfinding, combate, rede e mudanças alheias.

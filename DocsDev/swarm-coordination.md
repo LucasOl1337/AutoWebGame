@@ -4,6 +4,8 @@ Shared coordination file for recurring Codex swarm sessions. Each session should
 
 ## Active claims
 
+CLAIM | 2026-07-13 | sessao=ux-how-to-play-sudden-death | tipo=ux-onboarding-minimo | arquivos=how-to-play.html, tests/how-to-play-page-check.mjs, DocsDev/swarm-coordination.md, SwarmLedger-gameplay.md | status=feito | observacao=guia agora explica que o aviso SD antecede fechamento das bordas e orienta migracao antecipada ao centro; teste do guia, compile:esm, sudden-death-check, build e diff-check aprovados; runtime, assets e mudancas alheias intocados; commit seletivo pendente
+
 CLAIM | 2026-07-12 | sessao=bot-equal-distance-active-order | tipo=intervencao-gameplay-bot-minima | arquivos=src/Engine/bot-ai.ts, tests/bot-equal-distance-target-order-check.mjs, DocsDev/swarm-coordination.md | status=feito | observacao=antes empate de distancia/protecao somava id/100 e desviava para menor ID; depois empate preserva a ordem explicita de activePlayerIds; compile:esm, teste focal, bot-target, build e git diff --check aprovados; revisao focal sem alteracoes alheias; preview manual dispensado por heuristica pura sem UI; commit 51c198c
 
 CLAIM | 2026-07-12 | sessao=ux-landing-remote-control-reference | tipo=ux-copy-i18n-minima | arquivos=src/UiLayouts/i18n.ts, src/NetCode/session-client.ts, tests/landing-remote-control-reference-check.mjs, DocsDev/swarm-coordination.md, SwarmLedger-landing.md | status=feito | observacao=landing exibe tecla real R para detonar bomba remota do jogador 1, com copy PT/EN e requisito de controle remoto; compile, teste focal, build e diff-check aprovados; game-app.ts, index.html, tests/remote-detonation-check.mjs e sujeira alheia preservados; sem commit
