@@ -54,10 +54,14 @@ export class InputManager {
       if (this.reservedCodes.has(code) && typeof event.preventDefault === "function") {
         event.preventDefault();
       }
-      if (!this.keysDown.has(code)) {
+      const wasAlreadyDown = this.keysDown.has(code);
+      if (!wasAlreadyDown) {
         this.pressCounts.set(code, (this.pressCounts.get(code) ?? 0) + 1);
       }
       this.keysDown.add(code);
+      if (wasAlreadyDown) {
+        return;
+      }
       const idx = this.keyOrder.indexOf(code);
       if (idx !== -1) {
         this.keyOrder.splice(idx, 1);
