@@ -72,6 +72,7 @@ globalThis.window = {
 };
 
 const { GameApp } = await import("../output/esm/Engine/game-app.js");
+const { getPowerUpDefinition } = await import("../output/esm/Gameplay/powerups.js");
 const { TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
 
 const root = { appendChild: noop };
@@ -127,6 +128,12 @@ const shieldSlot = skillSlots.find((slot) => slot.type === "shield-up") ?? null;
 const bombPassSlot = skillSlots.find((slot) => slot.type === "bomb-pass-up") ?? null;
 const kickSlot = skillSlots.find((slot) => slot.type === "kick-up") ?? null;
 const shortFuseSlot = skillSlots.find((slot) => slot.type === "short-fuse-up") ?? null;
+const utilityShortLabels = Object.fromEntries(
+  ["shield-up", "bomb-pass-up", "kick-up", "short-fuse-up"].map((type) => [
+    type,
+    getPowerUpDefinition(type).shortLabel,
+  ]),
+);
 const recentPowerUpPickup = player?.recentPowerUpPickup ?? null;
 
 window.advanceTime(2300);
@@ -144,6 +151,7 @@ const report = {
   bombPassSlot,
   kickSlot,
   shortFuseSlot,
+  utilityShortLabels,
   recentPowerUpPickup,
   expiredRecentPowerUpPickup,
   expiredRecentSlotCount: expiredRecentSlots.length,
@@ -177,21 +185,25 @@ const report = {
       && shieldSlot.acquired === true
       && shieldSlot.level === 1
       && shieldSlot.value === "x1"
+      && utilityShortLabels["shield-up"] === "SH"
       && shieldSlot.recentlyCollected === true
       && bombPassSlot
       && bombPassSlot.acquired === true
       && bombPassSlot.level === 1
       && bombPassSlot.value === "x1"
+      && utilityShortLabels["bomb-pass-up"] === "BP"
       && bombPassSlot.recentlyCollected === true
       && kickSlot
       && kickSlot.acquired === true
       && kickSlot.level === 1
       && kickSlot.value === "x1"
+      && utilityShortLabels["kick-up"] === "K"
       && kickSlot.recentlyCollected === true
       && shortFuseSlot
       && shortFuseSlot.acquired === true
       && shortFuseSlot.level === 1
       && shortFuseSlot.value === "1.65s"
+      && utilityShortLabels["short-fuse-up"] === "SF"
       && shortFuseSlot.recentlyCollected === true
       && recentPowerUpPickup
       && recentPowerUpPickup.type === "short-fuse-up"

@@ -55,14 +55,14 @@ const POWER_UP_DEFINITIONS: Readonly<Record<PowerUpType, PowerUpDefinition>> = {
   "shield-up": {
     type: "shield-up",
     label: "Shield Charge",
-    shortLabel: "G",
+    shortLabel: "SH",
     tint: "#bba7ff",
     maxLevel: MAX_SHIELD_CHARGES,
   },
   "bomb-pass-up": {
     type: "bomb-pass-up",
     label: "Bomb Pass",
-    shortLabel: "P",
+    shortLabel: "BP",
     tint: "#f7a8ff",
     maxLevel: MAX_BOMB_PASS_LEVEL,
   },
@@ -76,7 +76,7 @@ const POWER_UP_DEFINITIONS: Readonly<Record<PowerUpType, PowerUpDefinition>> = {
   "short-fuse-up": {
     type: "short-fuse-up",
     label: "Short Fuse",
-    shortLabel: "Q",
+    shortLabel: "SF",
     tint: "#ff5eea",
     maxLevel: MAX_SHORT_FUSE_LEVEL,
   },
