@@ -63,6 +63,7 @@ export class SoundManager {
   private readonly lastVariantIndexByKey = new Map<SfxKey, number>();
   private unlocked = false;
   private unlockTarget: EventTarget | null = null;
+  private unlockHandler: EventListener | null = null;
   private volume = 0.7;
   private muted = false;
 
@@ -106,15 +107,16 @@ export class SoundManager {
   }
 
   public bindUnlock(target: EventTarget): void {
-    if (typeof window === "undefined" || this.unlockTarget) {
+    if (typeof window === "undefined" || this.unlocked || this.unlockTarget) {
       return;
     }
 
     this.unlockTarget = target;
-    const unlock = (): void => {
+    const unlock: EventListener = (): void => {
       this.unlocked = true;
       this.unbindUnlock();
     };
+    this.unlockHandler = unlock;
 
     target.addEventListener("pointerdown", unlock, { once: true, capture: true });
     target.addEventListener("keydown", unlock, { once: true, capture: true });
@@ -138,7 +140,12 @@ export class SoundManager {
 
     const startIndex = this.selectVariantIndex(key, variants.length);
 
-    void this.playVariantWithFallback(variants, startIndex, gain);
+    const throttleMarkedAtMs = policy?.minIntervalMs !== undefined ? nowMs : null;
+    void this.playVariantWithFallback(variants, startIndex, gain).then((played) => {
+      if (!played && throttleMarkedAtMs !== null && this.lastPlayAtMs.get(key) === throttleMarkedAtMs) {
+        this.lastPlayAtMs.delete(key);
+      }
+    });
   }
 
   private selectVariantIndex(key: SfxKey, variantCount: number): number {
@@ -160,7 +167,7 @@ export class SoundManager {
     variants: HTMLAudioElement[],
     startIndex: number,
     gain: number,
-  ): Promise<void> {
+  ): Promise<boolean> {
     for (let attempt = 0; attempt < variants.length; attempt += 1) {
       const base = variants[(startIndex + attempt) % variants.length];
       const clone = base.cloneNode(true) as HTMLAudioElement;
@@ -169,19 +176,25 @@ export class SoundManager {
 
       try {
         await clone.play();
-        return;
+        return true;
       } catch {
         // Try the next variation if the chosen one fails.
       }
     }
+    return false;
   }
 
   private unbindUnlock(): void {
-    if (!this.unlockTarget) {
+    if (!this.unlockTarget || !this.unlockHandler) {
+      this.unlockTarget = null;
+      this.unlockHandler = null;
       return;
     }
 
+    this.unlockTarget.removeEventListener?.("pointerdown", this.unlockHandler, true);
+    this.unlockTarget.removeEventListener?.("keydown", this.unlockHandler, true);
     this.unlockTarget = null;
+    this.unlockHandler = null;
   }
 
   private getNowMs(): number {

@@ -1105,11 +1105,11 @@ export class GameApp {
       return;
     }
     const storage = this.getLocalStorage();
-    const storedVolume = Number(storage?.getItem(AUDIO_VOLUME_STORAGE_KEY));
+    const storedVolume = Number(this.readStorageItem(storage, AUDIO_VOLUME_STORAGE_KEY));
     if (Number.isFinite(storedVolume)) {
       this.soundManager.setVolume(storedVolume);
     }
-    this.soundManager.setMuted(storage?.getItem(AUDIO_MUTED_STORAGE_KEY) === "true");
+    this.soundManager.setMuted(this.readStorageItem(storage, AUDIO_MUTED_STORAGE_KEY) === "true");
     void this.soundManager.loadSounds(SFX_MANIFEST);
     this.root.appendChild(this.canvas);
     if (import.meta.env?.DEV) {
@@ -1165,12 +1165,12 @@ export class GameApp {
 
   public setAudioVolume(volume: number): void {
     this.soundManager.setVolume(volume);
-    this.getLocalStorage()?.setItem(AUDIO_VOLUME_STORAGE_KEY, String(this.soundManager.getVolume()));
+    this.writeStorageItem(AUDIO_VOLUME_STORAGE_KEY, String(this.soundManager.getVolume()));
   }
 
   public setAudioMuted(muted: boolean): void {
     this.soundManager.setMuted(muted);
-    this.getLocalStorage()?.setItem(AUDIO_MUTED_STORAGE_KEY, String(muted));
+    this.writeStorageItem(AUDIO_MUTED_STORAGE_KEY, String(muted));
   }
 
   public getAudioSettings(): { volume: number; muted: boolean } {
@@ -3271,6 +3271,22 @@ export class GameApp {
       return window.localStorage ?? null;
     } catch {
       return null;
+    }
+  }
+
+  private readStorageItem(storage: Storage | null, key: string): string | null {
+    try {
+      return storage?.getItem(key) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private writeStorageItem(key: string, value: string): void {
+    try {
+      this.getLocalStorage()?.setItem(key, value);
+    } catch {
+      // Audio controls remain usable when storage is blocked or full.
     }
   }
 
