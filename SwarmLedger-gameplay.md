@@ -8,7 +8,8 @@
 - Critério de sucesso: `compile:esm`, teste focal, `build` e diff-check seletivo devem passar; sem commit e sem tocar arquivos sujos alheios.
 - Antes → depois: o HUD compacto fixava `bomb-up`, `flame-up`, `speed-up` e `remote-up`, ocultando utilitários adquiridos; agora mantém 4 slots, preserva básicos adquiridos e promove utilitários adquiridos no lugar de básicos não adquiridos, sempre na ordem global original.
 - Evidência focal observável: `render_game_to_text` expõe `compactSkillSlots`; no cenário com `bomb-up` e `flame-up` básicos adquiridos e múltiplos utilitários adquiridos, a seleção foi `bomb-up`, `flame-up`, `remote-up`, `shield-up`, com 4 slots adquiridos em ordem global.
-- Resultado/validação: `npm run compile:esm`; `node tests/powerup-hud-slots-check.mjs`; `npm run build`; `git diff --check -- src/Engine/game-app.ts tests/powerup-hud-slots-check.mjs docs/VisualDesignRules.md SwarmLedger-gameplay.md` — todos concluídos com código 0; somente avisos LF→CRLF. Sem commit; arquivos sujos alheios permaneceram intocados.
+- Resultado/validação: `npm run compile:esm`; `node tests/powerup-hud-slots-check.mjs`; `npm run build`; `git diff --check -- src/Engine/game-app.ts tests/powerup-hud-slots-check.mjs docs/VisualDesignRules.md SwarmLedger-gameplay.md` — todos concluídos com código 0; somente avisos LF→CRLF. Arquivos sujos alheios permaneceram intocados.
+- Commit seletivo da intervenção: `c9a0a8c` (`feat(hud): prioritize acquired compact powerups`).
 
 ## 2026-07-13 — flame-dissipate-tail
 
