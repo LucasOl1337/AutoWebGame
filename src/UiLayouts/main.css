@@ -249,6 +249,11 @@ button {
   filter: brightness(1.05);
 }
 
+.experience-button:active:not(:disabled) {
+  transform: translateY(1px);
+  filter: brightness(0.94);
+}
+
 .experience-button:disabled {
   opacity: 0.52;
   cursor: default;
@@ -4280,6 +4285,7 @@ button {
 
   .experience-language-switcher__option:hover:not(:disabled),
   .experience-button:hover:not(:disabled),
+  .experience-button:active:not(:disabled),
   .experience-bot-intensity__option:hover:not(:disabled),
   .experience-arena-theme__option:hover,
   .experience-match__toggle:hover,
