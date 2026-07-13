@@ -190,7 +190,7 @@ export function getPowerUpPriorityScore(player: PlayerState, type: PowerUpType):
     if (player.remoteLevel >= 1) {
       return 0;
     }
-    return 220;
+    return 250;
   }
   if (type === "shield-up") {
     if (player.shieldCharges >= MAX_SHIELD_CHARGES) {

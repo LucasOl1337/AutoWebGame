@@ -186,13 +186,17 @@ const bombPassScores = Array.from({ length: MAX_BOMB_PASS_LEVEL + 1 }, (_, bombP
 });
 bot.remoteLevel = 0;
 const remoteScore = getPowerUpPriorityScore(bot, "remote-up");
+bot.remoteLevel = 1;
+const saturatedRemoteScore = getPowerUpPriorityScore(bot, "remote-up");
+const hasExpectedRemotePriority = remoteScore === 250 && saturatedRemoteScore === 0;
 const hasExpectedBombPassPriority = JSON.stringify(bombPassScores) === JSON.stringify([240, 0]);
-const prefersBombPassOverRemote = bombPassScores[0] > remoteScore;
-const preservesHigherPriorities = bombScores[0] > bombPassScores[0]
-  && speedScores[0] > bombPassScores[0]
-  && flameScores[0] > bombPassScores[0]
-  && shieldScores[0] > bombPassScores[0]
-  && shortFuseScores[0] > bombPassScores[0];
+const prefersRemoteOverBombPass = remoteScore > bombPassScores[0];
+const keepsRemoteBelowShortFuse = remoteScore < shortFuseScores[0];
+const preservesHigherPriorities = bombScores[0] > remoteScore
+  && speedScores[0] > remoteScore
+  && flameScores[0] > remoteScore
+  && shieldScores[0] > remoteScore
+  && shortFuseScores[0] > remoteScore;
 
 const kickScores = Array.from({ length: MAX_KICK_LEVEL + 1 }, (_, kickLevel) => {
   bot.kickLevel = kickLevel;
@@ -224,8 +228,11 @@ const report = {
   hasDiminishingShieldReturns,
   bombPassScores,
   remoteScore,
+  saturatedRemoteScore,
+  hasExpectedRemotePriority,
   hasExpectedBombPassPriority,
-  prefersBombPassOverRemote,
+  prefersRemoteOverBombPass,
+  keepsRemoteBelowShortFuse,
   preservesHigherPriorities,
   kickScores,
   hasExpectedKickPriority,
@@ -238,7 +245,8 @@ if (!prefersBaseMobility || !prefersFirstShield || !skipsUselessSpeedUp
   || !skipsSaturatedBombForSurvival || !hasDiminishingBombReturns
   || !hasDiminishingSpeedReturns || !hasDiminishingFlameReturns
   || !hasDiminishingShortFuseReturns || !hasDiminishingShieldReturns
-  || !hasExpectedBombPassPriority || !prefersBombPassOverRemote
+  || !hasExpectedRemotePriority || !hasExpectedBombPassPriority
+  || !prefersRemoteOverBombPass || !keepsRemoteBelowShortFuse
   || !preservesHigherPriorities || !hasExpectedKickPriority
   || !preservesKickAsSituational) {
   process.exit(1);
