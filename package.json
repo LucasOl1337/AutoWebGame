@@ -37,6 +37,7 @@
     "test:input-page-scroll": "npm run compile:esm && node tests/input-page-scroll-check.mjs",
     "test:local-match-chrome": "npm run compile:esm && node tests/local-match-chrome-check.mjs",
     "test:input": "npm run compile:esm && node tests/input-transition-check.mjs",
+    "test:input-repeat-priority": "npm run compile:esm && node tests/input-repeat-direction-priority-check.mjs",
     "test:arena-runtime": "npm run compile:esm && node tests/arena-runtime-contract-check.mjs",
     "test:active-arena-fetch": "npm run compile:esm && node tests/active-arena-fetch-fallback-check.mjs",
     "test:spawn": "npm run compile:esm && node tests/spawn-escape-check.mjs",
