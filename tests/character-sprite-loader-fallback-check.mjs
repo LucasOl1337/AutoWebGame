@@ -1,4 +1,5 @@
 const imageRequests = [];
+let partialCustomCharacterId = "";
 
 class FakeImage {
   onload = null;
@@ -18,9 +19,12 @@ class FakeImage {
     imageRequests.push(this.#src);
     const isDefaultPlayerBaseSprite =
       /\/Assets\/Characters\/Animations\/default-players\/player[12]-(south|east|north|west)(-hires)?\.png$/.test(this.#src);
+    const isPartialCustomBaseSprite =
+      partialCustomCharacterId.length > 0
+      && this.#src === `/Assets/Characters/Animations/${partialCustomCharacterId}/south.png?v=sprite-fallback-check`;
 
     queueMicrotask(() => {
-      if (isDefaultPlayerBaseSprite) {
+      if (isDefaultPlayerBaseSprite || isPartialCustomBaseSprite) {
         this.onload?.();
         return;
       }
@@ -34,6 +38,7 @@ class FakeImage {
 globalThis.Image = FakeImage;
 
 const { CHARACTER_ROSTER_MANIFEST } = await import("../output/esm/Characters/Animations/character-roster-manifest.js");
+partialCustomCharacterId = CHARACTER_ROSTER_MANIFEST[0].id;
 
 const manifestFetches = [];
 globalThis.fetch = async (url) => {
@@ -67,7 +72,7 @@ const pass =
   && !roster.some((entry) => entry.id === "default-p1" || entry.id === "default-p2")
   && ranniCharacterRequests.some((request) => request.includes("/south.png?v=sprite-fallback-check"))
   && killerBeeCharacterRequests.some((request) => request.includes("/south.png?v=sprite-fallback-check"))
-  && ranniSprites?.down?.src === "/Assets/Characters/Animations/default-players/player1-south-hires.png"
+  && ranniSprites?.down?.src === `/Assets/Characters/Animations/${partialCustomCharacterId}/south.png?v=sprite-fallback-check`
   && ranniSprites?.right?.src === "/Assets/Characters/Animations/default-players/player1-east-hires.png"
   && killerBeeSprites?.down?.src === "/Assets/Characters/Animations/default-players/player2-south.png"
   && killerBeeSprites?.right?.src === "/Assets/Characters/Animations/default-players/player2-east.png";
@@ -79,7 +84,7 @@ console.log(
       roster: roster.map((entry) => ({ id: entry.id, name: entry.name })),
       ranniCharacterRequests,
       killerBeeCharacterRequests,
-      ranniFallback: {
+      ranniPartialCustomWithFallback: {
         down: ranniSprites?.down?.src ?? null,
         right: ranniSprites?.right?.src ?? null,
       },

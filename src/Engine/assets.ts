@@ -370,6 +370,19 @@ function getFallbackSpritesForRosterEntry(
     ?? createEmptyDirectionalSprites();
 }
 
+function fillMissingStaticDirections(
+  sprites: DirectionalSprites,
+  fallback: DirectionalSprites,
+): DirectionalSprites {
+  return {
+    ...sprites,
+    up: sprites.up ?? fallback.up,
+    down: sprites.down ?? fallback.down,
+    left: sprites.left ?? fallback.left,
+    right: sprites.right ?? fallback.right,
+  };
+}
+
 function createCharacterSpriteLoader(
   playerSprites: Partial<Record<PlayerId, DirectionalSprites>>,
 ): (entry: CharacterRosterEntry) => Promise<DirectionalSprites> {
@@ -384,11 +397,12 @@ function createCharacterSpriteLoader(
       assetUrl(`/Assets/Characters/Animations/${entry.id}`),
       entry.animations,
       entry.assetVersion,
-    ).then((sprites) => (
-      hasLoadedSpriteImage(sprites)
-        ? sprites
-        : getFallbackSpritesForRosterEntry(entry, playerSprites)
-    ));
+    ).then((sprites) => {
+      const fallback = getFallbackSpritesForRosterEntry(entry, playerSprites);
+      return hasLoadedSpriteImage(sprites)
+        ? fillMissingStaticDirections(sprites, fallback)
+        : fallback;
+    });
     spriteLoadCache.set(entry.id, loaded);
     return loaded;
   };

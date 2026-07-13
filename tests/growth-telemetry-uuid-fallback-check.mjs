@@ -1,11 +1,16 @@
 let randomSeed = 0;
-const storedValues = new Map();
+let randomUuidAttempts = 0;
+let storageReadAttempts = 0;
 const windowListeners = new Map();
 const documentListeners = new Map();
 const beacons = [];
 
 Object.defineProperty(globalThis, "crypto", {
   value: {
+    randomUUID: () => {
+      randomUuidAttempts += 1;
+      throw new Error("randomUUID unavailable in this webview");
+    },
     getRandomValues: (array) => {
       randomSeed += 1;
       array.fill(randomSeed);
@@ -23,10 +28,11 @@ Object.defineProperty(globalThis, "window", {
       href: "https://bomba.test/arena?utm_medium=webview",
     },
     localStorage: {
-      getItem: (key) => storedValues.get(key) ?? null,
-      setItem: (key, value) => {
-        storedValues.set(key, value);
+      getItem: () => {
+        storageReadAttempts += 1;
+        throw new Error("storage access denied");
       },
+      setItem: () => {},
     },
     addEventListener: (event, handler) => {
       windowListeners.set(event, handler);
@@ -87,7 +93,8 @@ const pass = beacons.length === 1
   && anonIds.has(expectedAnonId)
   && sessionIds.size === 1
   && sessionIds.has(expectedSessionId)
-  && storedValues.get("bomba-anon-player-id") === expectedAnonId
+  && randomUuidAttempts === 2
+  && storageReadAttempts === 1
   && events.every((event) => event.attribution.utmMedium === "webview")
   && documentListeners.has("visibilitychange");
 
@@ -96,7 +103,8 @@ console.log(JSON.stringify({
   eventNames,
   anonIds: Array.from(anonIds),
   sessionIds: Array.from(sessionIds),
-  storedAnonId: storedValues.get("bomba-anon-player-id"),
+  randomUuidAttempts,
+  storageReadAttempts,
   pass,
 }, null, 2));
 

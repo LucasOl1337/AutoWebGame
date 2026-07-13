@@ -1,0 +1,50 @@
+{
+  "roundId": "r003",
+  "status": "delivered",
+  "delivery": [
+    "Restringiu o dispatch publico aos verbos HTTP realmente aceitos: o resumo administrativo agora aceita somente GET; recursos de arena aceitam GET/PUT; activate e validate aceitam somente POST.",
+    "Impediu que respostas de erro do binding ASSETS recebam cache publico ou immutable, aplicando no-store para status HTTP a partir de 400.",
+    "Substituiu o microbenchmark instavel do teste de dispatch por 25 contratos deterministas e acrescentou regressao de cache para respostas 404 e 503."
+  ],
+  "files": [
+    "worker/index.js",
+    "tests/worker-api-route-dispatch-check.mjs",
+    "tests/worker-cache-headers-check.mjs"
+  ],
+  "evidence": [
+    "No baseline, npm run test:worker-api-route-dispatch falhou na primeira execucao e passou na segunda sem mudanca de codigo; contractPass permaneceu true e apenas benchmarkPass oscilou.",
+    "A auditoria do resolver mostrou POST /api/admin/summary permitido e verbos GET/PUT/POST genericamente permitidos em todas as rotas dinamicas de arena, apesar de o Durable Object rejeitar combinacoes invalidas.",
+    "getStaticAssetCacheControl decidia cache apenas por pathname/content-type; assim, um chunk com nome hashado e status 404 podia receber public, max-age=31536000, immutable, e outros erros nao HTML podiam receber cache publico curto.",
+    "Apos a correcao, o dispatch passou duas execucoes consecutivas durante a verificacao intermediaria e uma execucao final com 25 contratos; o cache check passou 7 casos, inclusive 404 hashado e 503 de asset com no-store."
+  ],
+  "validation": [
+    {
+      "command": "npm run test:worker-api-route-dispatch",
+      "status": "passed",
+      "details": "25 contratos verificados; nenhuma divergencia."
+    },
+    {
+      "command": "npm run test:worker-cache-headers",
+      "status": "passed",
+      "details": "7 cenarios verificados; respostas 404 e 503 usam no-store."
+    },
+    {
+      "command": "npm run build",
+      "status": "failed_external",
+      "details": "TypeScript falhou em src/NetCode/session-client.ts por renderAudioControls ausente e SessionElements incompleto; arquivo fora dos readResources/writeResources desta rodada e modificado concorrentemente."
+    },
+    {
+      "command": "git diff --check -- worker/index.js tests/worker-api-route-dispatch-check.mjs tests/worker-cache-headers-check.mjs && node --check nos tres arquivos",
+      "status": "passed",
+      "details": "Sem erros de whitespace ou sintaxe; apenas avisos de normalizacao LF/CRLF do Git."
+    }
+  ],
+  "risks": [
+    "O build completo precisa ser repetido pelo coordenador depois da barreira, quando a alteracao concorrente em session-client.ts estiver terminal.",
+    "Os testes de helper extraem funcoes do source do Worker e nao substituem um teste de integracao em runtime workerd; ainda assim cobrem diretamente os contratos corrigidos sem publicar ou fazer deploy."
+  ],
+  "limitations": [
+    "Nenhum deploy, teste remoto ou inspecao com Playwright foi executado.",
+    "Nenhum arquivo fora dos recursos de escrita do claim foi alterado para contornar a falha externa do build."
+  ]
+}

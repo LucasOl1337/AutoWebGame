@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "missionId": "autowebgame-1affeed128a5",
+  "projectPath": "C:\\Projetos\\AutoWebGame",
+  "mission": "auditar o projeto atual e executar as melhorias de maior impacto que possam ser entregues e verificadas com segurança",
+  "roundLimit": 10,
+  "maxConcurrency": 3,
+  "cadenceMinutes": 20,
+  "roundBudget": "adaptive",
+  "stateDirectory": ".swarm/mission-finite/",
+  "createdAt": "2026-07-13T10:28:19.8472930-03:00",
+  "sourceThreadId": "019f5b2c-ad5d-7ef0-9afb-9446c09cfe13"
+}

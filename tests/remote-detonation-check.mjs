@@ -40,6 +40,7 @@ const fakeCtx = new Proxy({
   save: noop,
   restore: noop,
   setTransform: noop,
+  translate: noop,
   createLinearGradient: () => ({ addColorStop: noop }),
   createRadialGradient: () => ({ addColorStop: noop }),
 }, { get: (target, key) => target[key] ?? noop });

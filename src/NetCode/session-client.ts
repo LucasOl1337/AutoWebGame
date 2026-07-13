@@ -79,6 +79,9 @@ interface OnlineGameAppBridge {
   clearOnlinePeer(): void;
   receiveOnlineGuestInput(input: OnlineInputState): void;
   returnToMenu(): void;
+  getAudioSettings(): { volume: number; muted: boolean };
+  setAudioVolume(volume: number): void;
+  setAudioMuted(muted: boolean): void;
 }
 
 type ExperienceScreen = "landing" | "lobby-list" | "setup" | "match";
@@ -115,6 +118,9 @@ interface SessionElements {
   landingArenaThemeLinks: HTMLAnchorElement[];
   landingLobbyButton: HTMLButtonElement;
   landingFeedbackButton: HTMLButtonElement;
+  landingAudioMuteButton: HTMLButtonElement;
+  landingAudioVolumeInput: HTMLInputElement;
+  landingDevLab: HTMLElement;
   landingRoster: HTMLDivElement;
   feedbackDialog: HTMLDivElement;
   feedbackTextarea: HTMLTextAreaElement;
@@ -818,6 +824,18 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     }
     this.elements.landingFeedbackButton.addEventListener("click", () => {
       this.openFeedbackDialog();
+    });
+    this.elements.landingAudioMuteButton.addEventListener("click", () => {
+      const settings = this.app.getAudioSettings();
+      this.app.setAudioMuted(!settings.muted);
+      this.renderAudioControls();
+    });
+    this.elements.landingAudioVolumeInput.addEventListener("input", () => {
+      this.app.setAudioVolume(Number(this.elements.landingAudioVolumeInput.value) / 100);
+      if (Number(this.elements.landingAudioVolumeInput.value) > 0) {
+        this.app.setAudioMuted(false);
+      }
+      this.renderAudioControls();
     });
     this.elements.landingLobbyButton.addEventListener("click", () => {
       this.idleScreen = "lobby-list";
@@ -1700,6 +1718,36 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     );
     landingActions.append(landingActionsPrimary, landingActionsSecondary);
 
+    const landingAudio = document.createElement("section");
+    landingAudio.className = "experience-audio";
+    const landingAudioLabel = document.createElement("strong");
+    landingAudioLabel.textContent = this.translate("Áudio", "Audio");
+    const landingAudioMuteButton = document.createElement("button");
+    landingAudioMuteButton.className = "experience-button experience-button--ghost experience-audio__mute";
+    landingAudioMuteButton.type = "button";
+    const landingAudioVolumeInput = document.createElement("input");
+    landingAudioVolumeInput.className = "experience-audio__range";
+    landingAudioVolumeInput.type = "range";
+    landingAudioVolumeInput.min = "0";
+    landingAudioVolumeInput.max = "100";
+    landingAudioVolumeInput.step = "5";
+    landingAudioVolumeInput.setAttribute("aria-label", this.translate("Volume dos efeitos", "Effects volume"));
+    landingAudio.append(landingAudioLabel, landingAudioMuteButton, landingAudioVolumeInput);
+
+    const landingDevLab = document.createElement("aside");
+    landingDevLab.className = "experience-dev-lab";
+    landingDevLab.hidden = !import.meta.env.DEV;
+    landingDevLab.innerHTML = `<strong>${this.translate("Laboratório DEV", "DEV laboratory")}</strong><span>${this.translate("Cenários reproduzíveis para bots e modelos externos.", "Reproducible scenarios for bots and external models.")}</span>`;
+    const devBotVsBot = document.createElement("a");
+    devBotVsBot.className = "experience-button experience-button--secondary";
+    devBotVsBot.href = "?autobot=3";
+    devBotVsBot.textContent = this.translate("Bot vs bot", "Bot vs bot");
+    const devExternalModels = document.createElement("a");
+    devExternalModels.className = "experience-button experience-button--ghost";
+    devExternalModels.href = "?autobot=3&codexbot=1,2,3,4";
+    devExternalModels.textContent = this.translate("Modelos externos", "External models");
+    landingDevLab.append(devBotVsBot, devExternalModels);
+
     const landingControls = document.createElement("section");
     landingControls.className = "experience-landing-controls";
     landingControls.setAttribute("aria-label", copy.controls.kicker);
@@ -1763,6 +1811,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       landingReleaseNotes,
       landingReturnBrief,
       landingActions,
+      landingAudio,
+      landingDevLab,
       landingBotIntensity,
       landingArenaTheme,
       landingControls,
@@ -2200,6 +2250,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       landingArenaThemeLinks,
       landingLobbyButton,
       landingFeedbackButton,
+      landingAudioMuteButton,
+      landingAudioVolumeInput,
+      landingDevLab,
       landingRoster,
       feedbackDialog,
       feedbackTextarea,
@@ -2251,8 +2304,18 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     };
   }
 
+  private renderAudioControls(): void {
+    const settings = this.app.getAudioSettings();
+    this.elements.landingAudioVolumeInput.value = String(Math.round(settings.volume * 100));
+    this.elements.landingAudioMuteButton.textContent = settings.muted
+      ? this.translate("Ativar som", "Unmute")
+      : this.translate("Silenciar", "Mute");
+    this.elements.landingAudioMuteButton.setAttribute("aria-pressed", String(settings.muted));
+  }
+
   private renderAll(): void {
     this.renderLanguageSwitcher();
+    this.renderAudioControls();
     this.renderLanding();
     this.renderAccountPanel();
     this.renderBillingPanel();

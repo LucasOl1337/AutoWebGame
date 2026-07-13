@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "missionId": "autowebgame-1affeed128a5",
+  "status": "active",
+  "claimsOpen": true,
+  "counters": {
+    "started": 3,
+    "completed": 3,
+    "failed": 0,
+    "skipped": 0
+  },
+  "activeRounds": [],
+  "completedRounds": ["r001", "r002", "r003"],
+  "failedRounds": [],
+  "automation": {
+    "name": "Enxame finito — autowebgame-1affeed128a5",
+    "id": "enxame-finito-autowebgame-1affeed128a5",
+    "status": "active",
+    "verifiedAt": "2026-07-13T10:29:51.1510000-03:00"
+  },
+  "repositoryBaseline": {
+    "branchObserved": "swarm/autowebgame/documentacao",
+    "head": "2f51ebcbf2fd474385858048a40a44a256547370",
+    "preexistingChanges": [
+      "M index.html",
+      "M src/Engine/game-app.ts",
+      "M tests/remote-detonation-check.mjs",
+      "?? DocsDev/qa-browser-loop.md",
+      "?? SwarmLedger-bomb-preview.md",
+      "?? SwarmLedger-landing.md",
+      "?? SwarmLedger-migracao-visual.md",
+      "?? SwarmLedger-performance.md",
+      "?? SwarmLedger-ready-to-ship.md"
+    ]
+  },
+  "createdAt": "2026-07-13T10:28:19.8472930-03:00",
+  "lastCycle": {
+    "cycleId": "cycle-001",
+    "status": "completed",
+    "barrierReached": true,
+    "coordinatorValidation": "passed",
+    "resultPath": ".swarm/mission-finite/cycles/cycle-001.json"
+  },
+  "updatedAt": "2026-07-13T10:42:30.0000000-03:00"
+}
