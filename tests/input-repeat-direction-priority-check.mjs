@@ -28,16 +28,25 @@ const repeatDidNotQueuePress = input.consumePress("KeyW") && !input.consumePress
 fire("keyup", event("KeyD"));
 const fallbackToHeldDirection = input.getMovementDirection(1);
 
+fire("keyup", event("KeyW"));
+fire("keydown", event("KeyW", true));
+const orphanRepeatDirection = input.getMovementDirection(1);
+const orphanRepeatDidNotQueuePress = !input.consumePress("KeyW");
+
 const pass = latestPhysicalPress === "right"
   && afterOlderKeyRepeat === "right"
   && repeatDidNotQueuePress
-  && fallbackToHeldDirection === "up";
+  && fallbackToHeldDirection === "up"
+  && orphanRepeatDirection === null
+  && orphanRepeatDidNotQueuePress;
 
 console.log(JSON.stringify({
   latestPhysicalPress,
   afterOlderKeyRepeat,
   repeatDidNotQueuePress,
   fallbackToHeldDirection,
+  orphanRepeatDirection,
+  orphanRepeatDidNotQueuePress,
   pass,
 }, null, 2));
 
