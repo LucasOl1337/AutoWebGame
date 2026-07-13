@@ -1,5 +1,15 @@
 # Swarm Ledger - Geral
 
+## 2026-07-12 - Script npm para limite de feedback
+
+- Automacao: `autowebgame-enxame-geral`.
+- Escopo registrado: expor o check existente `tests/feedback-length-guard-check.mjs` via `package.json`; sem alterar runtime, gameplay, rede ou arquivos com mudancas concorrentes.
+- Evidencia antes: o check validava o limite compartilhado de 2.000 caracteres no cliente, Worker e copy PT/EN, passava por execucao direta, mas nao possuia script npm dedicado.
+- Mudanca: adicionado somente `test:feedback-length`, executando o check existente sem compilacao desnecessaria.
+- Validacao: `npm run test:feedback-length` passou (`FEEDBACK_MAX_LENGTH: 2000`, checks de fonte e copy PT/EN sem falhas, `pass: true`); `npm run build` passou (TypeScript + Vite, 42 modulos); `git diff --check -- package.json SwarmLedger-geral.md` passou.
+- Revisao de escopo: diff funcional contem uma insercao em `package.json` e este registro; mudancas preexistentes em `DocsDev/swarm-coordination.md`, `index.html`, `src/Engine/game-app.ts`, `tests/remote-detonation-check.mjs` e ledgers alheios foram preservadas e excluidas do staging.
+- Commit: pendente de criacao seletiva.
+
 ## 2026-07-12 - Script npm para prioridade direcional em repeticao de input
 
 - Automacao: `autowebgame-enxame-geral`.
