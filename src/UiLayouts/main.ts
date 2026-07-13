@@ -9,6 +9,9 @@ if (!root) {
 }
 
 async function bootstrapGame(rootElement: HTMLDivElement): Promise<void> {
+  rootElement.setAttribute("aria-busy", "true");
+  rootElement.innerHTML = '<p role="status" aria-live="polite">Carregando arena…</p>';
+
   const activeArena = applyArenaThemeSelection(
     await fetchActiveArenaDefinition(),
     window.location.href,
@@ -23,6 +26,8 @@ async function bootstrapGame(rootElement: HTMLDivElement): Promise<void> {
     import("../NetCode/session-client"),
   ]);
   const assets = await loadGameAssets(activeArena.themeId);
+  rootElement.removeAttribute("aria-busy");
+  rootElement.replaceChildren();
   const game = new GameApp(rootElement, assets, activeArena);
   new OnlineSessionClient(rootElement, game, assets.characterRoster ?? [], activeArena.themeId);
   game.start();
