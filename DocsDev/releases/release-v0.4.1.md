@@ -1,6 +1,8 @@
 # v0.4.1 — Estabilidade de input, áudio e integração auditada (13/07/2026)
 
-Release patch oficial do AutoWebGame/BOMBA PvP, baseada em 0.4.0. Consolida correções locais pós-release sem alterar protocolo, dados persistidos ou infraestrutura de produção.
+![BOMBA PVP — PATCH v0.4.1](../../release-assets/v0.4.1-card.png)
+
+Release patch oficial do AutoWebGame/BOMBA PvP, baseada em v0.4.0. Consolida correções locais pós-release sem alterar protocolo, dados persistidos ou infraestrutura de produção.
 
 ## Destaques
 
@@ -12,11 +14,11 @@ Release patch oficial do AutoWebGame/BOMBA PvP, baseada em 0.4.0. Consolida cor
 
 ## Baseline e escopo
 
-- Baseline oficial: 0.4.0 / da613c7.
+- Baseline oficial: v0.4.0 / da613c7.
 - Branch: integrate/audited-v0.4.0-20260713.
-- Commits integrados: 6a23325, 8a71bdc, 70c00bd, 8343a7, 2481547, 8ce079a, c7d79ba, 7a88003.
-- O protótipo Agent API de 8343a7 foi revertido por c7d79ba; não integra o produto.
-- Nenhuma arte nova foi gerada.
+- Commits integrados: 6a23325, 8a71bdc, 70c00bd, b8343a7, 2481547, 8ce079a, c7d79ba, 7a88003.
+- O protótipo Agent API de b8343a7 foi revertido por c7d79ba; não integra o produto.
+- Arte oficial: `release-assets/v0.4.1-card.png`.
 
 ## Auditoria multiagente
 
@@ -35,7 +37,7 @@ A ausência de evidência significa apenas que não há alteração versionada a
 
 - Sem breaking changes, migração de Durable Object ou alteração de protocolo.
 - Sem leitura, alteração ou rotação de secrets.
-- Sem push, deploy ou geração de arte.
+- Sem push ou deploy; a arte oficial da release foi gerada localmente.
 - .swarm não integra o patch oficial.
 
 ## Estado de publicação
