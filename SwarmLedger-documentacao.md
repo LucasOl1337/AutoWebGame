@@ -1,3 +1,12 @@
+## 2026-07-12 - Exposicao do teste de fallback UUID da telemetria
+
+- Escopo reservado: adicionar somente um script npm para o teste existente `tests/growth-telemetry-uuid-fallback-check.mjs` em `package.json` e registrar a validacao neste ledger, sem tocar nas mudancas preexistentes.
+- Evidencia inicial: `DocsDev/swarm-coordination.md` registra `fix-telemetry-uuid-fallback`, e o teste dedicado existe, mas `package.json` nao oferece comando `test:growth-telemetry-uuid-fallback`.
+- Validacoes planejadas: novo script npm, teste adjacente de retry, build, `git diff --check` e revisao seletiva do escopo.
+- Implementacao: `package.json` agora expoe `test:growth-telemetry-uuid-fallback`, reutilizando o teste dedicado existente e o mesmo preparo ESM dos checks adjacentes.
+- Validacao concluida: `npm run test:growth-telemetry-uuid-fallback` passou (`pass: true`), `npm run test:growth-telemetry-retry` passou (`pass: true`), `npm run build` passou (42 modulos), e `git diff --check -- package.json SwarmLedger-documentacao.md` passou.
+- Revisao de escopo: diff funcional limitado a uma linha em `package.json`; este ledger registra reserva e resultado. Commit seletivo autorizado apenas para esses dois arquivos.
+
 ## 2026-07-12 - Correcao de referencia do manifesto no README
 
 - Escopo reservado: corrigir somente o caminho obsoleto do manifesto de personagens em `README.md` e validar a documentacao contra o arquivo real, sem tocar nas mudancas preexistentes.
