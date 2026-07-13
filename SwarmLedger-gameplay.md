@@ -1,5 +1,24 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-12 — input-ignore-orphan-key-repeat
+
+- Claim/escopo antes da intervenção: ignorar exclusivamente `keydown` marcado como repetição quando a tecla não consta como segurada, evitando que eventos órfãos após `keyup`, blur ou mudança de visibilidade recriem movimento/press; preservar repetição legítima de tecla segurada, prioridade direcional, prevenção de scroll, aliases e campos interativos.
+- Arquivos previstos: `src/Engine/input.ts`, `tests/input-repeat-direction-priority-check.mjs`, `SwarmLedger-gameplay.md`.
+- Evidência da lacuna: em `src/Engine/input.ts:57-69`, `event.repeat` não participava da decisão; um repeat recebido com `keysDown` vazio era tratado como pressão física nova, entrando em `pressCounts`, `keysDown` e `keyOrder`.
+- Preservação: mudanças preexistentes em `DocsDev/swarm-coordination.md`, `index.html`, `src/Engine/game-app.ts`, `tests/remote-detonation-check.mjs` e arquivos não rastreados permanecem intocadas e fora do escopo seletivo.
+- Antes → depois: um repeat órfão era aceito como nova pressão e podia manter movimento sem tecla fisicamente segurada; agora ele retorna antes de alterar filas/estado. Repeats de teclas realmente seguradas continuam prevenidos e não reordenam prioridade.
+- Evidência focal: `latestPhysicalPress="right"`, `afterOlderKeyRepeat="right"`, `fallbackToHeldDirection="up"`, `orphanRepeatDirection=null`, `orphanRepeatDidNotQueuePress=true`, `pass=true`.
+- Validação: `npm run compile:esm`; teste focal; transição, aliases, visibilidade e prevenção de scroll; `npm run build`; `git diff --check -- src/Engine/input.ts tests/input-repeat-direction-priority-check.mjs SwarmLedger-gameplay.md` — todos concluídos com código 0; somente avisos LF→CRLF.
+- Revisão de escopo: diff de implementação limitado aos dois arquivos reivindicados; mudanças alheias permaneceram fora do commit.
+- Commit seletivo da implementação: `65140f8b8e4075d28ff3b22101b5ef7d312e0948` (`fix(input): ignore orphan key repeats`).
+
+## 2026-07-12 — avaliação de invariantes de prioridade de power-ups de bots
+
+- Claim/escopo: avaliar os invariantes de prioridade de power-ups de bots.
+- Classificação: Inconclusiva.
+- Arquivos pretendidos: teste + ledger.
+- Encerramento: sem mudança em produção ou teste, pois o teste existente já prova monotonicidade e saturação, e não haveria melhoria jogável.
+
 ## 2026-07-12 — bot-bomb-diminishing-returns
 
 - Claim/escopo antes da intervenção: aplicar retorno decrescente exclusivamente ao score de `bomb-up` para bots, preservando o primeiro score alto, saturação em 0 no máximo, capacidade real, limites, drops, coleta, rede, segurança e demais prioridades.
