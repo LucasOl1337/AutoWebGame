@@ -48,7 +48,7 @@ globalThis.window = {
 };
 
 const { GameApp } = await import("../output/esm/Engine/game-app.js");
-const { MAX_BOMBS, MAX_BOMB_PASS_LEVEL, MAX_RANGE, MAX_SHIELD_CHARGES, MAX_SPEED_LEVEL, TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
+const { MAX_BOMBS, MAX_BOMB_PASS_LEVEL, MAX_KICK_LEVEL, MAX_RANGE, MAX_SHIELD_CHARGES, MAX_SPEED_LEVEL, TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
 const { getPowerUpPriorityScore } = await import("../output/esm/Gameplay/powerups.js");
 
 const root = { appendChild: noop };
@@ -194,9 +194,14 @@ const preservesHigherPriorities = bombScores[0] > bombPassScores[0]
   && shieldScores[0] > bombPassScores[0]
   && shortFuseScores[0] > bombPassScores[0];
 
-bot.kickLevel = 0;
-const unusedKickScore = getPowerUpPriorityScore(bot, "kick-up");
-const ignoresUnusableKickUpgrade = unusedKickScore === 0;
+const kickScores = Array.from({ length: MAX_KICK_LEVEL + 1 }, (_, kickLevel) => {
+  bot.kickLevel = kickLevel;
+  return getPowerUpPriorityScore(bot, "kick-up");
+});
+const hasExpectedKickPriority = JSON.stringify(kickScores) === JSON.stringify([180, 0]);
+const preservesKickAsSituational = kickScores[0] < bombPassScores[0]
+  && kickScores[0] < remoteScore
+  && kickScores[0] < shortFuseScores[0];
 
 const report = {
   preferSpeedDecision,
@@ -222,8 +227,9 @@ const report = {
   hasExpectedBombPassPriority,
   prefersBombPassOverRemote,
   preservesHigherPriorities,
-  unusedKickScore,
-  ignoresUnusableKickUpgrade,
+  kickScores,
+  hasExpectedKickPriority,
+  preservesKickAsSituational,
 };
 
 console.log(JSON.stringify(report, null, 2));
@@ -233,6 +239,7 @@ if (!prefersBaseMobility || !prefersFirstShield || !skipsUselessSpeedUp
   || !hasDiminishingSpeedReturns || !hasDiminishingFlameReturns
   || !hasDiminishingShortFuseReturns || !hasDiminishingShieldReturns
   || !hasExpectedBombPassPriority || !prefersBombPassOverRemote
-  || !preservesHigherPriorities || !ignoresUnusableKickUpgrade) {
+  || !preservesHigherPriorities || !hasExpectedKickPriority
+  || !preservesKickAsSituational) {
   process.exit(1);
 }

@@ -210,8 +210,11 @@ export function getPowerUpPriorityScore(player: PlayerState, type: PowerUpType):
     return 240;
   }
   if (type === "kick-up") {
-    // A IA ainda não planeja chutes; perseguir este item desviaria o bot sem ganho estratégico.
-    return 0;
+    if (player.kickLevel >= MAX_KICK_LEVEL) {
+      return 0;
+    }
+    // O chute seguro já é deliberado, mas continua situacional; fica abaixo de upgrades universais.
+    return 180;
   }
   if (type === "short-fuse-up") {
     if (player.shortFuseLevel >= MAX_SHORT_FUSE_LEVEL) {

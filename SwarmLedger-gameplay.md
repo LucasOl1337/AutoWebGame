@@ -1,5 +1,16 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-13 — bot-value-safe-kick-up
+
+- Claim/escopo antes da intervenção: restaurar exclusivamente um valor estratégico conservador para `kick-up`, agora que a IA executa chutes adjacentes deliberados e seguros; preservar efeito real, drops, coleta, pathfinding, combate, rede, demais prioridades e mudanças alheias.
+- Classificação inicial: Comprovada — `src/Gameplay/powerups.ts` ainda retorna 0 sob a premissa de que a IA não planeja chutes, enquanto `src/Engine/bot-ai.ts` já consulta uma direção segura de chute e `tests/bot-safe-adjacent-kick-check.mjs` cobre seus guardrails.
+- Arquivos previstos: `src/Gameplay/powerups.ts`, `tests/bot-powerup-priority-check.mjs`, `SwarmLedger-gameplay.md`.
+- Critério de sucesso: `kick-up` deve ter score positivo antes do upgrade, retornar 0 no máximo e permanecer abaixo de prioridades estratégicas já estabelecidas; teste focal, chute seguro, regressões de IA, build e diff-check devem passar.
+- Antes → depois: `kick-up` retornava sempre 0 por uma premissa obsoleta; agora vale 180 enquanto útil e 0 no nível máximo, abaixo de `bomb-pass-up` (240), `remote-up` (220) e primeiro `short-fuse-up` (260).
+- Evidência: `kickScores=[180,0]`, `hasExpectedKickPriority=true`, `preservesKickAsSituational=true`; o teste de chute adjacente confirmou `safeDecision={direction:"right",placeBomb:false}` e guardrails sem upgrade, sem direção comprometida, destino bloqueado e fuse urgente.
+- Resultado/validação: `npm run compile:esm`; `node tests/bot-powerup-priority-check.mjs`; `node tests/bot-safe-adjacent-kick-check.mjs`; `node tests/bot-own-blast-escape-check.mjs`; `node tests/bot-survival-10s-check.mjs`; `node tests/bot-target-selection-check.mjs`; `node tests/bomb-push-check.mjs`; `npm run build` — todos concluídos com código 0. Validação manual visual ficou limitada porque a coleta depende de drop/rota; o comportamento foi demonstrado deterministicamente sem alterar o runtime de chute.
+- Classificação final: Comprovada para coerência do fluxo estratégico; frequência e impacto perceptível em partidas reais permanecem experimentais.
+
 ## 2026-07-13 — ux-how-to-play-remote-keys
 
 - Claim/escopo antes da intervenção: associar explicitamente no guia existente a detonação remota às teclas reais P1=R e P2=U, preservando estilo, runtime, balanceamento, demais controles e mudanças alheias.
