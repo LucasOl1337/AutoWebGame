@@ -1,5 +1,15 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-13 — bot-bomb-pass-priority-240
+
+- Claim/escopo antes da intervenção: elevar exclusivamente o score bot de `bomb-pass-up` de 190 para 240, fazendo-o prevalecer sobre `remote-up` (220), preservando saturação em 0 no nível máximo, prioridades maiores, efeitos reais, limites, drops, coleta, rede e mudanças alheias.
+- Arquivos previstos: `src/Gameplay/powerups.ts`, `tests/bot-powerup-priority-check.mjs`, `SwarmLedger-gameplay.md`.
+- Preservação: arquivos preexistentes sujos e não rastreados fora desses três caminhos permaneceram intocados.
+- Antes → depois: `bomb-pass-up` útil valia 190 e perdia para `remote-up`; agora vale 240 e o supera por 20 pontos, enquanto continua abaixo de bomb inicial (460), speed inicial (460), flame inicial (460), shield inicial (500) e short-fuse inicial (260), retornando 0 no nível máximo.
+- Evidência focal: `bombPassScores=[240,0]`, `remoteScore=220`, `hasExpectedBombPassPriority=true`, `prefersBombPassOverRemote=true` e `preservesHigherPriorities=true`.
+- Resultado/validação: `npm run compile:esm`; `node tests/bot-powerup-priority-check.mjs`; `node tests/bot-own-blast-escape-check.mjs`; `node tests/bot-survival-10s-check.mjs`; `node tests/bot-target-selection-check.mjs`; `npm run build`; `git diff --check -- src/Gameplay/powerups.ts tests/bot-powerup-priority-check.mjs SwarmLedger-gameplay.md` — todos concluídos com código 0; apenas avisos LF→CRLF. Intervenção limitada aos três arquivos reivindicados.
+- Classificação final: Parcialmente comprovada — utilidade e preferência testadas; impacto em partida real não medido.
+
 ## 2026-07-13 — ux-how-to-play-sudden-death
 
 - Claim/escopo antes da intervenção: explicar somente no guia existente que a morte súbita fecha as bordas da arena e muda a decisão de posicionamento; preservar runtime, balanceamento, assets, estrutura do guia e mudanças alheias.

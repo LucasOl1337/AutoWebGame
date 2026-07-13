@@ -48,7 +48,7 @@ globalThis.window = {
 };
 
 const { GameApp } = await import("../output/esm/Engine/game-app.js");
-const { MAX_BOMBS, MAX_RANGE, MAX_SHIELD_CHARGES, MAX_SPEED_LEVEL, TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
+const { MAX_BOMBS, MAX_BOMB_PASS_LEVEL, MAX_RANGE, MAX_SHIELD_CHARGES, MAX_SPEED_LEVEL, TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
 const { getPowerUpPriorityScore } = await import("../output/esm/Gameplay/powerups.js");
 
 const root = { appendChild: noop };
@@ -180,6 +180,20 @@ const shieldScores = Array.from({ length: MAX_SHIELD_CHARGES + 1 }, (_, shieldCh
 });
 const hasDiminishingShieldReturns = JSON.stringify(shieldScores) === JSON.stringify([500, 210, 0]);
 
+const bombPassScores = Array.from({ length: MAX_BOMB_PASS_LEVEL + 1 }, (_, bombPassLevel) => {
+  bot.bombPassLevel = bombPassLevel;
+  return getPowerUpPriorityScore(bot, "bomb-pass-up");
+});
+bot.remoteLevel = 0;
+const remoteScore = getPowerUpPriorityScore(bot, "remote-up");
+const hasExpectedBombPassPriority = JSON.stringify(bombPassScores) === JSON.stringify([240, 0]);
+const prefersBombPassOverRemote = bombPassScores[0] > remoteScore;
+const preservesHigherPriorities = bombScores[0] > bombPassScores[0]
+  && speedScores[0] > bombPassScores[0]
+  && flameScores[0] > bombPassScores[0]
+  && shieldScores[0] > bombPassScores[0]
+  && shortFuseScores[0] > bombPassScores[0];
+
 bot.kickLevel = 0;
 const unusedKickScore = getPowerUpPriorityScore(bot, "kick-up");
 const ignoresUnusableKickUpgrade = unusedKickScore === 0;
@@ -203,6 +217,11 @@ const report = {
   hasDiminishingShortFuseReturns,
   shieldScores,
   hasDiminishingShieldReturns,
+  bombPassScores,
+  remoteScore,
+  hasExpectedBombPassPriority,
+  prefersBombPassOverRemote,
+  preservesHigherPriorities,
   unusedKickScore,
   ignoresUnusableKickUpgrade,
 };
@@ -213,6 +232,7 @@ if (!prefersBaseMobility || !prefersFirstShield || !skipsUselessSpeedUp
   || !skipsSaturatedBombForSurvival || !hasDiminishingBombReturns
   || !hasDiminishingSpeedReturns || !hasDiminishingFlameReturns
   || !hasDiminishingShortFuseReturns || !hasDiminishingShieldReturns
-  || !ignoresUnusableKickUpgrade) {
+  || !hasExpectedBombPassPriority || !prefersBombPassOverRemote
+  || !preservesHigherPriorities || !ignoresUnusableKickUpgrade) {
   process.exit(1);
 }

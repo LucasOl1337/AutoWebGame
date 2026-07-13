@@ -207,7 +207,7 @@ export function getPowerUpPriorityScore(player: PlayerState, type: PowerUpType):
     if (player.bombPassLevel >= MAX_BOMB_PASS_LEVEL) {
       return 0;
     }
-    return 190;
+    return 240;
   }
   if (type === "kick-up") {
     // A IA ainda não planeja chutes; perseguir este item desviaria o bot sem ganho estratégico.
