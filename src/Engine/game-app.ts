@@ -3826,12 +3826,7 @@ export class GameApp {
       : CANVAS_UI_TEXT;
     const allSkillSlots = this.getHudSkillSlots(playerId);
     const skillSlots = compact
-      ? allSkillSlots.filter((slot) => (
-        slot.type === "bomb-up"
-        || slot.type === "flame-up"
-        || slot.type === "speed-up"
-        || slot.type === "remote-up"
-      ))
+      ? this.getCompactHudSkillSlots(allSkillSlots)
       : allSkillSlots;
 
     this.drawHudPanel(x, y, width, 42, palette.glow);
@@ -3929,6 +3924,33 @@ export class GameApp {
 
   private getHudSkillSlots(playerId: PlayerId): HudSkillSlot[] {
     return SKILL_POWER_UP_TYPES.map((type) => this.getHudSkillSlot(playerId, type));
+  }
+
+  private getCompactHudSkillSlots(allSkillSlots: HudSkillSlot[]): HudSkillSlot[] {
+    const basicTypes: readonly SkillPowerUpType[] = ["bomb-up", "flame-up", "speed-up"];
+    const acquiredBasicTypes = new Set(
+      allSkillSlots
+        .filter((slot) => slot.acquired && basicTypes.includes(slot.type))
+        .map((slot) => slot.type),
+    );
+    const selectedTypes = new Set<SkillPowerUpType>(acquiredBasicTypes);
+
+    for (const slot of allSkillSlots) {
+      if (selectedTypes.size >= 4) {
+        break;
+      }
+      if (slot.acquired && !basicTypes.includes(slot.type)) {
+        selectedTypes.add(slot.type);
+      }
+    }
+    for (const slot of allSkillSlots) {
+      if (selectedTypes.size >= 4) {
+        break;
+      }
+      selectedTypes.add(slot.type);
+    }
+
+    return allSkillSlots.filter((slot) => selectedTypes.has(slot.type));
   }
 
   private getHudSkillSlot(playerId: PlayerId, type: SkillPowerUpType): HudSkillSlot {
@@ -5586,6 +5608,14 @@ export class GameApp {
           kickLevel: player.kickLevel,
           shortFuseLevel: player.shortFuseLevel,
           skillSlots: this.getHudSkillSlots(id).map((slot) => ({
+            type: slot.type,
+            acquired: slot.acquired,
+            level: slot.level,
+            value: slot.valueLabel,
+            key: slot.keyLabel,
+            recentlyCollected: slot.recentlyCollected,
+          })),
+          compactSkillSlots: this.getCompactHudSkillSlots(this.getHudSkillSlots(id)).map((slot) => ({
             type: slot.type,
             acquired: slot.acquired,
             level: slot.level,

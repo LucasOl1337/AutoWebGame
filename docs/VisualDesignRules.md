@@ -27,11 +27,8 @@ Keep a strong, readable pixel-art identity for a Bomberman-like arena where game
 - Enemy/player sprites must not share identical dominant hue with pickup icons.
 
 ## 5) HUD Rules
-- Show all active powerup categories in fixed order:
-  1. bomb-up
-  2. flame-up
-  3. speed-up
-  4. remote-up
+- The expanded HUD shows all powerup categories in the fixed definition order.
+- The compact HUD always shows exactly 4 slots in that same relative order: preserve acquired basic categories (`bomb-up`, `flame-up`, `speed-up`), then prioritize acquired utility categories over basic categories not yet acquired, and fill any remaining slots from the original order.
 - Stackable powerups show `xN` bonus amount (not base stat).
 - Remote shows `ON` and input key label when active.
 - HUD icon size should remain 8x8 in slot rendering unless full HUD rework is planned.

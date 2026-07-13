@@ -1,5 +1,15 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-13 — compact-hud-utility-priority
+
+- Claim/escopo antes da intervenção: manter exatamente 4 slots no HUD compacto, preservando a ordem original e todos os power-ups básicos adquiridos, mas priorizando utilitários adquiridos sobre básicos ainda não adquiridos; preservar HUD expandido, níveis, coleta, gameplay, rede e mudanças alheias.
+- Arquivos previstos: `src/Engine/game-app.ts`, `tests/powerup-hud-slots-check.mjs`, `docs/VisualDesignRules.md`, `SwarmLedger-gameplay.md`.
+- Seam/teste público: tornar a seleção compacta observável em `render_game_to_text` e validar deterministicamente quantidade, ordem, preservação de básicos adquiridos e preferência por utilitários adquiridos.
+- Critério de sucesso: `compile:esm`, teste focal, `build` e diff-check seletivo devem passar; sem commit e sem tocar arquivos sujos alheios.
+- Antes → depois: o HUD compacto fixava `bomb-up`, `flame-up`, `speed-up` e `remote-up`, ocultando utilitários adquiridos; agora mantém 4 slots, preserva básicos adquiridos e promove utilitários adquiridos no lugar de básicos não adquiridos, sempre na ordem global original.
+- Evidência focal observável: `render_game_to_text` expõe `compactSkillSlots`; no cenário com `bomb-up` e `flame-up` básicos adquiridos e múltiplos utilitários adquiridos, a seleção foi `bomb-up`, `flame-up`, `remote-up`, `shield-up`, com 4 slots adquiridos em ordem global.
+- Resultado/validação: `npm run compile:esm`; `node tests/powerup-hud-slots-check.mjs`; `npm run build`; `git diff --check -- src/Engine/game-app.ts tests/powerup-hud-slots-check.mjs docs/VisualDesignRules.md SwarmLedger-gameplay.md` — todos concluídos com código 0; somente avisos LF→CRLF. Sem commit; arquivos sujos alheios permaneceram intocados.
+
 ## 2026-07-13 — flame-dissipate-tail
 
 - Claim/escopo antes da intervenção: adicionar exclusivamente uma cauda visual curta de dissipação às flames normais e tóxicas, reduzindo sua opacidade no fim da duração; preservar duração, dano, tiles, colisão, sincronização, sprites, paletas e mudanças alheias.

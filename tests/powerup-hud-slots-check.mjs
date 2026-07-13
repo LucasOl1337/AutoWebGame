@@ -67,6 +67,7 @@ globalThis.window = {
   innerWidth: 1280,
   innerHeight: 720,
   addEventListener: on,
+  removeEventListener: noop,
   requestAnimationFrame: noop,
 };
 
@@ -102,6 +103,7 @@ const p1 = game.players[1];
 p1.position = { x: 2.5 * TILE_SIZE, y: 1.5 * TILE_SIZE };
 p1.tile = { x: 2, y: 1 };
 p1.spawnProtectionMs = 0;
+p1.maxBombs = 2;
 
 game.arena.powerUps = [
   { type: "remote-up", tile: { x: 2, y: 1 }, revealed: true, collected: false },
@@ -116,6 +118,8 @@ window.advanceTime(17);
 const state = JSON.parse(window.render_game_to_text());
 const player = state.players.find((entry) => entry.id === 1);
 const skillSlots = player?.skillSlots ?? [];
+const compactSkillSlots = player?.compactSkillSlots ?? [];
+const compactSkillSlotTypes = compactSkillSlots.map((slot) => slot.type);
 const bombSlot = skillSlots.find((slot) => slot.type === "bomb-up") ?? null;
 const flameSlot = skillSlots.find((slot) => slot.type === "flame-up") ?? null;
 const remoteSlot = skillSlots.find((slot) => slot.type === "remote-up") ?? null;
@@ -132,6 +136,7 @@ const expiredRecentPowerUpPickup = expiredPlayer?.recentPowerUpPickup ?? null;
 const expiredRecentSlots = expiredPlayer?.skillSlots?.filter((slot) => slot.recentlyCollected) ?? [];
 
 const report = {
+  compactSkillSlotTypes,
   bombSlot,
   flameSlot,
   remoteSlot,
@@ -143,10 +148,18 @@ const report = {
   expiredRecentPowerUpPickup,
   expiredRecentSlotCount: expiredRecentSlots.length,
   pass: Boolean(
-    bombSlot
-      && bombSlot.acquired === false
-      && bombSlot.level === 0
-      && bombSlot.value === "x0"
+    compactSkillSlots.length === 4
+      && JSON.stringify(compactSkillSlotTypes) === JSON.stringify([
+        "bomb-up",
+        "flame-up",
+        "remote-up",
+        "shield-up",
+      ])
+      && compactSkillSlots.every((slot) => slot.acquired)
+      && bombSlot
+      && bombSlot.acquired === true
+      && bombSlot.level === 1
+      && bombSlot.value === "x1"
       && bombSlot.recentlyCollected === false
       && flameSlot
       && flameSlot.acquired === true
