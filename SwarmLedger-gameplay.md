@@ -1,5 +1,17 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-13 — flame-dissipate-tail
+
+- Claim/escopo antes da intervenção: adicionar exclusivamente uma cauda visual curta de dissipação às flames normais e tóxicas, reduzindo sua opacidade no fim da duração; preservar duração, dano, tiles, colisão, sincronização, sprites, paletas e mudanças alheias.
+- Classificação inicial: Comprovada — `docs/VisualDesignRules.md` prioriza uma cauda de dissipação opcional, enquanto `drawFlame` mantém opacidade mínima de 0,35 até o desaparecimento abrupto.
+- Arquivos previstos: `src/Engine/game-app.ts`, `tests/flame-dissipate-tail-check.mjs`, `SwarmLedger-gameplay.md`.
+- Seam/teste público: renderização observável via contrato fonte de `drawFlame`; exigir opacidade integral fora da janela final, fade limitado aos últimos 120 ms e uso compartilhado por sprite e fallback, sem alterar `FLAME_DURATION_MS`.
+- Critério de sucesso: teste focal deve falhar antes e passar depois; `compile:esm`, regressão de hit window, `build` e `git diff --check` devem passar.
+- Antes → depois: a flame mantinha opacidade mínima de 0,35 e desaparecia abruptamente; agora permanece totalmente legível e dissipa apenas nos 120 ms finais, tanto no sprite normal quanto nos fallbacks normal e tóxico.
+- Evidência focal: RED válido por ausência de `FLAME_DISSIPATE_TAIL_MS`; GREEN com `tailMs=120`, `spriteUsesTail=true`, `fallbackUsesTail=true` e `preservesTiming=true`.
+- Resultado/validação: `node tests/flame-dissipate-tail-check.mjs`; `npm run compile:esm`; `npm run test:bomb-hit-window`; `npm run build`; `git diff --check -- src/Engine/game-app.ts tests/flame-dissipate-tail-check.mjs SwarmLedger-gameplay.md` — todos concluídos com código 0; somente avisos LF→CRLF. A validação visual manual ficou limitada, mas o comportamento de opacidade e a preservação do timing foram demonstrados deterministicamente.
+- Classificação final: Comprovada para a lacuna visual e preservação do contrato de gameplay; impacto subjetivo na sensação de acabamento permanece parcialmente experimental.
+
 ## 2026-07-13 — online-audio-bomb-id
 
 - Claim/escopo antes da intervenção: usar exclusivamente `BombState.id` como identidade das bombas nas transições de áudio online, evitando `bombPlace`/`bombExplode` quando a mesma bomba muda de tile; preservar demais eventos de áudio, sincronização online, gameplay e mudanças alheias.

@@ -188,6 +188,7 @@ const SKILL_FRAME_MS = 100;
 const DEATH_FRAME_MS = 90;
 const CRATE_BREAK_DURATION_MS = 220;
 const POWER_UP_SPAWN_POP_MS = 120;
+const FLAME_DISSIPATE_TAIL_MS = 120;
 const SPAWN_PROTECTION_MS = 2200;
 const PERFECT_START_WINDOW_MS = 320;
 const PERFECT_START_BOOST_MS = 640;
@@ -4741,7 +4742,7 @@ export class GameApp {
   private drawFlame(flame: FlameState): void {
     const x = flame.tile.x * TILE_SIZE;
     const y = flame.tile.y * TILE_SIZE;
-    const alpha = Math.max(0.35, flame.remainingMs / FLAME_DURATION_MS);
+    const alpha = Math.min(1, Math.max(0, flame.remainingMs) / FLAME_DISSIPATE_TAIL_MS);
     if (this.assets.props.flame && (!flame.style || flame.style === "normal")) {
       this.ctx.save();
       this.ctx.globalAlpha = alpha;
