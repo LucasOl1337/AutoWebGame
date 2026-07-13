@@ -18,6 +18,8 @@ assert.match(pageHtml, /<h1>Como jogar BOMBA PvP<\/h1>/);
 assert.match(pageHtml, /href="\/game"/);
 assert.match(pageHtml, /src="\/Assets\/UiLayouts\/how-to-play-arena\.png"/);
 assert.match(pageHtml, /<kbd>W<\/kbd><kbd>A<\/kbd><kbd>S<\/kbd><kbd>D<\/kbd>/);
+assert.match(pageHtml, /Quando o anel ficar vermelho, a explosao esta a instantes/);
+assert.match(pageHtml, /saia da linha reta imediatamente/);
 assert.match(pageHtml, /<kbd>R<\/kbd><kbd>U<\/kbd>/);
 assert.match(pageHtml, /Detonar bomba remota quando o powerup estiver ativo: P1 usa R e P2 usa U\./);
 assert.doesNotMatch(pageHtml, /<div><kbd>E<\/kbd><\/div>\s*<p>Detonar bomba remota/);

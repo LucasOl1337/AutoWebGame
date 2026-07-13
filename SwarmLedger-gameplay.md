@@ -1,5 +1,16 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-13 — onboarding-bomb-final-telegraph
+
+- Claim/escopo antes da intervenção: explicar exclusivamente no guia existente que o anel vermelho da bomba sinaliza os instantes finais do pavio; preservar runtime, janela de 450 ms, timing, renderização, balanceamento, assets, controles e mudanças alheias.
+- Classificação inicial: Comprovada — `src/Engine/game-app.ts` desenha o anel vermelho quando `bomb.fuseMs <= 450`, mas `how-to-play.html` apenas orienta sair antes do fuse terminar sem ensinar esse sinal visual.
+- Arquivos previstos: `how-to-play.html`, `tests/how-to-play-page-check.mjs`, `SwarmLedger-gameplay.md`.
+- Critério de sucesso: o guia deve associar de forma observável o anel vermelho à explosão iminente; contratos do guia e do telegraph, build e diff-check seletivo devem passar sem alterar código de produção.
+- Antes → depois: o controle de plantar bomba orientava apenas sair antes do fuse terminar; agora ensina que o anel vermelho significa explosão a instantes e pede saída imediata da linha reta.
+- Evidência: `src/Engine/game-app.ts:4729-4743` fixa a janela visual final em 450 ms; `how-to-play.html:578-580` comunica o sinal e a resposta; `tests/how-to-play-page-check.mjs:20-23` protege o texto.
+- Resultado/validação: `npm run test:how-to-play-page`; `node tests/bomb-final-telegraph-check.mjs`; `npm run build`; `git diff --check -- how-to-play.html tests/how-to-play-page-check.mjs SwarmLedger-gameplay.md` — todos concluídos com código 0. Diff completo revisado e limitado aos três arquivos reivindicados; mudanças alheias permaneceram intocadas.
+- Classificação final: Comprovada para a lacuna de onboarding e coerência com o telegraph real; impacto na reação de jogadores reais não foi medido.
+
 ## 2026-07-13 — verdant-ruins-procedural-render-mode
 
 - Claim/escopo antes da intervenção: mudar exclusivamente o modo de renderização de `Verdant Ruins` de sprite para procedural; preservar o modo default, `Skyfoundry`, demais temas, gameplay, assets e mudanças alheias.
