@@ -200,7 +200,7 @@ export function playOnlineAudioTransition({
 }
 
 function getBombAudioKey(bomb: BombState): string {
-  return `${bomb.ownerId}:${tileKey(bomb.tile.x, bomb.tile.y)}`;
+  return String(bomb.id);
 }
 
 function didShieldBlock(

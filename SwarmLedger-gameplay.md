@@ -1,5 +1,14 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-13 — online-audio-bomb-id
+
+- Claim/escopo antes da intervenção: usar exclusivamente `BombState.id` como identidade das bombas nas transições de áudio online, evitando `bombPlace`/`bombExplode` quando a mesma bomba muda de tile; preservar demais eventos de áudio, sincronização online, gameplay e mudanças alheias.
+- Arquivos previstos: `src/NetCode/online-sync.ts`, `tests/online-audio-bridge-check.mjs`, `SwarmLedger-gameplay.md`.
+- Critério de sucesso: mesma `id` movida deve permanecer em silêncio; troca de `id` deve produzir `bombPlace` e `bombExplode`; `compile:esm`, `test:online-audio`, `test:bomb-push`, `build` e diff-check devem passar.
+- Antes → depois: a transição identificava bombas por proprietário+tile e interpretava um chute/deslocamento como remoção seguida de adição; agora compara somente `BombState.id`, mantendo silêncio quando a mesma bomba muda de tile e emitindo `bombPlace`+`bombExplode` quando a identidade realmente troca.
+- Evidência focal: `placementCalls=["bombPlace"]`, `movedBombCalls=[]`, `idSwapCalls=["bombPlace","bombExplode"]` e `pendingRollbackCalls=[]`.
+- Resultado/validação: `npm run compile:esm`; `npm run test:online-audio`; `npm run test:bomb-push`; `npm run build`; `git diff --check -- src/NetCode/online-sync.ts tests/online-audio-bridge-check.mjs SwarmLedger-gameplay.md` — todos concluídos com código 0; somente avisos LF→CRLF. Sem commit e sem tocar mudanças alheias.
+
 ## 2026-07-13 — bot-value-safe-kick-up
 
 - Claim/escopo antes da intervenção: restaurar exclusivamente um valor estratégico conservador para `kick-up`, agora que a IA executa chutes adjacentes deliberados e seguros; preservar efeito real, drops, coleta, pathfinding, combate, rede, demais prioridades e mudanças alheias.
