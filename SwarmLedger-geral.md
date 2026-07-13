@@ -1,5 +1,15 @@
 # Swarm Ledger - Geral
 
+## 2026-07-12 - Script npm para prioridade direcional em repeticao de input
+
+- Automacao: `autowebgame-enxame-geral`.
+- Escopo registrado: expor o check existente `tests/input-repeat-direction-priority-check.mjs` via `package.json`; sem alterar runtime, gameplay, rede ou arquivos com mudancas concorrentes.
+- Evidencia antes: o check validava que eventos `repeat` antigos nao roubam a direcao fisica mais recente, mas nao possuia script npm dedicado.
+- Mudanca: adicionado somente `test:input-repeat-priority`, com compilacao ESM e execucao do check existente.
+- Validacao: `npm run test:input-repeat-priority` passou (`latestPhysicalPress: right`, `afterOlderKeyRepeat: right`, `repeatDidNotQueuePress: true`, `fallbackToHeldDirection: up`, `pass: true`); `npm run build` passou (TypeScript + Vite, 42 modulos); `git diff --check -- package.json SwarmLedger-geral.md` passou.
+- Revisao de escopo: diff funcional contem uma insercao em `package.json` e este registro; mudancas preexistentes em `DocsDev/swarm-coordination.md`, `index.html`, `src/Engine/game-app.ts`, `tests/remote-detonation-check.mjs` e ledgers alheios foram preservadas e excluidas do staging.
+- Commit: pendente de criacao seletiva.
+
 ## 2026-07-12 - Script npm para fallback de manifesto publico invalido
 
 - Automacao: `autowebgame-enxame-geral`.
