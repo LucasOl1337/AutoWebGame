@@ -81,6 +81,7 @@ const TELEMETRY_EVENT_NAMES = new Set([
   "lobby_left",
 ]);
 const LEGACY_ASSET_PREFIX = "/assets/";
+const GAME_DOCUMENT_ROUTES = new Set(["/game/play", "/game/training", "/game/lab"]);
 const ACTIVE_ARENA_ID_KEY = "arena:active-id";
 const ARENA_KEY_PREFIX = "arena:def:";
 const HASHED_VITE_ASSET_RE = /^\/Assets\/[^/?#]+-[A-Za-z0-9_-]{8,}\.(?:js|css)$/;
@@ -117,6 +118,16 @@ function getStaticAssetCacheControl(pathname, contentType, status = 200) {
     return IMMUTABLE_STATIC_CACHE_CONTROL;
   }
   return SHORT_STATIC_CACHE_CONTROL;
+}
+
+function resolveGameDocumentRequest(request, pathname) {
+  if ((request.method !== "GET" && request.method !== "HEAD") || !GAME_DOCUMENT_ROUTES.has(pathname)) {
+    return null;
+  }
+
+  const gameUrl = new URL(request.url);
+  gameUrl.pathname = "/game.html";
+  return new Request(gameUrl, request);
 }
 
 function resolvePublicApiRoute(pathname, method) {
@@ -225,7 +236,8 @@ export default {
       return new Response("Not found", { status: 404 });
     }
 
-    const assetResponse = await env.ASSETS.fetch(request);
+    const gameDocumentRequest = resolveGameDocumentRequest(request, url.pathname);
+    const assetResponse = await env.ASSETS.fetch(gameDocumentRequest ?? request);
     const contentType = assetResponse.headers.get("content-type") || "";
     const headers = new Headers(assetResponse.headers);
     headers.set("cache-control", getStaticAssetCacheControl(url.pathname, contentType, assetResponse.status));
