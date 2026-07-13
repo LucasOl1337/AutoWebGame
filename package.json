@@ -60,6 +60,7 @@
     "test:growth-telemetry-uuid-fallback": "npm run compile:esm && node tests/growth-telemetry-uuid-fallback-check.mjs",
     "test:i18n-storage-guard": "npm run compile:esm && node tests/i18n-storage-guard-check.mjs",
     "test:touch-focus-css": "node tests/touch-focus-css-check.mjs",
+    "test:audio-range-focus": "node tests/audio-range-focus-check.mjs",
     "test:how-to-play-page": "node tests/how-to-play-page-check.mjs",
     "test:worker-api-route-dispatch": "node tests/worker-api-route-dispatch-check.mjs",
     "test:worker-cache-headers": "node tests/worker-cache-headers-check.mjs",

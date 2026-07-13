@@ -1,5 +1,16 @@
 # Swarm Ledger - Geral
 
+## 2026-07-13 - Script npm para foco acessivel do controle de audio
+
+- Automacao: `SOLO`.
+- Intencao registrada antes da implementacao: expor o check existente `tests/audio-range-focus-check.mjs` via um script npm dedicado; limitar a mudanca a infraestrutura de teste e a este ledger, sem tocar runtime, gameplay, rede, CSS ou arquivos concorrentes.
+- Classificacao: infraestrutura de teste de acessibilidade, baixo risco.
+- Evidencia antes: a execucao direta do check passou, validando seletor `:focus-visible`, outline de 2 px e offset de 2 px, mas o teste nao estava acessivel pelos scripts npm.
+- Mudanca: adicionado somente `test:audio-range-focus`, executando o check CSS existente sem compilacao desnecessaria.
+- Validacao: `npm run test:audio-range-focus` passou com os tres checks verdadeiros e `pass: true`; `npm run build` passou (TypeScript + Vite, 42 modulos); `git diff --check -- package.json SwarmLedger-geral.md` passou.
+- Revisao de escopo: a unica insercao funcional desta rodada e o script `test:audio-range-focus`; as tres outras insercoes preexistentes em `package.json` e todas as demais mudancas concorrentes foram preservadas e excluidas do staging seletivo.
+- Commit: aprovado pelas validacoes e sera criado seletivamente com apenas o script npm e este registro.
+
 ## 2026-07-13 - Tema surpresa estavel por URL
 
 - Automacao: `SOLO`.
