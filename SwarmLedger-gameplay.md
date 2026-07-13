@@ -10,6 +10,7 @@
 - Evidência: `kickScores=[180,0]`, `hasExpectedKickPriority=true`, `preservesKickAsSituational=true`; o teste de chute adjacente confirmou `safeDecision={direction:"right",placeBomb:false}` e guardrails sem upgrade, sem direção comprometida, destino bloqueado e fuse urgente.
 - Resultado/validação: `npm run compile:esm`; `node tests/bot-powerup-priority-check.mjs`; `node tests/bot-safe-adjacent-kick-check.mjs`; `node tests/bot-own-blast-escape-check.mjs`; `node tests/bot-survival-10s-check.mjs`; `node tests/bot-target-selection-check.mjs`; `node tests/bomb-push-check.mjs`; `npm run build` — todos concluídos com código 0. Validação manual visual ficou limitada porque a coleta depende de drop/rota; o comportamento foi demonstrado deterministicamente sem alterar o runtime de chute.
 - Classificação final: Comprovada para coerência do fluxo estratégico; frequência e impacto perceptível em partidas reais permanecem experimentais.
+- Commit seletivo da intervenção: `c2dc5e6df8ca37d718a2fb59862dd9bdb0ec58cc` (`feat(gameplay): value safe kick upgrade for bots`).
 
 ## 2026-07-13 — ux-how-to-play-remote-keys
 
