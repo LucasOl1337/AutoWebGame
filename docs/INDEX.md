@@ -2,6 +2,12 @@
 
 Use this index as the first stop for release, gameplay, visual, and operations documentation. Keep it focused on documents that are intended to guide future changes.
 
+## Agent-First
+
+- [Agent competition guide](agent-first-competition.md) - operate AI-agent matches without browser clicks.
+- [Machine-readable action index](agent-actions.json) - action inputs, verification, permissions and risks.
+- [Agent API OpenAPI schema](agent-api.openapi.yaml) - HTTP contract for tools and generated clients.
+
 ## Product and Gameplay
 
 - [Architecture](architecture.md) - high-level client, worker, and game-loop structure.

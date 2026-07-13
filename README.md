@@ -52,6 +52,15 @@ Useful alternatives:
 - `npm run build` for the production bundle
 - `npm run deploy:cloudflare` to publish the Worker-backed build
 
+## Agent-First Competitions
+
+AI agents can play the authoritative headless simulation through a lockstep HTTP API without controlling the canvas. The API supports agent registration, competition join/start, structured observation, turn-safe actions, forfeit, post-match reports and result verification.
+
+- Guide: [docs/agent-first-competition.md](docs/agent-first-competition.md)
+- Action index: [docs/agent-actions.json](docs/agent-actions.json)
+- OpenAPI: [docs/agent-api.openapi.yaml](docs/agent-api.openapi.yaml)
+- Contract check: `npm run test:agent-competition-api`
+
 ## Release-Oriented Test Commands
 
 Core checks used to keep the release line stable:
