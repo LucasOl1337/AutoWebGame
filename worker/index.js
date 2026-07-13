@@ -39,19 +39,6 @@ import {
   getActiveMatchReconnectState,
   normalizeReconnectToken,
 } from "../src/NetCode/reconnect-session";
-import {
-  buildAgentActionCatalog,
-  createAgentObservation,
-  createAgentSession,
-  createAgentSessionToken,
-  hashAgentSessionToken,
-  normalizeAgentAction,
-  normalizeAgentCompetitionId,
-  normalizeAgentProfile,
-  normalizeAgentReport,
-  readBearerToken,
-  timingSafeAgentSecretEqual,
-} from "./agent-api.js";
 
 const STATE_VERSION = 3;
 const MATCH_TICK_MS = 1000 / 60;
@@ -59,10 +46,6 @@ const FULL_SNAPSHOT_EVERY_TICKS = 6;
 const MATCH_PUMP_INTERVAL_MS = 8;
 const MAX_MATCH_STEPS_PER_PUMP = 5;
 const MATCH_RESULT_RESTART_DELAY_MS = 900;
-const AGENT_COMPETITION_TICKS_PER_TURN = 6;
-const AGENT_API_MAX_BODY_BYTES = 65_536;
-const AGENT_COMPETITION_STORAGE_PREFIX = "agent:competition:";
-const AGENT_SESSION_STORAGE_PREFIX = "agent:session:";
 const ENDLESS_ROOM_CODE = "ENDLS1";
 const ENDLESS_ROOM_TITLE = "Partida infinita";
 const PLAYER_IDS = [1, 2, 3, 4];
@@ -102,7 +85,6 @@ const ACTIVE_ARENA_ID_KEY = "arena:active-id";
 const ARENA_KEY_PREFIX = "arena:def:";
 const HASHED_VITE_ASSET_RE = /^\/Assets\/[^/?#]+-[A-Za-z0-9_-]{8,}\.(?:js|css)$/;
 const API_ADMIN_ARENA_ROUTE_RE = /^\/api\/admin\/arenas\/([^/]+)(?:\/(activate|validate))?$/;
-const API_AGENT_COMPETITION_ROUTE_RE = /^\/api\/agent\/competitions\/([^/]+)\/(join|start|observe|act|forfeit|report|summary)$/;
 const SHORT_STATIC_CACHE_CONTROL = "public, max-age=86400, stale-while-revalidate=604800";
 const IMMUTABLE_STATIC_CACHE_CONTROL = "public, max-age=31536000, immutable";
 const PUBLIC_API_ROUTES = new Map([
@@ -119,8 +101,6 @@ const PUBLIC_API_ROUTES = new Map([
   ["/api/billing/status", { methods: new Set(["GET"]), targetPath: "/internal/billing/status" }],
   ["/api/billing/checkout", { methods: new Set(["POST"]), targetPath: "/internal/billing/checkout" }],
   ["/api/billing/webhook", { methods: new Set(["POST"]), targetPath: "/internal/billing/webhook" }],
-  ["/api/agent/actions", { methods: new Set(["GET"]), targetPath: "/internal/agent/actions" }],
-  ["/api/agent/register", { methods: new Set(["POST"]), targetPath: "/internal/agent/register" }],
 ]);
 
 function getStaticAssetCacheControl(pathname, contentType, status = 200) {
@@ -150,56 +130,20 @@ function resolvePublicApiRoute(pathname, method) {
   }
 
   const arenaAdminMatch = API_ADMIN_ARENA_ROUTE_RE.exec(pathname);
-  if (arenaAdminMatch) {
-    const arenaId = encodeURIComponent(arenaAdminMatch[1]);
-    const suffix = arenaAdminMatch[2] ? `/${arenaAdminMatch[2]}` : "";
-    return {
-      matched: true,
-      methodAllowed: method === "GET" || method === "PUT" || method === "POST",
-      targetPath: `/internal/admin/arenas/${arenaId}${suffix}`,
-    };
-  }
-
-  const agentCompetitionMatch = API_AGENT_COMPETITION_ROUTE_RE.exec(pathname);
-  if (!agentCompetitionMatch) {
+  if (!arenaAdminMatch) {
     return null;
   }
-  const competitionId = encodeURIComponent(agentCompetitionMatch[1]);
-  const action = agentCompetitionMatch[2];
-  const expectedMethod = action === "observe" || action === "summary" ? "GET" : "POST";
+
+  const arenaId = encodeURIComponent(arenaAdminMatch[1]);
+  const suffix = arenaAdminMatch[2] ? `/${arenaAdminMatch[2]}` : "";
   return {
     matched: true,
-    methodAllowed: method === expectedMethod,
-    targetPath: `/internal/agent/competitions/${competitionId}/${action}`,
+    methodAllowed: method === "GET" || method === "PUT" || method === "POST",
+    targetPath: `/internal/admin/arenas/${arenaId}${suffix}`,
   };
 }
 
 /**
- * @typedef {{
- *   agentId: string;
- *   displayName: string;
- *   model: string | null;
- *   provider: string | null;
- *   playerId: 1 | 2 | 3 | 4;
- *   characterIndex: number;
- * }} AgentCompetitionParticipant
- *
- * @typedef {{
- *   id: string;
- *   status: "waiting" | "running" | "finished";
- *   turn: number;
- *   createdAt: number;
- *   startedAt: number | null;
- *   finishedAt: number | null;
- *   startedByAgentId: string | null;
- *   participants: AgentCompetitionParticipant[];
- *   pendingActions: Map<1 | 2 | 3 | 4, import("../src/NetCode/protocol").OnlineInputState & { turn: number }>;
- *   game: GameApp | null;
- *   snapshot: import("../src/NetCode/protocol").OnlineGameSnapshot | null;
- *   result: { winnerPlayerId: number | null; winnerAgentId: string | null; finishedAt: number } | null;
- *   reports: Array<{ reportId: string; agentId: string; displayName: string; createdAt: number; summary: string | null; strengths: string[]; issues: string[]; suggestions: string[] }>;
- * }} AgentCompetition
- *
  * @typedef {{
  *   roomCode: string;
  *   title: string;
@@ -257,17 +201,6 @@ export default {
     if (apiRoute) {
       if (!apiRoute.methodAllowed) {
         return new Response("Method not allowed", { status: 405 });
-      }
-      if (url.pathname.startsWith("/api/agent/") && request.method === "POST") {
-        const declaredLength = Number(request.headers.get("content-length") || 0);
-        if (Number.isFinite(declaredLength) && declaredLength > AGENT_API_MAX_BODY_BYTES) {
-          return agentApiError("payload_too_large", 413);
-        }
-        const body = await request.arrayBuffer();
-        if (body.byteLength > AGENT_API_MAX_BODY_BYTES) {
-          return agentApiError("payload_too_large", 413);
-        }
-        return globalLobby.fetch(rewriteRequestPath(request, apiRoute.targetPath, body));
       }
       return globalLobby.fetch(rewriteRequestPath(request, apiRoute.targetPath));
     }
@@ -340,8 +273,6 @@ export class GlobalLobby extends DurableObject {
   preferredCharacterSelections = new Map();
   /** @type {Map<string, { game: GameApp, inputs: Record<1 | 2 | 3 | 4, import("../src/NetCode/protocol").OnlineInputState & { inputSeq?: number, sentAtMs?: number }>, ackedInputSeq: Record<1 | 2 | 3 | 4, number>, timer: ReturnType<typeof setInterval> | null, tick: number, activePlayerIds: Array<1 | 2 | 3 | 4>, botPlayerIds: Array<1 | 2 | 3 | 4>, characterSelections: Record<1 | 2 | 3 | 4, number>, matchResultChoices: Record<1 | 2 | 3 | 4, "rematch" | "lobby" | null>, clock: import("../src/NetCode/server-tick").FixedRatePumpState, resultRestartAtMs: number | null, roomMode: "classic" | "endless", arenaDefinition: import("../src/Gameplay/types").ArenaDefinition }>} */
   matches = new Map();
-  /** @type {Map<string, AgentCompetition>} */
-  agentCompetitions = new Map();
   /** @type {import("../src/Gameplay/types").ArenaDefinition} */
   activeArenaDefinition = createDefaultArenaDefinition();
   /** @type {Promise<void>} */
@@ -508,47 +439,6 @@ export class GlobalLobby extends DurableObject {
 
     if (url.pathname === "/internal/billing/webhook") {
       return this.handleBillingWebhook(request);
-    }
-
-    if (url.pathname === "/internal/agent/actions") {
-      return Response.json({
-        ...buildAgentActionCatalog(),
-        simulation: {
-          mode: "lockstep",
-          ticksPerTurn: AGENT_COMPETITION_TICKS_PER_TURN,
-          tickMs: MATCH_TICK_MS,
-          participantRange: [2, 4],
-        },
-      }, {
-        headers: { "cache-control": "public, max-age=300" },
-      });
-    }
-
-    if (url.pathname === "/internal/agent/register") {
-      return this.handleAgentRegister(request);
-    }
-
-    const agentCompetitionMatch = url.pathname.match(/^\/internal\/agent\/competitions\/([^/]+)\/(join|start|observe|act|forfeit|report|summary)$/);
-    if (agentCompetitionMatch) {
-      const competitionId = decodeURIComponent(agentCompetitionMatch[1]);
-      switch (agentCompetitionMatch[2]) {
-        case "join":
-          return this.handleAgentCompetitionJoin(request, competitionId);
-        case "start":
-          return this.handleAgentCompetitionStart(request, competitionId);
-        case "observe":
-          return this.handleAgentCompetitionObserve(request, competitionId);
-        case "act":
-          return this.handleAgentCompetitionAct(request, competitionId);
-        case "forfeit":
-          return this.handleAgentCompetitionForfeit(request, competitionId);
-        case "report":
-          return this.handleAgentCompetitionReport(request, competitionId);
-        case "summary":
-          return this.handleAgentCompetitionSummary(request, competitionId);
-        default:
-          break;
-      }
     }
 
     if (url.pathname === "/internal/admin/daily-report") {
@@ -1005,432 +895,6 @@ export class GlobalLobby extends DurableObject {
         },
       },
     );
-  }
-
-  /** @param {Request} request */
-  async handleAgentRegister(request) {
-    const expectedToken = typeof this.env.AGENT_OPERATOR_TOKEN === "string" ? this.env.AGENT_OPERATOR_TOKEN.trim() : "";
-    const providedToken = readBearerToken(request);
-    if (!expectedToken) {
-      await discardRequestBody(request);
-      return agentApiError("agent_api_not_configured", 503);
-    }
-    if (!providedToken || !(await timingSafeAgentSecretEqual(providedToken, expectedToken))) {
-      await discardRequestBody(request);
-      return agentApiError("unauthorized_operator", 401);
-    }
-    const payload = await readJsonObject(request);
-    if (!payload) {
-      return agentApiError("invalid_json", 400);
-    }
-    const normalized = normalizeAgentProfile(payload);
-    if (!normalized.ok) {
-      return agentApiError(normalized.error, 400);
-    }
-    const session = createAgentSession(normalized.profile);
-    const sessionToken = createAgentSessionToken();
-    const tokenHash = await hashAgentSessionToken(sessionToken);
-    await this.ctx.storage.put(`${AGENT_SESSION_STORAGE_PREFIX}${tokenHash}`, session);
-    return agentApiJson({
-      ok: true,
-      protocol: "bomba-agent-competition-v1",
-      agent: session,
-      sessionToken,
-      verification: { agentId: session.agentId, expiresAt: session.expiresAt },
-    }, 201);
-  }
-
-  /** @param {Request} request */
-  async authenticateAgent(request) {
-    const token = readBearerToken(request);
-    if (!token.startsWith("bomba_agent_")) {
-      return null;
-    }
-    const tokenHash = await hashAgentSessionToken(token);
-    const session = await this.ctx.storage.get(`${AGENT_SESSION_STORAGE_PREFIX}${tokenHash}`);
-    if (!session || typeof session !== "object" || typeof session.agentId !== "string") {
-      return null;
-    }
-    if (!Number.isFinite(session.expiresAt) || session.expiresAt <= Date.now()) {
-      await this.ctx.storage.delete(`${AGENT_SESSION_STORAGE_PREFIX}${tokenHash}`);
-      return null;
-    }
-    return session;
-  }
-
-  /** @param {string} competitionId */
-  async readAgentCompetition(competitionId) {
-    const normalizedId = normalizeAgentCompetitionId(competitionId);
-    if (!normalizedId) {
-      return null;
-    }
-    const cached = this.agentCompetitions.get(normalizedId);
-    if (cached) {
-      return cached;
-    }
-    const stored = await this.ctx.storage.get(`${AGENT_COMPETITION_STORAGE_PREFIX}${normalizedId}`);
-    if (!stored || typeof stored !== "object" || !Array.isArray(stored.participants)) {
-      return null;
-    }
-    const competition = {
-      id: normalizedId,
-      status: stored.status === "running" || stored.status === "finished" ? stored.status : "waiting",
-      turn: Number.isInteger(stored.turn) ? stored.turn : 0,
-      createdAt: Number(stored.createdAt) || Date.now(),
-      startedAt: Number.isFinite(stored.startedAt) ? stored.startedAt : null,
-      finishedAt: Number.isFinite(stored.finishedAt) ? stored.finishedAt : null,
-      startedByAgentId: typeof stored.startedByAgentId === "string" ? stored.startedByAgentId : null,
-      participants: stored.participants,
-      pendingActions: new Map(Array.isArray(stored.pendingActions) ? stored.pendingActions : []),
-      game: null,
-      snapshot: stored.snapshot && typeof stored.snapshot === "object" ? stored.snapshot : null,
-      result: stored.result && typeof stored.result === "object" ? stored.result : null,
-      reports: Array.isArray(stored.reports) ? stored.reports : [],
-    };
-    if (competition.status === "running" && competition.snapshot) {
-      const game = createServerGame(competition.snapshot.arena);
-      const activePlayerIds = competition.participants.map((entry) => entry.playerId);
-      const selections = createSeatMap((playerId) => (
-        competition.participants.find((entry) => entry.playerId === playerId)?.characterIndex ?? 0
-      ));
-      const labels = createSeatMap((playerId) => (
-        competition.participants.find((entry) => entry.playerId === playerId)?.displayName ?? `Agent ${playerId}`
-      ));
-      game.startServerAuthoritativeMatch(activePlayerIds, selections, {
-        arena: competition.snapshot.arena,
-        playerLabels: labels,
-      });
-      game.applyOnlineSnapshot(competition.snapshot);
-      competition.game = game;
-    }
-    this.agentCompetitions.set(normalizedId, competition);
-    return competition;
-  }
-
-  /** @param {AgentCompetition} competition */
-  async persistAgentCompetition(competition) {
-    const snapshot = competition.game?.exportOnlineSnapshot() ?? competition.snapshot;
-    competition.snapshot = snapshot;
-    await this.ctx.storage.put(`${AGENT_COMPETITION_STORAGE_PREFIX}${competition.id}`, {
-      id: competition.id,
-      status: competition.status,
-      turn: competition.turn,
-      createdAt: competition.createdAt,
-      startedAt: competition.startedAt,
-      finishedAt: competition.finishedAt,
-      startedByAgentId: competition.startedByAgentId,
-      participants: competition.participants,
-      pendingActions: Array.from(competition.pendingActions.entries()),
-      snapshot,
-      result: competition.result,
-      reports: competition.reports,
-    });
-  }
-
-  /** @param {Request} request @param {string} rawCompetitionId */
-  async handleAgentCompetitionJoin(request, rawCompetitionId) {
-    const session = await this.authenticateAgent(request);
-    if (!session) {
-      await discardRequestBody(request);
-      return agentApiError("unauthorized_agent", 401);
-    }
-    const competitionId = normalizeAgentCompetitionId(rawCompetitionId);
-    if (!competitionId) {
-      return agentApiError("invalid_competition_id", 400);
-    }
-    const payload = await readJsonObject(request);
-    if (!payload) {
-      return agentApiError("invalid_json", 400);
-    }
-    let competition = await this.readAgentCompetition(competitionId);
-    if (!competition) {
-      competition = {
-        id: competitionId,
-        status: "waiting",
-        turn: 0,
-        createdAt: Date.now(),
-        startedAt: null,
-        finishedAt: null,
-        startedByAgentId: null,
-        participants: [],
-        pendingActions: new Map(),
-        game: null,
-        snapshot: null,
-        result: null,
-        reports: [],
-      };
-      this.agentCompetitions.set(competitionId, competition);
-    }
-    if (competition.status !== "waiting") {
-      return agentApiError("competition_already_started", 409);
-    }
-    const existing = competition.participants.find((entry) => entry.agentId === session.agentId);
-    if (!existing) {
-      if (competition.participants.length >= PLAYER_IDS.length) {
-        return agentApiError("competition_full", 409);
-      }
-      const playerId = PLAYER_IDS[competition.participants.length];
-      const requestedCharacter = Number(payload.characterIndex);
-      const characterIndex = Number.isInteger(requestedCharacter)
-        ? Math.max(0, Math.min(CHARACTER_ROSTER_MANIFEST.length - 1, requestedCharacter))
-        : 0;
-      competition.participants.push({
-        agentId: session.agentId,
-        displayName: session.displayName,
-        model: session.model ?? null,
-        provider: session.provider ?? null,
-        playerId,
-        characterIndex,
-      });
-      await this.persistAgentCompetition(competition);
-    }
-    return agentApiJson(createAgentObservation(competition, session));
-  }
-
-  /** @param {Request} request @param {string} rawCompetitionId */
-  async handleAgentCompetitionStart(request, rawCompetitionId) {
-    const session = await this.authenticateAgent(request);
-    if (!session) {
-      await discardRequestBody(request);
-      return agentApiError("unauthorized_agent", 401);
-    }
-    const payload = await readJsonObject(request);
-    if (!payload) {
-      return agentApiError("invalid_json", 400);
-    }
-    const competition = await this.readAgentCompetition(rawCompetitionId);
-    if (!competition) {
-      return agentApiError("competition_not_found", 404);
-    }
-    if (!competition.participants.some((entry) => entry.agentId === session.agentId)) {
-      return agentApiError("agent_not_in_competition", 403);
-    }
-    if (competition.status !== "waiting") {
-      return agentApiError("competition_already_started", 409);
-    }
-    if (payload.confirm !== true) {
-      return agentApiError("explicit_confirmation_required", 409, { requiredField: "confirm" });
-    }
-    if (competition.participants.length < 2) {
-      return agentApiError("not_enough_agents", 409);
-    }
-    const activePlayerIds = competition.participants.map((entry) => entry.playerId);
-    const selections = createSeatMap((playerId) => (
-      competition.participants.find((entry) => entry.playerId === playerId)?.characterIndex ?? 0
-    ));
-    const labels = createSeatMap((playerId) => (
-      competition.participants.find((entry) => entry.playerId === playerId)?.displayName ?? `Agent ${playerId}`
-    ));
-    const game = createServerGame(this.activeArenaDefinition);
-    game.startServerAuthoritativeMatch(activePlayerIds, selections, {
-      arena: this.activeArenaDefinition,
-      playerLabels: labels,
-    });
-    competition.game = game;
-    competition.snapshot = game.exportOnlineSnapshot();
-    competition.status = "running";
-    competition.startedAt = Date.now();
-    competition.startedByAgentId = session.agentId;
-    competition.turn = 0;
-    competition.pendingActions.clear();
-    await this.persistAgentCompetition(competition);
-    return agentApiJson(createAgentObservation(competition, session));
-  }
-
-  /** @param {Request} request @param {string} rawCompetitionId */
-  async handleAgentCompetitionObserve(request, rawCompetitionId) {
-    const authenticated = await this.readAgentCompetitionForRequest(request, rawCompetitionId);
-    if (authenticated.response) {
-      return authenticated.response;
-    }
-    return agentApiJson(createAgentObservation(authenticated.competition, authenticated.session));
-  }
-
-  /** @param {Request} request @param {string} rawCompetitionId */
-  async handleAgentCompetitionAct(request, rawCompetitionId) {
-    const authenticated = await this.readAgentCompetitionForRequest(request, rawCompetitionId);
-    if (authenticated.response) {
-      return authenticated.response;
-    }
-    const payload = await readJsonObject(request);
-    if (!payload) {
-      return agentApiError("invalid_json", 400);
-    }
-    const { competition, session } = authenticated;
-    if (competition.status !== "running" || !competition.game || !competition.snapshot) {
-      return agentApiError("competition_not_running", 409);
-    }
-    const participant = competition.participants.find((entry) => entry.agentId === session.agentId);
-    if (!participant) {
-      return agentApiError("agent_not_in_competition", 403);
-    }
-    if (!competition.snapshot.players[participant.playerId]?.alive) {
-      return agentApiError("agent_player_eliminated", 409);
-    }
-    const normalized = normalizeAgentAction(payload);
-    if (!normalized.ok) {
-      return agentApiError(normalized.error, 400);
-    }
-    if (normalized.action.turn !== competition.turn) {
-      return agentApiError("stale_or_future_turn", 409, { expectedTurn: competition.turn });
-    }
-    if (competition.pendingActions.has(participant.playerId)) {
-      return agentApiError("action_already_submitted", 409, { expectedTurn: competition.turn });
-    }
-    competition.pendingActions.set(participant.playerId, normalized.action);
-    this.advanceAgentCompetitionWhenReady(competition);
-    await this.persistAgentCompetition(competition);
-    return agentApiJson(createAgentObservation(competition, session));
-  }
-
-  /** @param {Request} request @param {string} rawCompetitionId */
-  async handleAgentCompetitionForfeit(request, rawCompetitionId) {
-    const authenticated = await this.readAgentCompetitionForRequest(request, rawCompetitionId);
-    if (authenticated.response) {
-      return authenticated.response;
-    }
-    const payload = await readJsonObject(request);
-    if (!payload) {
-      return agentApiError("invalid_json", 400);
-    }
-    const { competition, session } = authenticated;
-    if (competition.status !== "running" || !competition.game || !competition.snapshot) {
-      return agentApiError("competition_not_running", 409);
-    }
-    if (payload.confirm !== true) {
-      return agentApiError("explicit_confirmation_required", 409, { requiredField: "confirm" });
-    }
-    const participant = competition.participants.find((entry) => entry.agentId === session.agentId);
-    if (!participant) {
-      return agentApiError("agent_not_in_competition", 403);
-    }
-    competition.game.removeServerPlayer(participant.playerId);
-    competition.snapshot = competition.game.exportOnlineSnapshot();
-    const survivors = competition.participants.filter((entry) => competition.snapshot.players[entry.playerId]?.alive);
-    const winner = survivors.length === 1 ? survivors[0] : null;
-    competition.status = "finished";
-    competition.finishedAt = Date.now();
-    competition.result = {
-      winnerPlayerId: winner?.playerId ?? null,
-      winnerAgentId: winner?.agentId ?? null,
-      finishedAt: competition.finishedAt,
-    };
-    competition.pendingActions.clear();
-    await this.persistAgentCompetition(competition);
-    return agentApiJson(createAgentObservation(competition, session));
-  }
-
-  /** @param {AgentCompetition} competition */
-  advanceAgentCompetitionWhenReady(competition) {
-    if (!competition.game || !competition.snapshot || competition.status !== "running") {
-      return;
-    }
-    const aliveParticipants = competition.participants.filter((entry) => competition.snapshot.players[entry.playerId]?.alive);
-    if (aliveParticipants.some((entry) => !competition.pendingActions.has(entry.playerId))) {
-      return;
-    }
-    for (let tick = 0; tick < AGENT_COMPETITION_TICKS_PER_TURN; tick += 1) {
-      for (const participant of aliveParticipants) {
-        const action = competition.pendingActions.get(participant.playerId);
-        competition.game.setServerPlayerInput(participant.playerId, {
-          direction: action?.direction ?? null,
-          bombPressed: tick === 0 && action?.bombPressed === true,
-          detonatePressed: tick === 0 && action?.detonatePressed === true,
-          skillPressed: tick === 0 && action?.skillPressed === true,
-          skillHeld: action?.skillHeld === true,
-        });
-      }
-      competition.game.advanceServerSimulation(MATCH_TICK_MS);
-    }
-    for (const participant of aliveParticipants) {
-      competition.game.setServerPlayerInput(participant.playerId, createNeutralInput());
-    }
-    competition.pendingActions.clear();
-    competition.turn += 1;
-    competition.snapshot = competition.game.exportOnlineSnapshot();
-    if (competition.snapshot.matchWinner) {
-      const winner = competition.participants.find((entry) => entry.playerId === competition.snapshot.matchWinner) ?? null;
-      competition.status = "finished";
-      competition.finishedAt = Date.now();
-      competition.result = {
-        winnerPlayerId: competition.snapshot.matchWinner,
-        winnerAgentId: winner?.agentId ?? null,
-        finishedAt: competition.finishedAt,
-      };
-    }
-  }
-
-  /** @param {Request} request @param {string} rawCompetitionId */
-  async handleAgentCompetitionReport(request, rawCompetitionId) {
-    const authenticated = await this.readAgentCompetitionForRequest(request, rawCompetitionId);
-    if (authenticated.response) {
-      return authenticated.response;
-    }
-    const payload = await readJsonObject(request);
-    if (!payload) {
-      return agentApiError("invalid_json", 400);
-    }
-    if (authenticated.competition.status !== "finished") {
-      return agentApiError("report_requires_finished_competition", 409);
-    }
-    const normalized = normalizeAgentReport(payload);
-    if (!normalized.ok) {
-      return agentApiError(normalized.error, 400);
-    }
-    const report = {
-      reportId: createId("agent_report"),
-      agentId: authenticated.session.agentId,
-      displayName: authenticated.session.displayName,
-      createdAt: Date.now(),
-      ...normalized.report,
-    };
-    const previousIndex = authenticated.competition.reports.findIndex((entry) => entry.agentId === report.agentId);
-    if (previousIndex >= 0) {
-      authenticated.competition.reports[previousIndex] = report;
-    } else {
-      authenticated.competition.reports.push(report);
-    }
-    await this.persistAgentCompetition(authenticated.competition);
-    return agentApiJson({ ok: true, report, verification: { reportId: report.reportId } }, 201);
-  }
-
-  /** @param {Request} request @param {string} rawCompetitionId */
-  async handleAgentCompetitionSummary(request, rawCompetitionId) {
-    const authenticated = await this.readAgentCompetitionForRequest(request, rawCompetitionId);
-    if (authenticated.response) {
-      return authenticated.response;
-    }
-    const competition = authenticated.competition;
-    return agentApiJson({
-      ok: true,
-      competitionId: competition.id,
-      status: competition.status,
-      turn: competition.turn,
-      result: competition.result,
-      participants: competition.participants,
-      reports: competition.reports,
-      verification: {
-        reportCount: competition.reports.length,
-        finishedAt: competition.finishedAt,
-      },
-    });
-  }
-
-  /** @param {Request} request @param {string} rawCompetitionId */
-  async readAgentCompetitionForRequest(request, rawCompetitionId) {
-    const session = await this.authenticateAgent(request);
-    if (!session) {
-      await discardRequestBody(request);
-      return { response: agentApiError("unauthorized_agent", 401) };
-    }
-    const competition = await this.readAgentCompetition(rawCompetitionId);
-    if (!competition) {
-      return { response: agentApiError("competition_not_found", 404) };
-    }
-    if (!competition.participants.some((entry) => entry.agentId === session.agentId)) {
-      return { response: agentApiError("agent_not_in_competition", 403) };
-    }
-    return { session, competition, response: null };
   }
 
   /**
@@ -4177,45 +3641,6 @@ function createId(prefix) {
   return `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
 
-function agentApiJson(payload, status = 200) {
-  return Response.json(payload, {
-    status,
-    headers: { "cache-control": "no-store" },
-  });
-}
-
-function agentApiError(code, status, details = null) {
-  return agentApiJson({
-    ok: false,
-    error: {
-      code,
-      message: code.replaceAll("_", " "),
-      retryable: status >= 500,
-      details,
-    },
-  }, status);
-}
-
-async function readJsonObject(request) {
-  const contentLength = Number(request.headers.get("content-length") || 0);
-  if (Number.isFinite(contentLength) && contentLength > 65_536) {
-    await discardRequestBody(request);
-    return null;
-  }
-  try {
-    const payload = await request.json();
-    return payload && typeof payload === "object" && !Array.isArray(payload) ? payload : null;
-  } catch {
-    return null;
-  }
-}
-
-async function discardRequestBody(request) {
-  if (request.body) {
-    await request.arrayBuffer();
-  }
-}
-
 function createNeutralInput() {
   return {
     direction: null,
@@ -4228,17 +3653,9 @@ function createNeutralInput() {
   };
 }
 
-function rewriteRequestPath(request, pathname, body = undefined) {
+function rewriteRequestPath(request, pathname) {
   const url = new URL(request.url);
   url.pathname = pathname;
-  if (body !== undefined) {
-    return new Request(url.toString(), {
-      method: request.method,
-      headers: request.headers,
-      body,
-      redirect: request.redirect,
-    });
-  }
   return new Request(url.toString(), request);
 }
 
