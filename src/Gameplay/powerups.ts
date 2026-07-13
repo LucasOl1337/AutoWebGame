@@ -12,7 +12,7 @@ import type { MenuPlayerId, PlayerState, PowerUpType } from "./types";
 
 export type SkillPowerUpType = PowerUpType;
 const MAX_SHORT_FUSE_LEVEL = 2;
-const SHORT_FUSE_STEP_MS = 350;
+const SHORT_FUSE_STEP_MS = 400;
 const MIN_SHORT_FUSE_MS = 1_200;
 
 export interface PowerUpDefinition {
