@@ -55,6 +55,9 @@ export class InputManager {
         event.preventDefault();
       }
       const wasAlreadyDown = this.keysDown.has(code);
+      if (event.repeat && !wasAlreadyDown) {
+        return;
+      }
       if (!wasAlreadyDown) {
         this.pressCounts.set(code, (this.pressCounts.get(code) ?? 0) + 1);
       }
