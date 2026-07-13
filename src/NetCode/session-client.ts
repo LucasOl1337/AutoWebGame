@@ -1774,6 +1774,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         },
         { key: "Q", label: copy.controls.bomb, detail: copy.landing.localControlsBomb },
         {
+          key: "R",
+          label: copy.landing.localControlsRemote,
+          detail: this.translate("Jogador 1 · requer controle remoto", "Player 1 · requires remote control"),
+        },
+        {
           key: this.translate("Espaço", "Space"),
           label: copy.controls.ultimate,
           detail: copy.landing.localControlsUltimate,

@@ -97,6 +97,7 @@ export interface SiteCopy {
     localControlsHint: string;
     localControlsMove: string;
     localControlsBomb: string;
+    localControlsRemote: string;
     localControlsUltimate: string;
   };
   lobbies: {
@@ -376,6 +377,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       localControlsHint: "Objetivo: seja o último bomber vivo. A partida contra bots usa o personagem selecionado ao lado.",
       localControlsMove: "Mover pelo labirinto",
       localControlsBomb: "Colocar bomba",
+      localControlsRemote: "Detonar bomba remota",
       localControlsUltimate: "Virar a rodada",
     },
     lobbies: {
@@ -642,6 +644,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       localControlsHint: "Objective: be the last bomber alive. Bot matches use the character selected on the side.",
       localControlsMove: "Move through the maze",
       localControlsBomb: "Place bomb",
+      localControlsRemote: "Detonate remote bomb",
       localControlsUltimate: "Turn the round",
     },
     lobbies: {
