@@ -8,7 +8,7 @@
 - Mudanca: adicionado somente `test:roster-invalid-public-manifest`, com compilacao ESM e execucao do check existente.
 - Validacao: `npm run test:roster-invalid-public-manifest` passou (`pass: true`, roster aprovado com 4 IDs e sem `Ranni Copy`); `npm run build` passou (TypeScript + Vite, 42 modulos); `git diff --check -- package.json SwarmLedger-geral.md` passou.
 - Revisao de escopo: diff contem uma insercao funcional em `package.json` e este registro; mudancas preexistentes em `DocsDev/swarm-coordination.md`, `index.html`, `src/Engine/game-app.ts`, `tests/remote-detonation-check.mjs` e ledgers alheios foram preservadas e excluidas do staging.
-- Commit: pendente de criacao seletiva.
+- Commit: `67a0d80eff4dc1c6ef3469396b763912d595409e` (`test(assets): expose invalid roster manifest check`).
 
 ## 2026-07-12 - Script npm para biblioteca de temas
 
