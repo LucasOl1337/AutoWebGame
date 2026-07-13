@@ -50,6 +50,7 @@
     "test:room-code-normalization": "node tests/room-code-entry-normalization-check.mjs",
     "test:account-username": "npm run compile:esm && node tests/account-username-validation-check.mjs",
     "test:feedback-length": "node tests/feedback-length-guard-check.mjs",
+    "test:release-visibility": "node tests/release-visibility-check.mjs",
     "test:billing-commercial": "npm run compile:esm && node tests/billing-commercial-flow-check.mjs",
     "test:commercial-release-flow": "npm run compile:esm && node tests/commercial-release-flow-check.mjs",
     "test:setup-loading-brief": "npm run compile:esm && node tests/setup-loading-brief-check.mjs",

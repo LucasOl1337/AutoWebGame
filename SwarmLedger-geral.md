@@ -1,5 +1,15 @@
 # Swarm Ledger - Geral
 
+## 2026-07-13 - Script npm para visibilidade de release
+
+- Automacao: `autowebgame-enxame-geral`.
+- Escopo registrado antes da implementacao: expor o check existente `tests/release-visibility-check.mjs` via `package.json`; sem alterar runtime, gameplay, rede ou arquivos com mudancas concorrentes.
+- Evidencia antes: o check valida badge e notas da release em PT/EN, renderizacao no cliente e estilos correspondentes; a execucao direta passou, mas nao havia script npm dedicado.
+- Mudanca: adicionado somente `test:release-visibility`, executando o check existente sem compilacao desnecessaria.
+- Validacao: `npm run test:release-visibility` passou (oito checks verdadeiros, `pass: true`); `npm run build` passou (TypeScript + Vite, 42 modulos); `git diff --check -- package.json SwarmLedger-geral.md` passou.
+- Revisao de escopo: diff funcional contem uma insercao em `package.json` e este registro; mudancas preexistentes em `index.html`, `src/Engine/game-app.ts`, `tests/remote-detonation-check.mjs` e ledgers/documentos alheios foram preservadas e excluidas do staging.
+- Commit: pendente de criacao seletiva.
+
 ## 2026-07-12 - Script npm para limite de feedback
 
 - Automacao: `autowebgame-enxame-geral`.
