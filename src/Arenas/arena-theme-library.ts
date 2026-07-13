@@ -201,7 +201,7 @@ export const ARENA_THEME_LIBRARY: readonly ArenaThemeDefinition[] = [
       "Use as a library variant, not the default, until blast contrast is re-reviewed.",
     ],
     pixellabDescription: "1). moss-kissed ruin floor tile with large readable slab breakup and dark grout 2). clean sandstone combat lane tile with brighter value grouping and minimal noise 3). ancient spawn seal tile with teal circular rune inset and open negative space 4). ruined garden wall tile with moss only on the crown and crisp block silhouette 5). sturdy travel crate with brass bindings and bright lid planes 6). optional cracked obsidian accent tile with vine edge detail",
-    renderMode: "sprite",
+    renderMode: "procedural",
     tilePaths: {
       base: "/Assets/TileMaps/themes/verdant-ruins/floor-base.png",
       lane: "/Assets/TileMaps/themes/verdant-ruins/floor-lane.png",

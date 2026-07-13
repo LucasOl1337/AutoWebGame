@@ -1,5 +1,14 @@
 # Swarm Ledger — Gameplay
 
+## 2026-07-13 — verdant-ruins-procedural-render-mode
+
+- Claim/escopo antes da intervenção: mudar exclusivamente o modo de renderização de `Verdant Ruins` de sprite para procedural; preservar o modo default, `Skyfoundry`, demais temas, gameplay, assets e mudanças alheias.
+- Arquivos previstos: `src/Arenas/arena-theme-library.ts`, `tests/verdant-ruins-render-mode-check.mjs`, `SwarmLedger-gameplay.md`.
+- Critério de sucesso: teste focal deve comprovar `Verdant Ruins` procedural e preservar explicitamente default e `Skyfoundry`; commit seletivo previsto após validação e sem tocar outros arquivos.
+- Antes → depois: `Verdant Ruins` usava renderização por sprite; agora usa renderização procedural, enquanto o default `Tournament Clean` permanece procedural e `Skyfoundry Bastion` permanece sprite.
+- Resultado/validação: `compile:esm`, teste focal, `arena-theme-library`, `build` e `git diff --check` passaram. Validação visual manual não realizada; o impacto perceptivo segue experimental. Commit seletivo previsto após validação.
+- Classificação final: Parcialmente comprovada.
+
 ## 2026-07-13 — compact-hud-utility-priority
 
 - Claim/escopo antes da intervenção: manter exatamente 4 slots no HUD compacto, preservando a ordem original e todos os power-ups básicos adquiridos, mas priorizando utilitários adquiridos sobre básicos ainda não adquiridos; preservar HUD expandido, níveis, coleta, gameplay, rede e mudanças alheias.
