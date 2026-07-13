@@ -104,7 +104,7 @@ function getPriorityEnemy(player: PlayerState, playerTile: TileCoord, context: B
       continue;
     }
     const protectedPenalty = candidate.spawnProtectionMs > 0 ? 1000 : 0;
-    const score = protectedPenalty + getTileDistance(playerTile, candidate.tile) + candidate.id / 100;
+    const score = protectedPenalty + getTileDistance(playerTile, candidate.tile);
     if (score < bestScore) {
       bestScore = score;
       bestEnemy = candidate;
