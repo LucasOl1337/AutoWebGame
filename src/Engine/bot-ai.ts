@@ -228,6 +228,11 @@ export function getBotDecision(player: PlayerState, context: BotContext): BotDec
     return { direction: suddenDeathDirection, placeBomb: false };
   }
 
+  const safeKickDirection = getSafeDeterministicKickDirection(player, playerTile, dangerMap, context);
+  if (safeKickDirection) {
+    return { direction: safeKickDirection, placeBomb: false };
+  }
+
   const enemyVulnerable = Boolean(enemy && enemy.spawnProtectionMs <= 0);
   const openingProtected = player.spawnProtectionMs > 0;
   const remoteDetonationBomb = enemy
@@ -305,6 +310,45 @@ export function getBotDecision(player: PlayerState, context: BotContext): BotDec
   }
 
   return { direction: null, placeBomb: false };
+}
+
+function getSafeDeterministicKickDirection(
+  player: PlayerState,
+  playerTile: TileCoord,
+  dangerMap: Map<string, number>,
+  context: BotContext,
+): Direction | null {
+  const direction = context.botCommittedDirection[player.id];
+  if (player.kickLevel <= 0 || direction === null) {
+    return null;
+  }
+
+  const delta = directionDelta[direction];
+  const bombTile = { x: playerTile.x + delta.x, y: playerTile.y + delta.y };
+  const bomb = context.bombs.find((candidate) => (
+    candidate.tile.x === bombTile.x && candidate.tile.y === bombTile.y
+  ));
+  if (!bomb) {
+    return null;
+  }
+
+  const landingTile = { x: bombTile.x + delta.x, y: bombTile.y + delta.y };
+  const playerArrivalMs = getMoveDuration(player);
+  const landingSafe = isTileSafeForArrivalWithWindow(
+    dangerMap,
+    landingTile,
+    playerArrivalMs,
+    BOT_DANGER_ARRIVAL_BUFFER_MS,
+  );
+  const landingOpen = isTilePathableForBot(player, landingTile, context)
+    && !context.activePlayerIds.some((id) => {
+      const candidate = context.players[id];
+      return candidate.active && candidate.alive && candidate.tile.x === landingTile.x && candidate.tile.y === landingTile.y;
+    });
+
+  return landingOpen && landingSafe && bomb.fuseMs > playerArrivalMs + BOT_DANGER_ARRIVAL_BUFFER_MS
+    ? direction
+    : null;
 }
 
 /**
