@@ -63,6 +63,7 @@
     "test:how-to-play-page": "node tests/how-to-play-page-check.mjs",
     "test:worker-api-route-dispatch": "node tests/worker-api-route-dispatch-check.mjs",
     "test:worker-cache-headers": "node tests/worker-cache-headers-check.mjs",
+    "test:sound-variation": "node tests/sound-manager-variation-check.mjs",
     "test:roster-sync": "npm run compile:esm && node tests/character-roster-manifest-sync-check.mjs",
     "test:roster-invalid-public-manifest": "npm run compile:esm && node tests/character-roster-invalid-public-manifest-check.mjs",
     "test:character-sprite-fallback": "npm run compile:esm && node tests/character-sprite-loader-fallback-check.mjs",

@@ -1,5 +1,16 @@
 # Swarm Ledger - Geral
 
+## 2026-07-13 - Script npm para variacao de efeitos sonoros
+
+- Automacao: `autowebgame-enxame-geral`.
+- Escopo registrado antes da implementacao: expor o check existente `tests/sound-manager-variation-check.mjs` via `package.json`; sem alterar runtime, audio, gameplay, rede ou arquivos com mudancas concorrentes.
+- Classificacao: infraestrutura de teste, baixo risco e comprovavel por execucao focal.
+- Evidencia antes: a execucao direta do check passou com manifesto, anti-spam, recuperacao e variacao de sons validados (`pass: true`), mas nao havia script npm dedicado.
+- Mudanca: adicionado somente `test:sound-variation`, executando o check existente sem compilacao desnecessaria.
+- Validacao: `npm run test:sound-variation` passou (manifesto, playback, anti-spam, recuperacao e variacao, `pass: true`); `npm run build` passou (TypeScript + Vite, 42 modulos); `git diff --check -- package.json SwarmLedger-geral.md` passou.
+- Revisao de escopo: diff funcional contem uma insercao em `package.json` e este registro; mudancas preexistentes em `index.html`, `src/Engine/game-app.ts`, `tests/remote-detonation-check.mjs` e documentos/ledgers alheios foram preservadas e excluidas do staging.
+- Commit: pendente de criacao seletiva.
+
 ## 2026-07-13 - Script npm para visibilidade de release
 
 - Automacao: `autowebgame-enxame-geral`.
