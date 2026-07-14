@@ -74,6 +74,7 @@ function keyEvent(code) {
 }
 
 const { GameApp } = await import("../output/esm/Engine/game-app.js");
+const { SITE_COPY } = await import("../output/esm/UiLayouts/i18n.js");
 
 const root = { appendChild: noop };
 const assets = {
@@ -128,10 +129,13 @@ const report = {
     && firstRound.match.round === 1
     && firstCue.active === true
     && firstCue.title === "RODADA 1"
+    && firstCue.subtitle === "Objetivo: seja o ultimo bomber vivo. Partida classica: primeiro a 2 vitorias."
     && secondRound.mode === "match"
     && secondRound.match.round === 2
     && secondCue.active === true
     && secondCue.title === "RODADA 2"
+    && secondCue.subtitle === "Objetivo: seja o ultimo bomber vivo. Partida classica: primeiro a 2 vitorias."
+    && SITE_COPY.en.canvas.roundStartSubtitle === "Objective: be the last bomber alive. Classic match: first to 2 wins."
     && expiredCue.mode === "match"
     && expired.active === false
     && expired.remainingMs === 0,
