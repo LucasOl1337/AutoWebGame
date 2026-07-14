@@ -170,6 +170,7 @@ interface CenterOverlayState {
   title: string;
   subtitle: string;
   footer: string | null;
+  victoryEmblem: boolean;
 }
 
 const directionDelta: Record<Direction, TileCoord> = {
@@ -5658,7 +5659,7 @@ export class GameApp {
   private renderMatchOverlay(): void {
     const overlay = this.getCenterOverlayState();
     if (overlay) {
-      this.drawCenterOverlay(overlay.title, overlay.subtitle, overlay.footer);
+      this.drawCenterOverlay(overlay.title, overlay.subtitle, overlay.footer, overlay.victoryEmblem);
     }
   }
 
@@ -5774,7 +5775,7 @@ export class GameApp {
   private renderMatchResult(): void {
     const overlay = this.getCenterOverlayState();
     if (overlay) {
-      this.drawCenterOverlay(overlay.title, overlay.subtitle, overlay.footer);
+      this.drawCenterOverlay(overlay.title, overlay.subtitle, overlay.footer, overlay.victoryEmblem);
     }
   }
 
@@ -5785,6 +5786,7 @@ export class GameApp {
         title: copy.pausedTitle,
         subtitle: copy.pausedSubtitle,
         footer: null,
+        victoryEmblem: false,
       };
     }
 
@@ -5807,6 +5809,7 @@ export class GameApp {
         title,
         subtitle,
         footer: `${copy.scoreSummary(this.formatActiveScore())} | ${nextAction}`,
+        victoryEmblem: this.roundOutcome.winner !== null,
       };
     }
 
@@ -5815,6 +5818,7 @@ export class GameApp {
         title: copy.roundStartTitle(this.roundNumber),
         subtitle: copy.roundStartSubtitle,
         footer: null,
+        victoryEmblem: false,
       };
     }
 
@@ -5824,28 +5828,39 @@ export class GameApp {
         title: this.matchWinner ? copy.matchWinner(this.players[this.matchWinner].name) : copy.matchComplete,
         subtitle: this.onlineSession ? copy.rematchSummary : copy.localResultActions,
         footer: scoreSummary,
+        victoryEmblem: this.matchWinner !== null,
       };
     }
 
     return null;
   }
 
-  private drawCenterOverlay(title: string, subtitle: string, footer: string | null = null): void {
+  private drawCenterOverlay(
+    title: string,
+    subtitle: string,
+    footer: string | null = null,
+    showVictoryEmblem = false,
+  ): void {
+    const victoryEmblem = showVictoryEmblem ? this.assets.ui?.victoryEmblem : null;
+    const textCenterX = victoryEmblem ? CANVAS_WIDTH / 2 + 48 : CANVAS_WIDTH / 2;
     this.ctx.fillStyle = CANVAS_UI_PANEL_BG_STRONG;
     this.ctx.fillRect(40, 164, CANVAS_WIDTH - 80, 120);
     this.ctx.strokeStyle = CANVAS_UI_BORDER_STRONG;
     this.ctx.strokeRect(40, 164, CANVAS_WIDTH - 80, 120);
+    if (victoryEmblem) {
+      this.ctx.drawImage(victoryEmblem, 67, 176, 55, 78);
+    }
     this.ctx.textAlign = "center";
     this.ctx.fillStyle = CANVAS_UI_TEXT;
     this.ctx.font = "700 22px Playfair Display";
-    this.ctx.fillText(title, CANVAS_WIDTH / 2, 214);
+    this.ctx.fillText(title, textCenterX, 214);
     this.ctx.fillStyle = CANVAS_UI_MUTED;
     this.ctx.font = "600 13px Inter";
-    this.ctx.fillText(subtitle, CANVAS_WIDTH / 2, 248);
+    this.ctx.fillText(subtitle, textCenterX, 248);
     if (footer) {
       this.ctx.fillStyle = CANVAS_UI_GOLD;
       this.ctx.font = "700 10px Inter";
-      this.ctx.fillText(footer, CANVAS_WIDTH / 2, 270);
+      this.ctx.fillText(footer, textCenterX, 270);
     }
   }
 

@@ -57,6 +57,9 @@ export interface GameAssets {
   effects?: {
     speedSparkTrail: HTMLImageElement | null;
   };
+  ui?: {
+    victoryEmblem: HTMLImageElement | null;
+  };
   powerUps: Partial<Record<PowerUpType, HTMLImageElement | null>>;
 }
 
@@ -428,6 +431,7 @@ export async function loadGameAssets(arenaThemeId?: string | null): Promise<Game
     bomb,
     flame,
     speedSparkTrail,
+    victoryEmblem,
     bombUp,
     flameUp,
     speedUp,
@@ -462,6 +466,7 @@ export async function loadGameAssets(arenaThemeId?: string | null): Promise<Game
     loadImage(assetUrl("/Assets/VisualEffects/bomb.png")),
     loadImage(assetUrl("/Assets/VisualEffects/flame.png")),
     loadImage(assetUrl("/Assets/VisualEffects/speed-spark-trail.png")),
+    loadImage(assetUrl("/Assets/UiLayouts/arena-victory-emblem.webp")),
     loadImage(assetUrl("/Assets/UiLayouts/power-bomb.png")),
     loadImage(assetUrl("/Assets/UiLayouts/power-flame.png")),
     loadImage(assetUrl("/Assets/UiLayouts/power-speed.png")),
@@ -521,6 +526,9 @@ export async function loadGameAssets(arenaThemeId?: string | null): Promise<Game
     },
     effects: {
       speedSparkTrail,
+    },
+    ui: {
+      victoryEmblem,
     },
     powerUps: {
       "bomb-up": bombUp,

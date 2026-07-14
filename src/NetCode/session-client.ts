@@ -3601,7 +3601,16 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     if (!canvas || canvas.parentElement === this.elements.matchViewport) {
       return;
     }
-    this.elements.matchViewport.replaceChildren(canvas);
+    const ignitionCoreLeft = document.createElement("img");
+    ignitionCoreLeft.className = "experience-match__ignition-core experience-match__ignition-core--left";
+    ignitionCoreLeft.src = "/Assets/ui/arena-ignition-core.webp";
+    ignitionCoreLeft.alt = "";
+    ignitionCoreLeft.setAttribute("aria-hidden", "true");
+
+    const ignitionCoreRight = ignitionCoreLeft.cloneNode(true) as HTMLImageElement;
+    ignitionCoreRight.className = "experience-match__ignition-core experience-match__ignition-core--right";
+
+    this.elements.matchViewport.replaceChildren(canvas, ignitionCoreLeft, ignitionCoreRight);
     window.requestAnimationFrame(() => {
       window.dispatchEvent(new Event("resize"));
     });

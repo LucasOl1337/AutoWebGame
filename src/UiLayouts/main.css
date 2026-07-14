@@ -3477,6 +3477,35 @@ button {
     linear-gradient(180deg, rgba(18, 22, 26, 0.98), rgba(4, 4, 8, 1));
 }
 
+.experience-match__ignition-core {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  width: clamp(108px, 11vw, 148px);
+  height: auto;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.experience-match__ignition-core--left {
+  left: 10px;
+}
+
+.experience-match__ignition-core--right {
+  right: 10px;
+}
+
+.experience-screen--match canvas {
+  position: relative;
+  z-index: 3;
+}
+
+@media (max-width: 760px) {
+  .experience-match__ignition-core {
+    display: none;
+  }
+}
+
 .experience-match__overlay {
   top: calc(8px + var(--experience-safe-area-top));
   left: calc(8px + var(--experience-safe-area-left));
