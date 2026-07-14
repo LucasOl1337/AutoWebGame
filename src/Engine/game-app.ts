@@ -3195,7 +3195,10 @@ export class GameApp {
         }
         if (powerUp.tile.x === tile.x && powerUp.tile.y === tile.y) {
           if (isPowerUpMaxed(player, powerUp.type)) {
-            this.addPowerUpPickupNotice(id, powerUp.type, false, "MAX");
+            const existingNotice = this.getPowerUpPickupNotice(id, powerUp.type);
+            if (existingNotice?.valueLabel !== "MAX") {
+              this.addPowerUpPickupNotice(id, powerUp.type, false, "MAX");
+            }
             continue;
           }
           powerUp.collected = true;
