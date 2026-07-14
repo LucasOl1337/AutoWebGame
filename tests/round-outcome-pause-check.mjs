@@ -111,7 +111,8 @@ const afterOverlay = afterEsc.match.centerOverlay;
 const overlayShowsScore = beforeOverlay?.footer?.includes("Placar: P1 1 - P2 0") === true;
 const overlayShowsNextAction = beforeOverlay?.footer?.includes("Proxima rodada em") === true;
 const nextRoundCueVisible = afterOverlay?.title === "RODADA 2"
-  && afterOverlay?.subtitle === "Seja o ultimo bomber vivo."
+  && afterOverlay?.subtitle === afterEsc.match.roundStartCue.subtitle
+  && afterOverlay?.subtitle?.startsWith("Objetivo:") === true
   && afterEsc.match.roundStartCue.active === true;
 
 const report = {
