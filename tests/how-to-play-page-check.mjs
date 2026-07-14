@@ -38,6 +38,7 @@ assert.match(pageHtml, /Morte subita fecha as bordas/);
 assert.match(pageHtml, /aviso SD aparecer, migre cedo para o centro/);
 assert.match(pageHtml, /arena fecha de fora para dentro/);
 assert.match(pageHtml, /id="plano"/);
+assert.match(pageHtml, /Mova-se assim que a rodada for liberada para ativar o breve impulso de largada/);
 assert.match(pageHtml, /class="back-to-top"[^>]*data-visible="false" hidden/);
 assert.match(pageHtml, /aria-label="Voltar ao inicio"/);
 assert.match(pageHtml, /backToTop\.hidden = !shouldShow/);
