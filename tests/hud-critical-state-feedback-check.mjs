@@ -119,7 +119,7 @@ const report = {
   guarded: p1Guarded?.hudStatus ?? null,
   pass: p1Before?.hudStatus?.label === "LIVE"
     && p1Before?.hudStatus?.critical === false
-    && p1During?.hudStatus?.label === "DANGER"
+    && p1During?.hudStatus?.label === `DANGER ${(p1During.hudStatus.dangerEtaMs / 1000).toFixed(1)}s`
     && p1During?.hudStatus?.tone === "danger"
     && p1During?.hudStatus?.critical === true
     && typeof p1During?.hudStatus?.dangerEtaMs === "number"
