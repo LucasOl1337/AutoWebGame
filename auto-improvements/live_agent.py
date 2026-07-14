@@ -74,6 +74,10 @@ DIR_STEP: dict[str, tuple[int, int]] = {
 ACCOUNT_FAILURE_THRESHOLD = 3
 STALL_FAILURE_MS = 900
 TACTICAL_RECOVERY_COOLDOWN_MS = 700
+SURVIVAL_DECISION_COOLDOWN_MS = 120
+SURVIVAL_DANGER_HORIZON_MS = 3000
+ESTIMATED_TILE_TRAVEL_MS = 260
+ESCAPE_TIMING_BUFFER_MS = 350
 _QUOTA_OR_AUTH_ERROR_KEYWORDS = (
     "rate_limit",
     "rate limit",
@@ -283,6 +287,198 @@ def _navigation_for_player(state: dict[str, Any]) -> dict[str, Any]:
     return player_navigation if isinstance(player_navigation, dict) else {}
 
 
+def _local_tile_index(state: dict[str, Any]) -> dict[tuple[int, int], dict[str, Any]]:
+    index: dict[tuple[int, int], dict[str, Any]] = {}
+    for tile in (_navigation_for_player(state).get("localTiles") or []):
+        if not isinstance(tile, dict):
+            continue
+        index[_tile_key(tile)] = tile
+    return index
+
+
+def _bomb_fuse_ms(bomb: dict[str, Any]) -> int:
+    try:
+        return max(0, int(bomb.get("fuseMs", 99999)))
+    except (TypeError, ValueError):
+        return 99999
+
+
+def _projected_danger_tiles(
+    state: dict[str, Any],
+    *,
+    hypothetical_bomb: bool = False,
+    detonate_owned: bool = False,
+) -> set[tuple[int, int]]:
+    """Project imminent flame crosses using the same wall/crate stop rules as GameApp."""
+    tile_index = _local_tile_index(state)
+    danger = {
+        _tile_key(flame.get("tile", {}))
+        for flame in (state.get("flames") or [])
+        if isinstance(flame, dict)
+    }
+    bombs = [
+        bomb
+        for bomb in (state.get("bombs") or [])
+        if isinstance(bomb, dict) and (
+            _bomb_fuse_ms(bomb) <= SURVIVAL_DANGER_HORIZON_MS
+            or (detonate_owned and str(bomb.get("ownerId")) == PLAYER_ID)
+        )
+    ]
+    if hypothetical_bomb:
+        me = _player_state(state, PLAYER_ID)
+        if me:
+            bombs.append({
+                "tile": me.get("tile", {}),
+                "flameRange": max(1, int(me.get("flameRange", 1) or 1)),
+                "fuseMs": 2000,
+            })
+
+    for bomb in bombs:
+        origin = _tile_key(bomb.get("tile", {}))
+        danger.add(origin)
+        try:
+            flame_range = max(1, int(bomb.get("flameRange", 1) or 1))
+        except (TypeError, ValueError):
+            flame_range = 1
+        for dx, dy in DIR_STEP.values():
+            for step in range(1, flame_range + 1):
+                position = (origin[0] + dx * step, origin[1] + dy * step)
+                tile = tile_index.get(position)
+                # The 7x7 snapshot is deliberately conservative: an unknown tile
+                # is never accepted as proof that a bomb has a safe exit.
+                if tile is None:
+                    break
+                kind = str(tile.get("kind", "open"))
+                if kind == "solid":
+                    break
+                danger.add(position)
+                if kind == "breakable":
+                    break
+    return danger
+
+
+def _find_escape_direction(
+    state: dict[str, Any],
+    *,
+    hypothetical_bomb: bool = False,
+    excluded_directions: set[str] | None = None,
+) -> str | None:
+    """Return the first step of a locally proven route outside all imminent blasts."""
+    me = _player_state(state, PLAYER_ID)
+    if not me:
+        return None
+    start = _tile_key(me.get("tile", {}))
+    tile_index = _local_tile_index(state)
+    if start not in tile_index:
+        return None
+
+    danger = _projected_danger_tiles(state, hypothetical_bomb=hypothetical_bomb)
+    navigation = _navigation_for_player(state)
+    raw_walkable = navigation.get("walkableDirections")
+    first_step_allowlist = None
+    if isinstance(raw_walkable, list):
+        first_step_allowlist = {
+            str(direction) for direction in raw_walkable if str(direction) in VALID_DIRECTIONS
+        }
+    excluded = excluded_directions or set()
+    blocked_kinds = {"solid", "breakable", "bomb", "flame", "enemy"}
+    queue: deque[tuple[tuple[int, int], str | None, int]] = deque([(start, None, 0)])
+    visited = {start}
+
+    while queue:
+        position, first_direction, depth = queue.popleft()
+        tile = tile_index.get(position, {})
+        if depth > 0 and position not in danger and tile.get("dangerEtaMs") is None:
+            return first_direction
+        if depth >= 6:
+            continue
+
+        for direction, (dx, dy) in DIR_STEP.items():
+            if depth == 0:
+                if direction in excluded:
+                    continue
+                if first_step_allowlist is not None and direction not in first_step_allowlist:
+                    continue
+            next_position = (position[0] + dx, position[1] + dy)
+            if next_position in visited:
+                continue
+            next_tile = tile_index.get(next_position)
+            if not next_tile or str(next_tile.get("kind", "open")) in blocked_kinds:
+                continue
+            arrival_ms = (depth + 1) * ESTIMATED_TILE_TRAVEL_MS
+            danger_eta = next_tile.get("dangerEtaMs")
+            if danger_eta is not None:
+                try:
+                    if int(danger_eta) <= arrival_ms + ESCAPE_TIMING_BUFFER_MS:
+                        continue
+                except (TypeError, ValueError):
+                    continue
+            visited.add(next_position)
+            queue.append((next_position, first_direction or direction, depth + 1))
+    return None
+
+
+def _current_tile_threatened(state: dict[str, Any]) -> bool:
+    me = _player_state(state, PLAYER_ID)
+    if not me:
+        return False
+    current = _tile_key(me.get("tile", {}))
+    if current in _projected_danger_tiles(state):
+        return True
+    tile = _local_tile_index(state).get(current, {})
+    danger_eta = tile.get("dangerEtaMs")
+    try:
+        return danger_eta is not None and int(danger_eta) <= SURVIVAL_DANGER_HORIZON_MS
+    except (TypeError, ValueError):
+        return False
+
+
+def build_survival_decision(state: dict[str, Any]) -> dict[str, Any] | None:
+    """Deterministic high-priority escape action while the current tile will burn."""
+    if not _current_tile_threatened(state):
+        return None
+    direction = _find_escape_direction(state)
+    return {
+        "playerId": PLAYER_ID,
+        "botId": AGENT_ID,
+        "direction": direction,
+        "placeBomb": False,
+        "detonate": False,
+        "useSkill": False,
+        "reason": (
+            "Survival control: follow proven blast escape route"
+            if direction
+            else "Survival control: no proven escape path; never add another bomb"
+        ),
+    }
+
+
+def enforce_survival_safety(decision: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
+    """Prevent model/local decisions from overriding deterministic self-preservation."""
+    safe = dict(decision)
+    survival = build_survival_decision(state)
+    if survival is not None:
+        return survival
+
+    if safe.get("detonate"):
+        me = _player_state(state, PLAYER_ID)
+        current = _tile_key(me.get("tile", {})) if me else (0, 0)
+        if current in _projected_danger_tiles(state, detonate_owned=True):
+            safe["detonate"] = False
+            safe["reason"] = "Survival guard: detonation rejected inside owned bomb blast"
+
+    if safe.get("placeBomb"):
+        escape_direction = _find_escape_direction(state, hypothetical_bomb=True)
+        if escape_direction is None:
+            safe["placeBomb"] = False
+            safe["detonate"] = False
+            safe["reason"] = "Survival guard: bomb rejected; no proven escape route"
+        else:
+            safe["direction"] = escape_direction
+            safe["reason"] = f"Survival guard: bomb allowed with escape {escape_direction}"
+    return safe
+
+
 class ActionOutcomeMemory:
     """Short-lived per-round memory that connects actions to observed results."""
 
@@ -395,6 +591,10 @@ def _local_fast_decision(
     if not me or not me.get("alive") or not me.get("active"):
         return None
 
+    survival = build_survival_decision(state)
+    if survival is not None:
+        return survival
+
     me_tile = me.get("tile", {})
     mx, my = _tile_key(me_tile)
     bombs = [b for b in (state.get("bombs") or []) if isinstance(b, dict)]
@@ -455,14 +655,21 @@ def _local_fast_decision(
     if recovery and best_direction is None:
         bomb_here = any(_tile_distance(me_tile, b.get("tile", {})) == 0 for b in bombs)
         can_bomb = int(me.get("activeBombs", 0) or 0) < int(me.get("maxBombs", 0) or 0)
-        place_bomb = bool(not immediate_danger and not bomb_here and can_bomb)
+        escape_direction = _find_escape_direction(
+            state,
+            hypothetical_bomb=True,
+            excluded_directions=excluded,
+        )
+        place_bomb = bool(not immediate_danger and not bomb_here and can_bomb and escape_direction)
+        if place_bomb:
+            best_direction = escape_direction
 
     reason = (
         "Tactical recovery after failed movement"
         if recovery
         else "Immediate evasive bootstrap" if immediate_danger else "Fast bootstrap pressure"
     )
-    return {
+    return enforce_survival_safety({
         "playerId": PLAYER_ID,
         "botId": AGENT_ID,
         "direction": best_direction,
@@ -470,7 +677,7 @@ def _local_fast_decision(
         "detonate": False,
         "useSkill": False,
         "reason": reason,
-    }
+    }, state)
 
 
 def build_recovery_decision(
@@ -591,7 +798,8 @@ def build_prompt(state: dict[str, Any], *, outcome_context: str = "") -> str:
         "Survive immediate danger first; otherwise pressure the nearest enemy and create trap bombs when close. "
         "Never choose a blocked direction. If stalledForMs is above 700, change to a walkable direction immediately. "
         "Do not repeat FAILED actions at the same tile. Use the local map and action outcomes to choose a different route, "
-        "place a bomb to open a breakable route, or wait only when movement would be lethal. "
+        "place a bomb only when a complete escape route outside its flame cross exists, or wait when movement would be lethal. "
+        "Never remain in the same row or column of your own bomb through detonation. "
         "Be decisive and low-latency. Return JSON only."
     )
     return "\n".join(lines)
@@ -735,6 +943,8 @@ class LiveAgent:
         self._was_alive_in_match = False
         self._action_memory = ActionOutcomeMemory()
         self._last_tactical_recovery_at_ms = 0
+        self._last_survival_decision_at_ms = 0
+        self._survival_active = False
 
     def _is_ai_busy(self) -> bool:
         with self._ai_lock:
@@ -781,11 +991,46 @@ class LiveAgent:
         decision = _local_fast_decision(state)
         if not decision:
             return
+        decision = enforce_survival_safety(decision, state)
         decision["reason"] = f"{reason}: {decision['reason']}"[:120]
         status, _ = _http_post("/decision", decision)
         if status == 200:
             self._action_memory.record(decision, state)
         log(f"bootstrap | {decision['direction'] or '.'} | {decision['reason']}")
+
+    def _maybe_post_survival_decision(self, state: dict[str, Any], tick: int) -> bool:
+        decision = build_survival_decision(state)
+        if decision is None:
+            if self._survival_active:
+                hold = {
+                    "playerId": PLAYER_ID,
+                    "botId": AGENT_ID,
+                    "direction": None,
+                    "placeBomb": False,
+                    "detonate": False,
+                    "useSkill": False,
+                    "reason": "Survival control: escape complete; hold outside blast",
+                }
+                status, _ = _http_post("/decision", hold)
+                if status == 200:
+                    log(f"survival-control tick={tick:>5} action=hold reason=escape-complete")
+            self._survival_active = False
+            return False
+        self._survival_active = True
+        current_ms = now_ms()
+        if current_ms - self._last_survival_decision_at_ms < SURVIVAL_DECISION_COOLDOWN_MS:
+            return True
+        status, _ = _http_post("/decision", decision)
+        if status != 200:
+            return True
+        self._last_survival_decision_at_ms = current_ms
+        self._action_memory.record(decision, state)
+        send_heartbeat("active")
+        log(
+            f"survival-control tick={tick:>5} "
+            f"action={decision.get('direction') or 'hold'} reason={decision['reason']}"
+        )
+        return True
 
     def _maybe_post_tactical_recovery(self, state: dict[str, Any], tick: int) -> None:
         navigation = _navigation_for_player(state)
@@ -838,6 +1083,10 @@ class LiveAgent:
         if warmup_raw:
             d = parse_decision(warmup_raw)
             if d:
+                # Warmup has no live spatial state, so it can never prove that a
+                # bomb or remote detonation is survivable.
+                d["placeBomb"] = False
+                d["detonate"] = False
                 _http_post("/decision", d)
                 log(f"warmup decision posted: {d['direction']}  {d['reason'][:50]}")
 
@@ -867,6 +1116,8 @@ class LiveAgent:
                     self._codex_session_id = None
                     self._action_memory.reset()
                     self._last_tactical_recovery_at_ms = 0
+                    self._last_survival_decision_at_ms = 0
+                    self._survival_active = False
                     self._was_alive_in_match = me_alive
                     if me_alive:
                         self._life_epoch += 1
@@ -901,6 +1152,8 @@ class LiveAgent:
                     continue
 
                 self.last_tick = tick
+                if self._maybe_post_survival_decision(state, tick):
+                    continue
                 self._maybe_post_tactical_recovery(state, tick)
 
                 # Fire AI call in background; skip tick if previous is still running.
@@ -959,7 +1212,7 @@ class LiveAgent:
                 log(f"discard dead response tick={tick:>5} while player is alive")
                 bootstrap = _local_fast_decision(latest_state)
                 if bootstrap:
-                    _http_post("/decision", bootstrap)
+                    _http_post("/decision", enforce_survival_safety(bootstrap, latest_state))
                 return
 
             if self._action_memory.should_reject(decision, latest_state):
@@ -972,6 +1225,8 @@ class LiveAgent:
                 if recovery is None:
                     return
                 decision = recovery
+
+            decision = enforce_survival_safety(decision, latest_state)
 
             self._last_model_error = ""
             self._account_consecutive_failures = 0

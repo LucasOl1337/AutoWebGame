@@ -609,3 +609,9 @@
 - Correção: projeção local de explosões respeitando paredes/caixas, busca de rota segura, rejeição de bomba/detonação suicida, controle de sobrevivência de alta prioridade a cada 120 ms e comando de parada ao concluir a fuga. Warmup não pode mais publicar bomba sem estado espacial.
 - Regressão: cobre agente cercado, bomba insegura pedida pelo modelo, bomba segura com primeiro passo obrigatório, mudança de direção no meio da fuga e `escape-complete` fora da explosão.
 - Validação real: GPT-5.6 SOL publicou bomba com `Survival guard: bomb allowed with escape down`, recebeu múltiplas correções `survival-control`, publicou `escape-complete`, sobreviveu à detonação e retomou a coleta de power-ups.
+## 2026-07-14 — lab-agent-self-preservation
+- Sintoma reproduzido: a recuperação tática plantava bomba quando todas as direções haviam falhado, mesmo sem provar uma rota para fora da cruz de chamas; o teste focal falhou com `a trapped agent must not plant a bomb without a proven escape route`.
+- Causa confirmada: fallback de bomba incondicional e ausência de uma trava determinística sobre respostas do modelo. A direção publicada também persistia durante o pavio sem recalcular a curva da fuga.
+- Correção: projeção local de explosões respeitando paredes/caixas, busca de rota segura, rejeição de bomba/detonação suicida, controle de sobrevivência de alta prioridade a cada 120 ms e comando de parada ao concluir a fuga. Warmup não pode mais publicar bomba sem estado espacial.
+- Regressão: cobre agente cercado, bomba insegura pedida pelo modelo, bomba segura com primeiro passo obrigatório, mudança de direção no meio da fuga e `escape-complete` fora da explosão.
+- Validação real: GPT-5.6 SOL publicou bomba com `Survival guard: bomb allowed with escape down`, recebeu múltiplas correções `survival-control`, publicou `escape-complete`, sobreviveu à detonação e retomou a coleta de power-ups.
