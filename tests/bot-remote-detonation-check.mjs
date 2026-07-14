@@ -92,6 +92,33 @@ game.updateMatch(1000 / 60);
 game.updateMatch(1000 / 60);
 const remoteExplosionPass = game.bombs.length === 0 && game.flames.length > 0 && enemy.alive === false;
 
+const protectedGame = new GameApp(root, assets);
+protectedGame.startMatch();
+const protectedBot = protectedGame.players[2];
+const protectedEnemy = protectedGame.players[1];
+protectedBot.spawnProtectionMs = 0;
+protectedEnemy.spawnProtectionMs = 0;
+protectedEnemy.flameGuardMs = 500;
+protectedBot.remoteLevel = 1;
+protectedBot.flameRange = 2;
+protectedGame.flames = [];
+protectedGame.arena.solid = new Set();
+protectedGame.arena.breakable = new Set();
+setPlayerTile(protectedBot, { x: 4, y: 4 });
+setPlayerTile(protectedEnemy, { x: 7, y: 5 });
+protectedGame.bombs = [
+  { id: 7501, ownerId: 2, tile: { x: 5, y: 5 }, fuseMs: 1600, ownerCanPass: false, flameRange: 2 },
+];
+protectedBot.activeBombs = 1;
+
+const protectedDecision = protectedGame.getBotDecision(protectedBot);
+const avoidsProtectedDetonationPass = protectedDecision.detonate !== true;
+
+protectedEnemy.flameGuardMs = 0;
+const expiredProtectionDecision = protectedGame.getBotDecision(protectedBot);
+const detonatesAfterProtectionExpiresPass = expiredProtectionDecision.detonate === true
+  && expiredProtectionDecision.placeBomb === false;
+
 const unsafeGame = new GameApp(root, assets);
 unsafeGame.startMatch();
 const unsafeBot = unsafeGame.players[2];
@@ -141,6 +168,10 @@ const report = {
   detonateDecision,
   shouldDetonatePass,
   remoteExplosionPass,
+  protectedDecision,
+  avoidsProtectedDetonationPass,
+  expiredProtectionDecision,
+  detonatesAfterProtectionExpiresPass,
   unsafeDecision,
   avoidsUnsafeDetonationPass,
   multiBombDecision,
@@ -149,6 +180,13 @@ const report = {
 
 console.log(JSON.stringify(report, null, 2));
 
-if (!shouldDetonatePass || !remoteExplosionPass || !avoidsUnsafeDetonationPass || !newerBombDetonationPass) {
+if (
+  !shouldDetonatePass
+  || !remoteExplosionPass
+  || !avoidsProtectedDetonationPass
+  || !detonatesAfterProtectionExpiresPass
+  || !avoidsUnsafeDetonationPass
+  || !newerBombDetonationPass
+) {
   process.exit(1);
 }

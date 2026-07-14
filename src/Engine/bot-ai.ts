@@ -234,7 +234,11 @@ export function getBotDecision(player: PlayerState, context: BotContext): BotDec
     return { direction: safeKickDirection, placeBomb: false };
   }
 
-  const enemyVulnerable = Boolean(enemy && enemy.spawnProtectionMs <= 0);
+  const enemyVulnerable = Boolean(
+    enemy
+    && enemy.spawnProtectionMs <= 0
+    && enemy.flameGuardMs <= 0
+  );
   const openingProtected = player.spawnProtectionMs > 0;
   const remoteDetonationBomb = enemy
     ? getRemoteDetonationBomb(player, enemy, enemyVulnerable, context)

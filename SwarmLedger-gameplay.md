@@ -1,3 +1,10 @@
+## 2026-07-14 — bot-avoid-remote-detonation-flame-guard
+- Claim/escopo: registrar a correção mínima já presente em `src/Engine/bot-ai.ts` e `tests/bot-remote-detonation-check.mjs`, além destes dois registros; preservar `package.json` e todos os diffs alheios; sem commit.
+- Antes → depois: o bot tratava como vulnerável qualquer inimigo sem proteção de spawn e podia gastar detonação remota contra `flameGuard` ativo; agora `enemyVulnerable` também exige `flameGuardMs <= 0`, evitando a detonação enquanto a guarda está ativa e retomando-a assim que expira.
+- Classificação: Comprovada para o contrato determinístico de decisão remota protegida/desprotegida.
+- Evidências: o teste focal cria a mesma linha de explosão com `flameGuardMs=500` e depois `0`; observa `avoidsProtectedDetonationPass=true` e `detonatesAfterProtectionExpiresPass=true`, além de preservar detonação segura, explosão real, recusa quando insegura e seleção de bomba própria mais nova.
+- Validação: `npm run test:bot-remote`, `npm run test:bot`, `npm run build` e `git diff --check`; diff/status revisados ao fechamento. Arquivos runtime/teste: `src/Engine/bot-ai.ts` e `tests/bot-remote-detonation-check.mjs`. Sem commit.
+
 ## 2026-07-14 — bot-ignore-saturated-hidden-drop-tiebreak
 - Claim/escopo antes da intervenção: ajustar exclusivamente o desempate entre caixas seguras e equidistantes para bonificar apenas drops ocultos ainda úteis ao bot; alterar `src/Engine/bot-ai.ts`, fortalecer `tests/bot-breakable-safe-tiebreak-check.mjs` e atualizar os dois registros; preservar segurança, pathfinding, prioridade ofensiva, balanceamento e todos os diffs alheios.
 - Evidência antes: `src/Engine/bot-ai.ts:284-290` bonifica qualquer drop pré-computado, enquanto `src/Engine/bot-ai.ts:736-744` já descarta pickups revelados saturados pela regra central de prioridade.
