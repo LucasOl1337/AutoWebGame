@@ -82,7 +82,12 @@ export function updateKillerBeeDash(
     y: player.position.y + deltaY * stepFraction,
   });
   if (!context.canOccupyPosition(player, nextPosition)) {
-    finishKillerBeeDash(player, context, player.position);
+    finishKillerBeeDash(
+      player,
+      context,
+      player.position,
+      KILLER_BEE_DASH_BLOCKED_COOLDOWN_MS,
+    );
     return true;
   }
   player.position = nextPosition;
@@ -105,6 +110,7 @@ export function finishKillerBeeDash(
   player: PlayerState,
   context: SkillContext,
   fallbackPosition: PixelCoord = player.position,
+  cooldownMs: number = KILLER_BEE_SKILL_COOLDOWN_MS,
 ): void {
   if (player.skill.id !== "killer-bee-wing-dash") {
     return;
@@ -123,7 +129,7 @@ export function finishKillerBeeDash(
   player.velocity.y = 0;
   player.skill.phase = "cooldown";
   player.skill.channelRemainingMs = 0;
-  player.skill.cooldownRemainingMs = KILLER_BEE_SKILL_COOLDOWN_MS;
+  player.skill.cooldownRemainingMs = cooldownMs;
   player.skill.castElapsedMs = 0;
   player.skill.projectedPosition = null;
   player.skill.projectedLastMoveDirection = null;
