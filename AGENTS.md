@@ -24,3 +24,17 @@ Project-specific notes from the inventory:
 - `src/Engine/game-app.ts`, `src/NetCode/session-client.ts` and `worker/index.js` are the highest-risk orchestration modules.
 - `scripts/online_server.mjs` is a legacy relay path; prefer the Cloudflare Worker backend unless explicitly working on legacy local support.
 - Avoid Playwright in this workspace. If browser inspection is required, use Chrome/Codex app tooling.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues no repositorio `LucasOl1337/AutoWebGame`. Consulte `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Usamos os cinco rotulos canonicos de triagem. Consulte `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+O repositorio usa documentacao de dominio single-context. Consulte `docs/agents/domain.md`.
