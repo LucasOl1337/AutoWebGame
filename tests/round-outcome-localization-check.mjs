@@ -22,10 +22,10 @@ function getOverlay(language, reason, winner) {
 }
 
 const cases = [
-  ["pt", "elimination", 1, "P1 venceu a rodada.", "Arena reiniciando...", "Placar:"],
+  ["pt", "elimination", 1, "P1 venceu a rodada.", "Ponto garantido. Arena reiniciando...", "Placar:"],
   ["pt", "double-ko", null, "Eliminacao simultanea.", "Eliminacao simultanea:", "Placar:"],
   ["pt", "timer", null, "Tempo esgotado.", "Nenhum ponto foi marcado.", "Placar:"],
-  ["en", "elimination", 1, "P1 wins the round.", "Arena rebooting...", "Score:"],
+  ["en", "elimination", 1, "P1 wins the round.", "Point secured. Arena rebooting...", "Score:"],
   ["en", "double-ko", null, "Double KO.", "Simultaneous elimination:", "Score:"],
   ["en", "timer", null, "Time expired.", "No points awarded.", "Score:"],
 ];
