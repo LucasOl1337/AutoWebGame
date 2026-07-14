@@ -12,6 +12,7 @@ const makePlayer = (id, x, y) => ({
   direction: "down",
   lastMoveDirection: null,
   spawnProtectionMs: 0,
+  flameGuardMs: 0,
   speedLevel: 0,
   flameRange: 1,
   activeBombs: 0,

@@ -120,6 +120,7 @@ let _liveRefreshStarted = false;
 let _latestNavigation: Record<string, LabNavigationSnapshot> = {};
 let _latestPhase = "-";
 let _latestTick = 0;
+let _labCapability = "";
 const _sessionModels = new Map<string, string>();
 
 interface LivePlayerPanelElements {
@@ -145,6 +146,7 @@ let _liveHudPhaseEl: HTMLElement | null = null;
 
 function _get(path: string): Promise<Response> {
   return fetch(`${LAB_API_BASE}${path}`, {
+    headers: _labCapability ? { "x-bomba-lab-session": _labCapability } : undefined,
     signal: AbortSignal.timeout(2500),
   });
 }
@@ -152,7 +154,10 @@ function _get(path: string): Promise<Response> {
 function _post(path: string, body: unknown): Promise<Response> {
   return fetch(`${LAB_API_BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(_labCapability ? { "x-bomba-lab-session": _labCapability } : {}),
+    },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(3000),
   });
@@ -918,6 +923,10 @@ export const AutoImprovementBridge = {
     for (const playerId of playerIds) {
       _controlledPlayerIds.add(String(playerId));
     }
+  },
+
+  setLabCapability(capability: string): void {
+    _labCapability = /^[A-Za-z0-9_-]{32,128}$/.test(capability) ? capability : "";
   },
 
   get isEnabled(): boolean {

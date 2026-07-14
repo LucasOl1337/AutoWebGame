@@ -209,8 +209,26 @@ await withMockNineRouter(async (nineBase) => {
     assert.ok(String(okJson.gameUrl).includes("codexbot=1,2"));
     assert.ok(String(okJson.gameUrl).includes("autobot="));
     assert.ok(String(okJson.gameUrl).includes("labSession="));
+    const capability = new URL(okJson.gameUrl, "http://lab.test").searchParams.get("labCapability");
+    assert.match(capability ?? "", /^[A-Za-z0-9_-]{32,128}$/);
     assert.equal(JSON.stringify(okJson).includes("test-key-not-real"), false);
     assert.equal(JSON.stringify(okJson).includes("apiKey"), false);
+
+    const missingCapabilityRes = await fetch(`${brokerBase}/lab/session`, {
+      headers: { ...authHeaders, "x-bomba-lab-proxy": "1" },
+    });
+    assert.equal(missingCapabilityRes.status, 401);
+
+    const authorizedSessionRes = await fetch(`${brokerBase}/lab/session`, {
+      headers: {
+        ...authHeaders,
+        "x-bomba-lab-proxy": "1",
+        "x-bomba-lab-session": capability,
+      },
+    });
+    const authorizedSessionJson = await authorizedSessionRes.json();
+    assert.equal(authorizedSessionRes.status, 200);
+    assert.equal(authorizedSessionJson.session.sessionId, okJson.sessionId);
   } finally {
     child.kill("SIGTERM");
     await Promise.race([
@@ -226,6 +244,8 @@ assertIncludes(workerJs, '"/api/lab/session"', "worker proxy allowlist");
 assertIncludes(workerJs, '"/api/lab/telemetry"', "worker proxy allowlist");
 assertIncludes(workerJs, "API_LAB_DECISION_ROUTE_RE", "worker decision allowlist");
 assertIncludes(workerJs, 'headers.set("x-bomba-lab-secret", env.LAB_BROKER_SECRET)', "worker secret injection");
+assertIncludes(workerJs, 'headers.set("x-bomba-lab-proxy", "1")', "worker proxy marker");
+assertIncludes(workerJs, 'headers.set("x-bomba-lab-session", sessionCapability)', "worker session capability forwarding");
 assert.equal(workerJs.includes("/trigger/worker-real\", { methods"), false, "worker must not expose admin triggers");
 
 console.log("lab-session-contract-check: ok");

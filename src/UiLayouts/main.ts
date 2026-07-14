@@ -108,11 +108,13 @@ async function bootstrapGame(rootElement: HTMLDivElement, route: FrontendRoute):
     { loadGameAssets },
     { GameApp },
     { installAiriGameBridge },
+    { AutoImprovementBridge },
     { OnlineSessionClient },
   ] = await Promise.all([
     import("../Engine/assets"),
     import("../Engine/game-app"),
     import("../Engine/airi-bridge"),
+    import("../Engine/auto-improvement-bridge"),
     import("../NetCode/session-client"),
   ]);
   const assets = await loadGameAssets(activeArena.themeId);
@@ -128,6 +130,7 @@ async function bootstrapGame(rootElement: HTMLDivElement, route: FrontendRoute):
   const codexBotParam = params.get("codexbot");
   const labSessionParam = params.get("labSession");
   const validLabSession = /^lab-[a-f0-9]{10}$/.test(labSessionParam ?? "");
+  const labCapability = params.get("labCapability") ?? "";
   const livePlayerIds = validLabSession && codexBotParam
     ? codexBotParam
       .split(",")
@@ -138,6 +141,7 @@ async function bootstrapGame(rootElement: HTMLDivElement, route: FrontendRoute):
     : [];
 
   if (livePlayerIds.length > 0) {
+    AutoImprovementBridge.setLabCapability(labCapability);
     game.setLiveBridgePlayers(livePlayerIds);
   }
   game.start();

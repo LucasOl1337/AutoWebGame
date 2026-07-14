@@ -27,6 +27,7 @@ import threading
 import time
 import traceback
 import uuid
+import secrets
 from collections import deque
 from copy import deepcopy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -49,6 +50,7 @@ NINE_ROUTER_BASE_URL = os.environ.get("NINE_ROUTER_BASE_URL", "http://127.0.0.1:
 NINE_ROUTER_API_KEY = os.environ.get("NINE_ROUTER_API_KEY", "").strip()
 NINE_ROUTER_DEFAULT_MODEL = os.environ.get("NINE_ROUTER_MODEL", "").strip()
 BROKER_INTERNAL_SECRET = os.environ.get("BROKER_INTERNAL_SECRET", "").strip()
+MAX_REQUEST_BODY_BYTES = 64 * 1024
 LAB_ALLOWED_PROVIDERS = {"9router"}
 LAB_ALLOWED_SLOTS = {"1", "2", "3", "4"}
 LAB_MODEL_CATALOG = (
@@ -102,6 +104,7 @@ _last_phase: str = ""
 # lab session orchestration
 _lab_session: dict[str, Any] | None = None
 _lab_agent_procs: dict[str, subprocess.Popen[str]] = {}
+_lab_agent_logs: dict[str, Any] = {}
 _lab_lock = threading.Lock()
 
 
@@ -138,7 +141,9 @@ def _normalize_lab_agent(raw: Any, fallback_slot: str) -> dict[str, str] | None:
 def _stop_lab_agents() -> None:
     with _lab_lock:
         procs = list(_lab_agent_procs.items())
+        logs = list(_lab_agent_logs.values())
         _lab_agent_procs.clear()
+        _lab_agent_logs.clear()
     for slot, proc in procs:
         if proc.poll() is None:
             proc.terminate()
@@ -147,6 +152,8 @@ def _stop_lab_agents() -> None:
             except subprocess.TimeoutExpired:
                 proc.kill()
         log(f"lab agent stopped slot={slot}")
+    for handle in logs:
+        handle.close()
     with _lock:
         _agent_heartbeats.clear()
         _agent_statuses.clear()
@@ -189,11 +196,12 @@ def _start_lab_agent(agent: dict[str, str]) -> None:
     with log_path.open("a", encoding="utf-8") as handle:
         handle.write(f"\n--- lab agent start slot={slot} provider={agent['provider']} model={agent['model']} ---\n")
 
+    log_handle = log_path.open("a", encoding="utf-8")
     proc = subprocess.Popen(
         [sys.executable, str(TOOLS_DIR / "live_agent.py")],
         cwd=str(TOOLS_DIR),
         env=env,
-        stdout=log_path.open("a", encoding="utf-8"),
+        stdout=log_handle,
         stderr=subprocess.STDOUT,
         text=True,
         encoding="utf-8",
@@ -203,9 +211,13 @@ def _start_lab_agent(agent: dict[str, str]) -> None:
     )
     with _lab_lock:
         old = _lab_agent_procs.pop(slot, None)
+        old_log = _lab_agent_logs.pop(slot, None)
         _lab_agent_procs[slot] = proc
+        _lab_agent_logs[slot] = log_handle
     if old is not None and old.poll() is None:
         old.terminate()
+    if old_log is not None:
+        old_log.close()
     log(f"lab agent started slot={slot} pid={proc.pid}")
 
 
@@ -269,9 +281,13 @@ def _public_lab_session() -> dict[str, Any] | None:
 
 
 def _expire_lab_session(session_id: str, duration_sec: int) -> None:
+    global _lab_session
     time.sleep(duration_sec)
     with _lab_lock:
         current_id = str((_lab_session or {}).get("sessionId", ""))
+        if current_id != session_id:
+            return
+        _lab_session = None
     if current_id == session_id:
         _stop_lab_agents()
         log(f"lab session expired session={session_id}")
@@ -322,9 +338,14 @@ class BrokerHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _read_json_body(self) -> dict[str, Any] | None:
-        length = int(self.headers.get("Content-Length", "0") or "0")
+        try:
+            length = int(self.headers.get("Content-Length", "0") or "0")
+        except ValueError:
+            return None
         if length <= 0:
             return {}
+        if length > MAX_REQUEST_BODY_BYTES:
+            return None
         raw = self.rfile.read(length)
         try:
             payload = json.loads(raw.decode("utf-8", errors="replace"))
@@ -342,6 +363,17 @@ class BrokerHandler(BaseHTTPRequestHandler):
         if self._is_authorized():
             return True
         self._send_json(401, {"ok": False, "error": "unauthorized"})
+        return False
+
+    def _require_lab_capability(self) -> bool:
+        if self.headers.get("x-bomba-lab-proxy") != "1":
+            return True
+        supplied = self.headers.get("x-bomba-lab-session", "")
+        with _lab_lock:
+            expected = str((_lab_session or {}).get("capability", ""))
+        if expected and supplied and hmac.compare_digest(supplied, expected):
+            return True
+        self._send_json(401, {"ok": False, "error": "invalid_lab_session"})
         return False
 
     def do_OPTIONS(self) -> None:  # noqa: N802
@@ -362,16 +394,22 @@ class BrokerHandler(BaseHTTPRequestHandler):
             elif path == "/state":
                 self._handle_get_state()
             elif path == "/report":
+                if not self._require_lab_capability():
+                    return
                 self._handle_get_report()
             elif path == "/tasks":
                 self._handle_get_tasks()
             elif path == "/insights/latest":
                 self._handle_get_latest_insight()
             elif path == "/lab/session":
+                if not self._require_lab_capability():
+                    return
                 self._handle_get_lab_session()
             elif path == "/lab/models":
                 self._handle_get_lab_models()
             elif path.startswith("/decision/"):
+                if not self._require_lab_capability():
+                    return
                 player_id = path[len("/decision/"):]
                 self._handle_get_decision(player_id)
             else:
@@ -395,6 +433,8 @@ class BrokerHandler(BaseHTTPRequestHandler):
             return
         try:
             if path == "/telemetry":
+                if not self._require_lab_capability():
+                    return
                 self._handle_post_telemetry(body)
             elif path == "/decision":
                 self._handle_post_decision(body)
@@ -540,10 +580,14 @@ class BrokerHandler(BaseHTTPRequestHandler):
         map_name = str(body.get("map", "classic") or "classic")[:40]
         modifier = str(body.get("modifier", "none") or "none")[:40]
         session_id = f"lab-{uuid.uuid4().hex[:10]}"
+        capability = secrets.token_urlsafe(32)
         slots = [agent["slot"] for agent in agents]
         codexbot = ",".join(slots)
         bot_fill = max(1, min(3, len(slots)))
-        game_url = f"/game/training?autobot={bot_fill}&codexbot={codexbot}&labSession={session_id}"
+        game_url = (
+            f"/game/training?autobot={bot_fill}&codexbot={codexbot}&labSession={session_id}"
+            f"&labCapability={capability}&rounds={rounds}&arenaTheme={map_name}&labModifier={modifier}"
+        )
 
         _stop_lab_agents()
         for agent in agents:
@@ -553,6 +597,7 @@ class BrokerHandler(BaseHTTPRequestHandler):
         with _lab_lock:
             _lab_session = {
                 "sessionId": session_id,
+                "capability": capability,
                 "createdAtMs": now_ms(),
                 "expiresAtMs": now_ms() + duration_sec * 1000,
                 "rounds": rounds,
@@ -657,7 +702,7 @@ class BrokerHandler(BaseHTTPRequestHandler):
     def _handle_agent_heartbeat(self, body: dict[str, Any]) -> None:
         agent_id = str(body.get("agentId", "") or "unknown")
         status = str(body.get("status", "online") or "online")[:24]
-        error = str(body.get("error", "") or "")[:240]
+        error = "agent_error" if body.get("error") else ""
         with _lock:
             _agent_heartbeats[agent_id] = now_ms()
             _agent_statuses[agent_id] = {
@@ -784,6 +829,7 @@ def run_server() -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        _stop_lab_agents()
         server.server_close()
         log("broker stopped")
 

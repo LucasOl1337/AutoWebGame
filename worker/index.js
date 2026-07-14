@@ -225,6 +225,11 @@ async function proxyLabRequest(request, env, route) {
   const contentType = request.headers.get("content-type");
   if (contentType) headers.set("content-type", contentType);
   headers.set("x-bomba-lab-secret", env.LAB_BROKER_SECRET);
+  headers.set("x-bomba-lab-proxy", "1");
+  const sessionCapability = request.headers.get("x-bomba-lab-session") || "";
+  if (/^[A-Za-z0-9_-]{32,128}$/.test(sessionCapability)) {
+    headers.set("x-bomba-lab-session", sessionCapability);
+  }
 
   try {
     const response = await fetch(targetUrl, {
