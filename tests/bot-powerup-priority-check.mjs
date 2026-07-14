@@ -163,7 +163,8 @@ const speedScores = Array.from({ length: MAX_SPEED_LEVEL + 1 }, (_, speedLevel) 
   bot.speedLevel = speedLevel;
   return getPowerUpPriorityScore(bot, "speed-up");
 });
-const hasDiminishingSpeedReturns = speedScores[0] === 460
+const hasDiminishingSpeedReturns = speedScores[0] === 461
+  && speedScores[0] === bombScores[0] + 1
   && speedScores[MAX_SPEED_LEVEL] === 0
   && speedScores.slice(1, -1).every((score, index, scores) => index === 0 || score < scores[index - 1])
   && speedScores.slice(2, -1).every((score, index) => {

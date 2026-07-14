@@ -230,7 +230,7 @@ export function getPowerUpPriorityScore(player: PlayerState, type: PowerUpType):
     return 0;
   }
   if (player.speedLevel === 0) {
-    return 460;
+    return 461;
   }
   // Depois do ganho inicial, cada nível adicional retém metade do bônus estratégico anterior.
   return 120 + 120 / 2 ** (player.speedLevel - 1);
