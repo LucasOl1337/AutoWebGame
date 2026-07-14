@@ -1051,11 +1051,6 @@ export class GlobalLobby extends DurableObject {
       return;
     }
 
-    const seatsFull = PLAYER_IDS.every((seatId) => Boolean(room.seats[seatId].clientId));
-    if (!alreadySeated && seatsFull) {
-      this.sendToClient(clientId, {
-        type: "error",
-        message: "Lobby full. Pick another room or wait for a slot.",
     const seatsFull = PLAYER_IDS.every((seatId) => isPlayableLobbySeat(room.seats[seatId]));
     const joinBlockReason = getLobbyJoinBlockReason(room.status, alreadySeated, seatsFull);
     if (joinBlockReason) {
@@ -1080,12 +1075,6 @@ export class GlobalLobby extends DurableObject {
     room.emptySince = null;
     await this.persistState();
     this.sendJoinedLobby(clientId, room);
-    const activeMatch = this.matches.get(room.roomCode);
-    const seatedPlayerId = this.findSeatForClient(room, clientId);
-    if (room.status === "playing" && activeMatch && seatedPlayerId) {
-      this.sendMatchStartedToSeat(
-        room,
-        seatedPlayerId,
     const resumedSeatId = this.findSeatForClient(room, clientId);
     const activeMatch = this.matches.get(room.roomCode);
     if (room.status === "playing" && resumedSeatId && activeMatch) {
