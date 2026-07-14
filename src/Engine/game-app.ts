@@ -5822,7 +5822,7 @@ export class GameApp {
       return {
         title: copy.roundStartTitle(this.roundNumber),
         subtitle: copy.roundStartSubtitle,
-        footer: null,
+        footer: copy.scoreSummary(this.formatActiveScore()),
         victoryEmblem: false,
       };
     }

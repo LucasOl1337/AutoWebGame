@@ -107,17 +107,21 @@ const expiredCue = JSON.parse(window.render_game_to_text());
 const firstCue = firstRound.match.roundStartCue;
 const secondCue = secondRound.match.roundStartCue;
 const expired = expiredCue.match.roundStartCue;
+const firstOverlay = firstRound.match.centerOverlay;
+const secondOverlay = secondRound.match.centerOverlay;
 
 const report = {
   firstRound: {
     mode: firstRound.mode,
     round: firstRound.match.round,
     cue: firstCue,
+    overlay: firstOverlay,
   },
   secondRound: {
     mode: secondRound.mode,
     round: secondRound.match.round,
     cue: secondCue,
+    overlay: secondOverlay,
   },
   expiredCue: {
     mode: expiredCue.mode,
@@ -130,11 +134,13 @@ const report = {
     && firstCue.active === true
     && firstCue.title === "RODADA 1"
     && firstCue.subtitle === "Objetivo: seja o ultimo bomber vivo. Partida classica: primeiro a 2 vitorias."
+    && firstOverlay?.footer === "Placar: P1 0 - P2 0"
     && secondRound.mode === "match"
     && secondRound.match.round === 2
     && secondCue.active === true
     && secondCue.title === "RODADA 2"
     && secondCue.subtitle === "Objetivo: seja o ultimo bomber vivo. Partida classica: primeiro a 2 vitorias."
+    && secondOverlay?.footer === "Placar: P1 1 - P2 0"
     && SITE_COPY.en.canvas.roundStartSubtitle === "Objective: be the last bomber alive. Classic match: first to 2 wins."
     && expiredCue.mode === "match"
     && expired.active === false

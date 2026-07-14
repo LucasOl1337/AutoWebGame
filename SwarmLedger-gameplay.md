@@ -1,3 +1,9 @@
+## 2026-07-14 — round-start-cue-score-footer
+- Claim/escopo: alterar somente o footer do cue de início de rodada em `src/Engine/game-app.ts`, fortalecer `tests/round-start-cue-check.mjs` e registrar esta intervenção nos dois documentos; preservar diffs alheios; commit local seletivo; sem push/deploy.
+- Antes → depois: o cue retornava `footer: null`; agora retorna `copy.scoreSummary(this.formatActiveScore())`, exibindo o placar atual sem duplicar formatação.
+- Evidência/resultado: o teste focal observa `Placar: P1 0 - P2 0` no cue da rodada 1 e `Placar: P1 1 - P2 0` no cue da rodada 2.
+- Validações: `npm run test:round-start-cue`, `npm run compile:esm`, `npm run build` e `git diff --check` seletivo concluídos com código 0; diffs alheios preservados; commit local seletivo; sem push/deploy.
+
 ## 2026-07-14 — powerup-reveal-two-stage-settle
 - Claim/escopo: alterar somente o cálculo visual existente de `drawPowerUp`, criar `tests/powerup-spawn-settle-check.mjs` e acrescentar registros aos dois documentos concorrentes; pico aproximado de `1.08` seguido por assentamento contínuo em `1.00` dentro dos `120 ms` existentes, sem gameplay ou timing novo; `launcher-shell.css` e teste farol intocados; sem commit, push ou deploy.
 - Resultado: a curva única `0.72→~1.10`, que saltava para `1.00` no fim, foi dividida em subida `0.72→1.08` até progresso `0.58` e assentamento cossenoidal contínuo `1.08→1.00`; relógio, duração, hitbox, coleta, sync e estado permanecem inalterados.
