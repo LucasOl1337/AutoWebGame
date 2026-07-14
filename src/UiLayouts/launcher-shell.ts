@@ -1,4 +1,5 @@
 import "./launcher-shell.css";
+import { ARENA_THEME_LIBRARY } from "../Arenas/arena-theme-library";
 import type { FrontendState, LauncherMode } from "./frontend-store";
 import { FrontendStore } from "./frontend-store";
 import { navigateToRoute, routeHref } from "./frontend-router";
@@ -17,7 +18,7 @@ const MODES: Array<{
     title: "Arena PvP",
     kicker: "Online",
     summary: "Partidas multiplayer em tempo real, salas privadas e ranking.",
-    cta: "Entrar na Arena",
+    cta: "Partida rápida",
     meta: "2-4 jogadores · matchmaking",
   },
   {
@@ -37,6 +38,13 @@ const MODES: Array<{
     meta: "9Router · bridge local",
   },
 ];
+
+const MATERIAL_THEMES = ARENA_THEME_LIBRARY.map((theme) => ({
+  id: theme.id,
+  name: theme.name,
+  image: theme.tilePaths?.base ?? null,
+  color: theme.palette.floorBase,
+}));
 
 export class LauncherShell {
   private readonly root: HTMLElement;
@@ -63,62 +71,106 @@ export class LauncherShell {
   private render(state: FrontendState): void {
     if (!this.shell) {
       this.shell = document.createElement("section");
-      this.shell.className = "launcher-shell";
+      this.shell.className = "launcher-shell launcher-shell--control";
       this.root.replaceChildren(this.shell);
     }
 
     const selected = MODES.find((mode) => mode.id === state.selectedMode) ?? MODES[0];
     this.shell.innerHTML = `
       <div class="launcher-frame">
-        <header class="launcher-topbar">
+        <header class="launcher-commandbar">
           <div class="launcher-brand">
-            <span class="launcher-mark" aria-hidden="true">BP</span>
+            <span class="launcher-registration" aria-hidden="true">BP / 01</span>
             <div>
-              <p class="launcher-kicker">BombaPVP</p>
-              <h1>Escolha o modo</h1>
+              <p class="launcher-kicker">Match Control System</p>
+              <h1>BOMBA PVP</h1>
             </div>
           </div>
-          <nav class="launcher-nav" aria-label="Modos">
-            ${MODES.map(
-              (mode) => `
-              <a class="launcher-nav-link ${state.selectedMode === mode.id ? "is-active" : ""}"
-                 href="${routeHref(mode.id)}"
-                 data-route="${mode.id}">${mode.title}</a>
-            `,
-            ).join("")}
-          </nav>
+          <dl class="launcher-command-meta" aria-label="Contrato do launcher">
+            <div><dt>Entrada</dt><dd>Partida rápida</dd></div>
+            <div><dt>Formato</dt><dd>2–4 jogadores</dd></div>
+            <div><dt>Arena</dt><dd>Material variável</dd></div>
+          </dl>
+          <button type="button" class="launcher-primary" data-route="play">
+            <span>Partida rápida</span><span aria-hidden="true">→</span>
+          </button>
         </header>
 
-        <section class="launcher-intro">
-          <p class="launcher-pulse">Arena · Treino · Laboratório de IA</p>
-          <h2>${selected.title}</h2>
-          <p class="launcher-lede">${selected.summary}</p>
-        </section>
-
-        <section class="launcher-modes" aria-label="Modos de jogo">
-          <div class="launcher-mode-grid">
+        <div class="launcher-workspace">
+          <nav class="launcher-mode-index" aria-label="Modos de jogo">
+            <p class="launcher-index-label">Modos</p>
             ${MODES.map(
-              (mode) => `
+              (mode, index) => `
               <button type="button"
                 class="launcher-mode ${state.selectedMode === mode.id ? "is-selected" : ""}"
                 data-mode="${mode.id}"
-                data-route="${mode.id}">
-                <span class="launcher-mode__kicker">${mode.kicker}</span>
-                <strong class="launcher-mode__title">${mode.title}</strong>
-                <span class="launcher-mode__copy">${mode.summary}</span>
-                <span class="launcher-mode__meta">${mode.meta}</span>
+                data-route="${mode.id}"
+                aria-pressed="${state.selectedMode === mode.id ? "true" : "false"}">
+                <span class="launcher-mode__number">${String(index + 1).padStart(2, "0")}</span>
+                <span class="launcher-mode__name">
+                  <strong>${mode.title}</strong><small>${mode.kicker}</small>
+                </span>
+                <span class="launcher-mode__arrow" aria-hidden="true">↗</span>
               </button>
             `,
             ).join("")}
-          </div>
-        </section>
+            <p class="launcher-index-note">Selecione um modo ou use o comando principal.</p>
+          </nav>
 
-        <footer class="launcher-footer">
-          <button type="button" class="launcher-primary" data-route="${selected.id}">
-            ${selected.cta}
-          </button>
-          <p class="launcher-footnote">PvP e Treino usam o jogo real. O Lab prepara agentes no broker local e abre a partida com bridge de IA.</p>
-        </footer>
+          <main class="launcher-sheet">
+            <header class="launcher-sheet__header">
+              <p class="launcher-pulse">Modo selecionado / ${selected.kicker}</p>
+              <h2>${selected.title}</h2>
+              <p class="launcher-lede">${selected.summary}</p>
+            </header>
+
+            <div class="launcher-sheet__body">
+              <section class="launcher-brief" aria-labelledby="launcher-brief-title">
+                <h3 id="launcher-brief-title">Ficha de entrada</h3>
+                <dl>
+                  <div><dt>Modo</dt><dd>${selected.title}</dd></div>
+                  <div><dt>Canal</dt><dd>${selected.kicker}</dd></div>
+                  <div><dt>Configuração</dt><dd>${selected.meta}</dd></div>
+                  <div><dt>Acesso</dt><dd>${routeHref(selected.id)}</dd></div>
+                </dl>
+                <button type="button" class="launcher-sheet-command" data-route="${selected.id}">
+                  <span>Executar</span><strong>${selected.cta}</strong><span aria-hidden="true">→</span>
+                </button>
+              </section>
+
+              <figure class="launcher-material-index">
+                <figcaption>
+                  <span>Índice material da arena</span>
+                  <strong>Ambiente muda. Controle permanece.</strong>
+                </figcaption>
+                <div class="launcher-material-grid">
+                  <div class="launcher-arena-emblem">
+                    <img src="/Assets/UiLayouts/arena-portal-emblem.webp" alt="Emblema pixel art da arena BOMBA PvP" width="512" height="512" />
+                    <span>Identidade / Arena</span>
+                  </div>
+                  ${MATERIAL_THEMES.map(
+                    (theme, index) => `
+                    <div class="launcher-material-sample">
+                      ${
+                        theme.image
+                          ? `<img src="${theme.image}" alt="Amostra de piso ${theme.name}" width="32" height="32" />`
+                          : `<span class="launcher-material-swatch" style="--material-color: ${theme.color}" role="img" aria-label="Amostra cromática ${theme.name}"></span>`
+                      }
+                      <span>Material ${String(index + 1).padStart(2, "0")} / ${theme.name}</span>
+                    </div>
+                  `,
+                  ).join("")}
+                </div>
+              </figure>
+            </div>
+
+            <footer class="launcher-sheet__footer">
+              <span>Build 0.4.3</span>
+              <span>Teclado · Touch · Web</span>
+              <span>Shell invariável / mapa variável</span>
+            </footer>
+          </main>
+        </div>
       </div>
     `;
 
@@ -126,7 +178,6 @@ export class LauncherShell {
       const mode = node.dataset.mode as LauncherMode | undefined;
       if (!mode) return;
       node.addEventListener("mouseenter", () => this.store.selectMode(mode));
-      node.addEventListener("focus", () => this.store.selectMode(mode));
       node.addEventListener("click", () => navigateToRoute(mode));
     });
 
