@@ -4962,9 +4962,12 @@ export class GameApp {
       ? POWER_UP_SPAWN_POP_MS
       : Math.max(0, this.animationClockMs - revealStartedAtMs);
     const revealProgress = Math.min(1, revealElapsedMs / POWER_UP_SPAWN_POP_MS);
-    const popScale = revealProgress < 1
-      ? 0.72 + (0.38 * Math.sin(revealProgress * Math.PI * 0.5))
-      : 1;
+    const revealPeakProgress = 0.58;
+    const popScale = revealProgress < revealPeakProgress
+      ? 0.72 + (0.36 * Math.sin((revealProgress / revealPeakProgress) * Math.PI * 0.5))
+      : 1 + (0.08 * Math.cos(
+        ((revealProgress - revealPeakProgress) / (1 - revealPeakProgress)) * Math.PI * 0.5,
+      ));
 
     this.ctx.save();
     if (popScale !== 1) {

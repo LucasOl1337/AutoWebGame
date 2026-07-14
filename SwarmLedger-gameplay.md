@@ -1,3 +1,8 @@
+## 2026-07-14 — powerup-reveal-two-stage-settle
+- Claim/escopo: alterar somente o cálculo visual existente de `drawPowerUp`, criar `tests/powerup-spawn-settle-check.mjs` e acrescentar registros aos dois documentos concorrentes; pico aproximado de `1.08` seguido por assentamento contínuo em `1.00` dentro dos `120 ms` existentes, sem gameplay ou timing novo; `launcher-shell.css` e teste farol intocados; sem commit, push ou deploy.
+- Resultado: a curva única `0.72→~1.10`, que saltava para `1.00` no fim, foi dividida em subida `0.72→1.08` até progresso `0.58` e assentamento cossenoidal contínuo `1.08→1.00`; relógio, duração, hitbox, coleta, sync e estado permanecem inalterados.
+- Validações: `node tests/powerup-spawn-settle-check.mjs`, `node tests/powerup-spawn-pop-check.mjs`, `npm run compile:esm`, `npm run build` (57 módulos) e `git diff --check -- src/Engine/game-app.ts tests/powerup-spawn-settle-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` passaram; conteúdo concorrente preservado; sem commit, push ou deploy.
+
 ## 2026-07-14 — kicked-bomb-active-flame-same-cycle
 - Claim/escopo: alterar somente `src/Engine/game-app.ts`, fortalecer `tests/bomb-push-check.mjs` e anexar registros aos dois documentos permitidos; bomba chutada que termina sobre flame ativa deve armar/explodir no mesmo ciclo; executar RED/GREEN e preservar tudo alheio; sem commit, push ou deploy.
 - RED: após deslizar de `(3,1)` a `(6,1)` sobre flame ativa, a bomba manteve pavio (`kickedOntoFlameArmedSameCycle=false`).
