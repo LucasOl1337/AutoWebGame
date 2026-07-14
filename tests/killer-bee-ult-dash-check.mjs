@@ -89,6 +89,29 @@ const finishSkill = {
   projectedPosition: bee.skill.projectedPosition ? { ...bee.skill.projectedPosition } : null,
 };
 
+const newlyOccupiedGame = createServerMatch({ 1: 0, 2: 1, 3: 0, 4: 1 });
+const newlyOccupiedBee = newlyOccupiedGame.players[1];
+newlyOccupiedBee.position = { x: 4 * TILE_SIZE + TILE_SIZE * 0.5, y: 4 * TILE_SIZE + TILE_SIZE * 0.5 };
+newlyOccupiedBee.tile = { x: 4, y: 4 };
+newlyOccupiedBee.spawnProtectionMs = 0;
+newlyOccupiedGame.setServerPlayerInput(1, {
+  direction: "right",
+  ...neutralInput,
+  skillPressed: true,
+});
+newlyOccupiedGame.advanceServerSimulation(17);
+const newlyOccupiedTarget = { ...newlyOccupiedBee.skill.projectedPosition };
+newlyOccupiedGame.arena.solid.add("7,4");
+for (let elapsedMs = 17; elapsedMs < 1000 && newlyOccupiedBee.skill.phase === "channeling"; elapsedMs += 17) {
+  newlyOccupiedGame.setServerPlayerInput(1, {
+    direction: "right",
+    ...neutralInput,
+  });
+  newlyOccupiedGame.advanceServerSimulation(17);
+}
+const newlyOccupiedFinish = { ...newlyOccupiedBee.position };
+const newlyOccupiedTile = { ...newlyOccupiedBee.tile };
+
 const blockedGame = createServerMatch({ 1: 0, 2: 1, 3: 0, 4: 1 });
 const blockedBee = blockedGame.players[1];
 blockedBee.position = { x: 4 * TILE_SIZE + TILE_SIZE * 0.5, y: 4 * TILE_SIZE + TILE_SIZE * 0.5 };
@@ -139,6 +162,9 @@ const dashMovedOnFirstFrame = firstStepX > beforeX + 1 && firstStepX < beforeX +
 const dashReachedFullDistance = Math.abs(finishX - (beforeX + KILLER_BEE_DASH_DISTANCE_PX)) < 1.5;
 const dashEndedInCooldown = finishSkill.phase === "cooldown";
 const dashCooldownApplied = finishSkill.cooldownRemainingMs === 4_000;
+const newlyOccupiedDestinationRejected = newlyOccupiedTile.x === 6
+  && newlyOccupiedTile.y === 4
+  && newlyOccupiedFinish.x < newlyOccupiedTarget.x - 1;
 const blockedByWall = blockedTile.x === 5 && blockedTile.y === 4 && blockedFinishX < beforeX + KILLER_BEE_DASH_DISTANCE_PX - 20;
 const trappedDashUsesShortCooldown = trappedSkill.phase === "cooldown" && trappedSkill.cooldownRemainingMs === 300;
 const trappedDashKeepsPosition = trappedAfter.x === trappedBefore.x && trappedAfter.y === trappedBefore.y;
@@ -204,6 +230,10 @@ const report = {
   dashReachedFullDistance,
   dashEndedInCooldown,
   dashCooldownApplied,
+  newlyOccupiedTarget,
+  newlyOccupiedFinish,
+  newlyOccupiedTile,
+  newlyOccupiedDestinationRejected,
   blockedByWall,
   trappedDashUsesShortCooldown,
   trappedDashKeepsPosition,
@@ -214,6 +244,7 @@ const report = {
     && dashReachedFullDistance
     && dashEndedInCooldown
     && dashCooldownApplied
+    && newlyOccupiedDestinationRejected
     && blockedByWall
     && trappedDashUsesShortCooldown
     && trappedDashKeepsPosition

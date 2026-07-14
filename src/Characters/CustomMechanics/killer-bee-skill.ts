@@ -77,10 +77,15 @@ export function updateKillerBeeDash(
   const arenaPixelHeight = context.arena.config.grid.height * TILE_SIZE;
   const deltaX = context.getWrappedDelta(target.x, player.position.x, arenaPixelWidth);
   const deltaY = context.getWrappedDelta(target.y, player.position.y, arenaPixelHeight);
-  player.position = context.normalizeArenaPosition({
+  const nextPosition = context.normalizeArenaPosition({
     x: player.position.x + deltaX * stepFraction,
     y: player.position.y + deltaY * stepFraction,
   });
+  if (!context.canOccupyPosition(player, nextPosition)) {
+    finishKillerBeeDash(player, context, player.position);
+    return true;
+  }
+  player.position = nextPosition;
   player.velocity = {
     x: context.getWrappedDelta(player.position.x, start.x, arenaPixelWidth) / (deltaMs / 1000),
     y: context.getWrappedDelta(player.position.y, start.y, arenaPixelHeight) / (deltaMs / 1000),
@@ -96,11 +101,18 @@ export function updateKillerBeeDash(
   return true;
 }
 
-export function finishKillerBeeDash(player: PlayerState, context: SkillContext): void {
+export function finishKillerBeeDash(
+  player: PlayerState,
+  context: SkillContext,
+  fallbackPosition: PixelCoord = player.position,
+): void {
   if (player.skill.id !== "killer-bee-wing-dash") {
     return;
   }
-  const target = player.skill.projectedPosition ?? player.position;
+  const projectedTarget = player.skill.projectedPosition ?? player.position;
+  const target = context.canOccupyPosition(player, projectedTarget)
+    ? projectedTarget
+    : fallbackPosition;
   player.position = { ...target };
   player.tile = context.getTileFromPosition(player.position);
   if (player.skill.projectedLastMoveDirection) {
