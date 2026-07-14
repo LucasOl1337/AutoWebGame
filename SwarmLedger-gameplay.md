@@ -46,6 +46,7 @@
 - Claim/escopo antes da intervenção: alterar exclusivamente `shortLabel` de Bomb Kick de `K` para `BK` em `src/Gameplay/powerups.ts`, criar `tests/bomb-kick-hud-label-check.mjs` e preservar todos os diffs alheios; sem commit.
 - RED → GREEN: após `compile:esm`, o teste focal falhou com `'K' !== 'BK'`; depois da mudança mínima, passou expondo `type=kick-up`, `label=Bomb Kick` e `shortLabel=BK` pela interface pública `getPowerUpDefinition`.
 - Validação final: teste focal passou; `npm run build` passou (42 módulos); `git diff --check -- src/Gameplay/powerups.ts tests/bomb-kick-hud-label-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` passou com apenas avisos LF→CRLF. `npm run test:powerup-hud` compilou e observou corretamente `kick-up: "BK"`, mas falhou porque o teste preexistente ainda exige `"K"` e também `1.65s`, enquanto o runtime concorrente já produz `1.60s`; esse arquivo ficou intocado conforme o escopo solicitado.
+- Fechamento documental mínimo: `npm run test:powerup-hud` passou no estado atual, confirmando `kick-up: "BK"` e short fuse `1.60s`; claim atualizado para `feito`. Build e diff-check seletivo dos dois documentos passaram antes do commit documental, sem alteração de runtime ou testes.
 
 ## 2026-07-13 — bot-remote-over-bomb-pass-priority
 - Claim/escopo antes da intervenção: alterar exclusivamente `getPowerUpPriorityScore` para `remote-up` 220→250 e fortalecer `tests/bot-powerup-priority-check.mjs`; preservar demais scores, comportamento de bot e toda sujeira alheia; sem commit.
