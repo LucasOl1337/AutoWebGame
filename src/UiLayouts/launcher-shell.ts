@@ -153,6 +153,10 @@ export class LauncherShell {
                     <img src="/Assets/UiLayouts/arena-portal-emblem.webp" alt="Emblema pixel art da arena BOMBA PvP" width="512" height="512" />
                     <span>Identidade / Arena</span>
                   </div>
+                  <div class="launcher-material-sample launcher-material-sample--illustration">
+                    <img src="/Assets/marketing/hero-arena-sigil.webp" alt="Arena arcana iluminada por um selo esmeralda" width="1536" height="1024" />
+                    <span>Arte integrada / Selo da arena</span>
+                  </div>
                   ${MATERIAL_THEMES.map(
                     (theme, index) => `
                     <div class="launcher-material-sample">

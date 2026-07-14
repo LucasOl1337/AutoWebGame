@@ -14,6 +14,7 @@ Use this index as the first stop for release, gameplay, visual, and operations d
 
 - [Visual Design Rules](VisualDesignRules.md) - visual rules for game presentation work.
 - [Animation Jobs](animation-jobs.md) - animation production and job notes.
+- [Oficina Criativa Visual - Coleta](../DocsDev/oficina-criativa-visual-coleta.md) - inventario auditavel das artes promovidas, onde aparecem e como foram validadas.
 - [Progress Log](progress.md) - historical implementation progress notes.
 
 ## Operations

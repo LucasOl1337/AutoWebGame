@@ -676,6 +676,11 @@
   image-rendering: pixelated;
 }
 
+.launcher-material-sample--illustration img {
+  object-position: center;
+  image-rendering: auto;
+}
+
 .launcher-material-swatch {
   display: block;
   width: 100%;

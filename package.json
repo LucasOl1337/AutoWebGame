@@ -90,6 +90,7 @@
     "test:mobile-viewport-safe-area": "node tests/mobile-viewport-safe-area-check.mjs",
     "test:landing-page": "node tests/landing-page-contract-check.mjs",
     "test:how-to-play-page": "node tests/how-to-play-page-check.mjs",
+    "test:creative-workshop-collection": "node tests/creative-workshop-collection-check.mjs",
     "test:frontend-architecture": "node tests/frontend-architecture-spa-check.mjs",
     "test:lab-session": "node tests/lab-session-contract-check.mjs",
     "test:lab-agent-control-loop": "node tests/lab-agent-control-loop-check.mjs",

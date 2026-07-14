@@ -469,7 +469,7 @@ export async function loadGameAssets(arenaThemeId?: string | null): Promise<Game
     loadImage(assetUrl("/Assets/UiLayouts/arena-victory-emblem.webp")),
     loadImage(assetUrl("/Assets/UiLayouts/power-bomb.png")),
     loadImage(assetUrl("/Assets/UiLayouts/power-flame.png")),
-    loadImage(assetUrl("/Assets/UiLayouts/power-speed.png")),
+    loadImage(assetUrl("/Assets/UiLayouts/power-speed-rastro-relampago.png")),
     loadImage(assetUrl("/Assets/UiLayouts/power-remote.png")),
     loadImage(assetUrl("/Assets/UiLayouts/power-shield.png")),
     loadImage(assetUrl("/Assets/UiLayouts/power-bomb-pass.png")),
