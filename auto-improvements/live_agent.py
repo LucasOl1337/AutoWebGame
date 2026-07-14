@@ -15,7 +15,7 @@ AGENT_BOT_ID            bot-default
 AGENT_PLAYER_ID         1
 AGENT_PROVIDER          claude | openai_codex | openrouter | ollama
 AGENT_MODEL             model name (empty = provider default)
-AGENT_POLL_INTERVAL_SEC 0.25
+AGENT_POLL_INTERVAL_SEC 0.05
 AGENT_IDLE_INTERVAL_SEC 1.0
 CODEX_HOME              path to .codex home
 ANTHROPIC_API_KEY       for Claude provider
@@ -51,7 +51,7 @@ BROKER_BASE = os.environ.get("BROKER_BASE", "http://127.0.0.1:8766").rstrip("/")
 BROKER_INTERNAL_SECRET = os.environ.get("BROKER_INTERNAL_SECRET", "").strip()
 AGENT_ID = os.environ.get("AGENT_BOT_ID", "bot-default")
 PLAYER_ID = str(os.environ.get("AGENT_PLAYER_ID", "1"))
-POLL_INTERVAL = float(os.environ.get("AGENT_POLL_INTERVAL_SEC", "0.25"))
+POLL_INTERVAL = float(os.environ.get("AGENT_POLL_INTERVAL_SEC", "0.05"))
 IDLE_INTERVAL = float(os.environ.get("AGENT_IDLE_INTERVAL_SEC", "1.0"))
 PROVIDER = compact_line(os.environ.get("AGENT_PROVIDER", "openai_codex"))
 MODEL = compact_line(os.environ.get("AGENT_MODEL", ""))
@@ -68,8 +68,9 @@ TOOLS_DIR = Path(__file__).resolve().parent
 SYSTEM_PROMPT = (TOOLS_DIR / "live_agent_system_prompt.txt").read_text(encoding="utf-8").strip()
 
 VALID_DIRECTIONS = {"up", "down", "left", "right"}
+VALID_SKILL_ACTIONS = {"start", "hold", "release", "none"}
 ACCOUNT_FAILURE_THRESHOLD = 3
-STALL_FAILURE_MS = 900
+ACK_WAIT_TIMEOUT_MS = 1500
 MAX_IN_FLIGHT_MODEL_CALLS = max(1, int(os.environ.get("AGENT_MAX_IN_FLIGHT", "3")))
 MODEL_TURN_MIN_INTERVAL_MS = max(50, int(os.environ.get("AGENT_TURN_INTERVAL_MS", "100")))
 MODEL_DECISION_TTL_MS = max(200, int(os.environ.get("AGENT_DECISION_TTL_MS", "1200")))
@@ -207,47 +208,6 @@ def send_heartbeat(status: str = "online", error: str = "") -> None:
 # Game state → compact prompt
 # ---------------------------------------------------------------------------
 
-def _fmt_player(p: dict[str, Any]) -> str:
-    if not isinstance(p, dict):
-        return ""
-    return (
-        f"P{p.get('id')} {p.get('name','')} tile=({p.get('tile',{}).get('x')},{p.get('tile',{}).get('y')}) "
-        f"alive={p.get('alive')} bombs={p.get('activeBombs')}/{p.get('maxBombs')} "
-        f"flame={p.get('flameRange')} speed={p.get('speedLevel')} "
-        f"remote={p.get('remoteLevel',0)} shield={p.get('shieldCharges',0)}"
-    )
-
-
-def _fmt_bomb(b: dict[str, Any]) -> str:
-    if not isinstance(b, dict):
-        return ""
-    tile = b.get("tile", {})
-    return f"bomb owner=P{b.get('ownerId')} tile=({tile.get('x')},{tile.get('y')}) fuse={b.get('fuseMs')}ms range={b.get('flameRange')}"
-
-
-def _fmt_flame(f: dict[str, Any]) -> str:
-    if not isinstance(f, dict):
-        return ""
-    tile = f.get("tile", {})
-    return f"flame tile=({tile.get('x')},{tile.get('y')}) rem={f.get('remainingMs')}ms"
-
-
-def _fmt_powerup(powerup: dict[str, Any]) -> str:
-    if not isinstance(powerup, dict):
-        return ""
-    tile = powerup.get("tile", {})
-    return f"powerup type={powerup.get('type')} tile=({tile.get('x')},{tile.get('y')})"
-
-
-def _fmt_enemy(me_tile: dict[str, Any], p: dict[str, Any]) -> str:
-    tile = p.get("tile", {})
-    return (
-        f"P{p.get('id')} tile=({tile.get('x')},{tile.get('y')}) "
-        f"d={_tile_distance(me_tile, tile)} alive={p.get('alive')} "
-        f"bombs={p.get('activeBombs')}/{p.get('maxBombs')} flame={p.get('flameRange')}"
-    )
-
-
 def _tile_distance(a: dict[str, Any] | None, b: dict[str, Any] | None) -> int:
     if not isinstance(a, dict) or not isinstance(b, dict):
         return 999
@@ -320,19 +280,6 @@ class ConcurrentTurnCoordinator:
             self._in_flight[request_id] = token
             return dict(token)
 
-    def complete(self, token: dict[str, int], *, round_epoch: int, life_epoch: int) -> bool:
-        request_id = int(token.get("requestId", 0) or 0)
-        with self._lock:
-            self._in_flight.pop(request_id, None)
-            if int(token.get("roundEpoch", -1)) != int(round_epoch):
-                return False
-            if int(token.get("lifeEpoch", -1)) != int(life_epoch):
-                return False
-            if request_id <= self._latest_applied_request_id:
-                return False
-            self._latest_applied_request_id = request_id
-            return True
-
     def release(self, token: dict[str, int]) -> None:
         """Free capacity after a failed call without advancing response ordering."""
         request_id = int(token.get("requestId", 0) or 0)
@@ -388,99 +335,156 @@ def relay_model_decision(
 
 
 class ActionOutcomeMemory:
-    """Short-lived per-round memory that connects actions to observed results."""
+    """Per-request observations returned to the model; never changes an action locally."""
 
     def __init__(self, max_outcomes: int = 8) -> None:
         self._lock = threading.RLock()
-        self._pending: dict[str, Any] | None = None
+        self._pending: dict[int, dict[str, Any]] = {}
         self._outcomes: deque[dict[str, Any]] = deque(maxlen=max_outcomes)
-        self._failed: dict[tuple[int, int, str], int] = {}
 
     def reset(self) -> None:
         with self._lock:
-            self._pending = None
+            self._pending.clear()
             self._outcomes.clear()
-            self._failed.clear()
 
     def record(self, decision: dict[str, Any], state: dict[str, Any]) -> None:
         with self._lock:
-            direction = str(decision.get("direction") or "")
             me = _player_state(state, PLAYER_ID)
-            if direction not in VALID_DIRECTIONS or not me:
-                self._pending = None
+            if not me:
                 return
-            navigation = _navigation_for_player(state)
-            self._pending = {
+            replaced_at_ms = now_ms()
+            for pending in self._pending.values():
+                if not pending["commandReplaced"]:
+                    pending["commandReplaced"] = True
+                    pending["replacedAtMs"] = replaced_at_ms
+            direction = str(decision.get("direction") or "")
+            if direction not in VALID_DIRECTIONS:
+                direction = ""
+            try:
+                request_id = int(decision.get("requestId", 0) or 0)
+            except (TypeError, ValueError):
+                request_id = 0
+            if request_id <= 0:
+                request_id = now_ms()
+            try:
+                expires_in_ms = int(decision.get("expiresInMs", MODEL_DECISION_TTL_MS) or MODEL_DECISION_TTL_MS)
+            except (TypeError, ValueError):
+                expires_in_ms = MODEL_DECISION_TTL_MS
+            self._pending[request_id] = {
+                "requestId": request_id,
                 "direction": direction,
                 "origin": _tile_key(me.get("tile", {})),
-                "stalledBeforeMs": int(navigation.get("stalledForMs", 0) or 0),
+                "placeBomb": bool(decision.get("placeBomb")),
+                "detonate": bool(decision.get("detonate")),
+                "skillAction": str(decision.get("skillAction", "none") or "none"),
+                "recordedAtMs": now_ms(),
+                "evaluateAfterMs": max(250, min(1500, expires_in_ms)),
+                "commandReplaced": False,
+                "replacedAtMs": 0,
             }
 
     def observe(self, state: dict[str, Any]) -> None:
         with self._lock:
-            pending = self._pending
-            if not pending:
+            if not self._pending:
                 return
             me = _player_state(state, PLAYER_ID)
-            if not me or not me.get("alive"):
-                self._pending = None
+            if not me:
                 return
-            current = _tile_key(me.get("tile", {}))
-            origin = pending["origin"]
-            direction = pending["direction"]
-            navigation = _navigation_for_player(state)
-            try:
-                stalled_ms = max(0, int(navigation.get("stalledForMs", 0) or 0))
-            except (TypeError, ValueError):
-                stalled_ms = 0
+            observed_at_ms = now_ms()
+            action_acks = {
+                int(ack.get("requestId", 0) or 0): ack
+                for ack in (state.get("actionAcks") or [])
+                if isinstance(ack, dict) and str(ack.get("playerId")) == PLAYER_ID
+            }
 
-            if current != origin:
-                outcome = "SUCCEEDED"
-                self._failed.pop((origin[0], origin[1], direction), None)
-            elif stalled_ms >= STALL_FAILURE_MS:
-                outcome = "FAILED"
-                key = (origin[0], origin[1], direction)
-                self._failed[key] = self._failed.get(key, 0) + 1
-            else:
-                return
+            for request_id, pending in list(self._pending.items()):
+                age_ms = max(0, observed_at_ms - int(pending["recordedAtMs"]))
+                origin = pending["origin"]
+                direction = pending["direction"]
+                details: list[str] = []
+                ack = action_acks.get(request_id)
+                if not ack:
+                    deadline_ms = (
+                        int(pending["replacedAtMs"]) + ACK_WAIT_TIMEOUT_MS
+                        if pending["commandReplaced"]
+                        else int(pending["recordedAtMs"]) + int(pending["evaluateAfterMs"]) + ACK_WAIT_TIMEOUT_MS
+                    )
+                    if observed_at_ms < deadline_ms:
+                        continue
+                    self._outcomes.append({
+                        "summary": (
+                            f"request={request_id} UNACKNOWLEDGED direction={direction or 'null'} "
+                            f"origin={origin} age={age_ms}ms"
+                        )
+                    })
+                    self._pending.pop(request_id, None)
+                    continue
+                if (
+                    bool(ack.get("alive", True))
+                    and not pending["commandReplaced"]
+                    and age_ms < int(pending["evaluateAfterMs"])
+                ):
+                    continue
+                ack_delta = ack.get("movementDelta", {}) if isinstance(ack, dict) else {}
+                try:
+                    ack_movement = (
+                        abs(float(ack_delta.get("x", 0) or 0)) > 0.01
+                        or abs(float(ack_delta.get("y", 0) or 0)) > 0.01
+                    ) if isinstance(ack_delta, dict) else False
+                except (TypeError, ValueError):
+                    ack_movement = False
 
-            self._outcomes.append({
-                "outcome": outcome,
-                "direction": direction,
-                "origin": origin,
-                "result": current,
-                "stalledMs": stalled_ms,
-            })
-            self._pending = None
+                if direction:
+                    if ack and bool(ack.get("tileChanged")):
+                        details.append("MOVE_SUCCEEDED")
+                    elif ack and (bool(ack.get("positionChanged")) or ack_movement):
+                        details.append("MOVE_IN_PROGRESS")
+                    else:
+                        details.append("MOVE_NO_PROGRESS")
 
-    def _failed_directions_unlocked(self, state: dict[str, Any]) -> set[str]:
-        me = _player_state(state, PLAYER_ID)
-        if not me:
-            return set()
-        x, y = _tile_key(me.get("tile", {}))
-        return {
-            direction
-            for (tile_x, tile_y, direction), count in self._failed.items()
-            if tile_x == x and tile_y == y and count > 0
-        }
+                if pending["placeBomb"]:
+                    placed = bool(ack.get("bombPlaced"))
+                    details.append("BOMB_PLACED" if placed else "BOMB_NO_EFFECT")
 
-    def failed_directions(self, state: dict[str, Any]) -> set[str]:
-        with self._lock:
-            return self._failed_directions_unlocked(state)
+                if pending["detonate"]:
+                    detonated = bool(ack.get("detonated"))
+                    details.append("DETONATED" if detonated else "DETONATE_NO_EFFECT")
+
+                skill_action = pending["skillAction"]
+                skill_phase_before = str(ack.get("skillPhaseBefore", "idle") or "idle")
+                skill_phase = str(ack.get("skillPhaseAfter", "idle") or "idle")
+                if skill_action == "start":
+                    started = bool(ack.get("skillPressed")) and skill_phase_before == "idle" and skill_phase != "idle"
+                    details.append("SKILL_STARTED" if started else "SKILL_NO_EFFECT")
+                elif skill_action == "hold":
+                    held = bool(ack.get("skillHeld")) and skill_phase_before in {"channeling", "releasing"}
+                    details.append("SKILL_HELD" if held else "SKILL_HOLD_NO_EFFECT")
+                elif skill_action == "release":
+                    released = (
+                        bool(ack.get("skillPressed"))
+                        and skill_phase_before in {"channeling", "releasing"}
+                        and skill_phase != skill_phase_before
+                    )
+                    details.append("SKILL_RELEASED" if released else "SKILL_RELEASE_NO_EFFECT")
+
+                if not details:
+                    details.append("WAITED")
+                if not bool(ack.get("alive", True)):
+                    details.append("DIED_AFTER")
+                if pending["commandReplaced"]:
+                    details.append("COMMAND_REPLACED")
+                self._outcomes.append({
+                    "summary": (
+                        f"request={request_id} {'+'.join(details)} direction={direction or 'null'} "
+                        f"origin={origin} delta=({ack_delta.get('x', 0)},{ack_delta.get('y', 0)}) "
+                        f"ack=true age={age_ms}ms"
+                    )
+                })
+                self._pending.pop(request_id, None)
 
     def prompt_context(self, state: dict[str, Any]) -> str:
         with self._lock:
-            lines: list[str] = []
-            for item in self._outcomes:
-                ox, oy = item["origin"]
-                rx, ry = item["result"]
-                lines.append(
-                    f"{item['outcome']} direction={item['direction']} tile=({ox},{oy}) "
-                    f"result=({rx},{ry}) stalled={item['stalledMs']}ms"
-                )
-            failed_here = sorted(self._failed_directions_unlocked(state))
-            if failed_here:
-                lines.append(f"FAILED HERE: {', '.join(failed_here)}")
+            lines = [str(item["summary"]) for item in self._outcomes]
             return "\n".join(lines) if lines else "No evaluated actions yet."
 
 
@@ -490,7 +494,7 @@ def build_prompt(state: dict[str, Any], *, outcome_context: str = "") -> str:
     players = [p for p in (state.get("players") or []) if isinstance(p, dict)]
     me = next((p for p in players if str(p.get("id")) == PLAYER_ID), None)
     if me is None:
-        return '{"direction":null,"placeBomb":false,"detonate":false,"useSkill":false,"expiresInMs":250,"reason":"no self state"}'
+        return '{"direction":null,"placeBomb":false,"detonate":false,"skillAction":"none","expiresInMs":250,"reason":"no self state"}'
 
     me_tile = me.get("tile", {})
     navigation = _navigation_for_player(state)
@@ -559,7 +563,7 @@ def build_prompt(state: dict[str, Any], *, outcome_context: str = "") -> str:
     return (
         f"MICRO DECISION for P{PLAYER_ID}. You alone choose every gameplay action; no local policy will correct it. "
         "React to this exact snapshot and the previous outcomes. Choose a 200-1500ms horizon in expiresInMs. "
-        "Return only one JSON object with direction, placeBomb, detonate, useSkill, expiresInMs, reason. "
+        "Return only one JSON object with direction, placeBomb, detonate, skillAction, expiresInMs, reason. "
         f"STATE={compact}"
     )
 
@@ -597,13 +601,17 @@ def parse_decision(raw: str) -> dict[str, Any] | None:
     if direction is not None and str(direction).lower() not in VALID_DIRECTIONS:
         direction = None
 
+    skill_action = str(data.get("skillAction", "") or "").lower()
+    if skill_action not in VALID_SKILL_ACTIONS:
+        skill_action = "start" if bool(data.get("useSkill", False)) else "none"
+
     return {
         "playerId": PLAYER_ID,
         "botId": AGENT_ID,
         "direction": direction,
         "placeBomb": bool(data.get("placeBomb", False)),
         "detonate": bool(data.get("detonate", False)),
-        "useSkill": bool(data.get("useSkill", False)),
+        "skillAction": skill_action,
         "expiresInMs": data.get("expiresInMs", MODEL_DECISION_TTL_MS),
         "reason": str(data.get("reason", ""))[:120],
     }
@@ -880,7 +888,10 @@ class LiveAgent:
             post_result: tuple[int, Any] = (0, None)
             def _publish() -> int:
                 nonlocal post_result
+                publication_state = self._get_latest_state()
                 post_result = _http_post("/decision", relayed)
+                if post_result[0] == 200:
+                    self._action_memory.record(relayed, publication_state)
                 return post_result[0]
 
             published, post_status = self._turns.publish(
@@ -899,13 +910,12 @@ class LiveAgent:
             self._last_model_error = ""
             self._account_consecutive_failures = 0
             self._ai_retry_at_ms = 0
-            self._action_memory.record(relayed, latest_state)
             self.decisions_this_match += 1
             send_heartbeat("active")
             arrow = {"up": "^", "down": "v", "left": "<", "right": ">"}.get(
                 str(relayed["direction"] or ""), "."
             )
-            flags = "".join(("B" if relayed["placeBomb"] else "-", "D" if relayed["detonate"] else "-", "S" if relayed["useSkill"] else "-"))
+            flags = "".join(("B" if relayed["placeBomb"] else "-", "D" if relayed["detonate"] else "-", relayed["skillAction"][:1].upper()))
             log(
                 f"request={request_id:>4} stateTick={tick:>5} latency={latency_ms:>4}ms "
                 f"inFlight={self._turns.in_flight_count} action={arrow}/{flags} | {relayed['reason'][:60]}"

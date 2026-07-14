@@ -17,8 +17,16 @@ assert.doesNotMatch(bridge, /navigation\.blockedDirections\.includes\(entry\.d\.
 assert.match(bridge, /_consumedDecisionActions/);
 assert.match(bridge, /decision\.requestId \?\? "unversioned"/);
 assert.match(bridge, /decision\.receivedAt \?\? "unreceived"/);
-assert.match(bridge, /useSkill: isNewAction && d\.useSkill/);
+assert.match(bridge, /skillAction === "start" \|\| skillAction === "release"/);
+assert.match(bridge, /skillAction === "start" \|\| skillAction === "hold"/);
 assert.match(gameApp, /Boolean\(botDecision\?\.useSkill\)/);
+assert.match(gameApp, /botDecision\?\.skillHeld \?\? this\.isSkillHeld\(id\)/);
+assert.match(gameApp, /AutoImprovementBridge\.isEnabled && this\.isLiveBridgeControlled\(id\)/);
+assert.match(gameApp, /liveBridgeControlled\s*\? desiredDirection/);
+assert.match(gameApp, /actionAcks: \[\.\.\.this\.labActionAcks\.values\(\)\]/);
+assert.match(gameApp, /requestId: actionRequestId/);
+assert.match(gameApp, /botDecision\?\.skillAction === "release"/);
+assert.match(gameApp, /player\.skill\.phase === "channeling" \|\| player\.skill\.phase === "releasing"/);
 
 const python = String.raw`
 import copy
@@ -29,6 +37,8 @@ import time
 sys.path.insert(0, r"${path.join(root, "auto-improvements")}")
 import live_agent
 import model_manager
+
+assert live_agent.POLL_INTERVAL == 0.05, live_agent.POLL_INTERVAL
 
 state = {
     "tick": 400,
@@ -61,7 +71,7 @@ model_decision = {
     "direction": "left",
     "placeBomb": True,
     "detonate": False,
-    "useSkill": True,
+    "skillAction": "start",
     "reason": "model owns this micro decision",
 }
 
@@ -71,7 +81,7 @@ relayed = live_agent.relay_model_decision(
     request_id=7,
     latency_ms=240,
 )
-for field in ("direction", "placeBomb", "detonate", "useSkill", "reason"):
+for field in ("direction", "placeBomb", "detonate", "skillAction", "reason"):
     assert relayed[field] == model_decision[field], f"model field {field} was rewritten: {relayed}"
 assert relayed["source"] == "model", relayed
 assert relayed["stateTick"] == 400, relayed
@@ -109,12 +119,132 @@ turn_2 = turns.reserve(tick=101, round_epoch=1, life_epoch=1)
 turn_3 = turns.reserve(tick=102, round_epoch=1, life_epoch=1)
 assert turn_1 and turn_2 and turn_3
 assert turns.reserve(tick=103, round_epoch=1, life_epoch=1) is None, "in-flight limit was ignored"
-assert turns.complete(turn_2, round_epoch=1, life_epoch=1) is True
-assert turns.complete(turn_1, round_epoch=1, life_epoch=1) is False, "older response replaced a newer model action"
+assert turns.publish(turn_2, round_epoch=1, life_epoch=1, publisher=lambda: 200) == (True, 200)
+assert turns.publish(turn_1, round_epoch=1, life_epoch=1, publisher=lambda: 200) == (False, None), "older response replaced a newer model action"
 turn_4 = turns.reserve(tick=103, round_epoch=1, life_epoch=1)
 assert turn_4 is not None, "completed capacity was not reused"
-assert turns.complete(turn_3, round_epoch=1, life_epoch=1) is True
-assert turns.complete(turn_4, round_epoch=2, life_epoch=1) is False, "old-round response was accepted"
+assert turns.publish(turn_3, round_epoch=1, life_epoch=1, publisher=lambda: 200) == (True, 200)
+assert turns.publish(turn_4, round_epoch=2, life_epoch=1, publisher=lambda: 200) == (False, None), "old-round response was accepted"
+
+memory = live_agent.ActionOutcomeMemory()
+memory_state = copy.deepcopy(state)
+memory_state["navigation"]["1"]["stalledForMs"] = 1900
+memory.record({**model_decision, "requestId": 41, "expiresInMs": 250}, memory_state)
+memory._pending[41]["recordedAtMs"] -= 300
+memory.observe(memory_state)
+context = memory.prompt_context(memory_state)
+assert context == "No evaluated actions yet.", context
+memory._pending[41]["recordedAtMs"] -= 1600
+memory.observe(memory_state)
+context = memory.prompt_context(memory_state)
+assert "request=41 UNACKNOWLEDGED" in context, context
+
+effect_memory = live_agent.ActionOutcomeMemory()
+effect_memory.record({**model_decision, "requestId": 43, "expiresInMs": 250}, memory_state)
+effect_memory._pending[43]["recordedAtMs"] -= 300
+effect_state = copy.deepcopy(memory_state)
+effect_state["players"][0]["activeBombs"] = 1
+effect_state["players"][0]["skill"] = {"phase": "channeling", "cooldownRemainingMs": 0}
+effect_state["actionAcks"] = [{
+    "requestId": 43, "playerId": "1", "positionChanged": True, "tileChanged": True,
+    "movementDelta": {"x": 48, "y": 0}, "bombAttempted": True,
+    "bombPlaced": True, "detonateAttempted": False, "detonated": False,
+    "skillPressed": True, "skillHeld": True,
+    "skillPhaseBefore": "idle", "skillPhaseAfter": "channeling", "alive": True,
+}]
+effect_memory.observe(effect_state)
+effect_context = effect_memory.prompt_context(effect_state)
+assert "BOMB_PLACED" in effect_context and "SKILL_STARTED" in effect_context, effect_context
+
+causal_memory = live_agent.ActionOutcomeMemory()
+causal_memory.record({**model_decision, "requestId": 50, "expiresInMs": 1500}, memory_state)
+moved_state = copy.deepcopy(memory_state)
+moved_state["players"][0]["tile"] = {"x": 3, "y": 1}
+causal_memory.record({**model_decision, "requestId": 51, "expiresInMs": 1500}, moved_state)
+moved_state["actionAcks"] = [{
+    "requestId": 50, "playerId": "1", "positionChanged": True, "tileChanged": True,
+    "movementDelta": {"x": 48, "y": 0}, "bombAttempted": True,
+    "bombPlaced": True, "detonateAttempted": False, "detonated": False,
+    "skillPhaseBefore": "idle", "skillPhaseAfter": "channeling", "alive": True,
+}]
+causal_memory.observe(moved_state)
+causal_context = causal_memory.prompt_context(moved_state)
+assert "request=50" in causal_context and "MOVE_SUCCEEDED" in causal_context, causal_context
+assert "COMMAND_REPLACED" in causal_context, causal_context
+assert list(causal_memory._pending) == [51], causal_memory._pending
+
+progress_memory = live_agent.ActionOutcomeMemory()
+progress_memory.record({**model_decision, "requestId": 60, "expiresInMs": 1500}, memory_state)
+progress_state = copy.deepcopy(memory_state)
+progress_state["navigation"]["1"]["lastMovementDelta"] = {"x": 4.5, "y": 0}
+progress_memory.record({**model_decision, "requestId": 61, "expiresInMs": 1500}, progress_state)
+progress_state["actionAcks"] = [{
+    "requestId": 60, "playerId": "1", "positionChanged": True, "tileChanged": False,
+    "movementDelta": {"x": 4.5, "y": 0}, "bombAttempted": True,
+    "bombPlaced": False, "detonateAttempted": False, "detonated": False,
+    "skillPhaseBefore": "idle", "skillPhaseAfter": "idle", "alive": True,
+}]
+progress_memory.observe(progress_state)
+progress_context = progress_memory.prompt_context(progress_state)
+assert "request=60" in progress_context and "MOVE_IN_PROGRESS" in progress_context, progress_context
+
+ack_memory = live_agent.ActionOutcomeMemory()
+ack_decision = {**model_decision, "requestId": 70, "expiresInMs": 250}
+ack_memory.record(ack_decision, memory_state)
+ack_memory._pending[70]["recordedAtMs"] -= 300
+ack_state = copy.deepcopy(memory_state)
+ack_state["players"][0]["activeBombs"] = 1
+ack_state["actionAcks"] = [{
+    "requestId": 70, "playerId": "1", "positionChanged": False, "tileChanged": False,
+    "movementDelta": {"x": 0, "y": 0}, "bombAttempted": True,
+    "bombPlaced": False, "detonateAttempted": False, "detonated": False,
+    "skillPhaseBefore": "idle", "skillPhaseAfter": "idle", "alive": True,
+}]
+ack_memory.observe(ack_state)
+ack_context = ack_memory.prompt_context(ack_state)
+assert "BOMB_NO_EFFECT" in ack_context and "ack=true" in ack_context, ack_context
+
+ack_progress_memory = live_agent.ActionOutcomeMemory()
+ack_progress_memory.record({**model_decision, "requestId": 71, "expiresInMs": 250}, memory_state)
+ack_progress_memory._pending[71]["recordedAtMs"] -= 300
+ack_progress_state = copy.deepcopy(memory_state)
+ack_progress_state["actionAcks"] = [{
+    "requestId": 71, "playerId": "1", "positionChanged": True, "tileChanged": False,
+    "movementDelta": {"x": 3.25, "y": 0}, "bombAttempted": False,
+    "bombPlaced": False, "detonateAttempted": False, "detonated": False,
+    "skillPhaseBefore": "idle", "skillPhaseAfter": "idle", "alive": True,
+}]
+ack_progress_memory.observe(ack_progress_state)
+assert "MOVE_IN_PROGRESS" in ack_progress_memory.prompt_context(ack_progress_state)
+
+idle_release_memory = live_agent.ActionOutcomeMemory()
+idle_release = {**model_decision, "requestId": 72, "skillAction": "release", "expiresInMs": 250}
+idle_release_memory.record(idle_release, memory_state)
+idle_release_memory._pending[72]["recordedAtMs"] -= 300
+idle_release_state = copy.deepcopy(memory_state)
+idle_release_state["actionAcks"] = [{
+    "requestId": 72, "playerId": "1", "positionChanged": False, "tileChanged": False,
+    "movementDelta": {"x": 0, "y": 0}, "bombAttempted": True,
+    "bombPlaced": False, "detonateAttempted": False, "detonated": False,
+    "skillPressed": False, "skillHeld": False,
+    "skillPhaseBefore": "idle", "skillPhaseAfter": "idle", "alive": True,
+}]
+idle_release_memory.observe(idle_release_state)
+assert "SKILL_RELEASE_NO_EFFECT" in idle_release_memory.prompt_context(idle_release_state)
+
+death_memory = live_agent.ActionOutcomeMemory()
+death_memory.record({**model_decision, "requestId": 42, "expiresInMs": 250}, memory_state)
+dead_state = copy.deepcopy(memory_state)
+dead_state["players"][0]["alive"] = False
+dead_state["actionAcks"] = [{
+    "requestId": 42, "playerId": "1", "positionChanged": False, "tileChanged": False,
+    "movementDelta": {"x": 0, "y": 0}, "bombAttempted": True,
+    "bombPlaced": False, "detonateAttempted": False, "detonated": False,
+    "skillPhaseBefore": "idle", "skillPhaseAfter": "idle", "alive": False,
+}]
+death_memory.observe(dead_state)
+death_context = death_memory.prompt_context(dead_state)
+assert "DIED_AFTER" in death_context and "BOMB_NO_EFFECT" in death_context, death_context
 
 publication_order = []
 ordered_turns = live_agent.ConcurrentTurnCoordinator(max_in_flight=2)
@@ -142,7 +272,7 @@ posted = []
 def fake_model(prompt, **kwargs):
     prompt_tick = int(prompt.split('"tick":', 1)[1].split(',', 1)[0])
     time.sleep({100: 0.12, 101: 0.08, 102: 0.01}[prompt_tick])
-    return ('{"direction":"right","placeBomb":false,"detonate":false,"useSkill":false,"expiresInMs":400,"reason":"tick %s"}' % prompt_tick, None, "ok")
+    return ('{"direction":"right","placeBomb":false,"detonate":false,"skillAction":"none","expiresInMs":400,"reason":"tick %s"}' % prompt_tick, None, "ok")
 
 live_agent._codex_new = fake_model
 live_agent._http_post = lambda path, payload: (posted.append((path, payload)) or (200, {"ok": True}))
@@ -154,8 +284,11 @@ for model_tick in (100, 101, 102):
     agent._fire_ai_call(snapshot, model_tick)
 time.sleep(0.25)
 decisions = [payload for path, payload in posted if path == "/decision"]
-assert [item["stateTick"] for item in decisions] == [102], decisions
-assert decisions[0]["source"] == "model", decisions
+decision_ticks = [item["stateTick"] for item in decisions]
+assert decision_ticks == sorted(decision_ticks), decisions
+assert decision_ticks[-1] == 102, decisions
+assert all(item["source"] == "model" for item in decisions), decisions
+assert max(agent._action_memory._pending) == 3, agent._action_memory._pending
 
 assert live_agent.REASONING_EFFORT == "none", live_agent.REASONING_EFFORT
 

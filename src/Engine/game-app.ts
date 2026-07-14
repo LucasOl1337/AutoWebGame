@@ -107,7 +107,11 @@ import {
   SUDDEN_DEATH_TICK_MS,
   type ProjectedBomb,
 } from "./danger-map";
-import { AutoImprovementBridge, type LabNavigationSnapshot } from "./auto-improvement-bridge";
+import {
+  AutoImprovementBridge,
+  type LabActionAck,
+  type LabNavigationSnapshot,
+} from "./auto-improvement-bridge";
 import type { SkillContext } from "../ultimate/skill-system";
 import {
   createDefaultPlayerSkillState,
@@ -328,6 +332,9 @@ interface BotDecision {
   placeBomb: boolean;
   detonate?: boolean;
   useSkill?: boolean;
+  skillHeld?: boolean;
+  skillAction?: "start" | "hold" | "release" | "none";
+  requestId?: number;
 }
 
 interface MovementOption {
@@ -473,6 +480,7 @@ export class GameApp {
   private botEnabled = false;
   private botBombCooldownMs = 0;
   private aiBridgeTick = 0;
+  private labActionAcks = new Map<string, LabActionAck>();
   private botCommittedDirection: Record<PlayerId, Direction | null> = createDirectionPlayerRecord(null);
   private botPendingReverseDirection: Record<PlayerId, Direction | null> = createDirectionPlayerRecord(null);
   private botPendingReverseFrames: Record<PlayerId, number> = createNumberPlayerRecord(0);
@@ -960,6 +968,7 @@ export class GameApp {
     this.autoPausedForHiddenTab = false;
     this.roundOutcome = null;
     this.botBombCooldownMs = 0;
+    this.labActionAcks.clear();
     this.botCommittedDirection = createDirectionPlayerRecord(null);
     this.botPendingReverseDirection = createDirectionPlayerRecord(null);
     this.botPendingReverseFrames = createNumberPlayerRecord(0);
@@ -1846,6 +1855,10 @@ export class GameApp {
           index: this.suddenDeathIndex,
         },
         navigation: this.getLabNavigationSnapshot(),
+        actionAcks: [...this.labActionAcks.values()].map((ack) => ({
+          ...ack,
+          alive: this.players[Number(ack.playerId) as PlayerId]?.alive ?? false,
+        })),
       });
     }
   }
@@ -2025,6 +2038,7 @@ export class GameApp {
     this.paused = false;
     this.autoPausedForHiddenTab = false;
     this.botBombCooldownMs = 0;
+    this.labActionAcks.clear();
     this.botCommittedDirection = createDirectionPlayerRecord(null);
     this.botPendingReverseDirection = createDirectionPlayerRecord(null);
     this.botPendingReverseFrames = createNumberPlayerRecord(0);
@@ -2226,17 +2240,31 @@ export class GameApp {
         const nativeSkillPressed = this.shouldUseNativeControls() && nativeBindings
           ? this.input.consumePress(nativeBindings.skill)
           : false;
-        const wantsSkill = Boolean(botDecision?.useSkill)
+        const modelSkillPressed = botDecision?.skillAction === "release"
+          ? Boolean(botDecision.useSkill) && (player.skill.phase === "channeling" || player.skill.phase === "releasing")
+          : Boolean(botDecision?.useSkill);
+        const wantsSkill = modelSkillPressed
           || this.consumeOnlineSkillPress(id)
           || (nativeSkillPressed
             && !this.isBotControlled(id)
             && (!this.automationMode || this.automationControlledPlayer === id));
-        const skillHeld = this.isSkillHeld(id);
+        const skillHeld = botDecision?.skillHeld ?? this.isSkillHeld(id);
 
         const desiredDirection = botDecision?.direction ?? this.getMovementDirection(id);
-        const direction = this.isBotControlled(id)
-          ? this.getStableBotDirection(player, desiredDirection, deltaMs)
-          : desiredDirection;
+        const liveBridgeControlled = AutoImprovementBridge.isEnabled && this.isLiveBridgeControlled(id);
+        const direction = liveBridgeControlled
+          ? desiredDirection
+          : this.isBotControlled(id)
+            ? this.getStableBotDirection(player, desiredDirection, deltaMs)
+            : desiredDirection;
+        const actionRequestId = liveBridgeControlled ? botDecision?.requestId : undefined;
+        const positionBefore = actionRequestId ? { ...player.position } : null;
+        const tileBefore = actionRequestId ? { ...player.tile } : null;
+        const skillPhaseBefore = player.skill.phase;
+        const detonationBomb = actionRequestId && wantsDetonate
+          ? this.getOldestOwnedBomb(player.id)
+          : null;
+        const detonationFuseBefore = detonationBomb?.fuseMs ?? 0;
         const placedBomb = this.simulatePlayerInputStep(
           player,
           {
@@ -2248,6 +2276,30 @@ export class GameApp {
           },
           deltaMs,
         );
+        if (actionRequestId && positionBefore && tileBefore) {
+          this.recordLabActionAck({
+            requestId: actionRequestId,
+            playerId: String(id),
+            direction,
+            movementDelta: {
+              x: player.position.x - positionBefore.x,
+              y: player.position.y - positionBefore.y,
+            },
+            positionChanged: player.position.x !== positionBefore.x || player.position.y !== positionBefore.y,
+            tileChanged: player.tile.x !== tileBefore.x || player.tile.y !== tileBefore.y,
+            bombAttempted: Boolean(botDecision?.placeBomb),
+            bombPlaced: placedBomb,
+            detonateAttempted: Boolean(botDecision?.detonate),
+            detonated: Boolean(detonationBomb && detonationFuseBefore > 0 && detonationBomb.fuseMs <= 0),
+            skillAction: botDecision?.skillAction ?? "none",
+            skillPressed: modelSkillPressed,
+            skillHeld: Boolean(botDecision?.skillHeld),
+            skillPhaseBefore,
+            skillPhaseAfter: player.skill.phase,
+            alive: player.alive,
+            updatedAtTick: this.aiBridgeTick + 1,
+          });
+        }
         if (this.isBotControlled(id) && direction && player.skill.phase !== "channeling") {
           this.rememberBotDirection(id, player.direction);
         }
@@ -2332,7 +2384,7 @@ export class GameApp {
     if (AutoImprovementBridge.isEnabled && this.isLiveBridgeControlled(player.id)) {
       // Per-player AI explicitly disabled → stand completely idle (no built-in AI)
       if (!AutoImprovementBridge.isPlayerEnabled(player.id)) {
-        return botAI_getBotDecision(player, this.createBotContext(this.getSharedBotDangerMap()));
+        return { direction: null, placeBomb: false, detonate: false, useSkill: false, skillHeld: false };
       }
       const aiDecision = AutoImprovementBridge.getDecision(player.id);
       if (aiDecision) return AutoImprovementBridge.toBotDecision(aiDecision);
@@ -2342,6 +2394,32 @@ export class GameApp {
       }
     }
     return botAI_getBotDecision(player, this.createBotContext(this.getSharedBotDangerMap()));
+  }
+
+  private recordLabActionAck(frame: LabActionAck): void {
+    const key = `${frame.playerId}:${frame.requestId}`;
+    const previous = this.labActionAcks.get(key);
+    this.labActionAcks.set(key, previous
+      ? {
+          ...frame,
+          movementDelta: {
+            x: previous.movementDelta.x + frame.movementDelta.x,
+            y: previous.movementDelta.y + frame.movementDelta.y,
+          },
+          positionChanged: previous.positionChanged || frame.positionChanged,
+          tileChanged: previous.tileChanged || frame.tileChanged,
+          bombAttempted: previous.bombAttempted || frame.bombAttempted,
+          bombPlaced: previous.bombPlaced || frame.bombPlaced,
+          detonateAttempted: previous.detonateAttempted || frame.detonateAttempted,
+          detonated: previous.detonated || frame.detonated,
+          skillPressed: previous.skillPressed || frame.skillPressed,
+          skillHeld: frame.skillHeld,
+          skillPhaseBefore: previous.skillPhaseBefore,
+        }
+      : frame);
+    while (this.labActionAcks.size > 32) {
+      this.labActionAcks.delete(this.labActionAcks.keys().next().value as string);
+    }
   }
 
   private getSharedBotDangerMap(): Map<string, number> {

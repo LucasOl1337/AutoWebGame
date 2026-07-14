@@ -48,13 +48,30 @@ assert payload["navigation"]["stalledForMs"] == 1800, payload
 assert payload["powerUps"][0]["type"] == "speed", payload
 
 memory = live_agent.ActionOutcomeMemory()
-attempt = {"direction": "right", "placeBomb": False, "detonate": False, "useSkill": False}
+attempt = {"requestId": 1, "direction": "right", "placeBomb": False, "detonate": False, "skillAction": "none", "expiresInMs": 250}
 memory.record(attempt, state)
+memory._pending[1]["recordedAtMs"] -= 300
+state["actionAcks"] = [{
+    "requestId": 1, "playerId": "1", "positionChanged": False, "tileChanged": False,
+    "movementDelta": {"x": 0, "y": 0}, "bombAttempted": False,
+    "bombPlaced": False, "detonateAttempted": False, "detonated": False,
+    "skillPhaseBefore": "idle", "skillPhaseAfter": "idle", "alive": True,
+}]
 memory.observe(state)
 learning = memory.prompt_context(state)
-assert "FAILED direction=right tile=(2,1)" in learning, learning
+assert "MOVE_NO_PROGRESS" in learning and "ack=true" in learning, learning
+
+blocked_memory = live_agent.ActionOutcomeMemory()
+blocked_memory.record({**attempt, "requestId": 2}, state)
+blocked_memory._pending[2]["recordedAtMs"] -= 2000
+blocked_state = json.loads(json.dumps(state))
+blocked_state["navigation"]["1"]["stalledForMs"] = 2800
+blocked_state["actionAcks"] = []
+blocked_memory.observe(blocked_state)
+blocked_learning = blocked_memory.prompt_context(blocked_state)
+assert "UNACKNOWLEDGED" in blocked_learning and "MOVE_" not in blocked_learning, blocked_learning
 learned_payload = json.loads(live_agent.build_prompt(state, outcome_context=learning).split("STATE=", 1)[1])
-assert any("FAILED direction=right" in line for line in learned_payload["recentOutcomes"]), learned_payload
+assert any("MOVE_NO_PROGRESS" in line for line in learned_payload["recentOutcomes"]), learned_payload
 
 agent = live_agent.LiveAgent()
 for forbidden in (

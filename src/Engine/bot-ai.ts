@@ -47,6 +47,9 @@ export interface BotDecision {
   placeBomb: boolean;
   detonate?: boolean;
   useSkill?: boolean;
+  skillHeld?: boolean;
+  skillAction?: "start" | "hold" | "release" | "none";
+  requestId?: number;
 }
 
 /**

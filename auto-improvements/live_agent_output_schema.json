@@ -4,9 +4,10 @@
     "direction": { "type": ["string", "null"], "enum": ["up", "down", "left", "right", null] },
     "placeBomb":  { "type": "boolean" },
     "detonate":   { "type": "boolean" },
-    "useSkill":   { "type": "boolean" },
+    "skillAction": { "type": "string", "enum": ["start", "hold", "release", "none"] },
+    "expiresInMs": { "type": "integer", "minimum": 200, "maximum": 1500 },
     "reason":     { "type": "string", "maxLength": 120 }
   },
-  "required": ["direction", "placeBomb", "detonate", "useSkill", "reason"],
+  "required": ["direction", "placeBomb", "detonate", "skillAction", "expiresInMs", "reason"],
   "additionalProperties": false
 }

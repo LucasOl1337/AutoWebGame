@@ -51,6 +51,27 @@ export interface TelemetrySnapshot {
   matchScore?: MatchScore;
   suddenDeath?: { active: boolean; index?: number };
   navigation?: Record<string, LabNavigationSnapshot>;
+  actionAcks?: LabActionAck[];
+}
+
+export interface LabActionAck {
+  requestId: number;
+  playerId: string;
+  direction: "up" | "down" | "left" | "right" | null;
+  movementDelta: { x: number; y: number };
+  positionChanged: boolean;
+  tileChanged: boolean;
+  bombAttempted: boolean;
+  bombPlaced: boolean;
+  detonateAttempted: boolean;
+  detonated: boolean;
+  skillAction: "start" | "hold" | "release" | "none";
+  skillPressed: boolean;
+  skillHeld: boolean;
+  skillPhaseBefore: string;
+  skillPhaseAfter: string;
+  alive: boolean;
+  updatedAtTick: number;
 }
 
 export interface LabNavigationSnapshot {
@@ -73,7 +94,8 @@ export interface BrokerDecision {
   direction: "up" | "down" | "left" | "right" | null;
   placeBomb: boolean;
   detonate: boolean;
-  useSkill: boolean;
+  useSkill?: boolean;
+  skillAction?: "start" | "hold" | "release" | "none";
   reason?: string;
   receivedAt?: number;
   source?: "model";
@@ -412,6 +434,7 @@ function _startLiveRefresh(): void {
             placeBomb: !!d.placeBomb,
             detonate: !!d.detonate,
             useSkill: !!d.useSkill,
+            skillAction: d.skillAction,
             reason: d.reason,
             receivedAt,
             source: d.source,
@@ -1046,11 +1069,15 @@ export const AutoImprovementBridge = {
     const actionKey = _decisionActionKey(d);
     const isNewAction = _consumedDecisionActions.get(pid) !== actionKey;
     if (isNewAction) _consumedDecisionActions.set(pid, actionKey);
+    const skillAction = d.skillAction ?? (d.useSkill ? "start" : "none");
     return {
       direction: d.direction ?? null,
       placeBomb: isNewAction && d.placeBomb,
       detonate: isNewAction && d.detonate,
-      useSkill: isNewAction && d.useSkill,
+      useSkill: isNewAction && (skillAction === "start" || skillAction === "release"),
+      skillHeld: skillAction === "start" || skillAction === "hold",
+      skillAction,
+      requestId: d.requestId,
     };
   },
 };
