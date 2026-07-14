@@ -6,7 +6,7 @@ const root = process.cwd();
 const pagePath = path.join(root, "how-to-play.html");
 const landingPath = path.join(root, "index.html");
 const vitePath = path.join(root, "vite.config.ts");
-const assetPath = path.join(root, "public", "Assets", "UiLayouts", "how-to-play-arena.png");
+const assetPath = path.join(root, "public", "Assets", "UiLayouts", "how-to-play-arena-tactical.webp");
 
 const pageHtml = fs.readFileSync(pagePath, "utf8");
 const landingHtml = fs.readFileSync(landingPath, "utf8");
@@ -16,7 +16,8 @@ const assetStats = fs.statSync(assetPath);
 assert.match(pageHtml, /<title>Como jogar \| BOMBA PvP<\/title>/);
 assert.match(pageHtml, /<h1>Como jogar BOMBA PvP<\/h1>/);
 assert.match(pageHtml, /href="\/game"/);
-assert.match(pageHtml, /src="\/Assets\/UiLayouts\/how-to-play-arena\.png"/);
+assert.match(pageHtml, /src="\/Assets\/UiLayouts\/how-to-play-arena-tactical\.webp"/);
+assert.match(pageHtml, /alt="Bomber escapando por uma zona segura enquanto uma bomba explode em cruz na arena"/);
 assert.match(pageHtml, /<kbd>W<\/kbd><kbd>A<\/kbd><kbd>S<\/kbd><kbd>D<\/kbd>/);
 assert.match(pageHtml, /<h3 class="accent-gold">Jogue a rodada<\/h3>\s*<p>Vence a rodada o ultimo bomber vivo\./);
 assert.match(pageHtml, /Na partida classica, vence o primeiro jogador a 2 vitorias\./);
@@ -62,5 +63,6 @@ assert.ok(
 );
 assert.match(viteConfig, /howToPlay:\s*"\.\/how-to-play\.html"/);
 assert.ok(assetStats.size > 100_000, "how-to-play banner should be a real generated image asset");
+assert.ok(assetStats.size < 180_000, "how-to-play banner should remain lightweight for onboarding");
 
 console.log("How-to-play page contract ok");
