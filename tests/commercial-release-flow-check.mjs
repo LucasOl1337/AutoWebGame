@@ -65,7 +65,8 @@ const checks = {
     hasCommercialMetadata: includesAll(indexHtml, [
       "<title>BOMBA PvP",
       '<meta name="description"',
-      '<link rel="icon" href="/Assets/UiLayouts/ICON.png"',
+      '<link rel="icon" type="image/png" sizes="32x32" href="/brand/bomba-prism-favicon-32.png"',
+      '<link rel="apple-touch-icon" sizes="180x180" href="/brand/bomba-prism-apple-touch.png"',
     ]),
     hasRepeatedGameEntrances: countOccurrences(indexHtml, 'href="/game"') >= 3,
     explainsPublicTrustBeforePurchase: includesAll(indexHtml, [
