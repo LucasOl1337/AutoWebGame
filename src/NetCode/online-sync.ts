@@ -122,6 +122,7 @@ interface OnlineAudioTransitionArgs {
   suppressLocalBombAudio: boolean;
   previousBombs: BombState[];
   previousFlames: FlameState[];
+  previousBreakableTiles: string[];
   previousPlayers: Record<PlayerId, PlayerState>;
   previousMatchWinner: PlayerId | null;
   previousRoundOutcome: RoundOutcome | null;
@@ -148,6 +149,7 @@ export function playOnlineAudioTransition({
   suppressLocalBombAudio,
   previousBombs,
   previousFlames,
+  previousBreakableTiles,
   previousPlayers,
   previousMatchWinner,
   previousRoundOutcome,
@@ -182,6 +184,12 @@ export function playOnlineAudioTransition({
   }
   if (newFlames > 0) {
     playSound("flames");
+  }
+  if (next.breakableTiles) {
+    const nextBreakableTiles = new Set(next.breakableTiles);
+    if (previousBreakableTiles.some((key) => !nextBreakableTiles.has(key))) {
+      playSound("crateBreak");
+    }
   }
   if (didShieldBlock(previousPlayers, next.players)) {
     playSound("shieldBlock");

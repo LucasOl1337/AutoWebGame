@@ -989,6 +989,7 @@ export class GameApp {
       suppressLocalBombAudio: this.hasPendingLocalBombAudioSuppression(),
       previousBombs: this.bombs,
       previousFlames: this.flames,
+      previousBreakableTiles: Array.from(this.arena.breakable),
       previousPlayers: this.players,
       previousMatchWinner: this.matchWinner,
       previousRoundOutcome: next.previousRoundOutcome,
@@ -2865,6 +2866,9 @@ export class GameApp {
     }
 
     this.ensureDemolitionComboDrop(brokenCrateKeys);
+    if (brokenCrateKeys.length > 0) {
+      this.soundManager.playOneShot("crateBreak");
+    }
 
     flameTiles.forEach((key) => {
       const [xText, yText] = key.split(",");

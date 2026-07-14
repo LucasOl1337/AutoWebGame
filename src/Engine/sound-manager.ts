@@ -3,6 +3,7 @@ import { assetUrl } from "./asset-url";
 export type SfxKey =
   | "bombPlace"
   | "bombExplode"
+  | "crateBreak"
   | "flames"
   | "matchStart"
   | "roundEnd"
@@ -32,6 +33,7 @@ function clampVolume(value: number): number {
 const SFX_PLAYBACK_POLICIES: Partial<Record<SfxKey, SoundPlaybackPolicy>> = {
   bombPlace: { minIntervalMs: 45 },
   bombExplode: { minIntervalMs: 140 },
+  crateBreak: { minIntervalMs: 90 },
   flames: { minIntervalMs: 110 },
   powerCollect: { minIntervalMs: 80 },
   shieldBlock: { minIntervalMs: 160 },
@@ -44,6 +46,7 @@ export const SFX_MANIFEST: Partial<Record<SfxKey, SoundManifestEntry>> = {
     { url: assetUrl("/Assets/SoundEffects/bomb_explode_default.mp3"), volume: 0.84 * MASTER_VOLUME },
     { url: assetUrl("/Assets/SoundEffects/bomb_explode_main.mp3"), volume: 0.78 * MASTER_VOLUME },
   ],
+  crateBreak: { url: assetUrl("/Assets/SoundEffects/shield_block_deflect.mp3"), volume: 0.5 * MASTER_VOLUME },
   flames: { url: assetUrl("/Assets/SoundEffects/flames.mp3"), volume: 0.74 * MASTER_VOLUME },
   matchStart: { url: assetUrl("/Assets/SoundEffects/match_start.mp3"), volume: 0.84 * 0.2 * MASTER_VOLUME },
   roundEnd: { url: assetUrl("/Assets/SoundEffects/round_end.wav"), volume: 0.76 * MASTER_VOLUME },
