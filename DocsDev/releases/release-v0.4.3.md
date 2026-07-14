@@ -10,7 +10,7 @@ Patch oficial auditado do AutoWebGame/BOMBA PvP. Este documento consolida o que 
 - **Nuvem antes da integração:** `origin/main` em `aa92b74`; havia um tag intermediário `v0.4.2` apontando para esse estado, mas **nenhum GitHub Release v0.4.2**.
 - **Local antes da auditoria:** `main` em `3c77364`, um commit à frente da nuvem, mais alterações não commitadas e várias worktrees/branches de agentes.
 - **Decisão SemVer:** publicar `v0.4.3`; não reescrever o tag público/intermediário `v0.4.2`.
-- **Escopo final:** 113 arquivos, 5.359 adições e 919 remoções contra `v0.4.1`; arte binária contada como arquivo, não como LOC.
+- **Escopo final:** 113 arquivos, 5.367 adições e 919 remoções contra `v0.4.1`; arte binária contada como arquivo, não como LOC.
 - **Compatibilidade:** sem migração de Durable Object, sem quebra do protocolo WebSocket/persistência e sem alteração de secrets. Métodos administrativos HTTP foram restringidos deliberadamente; toolchain de desenvolvimento agora exige Node.js 22+ para usar o Wrangler corrigido.
 
 ### Por que parte do histórico parece anterior ao release
@@ -96,8 +96,8 @@ O ledger não registra horário para estes claims do mesmo dia; dentro de 13/07 
 | Frontend e páginas públicas | 9 | 442 | 42 |
 | Testes | 64 | 2.746 | 72 |
 | Infra, dependências, config e assets | 8 | 437 | 696 |
-| Docs, ledgers e release | 14 | 1.316 | 6 |
-| **Total** | **113** | **5.359** | **919** |
+| Docs, ledgers e release | 14 | 1.324 | 6 |
+| **Total** | **113** | **5.367** | **919** |
 
 1. **Feature — IA e escolhas de powerup** (`bot-ai.ts`, `powerups.ts`, `arena.ts` e testes)
    - Bots avaliam saturação, retornos decrescentes e utilidade de speed, flame, bomb, shield, remote, kick e bomb-pass; desempates ficam determinísticos.
@@ -137,7 +137,7 @@ O ledger não registra horário para estes claims do mesmo dia; dentro de 13/07 
 
 8. **Docs/Release — rastreabilidade e limpeza** (`DocsDev`, ledgers, patch notes, changelog e arte)
    - Auditoria multiagente, patch card oficial e histórico de claims; scratch `.swarm`, arquivos `*.integration.*` e protótipo UX não consumido foram retirados do produto sem destruir refs recuperáveis.
-   - Docs/ledgers/release: 14 arquivos, +1.316/-6; esse volume é rastreabilidade, não funcionalidade.
+   - Docs/ledgers/release: 14 arquivos, +1.324/-6; esse volume é rastreabilidade, não funcionalidade.
 
 ## LISTA 2 — O que mudou na prática (para o humano)
 
@@ -181,13 +181,14 @@ Estimativa honesta: **70–80% do resultado final é valor útil ou cobertura qu
 - Sete estados do Lab TRAE permanecem em `archive/trae-lab-*`.
 - Oito worktrees auxiliares limpas foram removidas com `git worktree remove`; a entrada integration já ausente foi saneada com `git worktree prune`.
 - O checkout local ficou com uma única worktree canônica e apenas a branch local `main`.
-- Branches remotas serão removidas somente depois do push das tags de arquivo e da nova `main`.
+- As 14 branches remotas auxiliares foram removidas depois do push das tags; local e origin agora expõem apenas `main` como branch.
 
 ## Publicação e validação
 
 - Build: **aprovado**, Vite 7.3.6, 52 módulos transformados.
 - Checks de contrato: **176/176 aprovados**, repetidos após o upgrade de dependências.
 - Dependências: **0 vulnerabilidades** após atualizar Wrangler/Vite e transitivas compatíveis.
-- Worker: syntax check e **Wrangler 4.110.0 dry-run aprovados**; deploy pendente nesta etapa do documento.
-- QA local: **5/5 rotas HTTP aprovadas** em Vite/Worker. Inspeção visual automatizada ficou bloqueada por falha do plugin oficial (`Cannot redefine property: process`), sem ser substituída por Playwright.
-- GitHub Release: pendente nesta etapa do documento.
+- Worker: syntax check e dry-run aprovados; **deploy Cloudflare concluído** com Wrangler 4.110.0, versão `e8391cb3-4e87-435e-92b3-e196cc4a9800`.
+- QA: **5/5 rotas locais** e **9/9 endpoints de produção** aprovados em `bombapvp.com`, `bombpvp.com` e `workers.dev`; SHA-256 do bundle principal remoto idêntico ao `dist` local.
+- Inspeção visual automatizada ficou bloqueada por falha do plugin oficial (`Cannot redefine property: process`), sem ser substituída por Playwright.
+- GitHub Release: [v0.4.3](https://github.com/LucasOl1337/AutoWebGame/releases/tag/v0.4.3).

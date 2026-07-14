@@ -2,7 +2,7 @@
 
 **Projeto:** AutoWebGame / BOMBA PvP
 **Baseline público:** `v0.4.1` (`a2eff456`)
-**Estado:** candidato auditado; publicação em finalização
+**Estado:** publicado no GitHub e em produção
 
 ## Para quem joga
 

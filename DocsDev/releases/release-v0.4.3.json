@@ -16,10 +16,10 @@
     "intermediateGithubReleaseExists": false
   },
   "semverDecision": "patch-v0.4.3-without-rewriting-v0.4.2",
-  "publicationStatus": "audited-candidate-pending-deploy-and-github-release",
+  "publicationStatus": "published-production-and-github-release",
   "diff": {
     "files": 113,
-    "additions": 5359,
+    "additions": 5367,
     "deletions": 919,
     "binaryArtifacts": ["release-assets/v0.4.3-card.png"]
   },
@@ -78,14 +78,21 @@
     "auxiliaryWorktreesRemoved": 8,
     "missingWorktreeEntriesPruned": true,
     "localBranchesRemaining": ["main"],
-    "remoteBranchDeletion": "pending archive-tag and main push"
+    "remoteBranchesDeleted": 14,
+    "remoteBranchesRemaining": ["main"]
   },
   "validation": {
     "build": "passed: Vite 7.3.6, 52 modules",
     "contractChecks": "176/176 passed twice, including after dependency upgrades",
     "dependencyAudit": "0 vulnerabilities",
-    "worker": "syntax and Wrangler 4.110.0 dry-run passed; deploy pending",
+    "worker": "deployed: e8391cb3-4e87-435e-92b3-e196cc4a9800",
+    "productionSmoke": "9/9 endpoints passed; main bundle SHA-256 matched local dist",
     "browser": "5/5 local HTTP routes passed; visual automation blocked by official plugin process-property error"
+  },
+  "publication": {
+    "githubRelease": "https://github.com/LucasOl1337/AutoWebGame/releases/tag/v0.4.3",
+    "workerVersion": "e8391cb3-4e87-435e-92b3-e196cc4a9800",
+    "domains": ["bombapvp.com", "bombpvp.com"]
   },
   "verdict": {
     "netValue": "positive",
