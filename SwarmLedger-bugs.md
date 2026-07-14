@@ -1,5 +1,16 @@
 # SwarmLedger - Bugs
 
+## 2026-07-13 - Escopo: chaves duplicadas em scripts npm
+
+- Classificacao: manutencao de configuracao, baixo risco, alteracao isolada.
+- Evidencia: `package.json` declara duas vezes `test:release-visibility` e duas vezes `test:roster-invalid-public-manifest`; parsers JSON preservam apenas a ultima ocorrencia, ocultando a duplicacao.
+- Escopo planejado: remover somente as duas declaracoes redundantes de `package.json`, sem alterar os comandos efetivos, e adicionar um guard Node que falha se houver nomes duplicados no objeto `scripts`.
+- Validacao planejada: executar o guard novo, os dois scripts afetados, build, checagem de sintaxe do `package.json` e `git diff --check`.
+- Estado inicial: branch `main`, arvore limpa, CodeGraph atualizado.
+- Resultado: removidas as duas declaracoes redundantes e adicionado `tests/package-scripts-unique-check.mjs`, exposto como `test:package-scripts-unique`; os comandos efetivos dos scripts preservados continuam identicos.
+- Validacao: guard em vermelho antes da correcao detectou exatamente os dois nomes; depois passaram `npm run test:package-scripts-unique` (140 scripts unicos), `npm run test:release-visibility`, `npm run test:roster-invalid-public-manifest`, `npm run build`, parse JSON via Node e `git diff --check`.
+- Validacao manual: nao aplicavel; a mudanca e de configuracao e foi exercitada pelos comandos npm afetados e pelo build completo.
+
 ## 2026-07-11 - Microintervencao de gameplay: cadencia do Sudden Death
 
 - Classificacao: tuning de gameplay, baixo risco, alteracao isolada.
