@@ -1,6 +1,7 @@
 import type { PowerUpType } from "./types";
 
 export const PICKUP_CHAIN_WINDOW_MS = 4_200;
+export const PICKUP_CHAIN_ROLLING_WINDOW_MS = 1_400;
 export const PICKUP_CHAIN_GUARD_MS = 1_400;
 
 export interface PickupChainState {
@@ -28,8 +29,8 @@ export function registerPickupForChain(state: PickupChainState, type: PowerUpTyp
     && state.previousType !== type;
 
   if (completedChain) {
-    state.previousType = null;
-    state.remainingMs = 0;
+    state.previousType = type;
+    state.remainingMs = PICKUP_CHAIN_ROLLING_WINDOW_MS;
     return true;
   }
 

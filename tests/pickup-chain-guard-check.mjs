@@ -3,7 +3,11 @@ Object.defineProperty(globalThis, "navigator", { value: { webdriver: true }, con
 const noop = () => {};
 const { GameApp } = await import("../output/esm/Engine/game-app.js");
 const { TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
-const { PICKUP_CHAIN_GUARD_MS, PICKUP_CHAIN_WINDOW_MS } = await import("../output/esm/Gameplay/pickup-chain.js");
+const {
+  PICKUP_CHAIN_GUARD_MS,
+  PICKUP_CHAIN_ROLLING_WINDOW_MS,
+  PICKUP_CHAIN_WINDOW_MS,
+} = await import("../output/esm/Gameplay/pickup-chain.js");
 
 const emptySprites = {
   up: null,
@@ -79,7 +83,10 @@ collect(chainGame, "bomb-up");
 const armedState = getPlayerTextState(chainGame);
 chainGame.advanceServerSimulation(1_000);
 collect(chainGame, "flame-up");
-const guardedState = getPlayerTextState(chainGame);
+const firstGuardedState = getPlayerTextState(chainGame);
+chainGame.advanceServerSimulation(100);
+collect(chainGame, "speed-up");
+const secondGuardedState = getPlayerTextState(chainGame);
 const guardedPlayer = chainGame.players[1];
 chainGame.flames = [{ tile: { x: 2, y: 1 }, remainingMs: 300 }];
 chainGame.resolvePlayerDeathsFromFlames();
@@ -98,16 +105,22 @@ collect(expiredGame, "flame-up");
 const expiredState = getPlayerTextState(expiredGame);
 
 const report = {
-  constants: { PICKUP_CHAIN_WINDOW_MS, PICKUP_CHAIN_GUARD_MS },
+  constants: { PICKUP_CHAIN_WINDOW_MS, PICKUP_CHAIN_ROLLING_WINDOW_MS, PICKUP_CHAIN_GUARD_MS },
   armedState: {
     pickupChain: armedState.pickupChain,
     flameGuardMs: armedState.flameGuardMs,
   },
-  guardedState: {
-    pickupChain: guardedState.pickupChain,
-    flameGuardMs: guardedState.flameGuardMs,
-    hudStatus: guardedState.hudStatus,
-    recentPowerUpPickup: guardedState.recentPowerUpPickup,
+  firstGuardedState: {
+    pickupChain: firstGuardedState.pickupChain,
+    flameGuardMs: firstGuardedState.flameGuardMs,
+    hudStatus: firstGuardedState.hudStatus,
+    recentPowerUpPickup: firstGuardedState.recentPowerUpPickup,
+  },
+  secondGuardedState: {
+    pickupChain: secondGuardedState.pickupChain,
+    flameGuardMs: secondGuardedState.flameGuardMs,
+    hudStatus: secondGuardedState.hudStatus,
+    recentPowerUpPickup: secondGuardedState.recentPowerUpPickup,
   },
   survivedFlame,
   repeatedState: {
@@ -121,12 +134,20 @@ const report = {
   pass: armedState.pickupChain.previousType === "bomb-up"
     && armedState.pickupChain.remainingMs > 0
     && armedState.flameGuardMs === 0
-    && guardedState.pickupChain.previousType === null
-    && guardedState.pickupChain.remainingMs === 0
-    && guardedState.flameGuardMs > 0
-    && guardedState.flameGuardMs <= PICKUP_CHAIN_GUARD_MS
-    && guardedState.hudStatus.label === "GUARD"
-    && guardedState.recentPowerUpPickup?.chainGuard === true
+    && firstGuardedState.pickupChain.previousType === "flame-up"
+    && firstGuardedState.pickupChain.remainingMs > 0
+    && firstGuardedState.pickupChain.remainingMs <= PICKUP_CHAIN_ROLLING_WINDOW_MS
+    && firstGuardedState.flameGuardMs > 0
+    && firstGuardedState.flameGuardMs <= PICKUP_CHAIN_GUARD_MS
+    && firstGuardedState.hudStatus.label === "GUARD"
+    && firstGuardedState.recentPowerUpPickup?.chainGuard === true
+    && secondGuardedState.pickupChain.previousType === "speed-up"
+    && secondGuardedState.pickupChain.remainingMs > 0
+    && secondGuardedState.pickupChain.remainingMs <= PICKUP_CHAIN_ROLLING_WINDOW_MS
+    && secondGuardedState.flameGuardMs === PICKUP_CHAIN_GUARD_MS
+    && secondGuardedState.flameGuardMs >= firstGuardedState.flameGuardMs
+    && secondGuardedState.hudStatus.label === "GUARD"
+    && secondGuardedState.recentPowerUpPickup?.chainGuard === true
     && survivedFlame
     && repeatedState.flameGuardMs === 0
     && repeatedState.pickupChain.previousType === "bomb-up"
