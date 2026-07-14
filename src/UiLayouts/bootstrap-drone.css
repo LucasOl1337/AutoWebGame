@@ -1,0 +1,43 @@
+.bootstrap-state__indicator {
+  width: clamp(88px, 16vw, 112px);
+  height: clamp(88px, 16vw, 112px);
+  border: 0;
+  border-radius: 0;
+  background: url("/Assets/UiLayouts/bootstrap-drone-estopim.png") center / contain no-repeat;
+  filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.42));
+  image-rendering: pixelated;
+  box-shadow: none;
+  animation: bootstrap-drone-hover 1.25s ease-in-out infinite alternate;
+}
+
+.bootstrap-state[data-state="error"] .bootstrap-state__indicator {
+  border: 0;
+  filter:
+    grayscale(0.72)
+    sepia(0.28)
+    hue-rotate(318deg)
+    drop-shadow(0 14px 18px rgba(68, 7, 12, 0.46));
+  box-shadow: none;
+  animation: none;
+}
+
+.bootstrap-state[data-state="error"] .bootstrap-state__indicator::before,
+.bootstrap-state[data-state="error"] .bootstrap-state__indicator::after {
+  content: none;
+}
+
+@keyframes bootstrap-drone-hover {
+  from {
+    transform: translateY(3px) rotate(-1deg);
+  }
+
+  to {
+    transform: translateY(-4px) rotate(1deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bootstrap-state__indicator {
+    animation: none;
+  }
+}

@@ -110,6 +110,11 @@ export class LauncherShell {
                 <span class="launcher-mode__name">
                   <strong>${mode.title}</strong><small>${mode.kicker}</small>
                 </span>
+                ${mode.id === "play" ? `
+                  <span class="launcher-mode__art" aria-hidden="true">
+                    <img src="/Assets/UiLayouts/arena-portal-emblem.webp" alt="" width="512" height="512" />
+                  </span>
+                ` : ""}
                 <span class="launcher-mode__arrow" aria-hidden="true">↗</span>
               </button>
             `,

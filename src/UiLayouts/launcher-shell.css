@@ -462,6 +462,27 @@
   opacity: 0.62;
 }
 
+.launcher-mode__art {
+  width: 42px;
+  height: 42px;
+  margin-left: auto;
+  opacity: 0;
+  transform: scale(0.86);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.launcher-mode__art img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.launcher-mode.is-selected .launcher-mode__art {
+  opacity: 1;
+  transform: scale(1);
+}
+
 .launcher-mode__arrow {
   font-size: 19px;
 }
@@ -474,12 +495,30 @@
 }
 
 .launcher-sheet__header {
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(250px, 0.58fr);
   align-items: end;
   gap: 20px 40px;
   padding: clamp(26px, 4vw, 56px);
   border-bottom: 1px solid var(--control-ink);
+  overflow: hidden;
+}
+
+.launcher-sheet__header::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: clamp(360px, 48vw, 660px);
+  aspect-ratio: 1;
+  right: clamp(-210px, -11vw, -90px);
+  top: 50%;
+  background: url("/Assets/UiLayouts/launcher-demolition-blueprint.webp") center / contain no-repeat;
+  opacity: 0.16;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  transform: translateY(-50%);
 }
 
 .launcher-sheet__header .launcher-pulse {
@@ -733,6 +772,12 @@
 
   .launcher-sheet__header h2 {
     font-size: clamp(48px, 16vw, 82px);
+  }
+
+  .launcher-sheet__header::after {
+    width: 390px;
+    right: -190px;
+    opacity: 0.12;
   }
 
   .launcher-sheet__footer {
