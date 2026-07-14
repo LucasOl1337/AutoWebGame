@@ -6,7 +6,8 @@
 ## 2026-07-14 — chain-pickup-notice-expanded-item
 - Claim/escopo antes da intervenção: alterar exclusivamente `formatPowerUpPickupNotice` em `src/Engine/game-app.ts`, criar `tests/powerup-chain-pickup-notice-check.mjs` e atualizar os dois registros; preservar `tests/lab-agent-control-loop-check.mjs`, demais diffs alheios e não fazer commit/push.
 - Antes → depois: o aviso de chain guard mostrava `CHAIN!` no HUD compacto e `CHAIN GUARD` no amplo, ocultando qual pickup gerou o encadeamento; agora o compacto permanece `CHAIN!` e o amplo usa `CHAIN <shortLabel> <valueLabel>`.
-- Critério de sucesso: teste focal comprova os dois formatos, disponibilidade da definição antes do branch e remoção do literal legado; executar `compile:esm`, testes powerup relevantes, `build` e `git diff --check`.
+- Critério de sucesso: teste focal comprova os dois formatos, disponibilidade da definição antes do branch e remoção do literal legado.
+- Validações: `node tests/powerup-chain-pickup-notice-check.mjs`, `npm run compile:esm`, `npm run test:pickup-chain`, `node tests/powerup-max-hud-feedback-check.mjs`, `node tests/short-fuse-pickup-feedback-check.mjs`, `node tests/powerup-hud-slots-check.mjs`, `npm run build` e `git diff --check` concluídos com código 0; o diff-check emitiu somente avisos LF→CRLF. `tests/lab-agent-control-loop-check.mjs` não foi alterado por esta intervenção.
 
 ## 2026-07-14 — bot-second-flame-up-340
 - Claim/escopo antes da intervenção: alterar somente `src/Gameplay/powerups.ts`, fortalecer `tests/bot-powerup-priority-check.mjs` e atualizar estes dois registros; segundo Flame Up do bot deve passar de 420 para 340, formando a curva `460, 340, 300...` até `0`; preservar todas as demais prioridades, comportamento e sujeira alheia; commit seletivo apenas se todas as validações passarem; sem push.
