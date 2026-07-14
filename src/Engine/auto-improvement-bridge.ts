@@ -36,6 +36,8 @@ const TELEMETRY_THROTTLE_MS = 100;
 const DECISION_TTL_MS = 1200;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
 const DECISION_POLL_INTERVAL_MS = 100;
+const MICRO_ACTION_MIN_MS = 400;
+const MICRO_ACTION_MAX_MS = 500;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -44,6 +46,7 @@ const DECISION_POLL_INTERVAL_MS = 100;
 export interface TelemetrySnapshot {
   tick: number;
   phase: string;
+  roundNumber?: number;
   players: PlayerState[];
   bombs: BombState[];
   flames: FlameState[];
@@ -56,8 +59,11 @@ export interface TelemetrySnapshot {
 
 export interface LabActionAck {
   requestId: number;
+  microActionIndex: number;
   playerId: string;
   direction: "up" | "down" | "left" | "right" | null;
+  tileBefore: { x: number; y: number };
+  tileAfter: { x: number; y: number };
   movementDelta: { x: number; y: number };
   positionChanged: boolean;
   tileChanged: boolean;
@@ -102,7 +108,17 @@ export interface BrokerDecision {
   stateTick?: number;
   requestId?: number;
   latencyMs?: number;
+  microActionIndex?: number;
   expiresInMs?: number;
+  microActions?: BrokerMicroAction[];
+}
+
+export interface BrokerMicroAction {
+  direction: "up" | "down" | "left" | "right" | null;
+  durationMs: number;
+  placeBomb: boolean;
+  detonate: boolean;
+  skillAction: "start" | "hold" | "release" | "none";
 }
 
 // ---------------------------------------------------------------------------
@@ -120,14 +136,50 @@ const _decisions = new Map<string, { d: BrokerDecision; at: number }>();
 const _decisionRequests = new Map<string, { pending: boolean; at: number }>();
 const _controlledPlayerIds = new Set<string>();
 const _consumedDecisionActions = new Map<string, string>();
+const _minimumDecisionStateTick = new Map<string, number>();
+
+function _isDecisionFromCurrentRound(playerId: string, decision: BrokerDecision): boolean {
+  const minimumTick = _minimumDecisionStateTick.get(playerId) ?? 0;
+  const stateTick = Number(decision.stateTick ?? -1);
+  return minimumTick <= 0 || (Number.isFinite(stateTick) && stateTick >= minimumTick);
+}
 
 function _decisionTtlMs(decision: BrokerDecision): number {
+  if (decision.microActions?.length) {
+    const planMs = decision.microActions.reduce(
+      (total, action) => total + Math.max(MICRO_ACTION_MIN_MS, Math.min(MICRO_ACTION_MAX_MS, Number(action.durationMs) || MICRO_ACTION_MIN_MS)),
+      0,
+    );
+    return Math.max(1000, Math.min(18000, planMs + 750));
+  }
   const requested = Number(decision.expiresInMs ?? DECISION_TTL_MS);
   return Math.max(200, Math.min(1500, Number.isFinite(requested) ? requested : DECISION_TTL_MS));
 }
 
 function _decisionActionKey(decision: BrokerDecision): string {
-  return `${decision.requestId ?? "unversioned"}:${decision.receivedAt ?? "unreceived"}`;
+  return `${decision.requestId ?? "unversioned"}:${decision.microActionIndex ?? 0}:${decision.receivedAt ?? "unreceived"}`;
+}
+
+export function resolveMicroAction(decision: BrokerDecision, receivedAt: number, now = Date.now()): BrokerDecision {
+  const actions = decision.microActions;
+  if (!actions?.length) return decision;
+  const elapsedMs = Math.max(0, now - receivedAt);
+  let horizonMs = 0;
+  let selectedIndex = actions.length - 1;
+  for (let index = 0; index < actions.length; index += 1) {
+    horizonMs += Math.max(MICRO_ACTION_MIN_MS, Math.min(MICRO_ACTION_MAX_MS, Number(actions[index].durationMs) || MICRO_ACTION_MIN_MS));
+    if (elapsedMs < horizonMs) {
+      selectedIndex = index;
+      break;
+    }
+  }
+  const selected = actions[selectedIndex];
+  return {
+    ...decision,
+    ...selected,
+    microActionIndex: selectedIndex,
+    expiresInMs: _decisionTtlMs(decision),
+  };
 }
 
 // ── Strict mode & per-player control ──────────────────────────────────────
@@ -145,6 +197,7 @@ interface DecisionEntry {
   requestId?: number;
   stateTick?: number;
   latencyMs?: number;
+  microActionIndex?: number;
 }
 const _decisionHistory = new Map<string, DecisionEntry[]>(); // newest first
 const HISTORY_MAX = 40;
@@ -243,6 +296,7 @@ function _fetchDecision(playerId: string): void {
     .then((r) => r.json())
     .then((data: { ok: boolean; decision: BrokerDecision | null }) => {
       if (data?.ok && data.decision) {
+        if (!_isDecisionFromCurrentRound(playerId, data.decision)) return;
         const receivedAt = Number(data.decision.receivedAt || Date.now());
         const decision = { ...data.decision, receivedAt };
         _decisions.set(playerId, { d: decision, at: receivedAt });
@@ -262,7 +316,11 @@ function _fetchDecision(playerId: string): void {
 function _pushHistory(pid: string, d: BrokerDecision, tick: number): void {
   const hist = _decisionHistory.get(pid) ?? [];
   const receivedAt = Number(d.receivedAt || Date.now());
-  if (hist.length && hist[0].receivedAt === receivedAt) return;
+  if (
+    hist.length
+    && hist[0].receivedAt === receivedAt
+    && hist[0].microActionIndex === d.microActionIndex
+  ) return;
   hist.unshift({
     dir: d.direction,
     bomb: d.placeBomb,
@@ -273,6 +331,7 @@ function _pushHistory(pid: string, d: BrokerDecision, tick: number): void {
     requestId: d.requestId,
     stateTick: d.stateTick,
     latencyMs: d.latencyMs,
+    microActionIndex: d.microActionIndex,
   });
   if (hist.length > HISTORY_MAX) hist.length = HISTORY_MAX;
   _decisionHistory.set(pid, hist);
@@ -363,7 +422,7 @@ function _renderLivePlayerPanel(
   panel.status.dataset.tone = error || stalled ? "danger" : healthy ? "live" : "idle";
   panel.heartbeat.textContent = Number.isFinite(heartbeatAgeMs) ? `${(heartbeatAgeMs / 1000).toFixed(1)}s` : "—";
   panel.decisionAge.textContent = Number.isFinite(decisionAgeMs)
-    ? `${decision?.requestId ? `#${decision.requestId} · ` : ""}${decision?.stateTick != null ? `tick ${decision.stateTick} · ` : ""}${decision?.latencyMs != null ? `${decision.latencyMs}ms · ` : ""}${(decisionAgeMs / 1000).toFixed(1)}s atrás`
+    ? `${decision?.requestId ? `#${decision.requestId} · ` : ""}${decision?.microActionIndex != null ? `ação ${decision.microActionIndex + 1}/${decision.microActions?.length ?? 1} · ` : ""}${decision?.stateTick != null ? `tick ${decision.stateTick} · ` : ""}${decision?.latencyMs != null ? `${decision.latencyMs}ms · ` : ""}${(decisionAgeMs / 1000).toFixed(1)}s atrás`
     : "aguardando";
   panel.movement.textContent = `${_dirArrow(decision?.direction ?? null)} ${_movementLabel(decision?.direction ?? null)}`;
   panel.bomb.textContent = decision?.placeBomb ? "COLOCAR BOMBA" : decision?.detonate ? "DETONAR" : "NENHUMA";
@@ -382,7 +441,7 @@ function _renderLivePlayerPanel(
     const time = document.createElement("time");
     const movement = document.createElement("strong");
     const reason = document.createElement("span");
-    time.textContent = `${entry.requestId ? `#${entry.requestId} ` : ""}${entry.latencyMs != null ? `${entry.latencyMs}ms ` : ""}${(age / 1000).toFixed(1)}s`;
+    time.textContent = `${entry.requestId ? `#${entry.requestId}${entry.microActionIndex != null ? `.${entry.microActionIndex + 1}` : ""} ` : ""}${entry.latencyMs != null ? `${entry.latencyMs}ms ` : ""}${(age / 1000).toFixed(1)}s`;
     movement.textContent = `${_dirArrow(entry.dir)} ${_movementLabel(entry.dir)}`;
     reason.textContent = entry.reason || "Sem justificativa";
     row.append(time, movement, reason);
@@ -426,6 +485,10 @@ function _startLiveRefresh(): void {
         _latestPhase = report.phase ?? "-";
 
         for (const [pid, d] of Object.entries(decisions)) {
+          if (!_isDecisionFromCurrentRound(pid, d)) {
+            delete decisions[pid];
+            continue;
+          }
           const receivedAt = Number(d.receivedAt || Date.now());
           const bd: BrokerDecision = {
             playerId: pid,
@@ -442,9 +505,12 @@ function _startLiveRefresh(): void {
             requestId: d.requestId,
             latencyMs: d.latencyMs,
             expiresInMs: d.expiresInMs,
+            microActions: d.microActions,
           };
           _decisions.set(pid, { d: bd, at: receivedAt });
-          _pushHistory(pid, bd, tick);
+          const activeDecision = resolveMicroAction(bd, receivedAt);
+          decisions[pid] = activeDecision;
+          _pushHistory(pid, activeDecision, tick);
         }
 
         if (_decisionsEl) {
@@ -988,6 +1054,7 @@ export const AutoImprovementBridge = {
   },
 
   setControlledPlayerIds(playerIds: Array<number | string>): void {
+    this.invalidateDecisions([..._controlledPlayerIds, ...playerIds]);
     _controlledPlayerIds.clear();
     for (const playerId of playerIds) {
       _controlledPlayerIds.add(String(playerId));
@@ -1049,7 +1116,30 @@ export const AutoImprovementBridge = {
       _decisions.delete(pid);
       return null;
     }
-    return entry.d;
+    return resolveMicroAction(entry.d, entry.at);
+  },
+
+  invalidateDecisions(
+    playerIds: Iterable<number | string> = _controlledPlayerIds,
+    minimumStateTick = 0,
+  ): void {
+    for (const playerId of playerIds) {
+      const pid = String(playerId);
+      _decisions.delete(pid);
+      _decisionRequests.delete(pid);
+      _consumedDecisionActions.delete(pid);
+      if (minimumStateTick > 0) {
+        _minimumDecisionStateTick.set(pid, Math.max(
+          minimumStateTick,
+          _minimumDecisionStateTick.get(pid) ?? 0,
+        ));
+      }
+    }
+    _updatePanelDecisions();
+  },
+
+  hasFreshDecision(playerId: number | string): boolean {
+    return this.getDecision(playerId) !== null;
   },
 
   /** When true, bots stand completely still if no Codex decision arrives (no built-in AI fallback). */
@@ -1078,6 +1168,7 @@ export const AutoImprovementBridge = {
       skillHeld: skillAction === "start" || skillAction === "hold",
       skillAction,
       requestId: d.requestId,
+      microActionIndex: d.microActionIndex,
     };
   },
 };

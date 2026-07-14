@@ -137,7 +137,7 @@ assert context == "No evaluated actions yet.", context
 memory._pending[41]["recordedAtMs"] -= 1600
 memory.observe(memory_state)
 context = memory.prompt_context(memory_state)
-assert "request=41 UNACKNOWLEDGED" in context, context
+assert "request=41 step=0 UNACKNOWLEDGED" in context, context
 
 effect_memory = live_agent.ActionOutcomeMemory()
 effect_memory.record({**model_decision, "requestId": 43, "expiresInMs": 250}, memory_state)
@@ -272,7 +272,10 @@ posted = []
 def fake_model(prompt, **kwargs):
     prompt_tick = int(prompt.split('"tick":', 1)[1].split(',', 1)[0])
     time.sleep({100: 0.12, 101: 0.08, 102: 0.01}[prompt_tick])
-    return ('{"direction":"right","placeBomb":false,"detonate":false,"skillAction":"none","expiresInMs":400,"reason":"tick %s"}' % prompt_tick, None, "ok")
+    return (json.dumps({
+        "microActions": [["right", 400, False, False, "none"]] * 30,
+        "reason": "tick %s" % prompt_tick,
+    }), None, "ok")
 
 live_agent._codex_new = fake_model
 live_agent._http_post = lambda path, payload: (posted.append((path, payload)) or (200, {"ok": True}))
@@ -288,7 +291,7 @@ decision_ticks = [item["stateTick"] for item in decisions]
 assert decision_ticks == sorted(decision_ticks), decisions
 assert decision_ticks[-1] == 102, decisions
 assert all(item["source"] == "model" for item in decisions), decisions
-assert max(agent._action_memory._pending) == 3, agent._action_memory._pending
+assert max(key[0] if isinstance(key, tuple) else key for key in agent._action_memory._pending) == 3, agent._action_memory._pending
 
 assert live_agent.REASONING_EFFORT == "none", live_agent.REASONING_EFFORT
 

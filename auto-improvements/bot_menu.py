@@ -205,9 +205,10 @@ def probe_codex_live(codex_home: str = "") -> tuple[bool, str]:
            "--cd", str(Path(__file__).resolve().parent)]
     if schema.exists():
         cmd.extend(["--output-schema", str(schema)])
-    cmd.append(
-        'Return exactly this JSON: {"direction":null,"placeBomb":false,"detonate":false,"skillAction":"none","expiresInMs":250,"reason":"ok"}'
-    )
+    cmd.append("Return exactly this JSON: " + json.dumps({
+        "microActions": [[None, 500, False, False, "none"]] * 30,
+        "reason": "ok",
+    }, separators=(",", ":")))
     CREATE_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
     env = os.environ.copy()
     if codex_home:

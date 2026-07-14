@@ -94,7 +94,7 @@ import {
   SoundManager,
   SFX_MANIFEST,
 } from "./sound-manager";
-import type { BotContext } from "./bot-ai";
+import type { BotContext, BotDecision } from "./bot-ai";
 import {
   buildBotDangerMap as botAI_buildDangerMap,
   getBotDecision as botAI_getBotDecision,
@@ -191,6 +191,7 @@ const LANE_LOCK_THRESHOLD = 3;
 const LANE_SETTLE_EPSILON = 0.35;
 const LANE_SNAP_FACTOR = 2.6;
 const ROUND_START_CUE_MS = 1_250;
+const LAB_INITIAL_PLAN_TIMEOUT_MS = 25_000;
 const CHARACTER_MENU_KEYS: Record<MenuPlayerId, string> = {
   1: "KeyG",
   2: "KeyK",
@@ -325,16 +326,6 @@ function createHeadlessCanvas(): {
     setAttribute: noop,
     getContext: () => fakeContext,
   };
-}
-
-interface BotDecision {
-  direction: Direction | null;
-  placeBomb: boolean;
-  detonate?: boolean;
-  useSkill?: boolean;
-  skillHeld?: boolean;
-  skillAction?: "start" | "hold" | "release" | "none";
-  requestId?: number;
 }
 
 interface MovementOption {
@@ -481,6 +472,9 @@ export class GameApp {
   private botBombCooldownMs = 0;
   private aiBridgeTick = 0;
   private labActionAcks = new Map<string, LabActionAck>();
+  private labInitialPlansReady = false;
+  private labInitialPlanWaitStartedAtMs = 0;
+  private labStartupAbortTriggered = false;
   private botCommittedDirection: Record<PlayerId, Direction | null> = createDirectionPlayerRecord(null);
   private botPendingReverseDirection: Record<PlayerId, Direction | null> = createDirectionPlayerRecord(null);
   private botPendingReverseFrames: Record<PlayerId, number> = createNumberPlayerRecord(0);
@@ -969,6 +963,10 @@ export class GameApp {
     this.roundOutcome = null;
     this.botBombCooldownMs = 0;
     this.labActionAcks.clear();
+    this.labInitialPlansReady = false;
+    this.labInitialPlanWaitStartedAtMs = 0;
+    this.labStartupAbortTriggered = false;
+    AutoImprovementBridge.invalidateDecisions(this.activePlayerIds, this.aiBridgeTick + 1);
     this.botCommittedDirection = createDirectionPlayerRecord(null);
     this.botPendingReverseDirection = createDirectionPlayerRecord(null);
     this.botPendingReverseFrames = createNumberPlayerRecord(0);
@@ -1227,6 +1225,9 @@ export class GameApp {
   public setLiveBridgePlayers(playerIds: PlayerId[]): void {
     const selected = new Set(playerIds);
     this.liveBridgePlayers = createPlayerRecord((playerId) => selected.has(playerId));
+    this.labInitialPlansReady = false;
+    this.labInitialPlanWaitStartedAtMs = 0;
+    this.labStartupAbortTriggered = false;
     AutoImprovementBridge.setControlledPlayerIds(playerIds);
   }
 
@@ -1816,6 +1817,11 @@ export class GameApp {
       return;
     }
 
+    if (this.isAwaitingInitialModelPlan()) {
+      this.pushLabTelemetry();
+      return;
+    }
+
     this.updateRoundStartCue(deltaMs);
     this.roundTimeMs = Math.max(0, this.roundTimeMs - deltaMs);
     this.animationClockMs += deltaMs;
@@ -1840,27 +1846,78 @@ export class GameApp {
       this.cachedDangerMap = null;
     }
 
-    if (AutoImprovementBridge.isEnabled) {
-      this.aiBridgeTick++;
-      AutoImprovementBridge.pushTelemetry({
-        tick: this.aiBridgeTick,
-        phase: this.mode,
-        players: Object.values(this.players),
-        bombs: this.bombs,
-        flames: this.flames,
-        powerUps: this.arena.powerUps,
-        matchScore: this.score,
-        suddenDeath: {
-          active: this.suddenDeathActive,
-          index: this.suddenDeathIndex,
-        },
-        navigation: this.getLabNavigationSnapshot(),
-        actionAcks: [...this.labActionAcks.values()].map((ack) => ({
-          ...ack,
-          alive: this.players[Number(ack.playerId) as PlayerId]?.alive ?? false,
-        })),
-      });
+    this.pushLabTelemetry();
+  }
+
+  private isAwaitingInitialModelPlan(): boolean {
+    if (!AutoImprovementBridge.isEnabled || this.labInitialPlansReady) {
+      return false;
     }
+    const controlledPlayers = this.activePlayerIds.filter((playerId) => (
+      this.liveBridgePlayers[playerId] && this.players[playerId].alive
+    ));
+    if (!controlledPlayers.length) {
+      this.labInitialPlanWaitStartedAtMs = 0;
+      return false;
+    }
+    const missingPlayers = controlledPlayers.filter((playerId) => (
+      !AutoImprovementBridge.hasFreshDecision(playerId)
+    ));
+    this.labInitialPlansReady = missingPlayers.length === 0;
+    if (this.labInitialPlansReady) {
+      this.labInitialPlanWaitStartedAtMs = 0;
+      return false;
+    }
+    const now = Date.now();
+    if (!this.labInitialPlanWaitStartedAtMs) {
+      this.labInitialPlanWaitStartedAtMs = now;
+    } else if (
+      now - this.labInitialPlanWaitStartedAtMs >= LAB_INITIAL_PLAN_TIMEOUT_MS
+      && !this.labStartupAbortTriggered
+    ) {
+      this.abortUnavailableLabSession(missingPlayers);
+    }
+    return !this.labInitialPlansReady;
+  }
+
+  private abortUnavailableLabSession(missingPlayers: PlayerId[]): void {
+    this.labStartupAbortTriggered = true;
+    const players = missingPlayers.map((playerId) => `P${playerId}`).join(", ");
+    const message = `O 9router não entregou um plano válido para ${players} em 25 segundos. A sessão foi interrompida; tente novamente.`;
+    if (this.headless || typeof window === "undefined") {
+      this.paused = true;
+      return;
+    }
+    window.setTimeout(() => {
+      window.alert(message);
+      window.location.assign("/lab");
+    }, 0);
+  }
+
+  private pushLabTelemetry(): void {
+    if (!AutoImprovementBridge.isEnabled) {
+      return;
+    }
+    this.aiBridgeTick++;
+    AutoImprovementBridge.pushTelemetry({
+      tick: this.aiBridgeTick,
+      phase: this.mode,
+      roundNumber: this.roundNumber,
+      players: Object.values(this.players),
+      bombs: this.bombs,
+      flames: this.flames,
+      powerUps: this.arena.powerUps,
+      matchScore: this.score,
+      suddenDeath: {
+        active: this.suddenDeathActive,
+        index: this.suddenDeathIndex,
+      },
+      navigation: this.getLabNavigationSnapshot(),
+      actionAcks: [...this.labActionAcks.values()].map((ack) => ({
+        ...ack,
+        alive: this.players[Number(ack.playerId) as PlayerId]?.alive ?? false,
+      })),
+    });
   }
 
   private updateMatchResult(deltaMs: number): void {
@@ -2039,6 +2096,10 @@ export class GameApp {
     this.autoPausedForHiddenTab = false;
     this.botBombCooldownMs = 0;
     this.labActionAcks.clear();
+    this.labInitialPlansReady = false;
+    this.labInitialPlanWaitStartedAtMs = 0;
+    this.labStartupAbortTriggered = false;
+    AutoImprovementBridge.invalidateDecisions(this.activePlayerIds, this.aiBridgeTick + 1);
     this.botCommittedDirection = createDirectionPlayerRecord(null);
     this.botPendingReverseDirection = createDirectionPlayerRecord(null);
     this.botPendingReverseFrames = createNumberPlayerRecord(0);
@@ -2279,8 +2340,11 @@ export class GameApp {
         if (actionRequestId && positionBefore && tileBefore) {
           this.recordLabActionAck({
             requestId: actionRequestId,
+            microActionIndex: botDecision?.microActionIndex ?? 0,
             playerId: String(id),
             direction,
+            tileBefore,
+            tileAfter: { ...player.tile },
             movementDelta: {
               x: player.position.x - positionBefore.x,
               y: player.position.y - positionBefore.y,
@@ -2397,7 +2461,7 @@ export class GameApp {
   }
 
   private recordLabActionAck(frame: LabActionAck): void {
-    const key = `${frame.playerId}:${frame.requestId}`;
+    const key = `${frame.playerId}:${frame.requestId}:${frame.microActionIndex}`;
     const previous = this.labActionAcks.get(key);
     this.labActionAcks.set(key, previous
       ? {
@@ -2415,9 +2479,11 @@ export class GameApp {
           skillPressed: previous.skillPressed || frame.skillPressed,
           skillHeld: frame.skillHeld,
           skillPhaseBefore: previous.skillPhaseBefore,
+          tileBefore: previous.tileBefore,
+          tileAfter: frame.tileAfter,
         }
       : frame);
-    while (this.labActionAcks.size > 32) {
+    while (this.labActionAcks.size > 64) {
       this.labActionAcks.delete(this.labActionAcks.keys().next().value as string);
     }
   }

@@ -1,13 +1,26 @@
 {
   "type": "object",
   "properties": {
-    "direction": { "type": ["string", "null"], "enum": ["up", "down", "left", "right", null] },
-    "placeBomb":  { "type": "boolean" },
-    "detonate":   { "type": "boolean" },
-    "skillAction": { "type": "string", "enum": ["start", "hold", "release", "none"] },
-    "expiresInMs": { "type": "integer", "minimum": 200, "maximum": 1500 },
-    "reason":     { "type": "string", "maxLength": 120 }
+    "microActions": {
+      "type": "array",
+      "minItems": 30,
+      "maxItems": 30,
+      "items": {
+        "type": "array",
+        "minItems": 5,
+        "maxItems": 5,
+        "prefixItems": [
+          { "type": ["string", "null"], "enum": ["up", "down", "left", "right", null] },
+          { "type": "integer", "minimum": 400, "maximum": 500 },
+          { "type": "boolean" },
+          { "type": "boolean" },
+          { "type": "string", "enum": ["start", "hold", "release", "none"] }
+        ],
+        "items": false
+      }
+    },
+    "reason": { "type": "string", "maxLength": 120 }
   },
-  "required": ["direction", "placeBomb", "detonate", "skillAction", "expiresInMs", "reason"],
+  "required": ["microActions", "reason"],
   "additionalProperties": false
 }

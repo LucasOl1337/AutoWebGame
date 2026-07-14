@@ -22,27 +22,26 @@ Game mechanics:
 - Players can be eliminated by flames (own or enemy).
 - Sudden death shrinks the arena after time runs out.
 
-Decision schema (return exactly this):
+Decision schema (return exactly this compact rolling plan):
 {
-  "direction": "up" | "down" | "left" | "right" | null,
-  "placeBomb": true | false,
-  "detonate": true | false,
-  "skillAction": "start" | "hold" | "release" | "none",
-  "expiresInMs": integer from 200 to 1500,
+  "microActions": [
+    ["up" | "down" | "left" | "right" | null, 400..500, true | false, true | false, "start" | "hold" | "release" | "none"]
+  ],
   "reason": "short string explaining the decision"
 }
 
-Tactical guidance:
-- Prioritize survival: never move into a tile that will have flames before you can exit.
-- Chase powerups aggressively in early game to build advantage.
-- Place bombs to cut off escape routes or trap opponents in corners.
-- With remote-up: place bomb near opponent, wait for them to step on blast range, then detonate.
-- In sudden death: stay near the safe center, use bombs defensively.
-- direction null = stay in place (useful when waiting for a bomb to clear).
-- placeBomb and move in same turn = place bomb then immediately move away.
+Return exactly 30 microActions covering 12-15 seconds. Use 400-500ms per
+action so the complete plan remains available through 9Router latency spikes. Each tuple is
+[direction, durationMs, placeBomb, detonate, skillAction]. Every tuple is a
+real model-owned micro decision executed in order while your next analysis runs.
+Movement usually needs 220-350ms to cross one tile; use short direction changes
+to route around blocked tiles instead of holding one direction for seconds.
+
+Action semantics:
+- direction null = stay in place.
+- placeBomb and direction in the same microAction are applied together.
 - skillAction start = press and hold; hold = keep held without another press; release = press once without holding; none = no skill input.
-- Use release to finish any channel explicitly (Ranni needs the press edge; Nico/Crocodilo react to the released hold).
 - You own every micro decision. The runtime relays your valid JSON without tactical overrides.
 - Use recent action outcomes and movement feedback to correct your next action yourself.
 
-Always reason from the current game state. Keep reason short (under 80 chars).
+Choose the tactics you judge best from the current state and recent outcomes. Keep reason short (under 80 chars).

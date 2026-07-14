@@ -50,6 +50,7 @@ export interface BotDecision {
   skillHeld?: boolean;
   skillAction?: "start" | "hold" | "release" | "none";
   requestId?: number;
+  microActionIndex?: number;
 }
 
 /**

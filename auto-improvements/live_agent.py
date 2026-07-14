@@ -74,7 +74,7 @@ ACK_WAIT_TIMEOUT_MS = 1500
 MAX_IN_FLIGHT_MODEL_CALLS = max(1, int(os.environ.get("AGENT_MAX_IN_FLIGHT", "3")))
 MODEL_TURN_MIN_INTERVAL_MS = max(50, int(os.environ.get("AGENT_TURN_INTERVAL_MS", "100")))
 MODEL_DECISION_TTL_MS = max(200, int(os.environ.get("AGENT_DECISION_TTL_MS", "1200")))
-MODEL_MAX_TOKENS = max(48, int(os.environ.get("AGENT_MAX_TOKENS", "96")))
+MODEL_MAX_TOKENS = max(384, int(os.environ.get("AGENT_MAX_TOKENS", "768")))
 MODEL_TURN_TIMEOUT_SECONDS = max(3.0, float(os.environ.get("AGENT_TURN_TIMEOUT_SEC", "20")))
 _QUOTA_OR_AUTH_ERROR_KEYWORDS = (
     "rate_limit",
@@ -329,7 +329,7 @@ def relay_model_decision(
         "stateTick": int(state.get("tick", -1) or -1),
         "requestId": int(request_id),
         "latencyMs": max(0, int(latency_ms)),
-        "expiresInMs": max(200, min(1500, requested_ttl)),
+        "expiresInMs": max(200, min(18000, requested_ttl)),
     })
     return relayed
 
@@ -339,7 +339,7 @@ class ActionOutcomeMemory:
 
     def __init__(self, max_outcomes: int = 8) -> None:
         self._lock = threading.RLock()
-        self._pending: dict[int, dict[str, Any]] = {}
+        self._pending: dict[Any, dict[str, Any]] = {}
         self._outcomes: deque[dict[str, Any]] = deque(maxlen=max_outcomes)
 
     def reset(self) -> None:
@@ -352,36 +352,50 @@ class ActionOutcomeMemory:
             me = _player_state(state, PLAYER_ID)
             if not me:
                 return
-            replaced_at_ms = now_ms()
-            for pending in self._pending.values():
-                if not pending["commandReplaced"]:
-                    pending["commandReplaced"] = True
-                    pending["replacedAtMs"] = replaced_at_ms
-            direction = str(decision.get("direction") or "")
-            if direction not in VALID_DIRECTIONS:
-                direction = ""
             try:
                 request_id = int(decision.get("requestId", 0) or 0)
             except (TypeError, ValueError):
                 request_id = 0
             if request_id <= 0:
                 request_id = now_ms()
-            try:
-                expires_in_ms = int(decision.get("expiresInMs", MODEL_DECISION_TTL_MS) or MODEL_DECISION_TTL_MS)
-            except (TypeError, ValueError):
-                expires_in_ms = MODEL_DECISION_TTL_MS
-            self._pending[request_id] = {
-                "requestId": request_id,
-                "direction": direction,
-                "origin": _tile_key(me.get("tile", {})),
-                "placeBomb": bool(decision.get("placeBomb")),
-                "detonate": bool(decision.get("detonate")),
-                "skillAction": str(decision.get("skillAction", "none") or "none"),
-                "recordedAtMs": now_ms(),
-                "evaluateAfterMs": max(250, min(1500, expires_in_ms)),
-                "commandReplaced": False,
-                "replacedAtMs": 0,
-            }
+            recorded_at_ms = now_ms()
+            for pending_key, pending in list(self._pending.items()):
+                if pending["requestId"] != request_id and not pending["commandReplaced"]:
+                    if int(pending["recordedAtMs"]) > recorded_at_ms:
+                        self._pending.pop(pending_key, None)
+                        continue
+                    pending["commandReplaced"] = True
+                    pending["replacedAtMs"] = recorded_at_ms
+
+            actions = decision.get("microActions")
+            if not isinstance(actions, list) or not actions:
+                actions = [decision]
+            scheduled_offset_ms = 0
+            for index, action in enumerate(actions):
+                if not isinstance(action, dict):
+                    continue
+                direction = str(action.get("direction") or "")
+                if direction not in VALID_DIRECTIONS:
+                    direction = ""
+                try:
+                    duration_ms = max(100, min(500, int(action.get("durationMs", 250) or 250)))
+                except (TypeError, ValueError):
+                    duration_ms = 250
+                pending_key: Any = request_id if len(actions) == 1 else (request_id, index)
+                self._pending[pending_key] = {
+                    "requestId": request_id,
+                    "microActionIndex": index,
+                    "direction": direction,
+                    "origin": _tile_key(me.get("tile", {})),
+                    "placeBomb": bool(action.get("placeBomb")),
+                    "detonate": bool(action.get("detonate")),
+                    "skillAction": str(action.get("skillAction", "none") or "none"),
+                    "recordedAtMs": recorded_at_ms + scheduled_offset_ms,
+                    "evaluateAfterMs": duration_ms,
+                    "commandReplaced": False,
+                    "replacedAtMs": 0,
+                }
+                scheduled_offset_ms += duration_ms
 
     def observe(self, state: dict[str, Any]) -> None:
         with self._lock:
@@ -392,17 +406,19 @@ class ActionOutcomeMemory:
                 return
             observed_at_ms = now_ms()
             action_acks = {
-                int(ack.get("requestId", 0) or 0): ack
+                (int(ack.get("requestId", 0) or 0), int(ack.get("microActionIndex", 0) or 0)): ack
                 for ack in (state.get("actionAcks") or [])
                 if isinstance(ack, dict) and str(ack.get("playerId")) == PLAYER_ID
             }
 
-            for request_id, pending in list(self._pending.items()):
+            for pending_key, pending in list(self._pending.items()):
+                request_id = int(pending["requestId"])
+                micro_action_index = int(pending["microActionIndex"])
                 age_ms = max(0, observed_at_ms - int(pending["recordedAtMs"]))
                 origin = pending["origin"]
                 direction = pending["direction"]
                 details: list[str] = []
-                ack = action_acks.get(request_id)
+                ack = action_acks.get((request_id, micro_action_index))
                 if not ack:
                     deadline_ms = (
                         int(pending["replacedAtMs"]) + ACK_WAIT_TIMEOUT_MS
@@ -413,12 +429,17 @@ class ActionOutcomeMemory:
                         continue
                     self._outcomes.append({
                         "summary": (
-                            f"request={request_id} UNACKNOWLEDGED direction={direction or 'null'} "
+                            f"request={request_id} step={micro_action_index} UNACKNOWLEDGED direction={direction or 'null'} "
                             f"origin={origin} age={age_ms}ms"
                         )
                     })
-                    self._pending.pop(request_id, None)
+                    self._pending.pop(pending_key, None)
                     continue
+                ack_origin = ack.get("tileBefore")
+                if isinstance(ack_origin, dict):
+                    origin = _tile_key(ack_origin)
+                ack_destination = ack.get("tileAfter")
+                destination = _tile_key(ack_destination) if isinstance(ack_destination, dict) else origin
                 if (
                     bool(ack.get("alive", True))
                     and not pending["commandReplaced"]
@@ -475,12 +496,12 @@ class ActionOutcomeMemory:
                     details.append("COMMAND_REPLACED")
                 self._outcomes.append({
                     "summary": (
-                        f"request={request_id} {'+'.join(details)} direction={direction or 'null'} "
-                        f"origin={origin} delta=({ack_delta.get('x', 0)},{ack_delta.get('y', 0)}) "
+                        f"request={request_id} step={micro_action_index} {'+'.join(details)} direction={direction or 'null'} "
+                        f"origin={origin} final={destination} delta=({ack_delta.get('x', 0)},{ack_delta.get('y', 0)}) "
                         f"ack=true age={age_ms}ms"
                     )
                 })
-                self._pending.pop(request_id, None)
+                self._pending.pop(pending_key, None)
 
     def prompt_context(self, state: dict[str, Any]) -> str:
         with self._lock:
@@ -494,7 +515,7 @@ def build_prompt(state: dict[str, Any], *, outcome_context: str = "") -> str:
     players = [p for p in (state.get("players") or []) if isinstance(p, dict)]
     me = next((p for p in players if str(p.get("id")) == PLAYER_ID), None)
     if me is None:
-        return '{"direction":null,"placeBomb":false,"detonate":false,"skillAction":"none","expiresInMs":250,"reason":"no self state"}'
+        return '{"microActions":[[null,500,false,false,"none"]],"reason":"no self state"}'
 
     me_tile = me.get("tile", {})
     navigation = _navigation_for_player(state)
@@ -530,6 +551,7 @@ def build_prompt(state: dict[str, Any], *, outcome_context: str = "") -> str:
     payload = {
         "tick": state.get("tick", 0),
         "phase": state.get("phase", ""),
+        "roundNumber": state.get("roundNumber", 0),
         "score": state.get("matchScore", {}),
         "suddenDeath": state.get("suddenDeath", {}),
         "self": compact_player(me),
@@ -561,9 +583,10 @@ def build_prompt(state: dict[str, Any], *, outcome_context: str = "") -> str:
     }
     compact = json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
     return (
-        f"MICRO DECISION for P{PLAYER_ID}. You alone choose every gameplay action; no local policy will correct it. "
-        "React to this exact snapshot and the previous outcomes. Choose a 200-1500ms horizon in expiresInMs. "
-        "Return only one JSON object with direction, placeBomb, detonate, skillAction, expiresInMs, reason. "
+        f"ROLLING MICRO-ACTION PLAN for P{PLAYER_ID}. You alone choose every gameplay action; no local policy will correct it. "
+        "React to this exact snapshot and previous outcomes. Return exactly 30 microActions covering 12-15 seconds. "
+        "Each compact action is [direction,durationMs,placeBomb,detonate,skillAction], duration 400-500ms. "
+        "Return only one JSON object with microActions and reason. "
         f"STATE={compact}"
     )
 
@@ -572,7 +595,7 @@ def build_prompt(state: dict[str, Any], *, outcome_context: str = "") -> str:
 # Decision parsing
 # ---------------------------------------------------------------------------
 
-def parse_decision(raw: str) -> dict[str, Any] | None:
+def parse_decision(raw: str, *, require_full_plan: bool = False) -> dict[str, Any] | None:
     text = raw.strip()
     # strip markdown fences if present
     if "```" in text:
@@ -597,22 +620,101 @@ def parse_decision(raw: str) -> dict[str, Any] | None:
     if not isinstance(data, dict):
         return None
 
-    direction = data.get("direction")
-    if direction is not None and str(direction).lower() not in VALID_DIRECTIONS:
-        direction = None
+    def normalize_micro_action(
+        value: Any,
+        *,
+        min_duration_ms: int = 100,
+        strict: bool = False,
+    ) -> dict[str, Any] | None:
+        if strict:
+            if not isinstance(value, list) or len(value) != 5:
+                return None
+            direction, duration_ms, place_bomb, detonate, skill_action = value
+            if direction is not None and (not isinstance(direction, str) or direction not in VALID_DIRECTIONS):
+                return None
+            if isinstance(duration_ms, bool) or not isinstance(duration_ms, int) or not 400 <= duration_ms <= 500:
+                return None
+            if not isinstance(place_bomb, bool) or not isinstance(detonate, bool):
+                return None
+            if not isinstance(skill_action, str) or skill_action not in VALID_SKILL_ACTIONS:
+                return None
+            return {
+                "direction": direction,
+                "durationMs": duration_ms,
+                "placeBomb": place_bomb,
+                "detonate": detonate,
+                "skillAction": skill_action,
+            }
+        if isinstance(value, list) and len(value) >= 5:
+            direction, duration_ms, place_bomb, detonate, skill_action = value[:5]
+        elif isinstance(value, dict):
+            direction = value.get("direction", value.get("d"))
+            duration_ms = value.get("durationMs", value.get("ms", 250))
+            place_bomb = value.get("placeBomb", value.get("b", False))
+            detonate = value.get("detonate", value.get("x", False))
+            skill_action = value.get("skillAction", value.get("s", "none"))
+        else:
+            return None
+        if direction is not None:
+            direction = str(direction).lower()
+            if direction not in VALID_DIRECTIONS:
+                direction = None
+        try:
+            duration_ms = max(min_duration_ms, min(500, int(duration_ms)))
+        except (TypeError, ValueError):
+            duration_ms = min_duration_ms
+        skill_action = str(skill_action or "none").lower()
+        if skill_action not in VALID_SKILL_ACTIONS:
+            skill_action = "none"
+        return {
+            "direction": direction,
+            "durationMs": duration_ms,
+            "placeBomb": bool(place_bomb),
+            "detonate": bool(detonate),
+            "skillAction": skill_action,
+        }
 
-    skill_action = str(data.get("skillAction", "") or "").lower()
-    if skill_action not in VALID_SKILL_ACTIONS:
-        skill_action = "start" if bool(data.get("useSkill", False)) else "none"
+    raw_micro_actions = data.get("microActions")
+    if require_full_plan and (not isinstance(raw_micro_actions, list) or len(raw_micro_actions) != 30):
+        return None
+    micro_actions = [
+        normalized
+        for value in (raw_micro_actions or [])[:30]
+        if (normalized := normalize_micro_action(
+            value,
+            min_duration_ms=400,
+            strict=require_full_plan,
+        )) is not None
+    ] if isinstance(raw_micro_actions, list) else []
+    if require_full_plan and len(micro_actions) != 30:
+        return None
+    if not micro_actions:
+        if require_full_plan:
+            return None
+        legacy = normalize_micro_action({
+            "direction": data.get("direction"),
+            "durationMs": data.get("expiresInMs", MODEL_DECISION_TTL_MS),
+            "placeBomb": data.get("placeBomb", False),
+            "detonate": data.get("detonate", False),
+            "skillAction": data.get("skillAction", "start" if data.get("useSkill") else "none"),
+        })
+        if legacy:
+            micro_actions = [legacy]
+    if not micro_actions:
+        return None
+
+    first = micro_actions[0]
+    plan_duration_ms = sum(action["durationMs"] for action in micro_actions)
 
     return {
         "playerId": PLAYER_ID,
         "botId": AGENT_ID,
-        "direction": direction,
-        "placeBomb": bool(data.get("placeBomb", False)),
-        "detonate": bool(data.get("detonate", False)),
-        "skillAction": skill_action,
-        "expiresInMs": data.get("expiresInMs", MODEL_DECISION_TTL_MS),
+        "direction": first["direction"],
+        "placeBomb": first["placeBomb"],
+        "detonate": first["detonate"],
+        "skillAction": first["skillAction"],
+        "microActions": micro_actions,
+        "expiresInMs": plan_duration_ms,
         "reason": str(data.get("reason", ""))[:120],
     }
 
@@ -705,6 +807,7 @@ class LiveAgent:
         self._codex_home_index = 0
         self._account_consecutive_failures = 0
         self._round_epoch = 0
+        self._last_round_number = 0
         self._life_epoch = 0
         self._latest_state: dict[str, Any] = {}
         self._latest_state_lock = threading.Lock()
@@ -780,11 +883,22 @@ class LiveAgent:
                 tick = int(body.get("tick", -1) or -1)
                 state = body.get("state") or {}
                 phase = str(state.get("phase", "") or "")
+                try:
+                    round_number = max(0, int(state.get("roundNumber", 0) or 0))
+                except (TypeError, ValueError):
+                    round_number = 0
                 self._set_latest_state(state)
                 self._action_memory.observe(state)
                 me_alive = _current_life_active(state)
 
-                if phase == "match" and self.last_phase != "match":
+                round_changed = (
+                    phase == "match"
+                    and self.last_phase == "match"
+                    and round_number > 0
+                    and self._last_round_number > 0
+                    and round_number != self._last_round_number
+                )
+                if phase == "match" and (self.last_phase != "match" or round_changed):
                     self._round_epoch += 1
                     self._life_epoch += 1 if me_alive else 0
                     self.decisions_this_match = 0
@@ -794,7 +908,7 @@ class LiveAgent:
                     self._last_model_turn_started_at_ms = 0
                     self._was_alive_in_match = me_alive
                     log("=" * 55)
-                    log(f"MATCH STARTED player={PLAYER_ID}; waiting only for model decisions")
+                    log(f"ROUND STARTED player={PLAYER_ID} round={round_number or '?'}; waiting only for model decisions")
                     log("=" * 55)
 
                 if phase == "match-result" and self.last_phase == "match":
@@ -804,6 +918,8 @@ class LiveAgent:
                     self._on_match_ended(state)
 
                 self.last_phase = phase
+                if round_number > 0:
+                    self._last_round_number = round_number
                 if phase != "match":
                     time.sleep(IDLE_INTERVAL)
                     continue
@@ -864,7 +980,10 @@ class LiveAgent:
                 self._handle_model_error(status, tick)
                 return
 
-            decision = parse_decision(raw)
+            decision = parse_decision(
+                raw,
+                require_full_plan=PROVIDER in {"9router", "openrouter", "openai_compatible"},
+            )
             if decision is None:
                 self._turns.release(token)
                 log(f"parse failed request={request_id} tick={tick:>5} raw={raw[:80]}")
