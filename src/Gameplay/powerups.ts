@@ -217,8 +217,8 @@ export function getPowerUpPriorityScore(player: PlayerState, type: PowerUpType):
     if (player.kickLevel >= MAX_KICK_LEVEL) {
       return 0;
     }
-    // O chute seguro já é deliberado, mas continua situacional; fica abaixo de upgrades universais.
-    return 180;
+    // Sem passagem por bombas, o chute reutiliza a prioridade situacional com uma margem mínima.
+    return player.bombPassLevel === 0 ? 181 : 180;
   }
   if (type === "short-fuse-up") {
     if (player.shortFuseLevel >= MAX_SHORT_FUSE_LEVEL) {

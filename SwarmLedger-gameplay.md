@@ -1,3 +1,8 @@
+## 2026-07-14 — bot-kick-before-bomb-pass
+- Claim/escopo antes da intervenção: ajustar somente a prioridade existente de `kick-up` em `src/Gameplay/powerups.ts` para torná-lo ligeiramente mais atraente ao bot apenas enquanto `bombPassLevel` é zero; criar teste focal isolado, registrar resultado neste ledger, preservar arquivos já sujos e fazer commit local seletivo se compile/test/build/diff-check passarem; sem push/deploy.
+- Resultado: Bomb Kick reutiliza o score situacional `180` e recebe somente `+1` enquanto o bot não tem Bomb Pass (`181`); após adquirir passagem volta a `180`, e Kick saturado permanece `0`.
+- Validações: `npm run compile:esm`, teste focal, `npm run test:bot-powerup`, `npm run build` (57 módulos) e `git diff --check` seletivo passaram; arquivos alheios já sujos permaneceram intocados; sem push/deploy.
+
 ## 2026-07-14 — pickup-chain-rolling-window
 - Claim/escopo: alterar somente `src/Gameplay/pickup-chain.ts`, fortalecer `tests/pickup-chain-guard-check.mjs` e anexar registros aos dois ledgers existentes; após A→B bem-sucedido manter B armado por janela reduzida explícita para A→B→C produzir duas guards, preservando repetição e expiração; sem commit, push ou deploy.
 - RED: A→B deixava `previousType=null`/`remainingMs=0`; C apenas rearmava a janela normal e registrava `chainGuard=false`.
