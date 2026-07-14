@@ -2836,6 +2836,9 @@ export class GameApp {
     }
     bomb.tile = this.normalizeTile(targetTile);
     bomb.fuseMs = Math.max(KICK_FUSE_MIN_MS, bomb.fuseMs - movedTiles * KICK_FUSE_PENALTY_MS_PER_TILE);
+    if (this.flames.some((flame) => flame.tile.x === bomb.tile.x && flame.tile.y === bomb.tile.y)) {
+      bomb.fuseMs = 0;
+    }
     bomb.ownerCanPass = false;
     if (impactBreakableKey) {
       this.breakCrateAtKey(impactBreakableKey);

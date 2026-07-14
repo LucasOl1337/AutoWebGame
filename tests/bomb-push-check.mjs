@@ -160,6 +160,24 @@ const hotKickFusePenalty = hotKickMoved && game.bombs[0]?.tile.x === 6 && hotKic
 
 resetPlayers();
 clearLane();
+game.flames = [
+  { tile: { x: 6, y: 1 }, remainingMs: 500, style: "normal" },
+];
+game.bombs = [
+  { id: 23, ownerId: 2, tile: { x: 3, y: 1 }, fuseMs: 1500, ownerCanPass: false, flameRange: 1 },
+];
+const flameKickMoved = game.tryPushBombAtTile({ x: 3, y: 1 }, "right", 3);
+const kickedOntoFlameArmedSameCycle = flameKickMoved
+  && game.bombs[0]?.tile.x === 6
+  && game.bombs[0]?.tile.y === 1
+  && game.bombs[0]?.fuseMs === 0;
+game.updateBombs(0);
+const kickedOntoFlameExplodesSameCycle = kickedOntoFlameArmedSameCycle
+  && !game.bombs.some((bomb) => bomb.id === 23);
+game.flames = [];
+
+resetPlayers();
+clearLane();
 game.arena.breakable.add(tileKey(5, 1));
 game.bombs = [
   { id: 21, ownerId: 2, tile: { x: 3, y: 1 }, fuseMs: 1500, ownerCanPass: false, flameRange: 1 },
@@ -219,6 +237,8 @@ const report = {
   kickPushesBomb,
   kickSlidesBomb,
   hotKickFusePenalty,
+  kickedOntoFlameArmedSameCycle,
+  kickedOntoFlameExplodesSameCycle,
   hotKickScalesWithSlide,
   urgentHotKickFuseFloor,
   kickStopsBeforeCrate,
@@ -238,6 +258,8 @@ if (
   || !kickPushesBomb
   || !kickSlidesBomb
   || !hotKickFusePenalty
+  || !kickedOntoFlameArmedSameCycle
+  || !kickedOntoFlameExplodesSameCycle
   || !hotKickScalesWithSlide
   || !urgentHotKickFuseFloor
   || !kickStopsBeforeCrate

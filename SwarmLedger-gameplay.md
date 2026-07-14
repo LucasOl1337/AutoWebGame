@@ -1,3 +1,9 @@
+## 2026-07-14 — kicked-bomb-active-flame-same-cycle
+- Claim/escopo: alterar somente `src/Engine/game-app.ts`, fortalecer `tests/bomb-push-check.mjs` e anexar registros aos dois documentos permitidos; bomba chutada que termina sobre flame ativa deve armar/explodir no mesmo ciclo; executar RED/GREEN e preservar tudo alheio; sem commit, push ou deploy.
+- RED: após deslizar de `(3,1)` a `(6,1)` sobre flame ativa, a bomba manteve pavio (`kickedOntoFlameArmedSameCycle=false`).
+- Implementação/GREEN: após definir o tile final e aplicar a penalidade do chute, `tryPushBombAtTile` detecta flame ativa nesse tile e zera o pavio; `updateBombs(0)` consome a fila normal e remove/explode a bomba no mesmo ciclo (`armed=true`, `explodes=true`).
+- Validações: `npm run compile:esm`, `npm run test:bomb-push`, `npm run test:bomb-chain`, `npm run test:bomb-hit-window`, `npm run build` (57 módulos) e `git diff --check` seletivo passaram; sem commit, push ou deploy.
+
 ## 2026-07-14 — bot-kick-before-bomb-pass
 - Claim/escopo antes da intervenção: ajustar somente a prioridade existente de `kick-up` em `src/Gameplay/powerups.ts` para torná-lo ligeiramente mais atraente ao bot apenas enquanto `bombPassLevel` é zero; criar teste focal isolado, registrar resultado neste ledger, preservar arquivos já sujos e fazer commit local seletivo se compile/test/build/diff-check passarem; sem push/deploy.
 - Resultado: Bomb Kick reutiliza o score situacional `180` e recebe somente `+1` enquanto o bot não tem Bomb Pass (`181`); após adquirir passagem volta a `180`, e Kick saturado permanece `0`.
