@@ -244,6 +244,9 @@ export interface SiteCopy {
     arenaRebooting: string;
     doubleKo: string;
     noPoints: string;
+    roundWinner: (name: string) => string;
+    doubleKoTitle: string;
+    timeoutTitle: string;
     matchWinner: (name: string) => string;
     matchComplete: string;
     rematchSummary: string;
@@ -294,7 +297,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedback: "Enviar feedback",
       searching: "Procurando a melhor sala para voce entrar.",
       meta: (queuedRooms, onlineUsers) => `${queuedRooms} salas abertas agora | ${onlineUsers} jogadores online`,
-      releaseBadge: "v0.4.2 no ar",
+      releaseBadge: "v0.4.3 no ar",
       releaseTitle: "Novidades do patch",
       releaseItems: [
         "Escolha 1, 2 ou 3 bots antes da partida local.",
@@ -537,6 +540,9 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       arenaRebooting: "Arena reiniciando...",
       doubleKo: "Eliminacao simultanea: os dois nucleos explodiram e ninguem pontua.",
       noPoints: "Nenhum ponto foi marcado.",
+      roundWinner: (name) => `${name} venceu a rodada.`,
+      doubleKoTitle: "Eliminacao simultanea.",
+      timeoutTitle: "Tempo esgotado.",
       matchWinner: (name) => `${name} venceu a partida!`,
       matchComplete: "Partida encerrada",
       rematchSummary: "Proxima partida iniciando automaticamente...",
@@ -585,7 +591,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedback: "Send feedback",
       searching: "Looking for the best room for you.",
       meta: (queuedRooms, onlineUsers) => `${queuedRooms} open rooms right now | ${onlineUsers} players online`,
-      releaseBadge: "v0.4.2 live",
+      releaseBadge: "v0.4.3 live",
       releaseTitle: "Patch highlights",
       releaseItems: [
         "Choose 1, 2, or 3 bots before a local match.",
@@ -817,6 +823,9 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       arenaRebooting: "Arena rebooting...",
       doubleKo: "Simultaneous elimination: both cores overloaded and no one scores.",
       noPoints: "No points awarded.",
+      roundWinner: (name) => `${name} wins the round.`,
+      doubleKoTitle: "Double KO.",
+      timeoutTitle: "Time expired.",
       matchWinner: (name) => `${name} wins the match!`,
       matchComplete: "Match complete",
       rematchSummary: "Next match starting automatically...",

@@ -232,8 +232,11 @@ export class GrowthTelemetryClient {
   }
 
   private requeueFailedBatch(batch: GrowthTelemetryEventBody[]): void {
-    this.queuedEvents = batch.concat(this.queuedEvents);
-    this.trimQueuedEvents();
+    // A failed in-flight batch is older than anything queued while the request
+    // was pending. Keep those events first and discard only the newest overflow.
+    this.queuedEvents = batch
+      .concat(this.queuedEvents)
+      .slice(0, TELEMETRY_MAX_QUEUE_SIZE);
   }
 
   private trimQueuedEvents(): void {

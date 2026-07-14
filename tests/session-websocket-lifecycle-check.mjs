@@ -63,7 +63,12 @@ function createClient() {
     quickMatchSearching: false,
     endlessMatchStarting: false,
     reconnectingForAccountRefresh: false,
-    app: { detachOnlineSession() {} },
+    leaveRequested: false,
+    telemetry: { track() {} },
+    app: {
+      detachOnlineSession() {},
+      getCurrentMode() { return "menu"; },
+    },
     renderAll() {},
     setStatus() {},
   });
@@ -146,6 +151,51 @@ assert.equal(
   staleEventClient.realtimeReady,
   true,
   "a late close event from a stale socket must not mark the replacement connection offline",
+);
+
+const leavingClient = createClient();
+leavingClient.connect();
+const leavingSocket = sockets[4];
+leavingSocket.readyState = FakeWebSocket.OPEN;
+leavingSocket.emit("open");
+leavingClient.currentLobby = { roomCode: "LEAVE42" };
+leavingClient.roomCode = "LEAVE42";
+leavingClient.role = "guest";
+
+leavingClient.leaveCurrentLobby();
+assert.deepEqual(
+  leavingSocket.sent,
+  [{ type: "leave-lobby" }],
+  "a deliberate leave should be sent before local reconnect state changes",
+);
+leavingSocket.readyState = FakeWebSocket.CLOSED;
+leavingSocket.emit("close");
+
+assert.equal(
+  leavingClient.pendingAutoJoinRoom,
+  null,
+  "a socket close racing the leave acknowledgement must not restore the room",
+);
+scheduledTimers.shift().callback();
+const postLeaveSocket = sockets[5];
+postLeaveSocket.readyState = FakeWebSocket.OPEN;
+postLeaveSocket.emit("open");
+postLeaveSocket.emit("message", {
+  data: JSON.stringify({
+    type: "hello",
+    clientId: "post-leave-client",
+    account: null,
+    sessionState: null,
+    lobbies: [],
+    onlineUsers: 1,
+    onlinePlayers: [],
+    quickMatchQueued: 0,
+  }),
+});
+assert.deepEqual(
+  postLeaveSocket.sent,
+  [],
+  "the replacement connection must remain at home after a deliberate leave",
 );
 
 console.log(JSON.stringify({

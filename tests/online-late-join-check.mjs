@@ -75,7 +75,9 @@ function createClient(url, label) {
     };
     const timeout = setTimeout(() => {
       cleanup();
-      reject(new Error(`${label} timed out waiting for a server message.`));
+      reject(new Error(
+        `${label} timed out waiting for a server message. Received: ${messages.map((message) => message.type).join(", ") || "none"}.`,
+      ));
     }, timeoutMs);
     const cleanup = () => {
       clearTimeout(timeout);
@@ -226,8 +228,12 @@ try {
     && thirdError?.message === LATE_JOIN_REJECTION,
   );
 
+  second.send({ type: "leave-lobby" });
+  await Promise.all([
+    second.waitFor((message) => message.type === "lobby-left"),
+    first.waitFor((message) => message.type === "peer-left"),
+  ]);
   second.websocket.close();
-  await first.waitFor((message) => message.type === "peer-left");
   const replacement = createClient(workerWsUrl, "replacement");
   clients.push(replacement);
   await replacement.waitFor((message) => message.type === "hello");

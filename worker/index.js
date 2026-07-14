@@ -3135,24 +3135,6 @@ export class GlobalLobby extends DurableObject {
     });
   }
 
-  sendSnapshotToClient(clientId, roomCode) {
-    const match = this.matches.get(roomCode);
-    if (!match) {
-      return;
-    }
-    const snapshot = match.game.exportOnlineSnapshot();
-    this.sendToClient(clientId, {
-      type: "host-snapshot",
-      snapshot: {
-        ...snapshot,
-        serverTimeMs: Date.now(),
-        serverTick: match.tick,
-        frameId: match.tick,
-        ackedInputSeq: createSeatMap((playerId) => match.ackedInputSeq[playerId] ?? 0),
-      },
-    });
-  }
-
   broadcastQuickMatchState() {
     const queued = this.countOpenQuickMatchRooms();
     const onlineUsers = this.sockets.size;

@@ -9,7 +9,7 @@ const wrangler = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "ut
 
 assert.match(router, /"\/game\/play"/);
 assert.match(router, /"\/game\/training"/);
-assert.match(router, /"\/game\/lab"/);
+assert.doesNotMatch(router, /"\/game\/lab"/);
 assert.match(router, /window\.history\.pushState/);
 assert.match(store, /export class FrontendStore/);
 assert.match(store, /subscribe\(listener/);
@@ -18,8 +18,15 @@ assert.match(shell, /data-route=/);
 assert.match(shell, /SA-EAST · ONLINE/);
 assert.match(main, /if \(route === "launcher"\)/);
 assert.match(main, /bootGameOnce/);
+const launcherBranch = main.slice(main.indexOf('if (route === "launcher")'), main.indexOf('launcherShell?.destroy()', main.indexOf('if (route === "launcher")')));
+assert.match(launcherBranch, /if \(gameBootPromise !== null\)/);
+assert.match(launcherBranch, /window\.location\.reload\(\)/);
+assert.match(launcherBranch, /return;/);
 assert.match(main, /new GameApp/);
 assert.match(main, /new OnlineSessionClient/);
+assert.match(main, /if \(route === "training"\)/);
+assert.match(main, /game\.startOfflineBotMatch\(1, "classic"\)/);
+assert.doesNotMatch(shell, /data-route="lab"/);
 assert.match(wrangler, /"not_found_handling": "single-page-application"/);
 assert.match(wrangler, /"run_worker_first": true/);
 console.log("frontend architecture and SPA fallback contract: ok");

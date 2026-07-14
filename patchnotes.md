@@ -1,7 +1,37 @@
+# Patch Notes — 2026-07-14 v0.4.3
+
+**Projeto:** AutoWebGame / BOMBA PvP
+**Baseline público:** `v0.4.1` (`a2eff456`)
+**Estado:** candidato auditado; publicação em finalização
+
+## Para quem joga
+
+- Bots escolhem upgrades com mais contexto, evitam saturação e chutam/detonam com mais segurança.
+- Bombas, pickups, chamas, HUD e resultados comunicam melhor perigo, coleta, placar e próxima ação.
+- Online reduz snaps em portal/jitter e trata reconnect, late join e saída deliberada com mais consistência.
+- Jogador 2 mantém a habilidade em `I`; Killer Bee, Ranni e Nico receberam ajustes de ultimate.
+- Launcher, loading, layout responsivo, foco, volume, idioma e guia Como Jogar ficaram mais polidos.
+
+## Invisível, mas importante
+
+- Telemetria preserva eventos antigos durante retry/overflow.
+- Worker teve contrato de deep routes/reconnect reconciliado e duplicação removida.
+- Biblioteca de nove temas foi reparada para JSON válido.
+- 176/176 checks, build e dry-run do Worker aprovados; audit com 0 vulnerabilidades.
+
+## Fora do patch
+
+- O Lab de agentes do TRAE foi preservado em tags `archive/trae-lab-*`, mas não publicado: dependia de localhost/credenciais e uma versão anterior simulava dados.
+- Scratch `.swarm` e protótipos sem consumo foram removidos sem apagar a evidência Git.
+
+Relatório: `DocsDev/releases/release-v0.4.3.md` e `DocsDev/releases/release-v0.4.3.json`.
+
+---
+
 # Patch Notes — 2026-07-13 v0.4.1
 
 **Projeto:** AutoWebGame / BOMBA PvP
-**Baseline:** 0.4.0 (da613c7)
+**Baseline:** `v0.4.0` (`da613c7`)
 **Estado:** preparado localmente; não publicado
 
 ## Para quem joga

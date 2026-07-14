@@ -8,6 +8,7 @@ const { TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
 const NICO_CHANNEL_MS = 2_000;
 const NICO_RELEASE_MS = 260;
 const NICO_COOLDOWN_MS = 8_000;
+const NICO_VOLUNTARY_CANCEL_COOLDOWN_MS = 600;
 
 const emptyDirectionalSprites = {
   up: null,
@@ -192,8 +193,10 @@ cancelGame.setServerPlayerInput(1, {
 });
 cancelGame.advanceServerSimulation(17);
 
-const canceledBeforeFire = cancelNico.skill.phase === "idle"
-  && cancelNico.skill.cooldownRemainingMs === 0
+const canceledBeforeFire = cancelNico.skill.phase === "cooldown"
+  && cancelNico.skill.cooldownRemainingMs === NICO_VOLUNTARY_CANCEL_COOLDOWN_MS
+  && cancelNico.skill.channelRemainingMs === 0
+  && cancelNico.skill.castElapsedMs === 0
   && cancelGame.magicBeams.length === 0
   && cancelEnemy.alive === true;
 

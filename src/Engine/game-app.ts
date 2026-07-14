@@ -1168,13 +1168,11 @@ export class GameApp {
 
   public setAudioVolume(volume: number): void {
     this.soundManager.setVolume(volume);
-    this.getLocalStorage()?.setItem(AUDIO_VOLUME_STORAGE_KEY, String(this.soundManager.getVolume()));
     this.writeStorageItem(AUDIO_VOLUME_STORAGE_KEY, String(this.soundManager.getVolume()));
   }
 
   public setAudioMuted(muted: boolean): void {
     this.soundManager.setMuted(muted);
-    this.getLocalStorage()?.setItem(AUDIO_MUTED_STORAGE_KEY, String(muted));
     this.writeStorageItem(AUDIO_MUTED_STORAGE_KEY, String(muted));
   }
 
@@ -5518,6 +5516,11 @@ export class GameApp {
     }
 
     if (this.mode === "match" && this.roundOutcome) {
+      const title = this.roundOutcome.reason === "elimination" && this.roundOutcome.winner
+        ? copy.roundWinner(this.players[this.roundOutcome.winner].name)
+        : this.roundOutcome.reason === "double-ko"
+          ? copy.doubleKoTitle
+          : copy.timeoutTitle;
       const subtitle = this.roundOutcome.reason === "elimination"
         ? copy.arenaRebooting
         : this.roundOutcome.reason === "double-ko"
@@ -5528,7 +5531,7 @@ export class GameApp {
         ? copy.matchResultCue(seconds)
         : copy.nextRoundCue(seconds);
       return {
-        title: this.roundOutcome.message,
+        title,
         subtitle,
         footer: `${copy.scoreSummary(this.formatActiveScore())} | ${nextAction}`,
       };

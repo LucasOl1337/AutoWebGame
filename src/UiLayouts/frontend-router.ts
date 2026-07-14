@@ -1,17 +1,15 @@
-export type FrontendRoute = "launcher" | "play" | "training" | "lab";
+export type FrontendRoute = "launcher" | "play" | "training";
 
 const ROUTE_PATHS: Record<FrontendRoute, string> = {
   launcher: "/game",
   play: "/game/play",
   training: "/game/training",
-  lab: "/game/lab",
 };
 
 export function resolveFrontendRoute(pathname: string): FrontendRoute {
   const normalized = pathname.replace(/\/+$/, "") || "/";
   if (normalized === "/game.html" || normalized === "/game/play") return "play";
   if (normalized === "/game/training") return "training";
-  if (normalized === "/game/lab") return "lab";
   return "launcher";
 }
 

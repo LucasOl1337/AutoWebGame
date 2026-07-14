@@ -88,14 +88,10 @@ const firstBatchEventNames = [
   "lobby_create_clicked",
   "feedback_opened",
 ];
-const secondBatchEventNames = [
-  "lobby_join_clicked",
-  "lobby_code_join_submitted",
-  "lobby_joined",
-  "seat_claim_clicked",
-  "ready_clicked",
-  "character_selected",
-];
+const secondBatchEventNames = Array.from(
+  { length: 30 },
+  (_, index) => `queued_during_retry_${String(index + 1).padStart(2, "0")}`,
+);
 
 for (const eventName of secondBatchEventNames) {
   client.track(eventName);
@@ -104,17 +100,11 @@ for (const eventName of secondBatchEventNames) {
 const serializedBeforeRetry = fetchCalls.length === 1;
 pendingFetches.shift()?.resolve({ ok: false, status: 503 });
 
-await Promise.resolve();
-await Promise.resolve();
-
-const retryTimer = scheduledTimers.shift();
-retryTimer?.handler();
-
-await Promise.resolve();
-await Promise.resolve();
+await new Promise((resolve) => setImmediate(resolve));
 
 const firstEventNames = fetchCalls[0]?.payload.map((event) => event.eventName) ?? [];
 const secondEventNames = fetchCalls[1]?.payload.map((event) => event.eventName) ?? [];
+const expectedRetriedEventNames = firstBatchEventNames.concat(secondBatchEventNames.slice(0, 24));
 pendingFetches.shift()?.resolve({ ok: true, status: 202 });
 await Promise.resolve();
 await Promise.resolve();
@@ -124,9 +114,11 @@ const pass = fetchCalls.length === 2
   && fetchCalls.every((call) => call.url === "/api/telemetry")
   && firstEventNames.length === 6
   && firstEventNames.join("|") === firstBatchEventNames.join("|")
-  && secondEventNames.join("|") === firstBatchEventNames.concat(secondBatchEventNames).join("|")
+  && secondEventNames.length === 30
+  && secondEventNames.join("|") === expectedRetriedEventNames.join("|")
   && secondEventNames.includes("session_start")
-  && secondEventNames.includes("character_selected")
+  && secondEventNames.includes("queued_during_retry_24")
+  && !secondEventNames.includes("queued_during_retry_30")
   && fetchCalls[1].payload.every((event) => event.attribution.utmCampaign === "retry-test")
   && windowListeners.has("pagehide")
   && documentListeners.has("visibilitychange");

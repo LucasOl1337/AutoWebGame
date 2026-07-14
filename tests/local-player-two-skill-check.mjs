@@ -140,6 +140,7 @@ listeners.get("keyup")?.({ code: skillCode, target: null, preventDefault: noop }
 game.update(17);
 game.automationMode = true;
 game.automationControlledPlayer = 2;
+resetSkill(game.players[2]);
 keydown?.({ code: skillCode, repeat: false, target: null, preventDefault: noop });
 game.update(17);
 const automationStarted = {

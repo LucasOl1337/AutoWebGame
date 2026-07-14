@@ -1,6 +1,6 @@
 import type { FrontendRoute } from "./frontend-router";
 
-export type LauncherMode = "play" | "training" | "lab";
+export type LauncherMode = "play" | "training";
 
 export interface FrontendState {
   route: FrontendRoute;

@@ -2,7 +2,7 @@ import "./main.css";
 import { fetchActiveArenaDefinition } from "../Arenas/arena";
 import { applyArenaThemeSelection } from "../Arenas/arena-theme-selection";
 import { LauncherShell } from "./launcher-shell";
-import { resolveFrontendRoute } from "./frontend-router";
+import { resolveFrontendRoute, type FrontendRoute } from "./frontend-router";
 import { FrontendStore } from "./frontend-store";
 
 const rootElement = document.querySelector<HTMLDivElement>("#app");
@@ -94,7 +94,7 @@ function renderBootstrapFailure(rootElement: HTMLDivElement): void {
   rootElement.replaceChildren(createBootstrapPanel("error", () => window.location.reload()));
 }
 
-async function bootstrapGame(rootElement: HTMLDivElement): Promise<void> {
+async function bootstrapGame(rootElement: HTMLDivElement, route: FrontendRoute): Promise<void> {
   rootElement.setAttribute("aria-busy", "true");
   rootElement.innerHTML = '<p role="status" aria-live="polite">Carregando arena…</p>';
 
@@ -115,11 +115,14 @@ async function bootstrapGame(rootElement: HTMLDivElement): Promise<void> {
   const assets = await loadGameAssets(activeArena.themeId);
   rootElement.removeAttribute("aria-busy");
   rootElement.replaceChildren();
-  rootElement.replaceChildren();
   rootElement.setAttribute("aria-busy", "false");
   const game = new GameApp(rootElement, assets, activeArena);
   new OnlineSessionClient(rootElement, game, assets.characterRoster ?? [], activeArena.themeId);
   game.start();
+
+  if (route === "training") {
+    game.startOfflineBotMatch(1, "classic");
+  }
 
   if (import.meta.env.DEV) {
     (window as Window & { __autobot?: typeof game }).__autobot = game;
@@ -144,8 +147,8 @@ async function bootstrapGame(rootElement: HTMLDivElement): Promise<void> {
 
 let gameBootPromise: Promise<void> | null = null;
 
-function bootGameOnce(rootElement: HTMLDivElement): Promise<void> {
-  gameBootPromise ??= bootstrapGame(rootElement);
+function bootGameOnce(rootElement: HTMLDivElement, route: FrontendRoute): Promise<void> {
+  gameBootPromise ??= bootstrapGame(rootElement, route);
   return gameBootPromise;
 }
 
@@ -157,6 +160,10 @@ async function renderRoute(): Promise<void> {
   const route = resolveFrontendRoute(window.location.pathname);
   frontendStore.setRoute(route);
   if (route === "launcher") {
+    if (gameBootPromise !== null) {
+      window.location.reload();
+      return;
+    }
     launcherShell?.destroy();
     launcherShell = new LauncherShell(root, frontendStore);
     launcherShell.mount();
@@ -167,7 +174,7 @@ async function renderRoute(): Promise<void> {
   launcherShell = null;
   frontendStore.setBootingGame(true);
   try {
-    await bootGameOnce(root);
+    await bootGameOnce(root, route);
   } catch (error) {
     gameBootPromise = null;
     console.error("AutoWebGame bootstrap failed", error);

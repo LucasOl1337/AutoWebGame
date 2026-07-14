@@ -1,3 +1,12 @@
+## 2026-07-14 — onboarding-powerup-variety-flame-protection
+- Claim/escopo antes da intervenção: ensinar somente no card `Powerups escalam` que coletar tipos diferentes em até 4,2 s ativa proteção curta contra flames; alterar exclusivamente `how-to-play.html`, `tests/how-to-play-page-check.mjs` e este ledger; preservar todo conteúdo alheio e não realizar commit.
+
+## 2026-07-13 — nico-voluntary-cancel-short-cooldown
+- Claim/escopo: alterar somente `src/Characters/CustomMechanics/nico-skill.ts`, `tests/nico-ult-arcane-beam-check.mjs` e os dois registros de coordenação; preservar `src/UiLayouts/launcher-shell.ts` e todos os diffs alheios; sem commit.
+- Antes → depois: soltar voluntariamente a habilidade de Nico durante o channel retornava a `idle` com cooldown zero; agora entra em `cooldown` por 600 ms por meio de `NICO_VOLUNTARY_CANCEL_COOLDOWN_MS`, mantendo o disparo completo com cooldown integral de 8000 ms.
+- Evidência focal: `canceledBeforeFire=true` exige fase `cooldown`, cooldown de 600 ms no tick do cancelamento, channel/cast zerados, nenhum beam criado e inimigo intacto; o restante do contrato do Arcane Beam continuou aprovado.
+- Resultado/validação: `npm run test:nico-ult`, `npm run test:skill-contract`, `npm run build` e `git diff --check -- src/Characters/CustomMechanics/nico-skill.ts tests/nico-ult-arcane-beam-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` concluíram com código 0. Revisão seletiva confirmou somente os quatro arquivos reivindicados; `launcher-shell.ts` permaneceu intocado; sem commit.
+
 ## 2026-07-13 — short-fuse-effective-pickup-feedback
 - Claim/escopo antes da intervenção: alterar somente a apresentação do feedback de coleta de `short-fuse-up` em `src/Engine/game-app.ts`, adicionar `tests/short-fuse-pickup-feedback-check.mjs` e registrar coordenação/resultado; preservar balanceamento, aplicação, HUD persistente, demais feedbacks, scripts e diffs alheios.
 - Antes → depois: a coleta já capturava o fuse efetivo de `formatBombFuseSeconds` (`1.60s`/`1.20s`), mas o formatter genérico produzia `+SF 1...` no HUD compacto e `+Short Fuse ...` no expandido; agora ambos exibem diretamente `SF 1.60s` e `SF 1.20s`.

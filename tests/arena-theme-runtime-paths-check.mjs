@@ -16,7 +16,7 @@ const expectedFiles = {
 };
 
 const spriteThemes = ARENA_THEME_LIBRARY.filter((theme) => theme.renderMode === "sprite");
-const expectedSpriteThemeIds = ["arcane-citadel", "skyfoundry-bastion"];
+const expectedSpriteThemeIds = ["arcane-citadel", "ember-kiln", "skyfoundry-bastion", "tidal-foundry"];
 const runtimePathResults = await Promise.all(spriteThemes.map(async (theme) => {
   const tilePaths = theme.tilePaths ?? {};
   const mismatches = Object.entries(expectedFiles)

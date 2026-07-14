@@ -545,6 +545,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private matchChromeHideTimer: number | null = null;
   private statusClearTimer: number | null = null;
   private reconnectingForAccountRefresh = false;
+  private leaveRequested = false;
   private realtimeReady = false;
   private currentSessionState: OnlineSessionState | null = null;
   private sessionReturnBrief: SessionReturnBrief | null = null;
@@ -739,13 +740,16 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         return;
       }
       const hadActiveOnlineSession = Boolean(this.currentLobby || this.role || this.roomCode);
-      const reconnectRoomCode = resolveReconnectRoomCode(
-        this.currentLobby?.roomCode,
-        this.roomCode,
-        this.pendingAutoJoinRoom,
-      );
+      const reconnectRoomCode = this.leaveRequested
+        ? null
+        : resolveReconnectRoomCode(
+          this.currentLobby?.roomCode,
+          this.roomCode,
+          this.pendingAutoJoinRoom,
+        );
       const accountRefresh = this.reconnectingForAccountRefresh;
       this.reconnectingForAccountRefresh = false;
+      this.leaveRequested = false;
       this.realtimeReady = false;
       this.socket = null;
       this.role = null;
@@ -1184,7 +1188,12 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.telemetry.track("lobby_left", {
       context: { roomCode: this.currentLobby?.roomCode ?? null, screen: this.getScreen() },
     });
-    this.send({ type: "leave-lobby" });
+    if (this.send({ type: "leave-lobby" })) {
+      // A close can race the server acknowledgement. Preserve the user's
+      // decision to leave instead of automatically rejoining the same room.
+      this.leaveRequested = true;
+      this.pendingAutoJoinRoom = null;
+    }
   }
 
   private leaveCurrentMatch(): void {
@@ -1268,6 +1277,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.currentLobby = message.lobby;
         this.roomCode = message.lobby.roomCode;
         this.pendingAutoJoinRoom = null;
+        this.leaveRequested = false;
         this.syncPreferredCharacterFromLobby();
         this.app.attachOnlineSession(this);
         this.updateLocation(message.lobby.roomCode);
@@ -1299,6 +1309,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         this.roomCode = null;
         this.currentLobby = null;
         this.pendingAutoJoinRoom = null;
+        this.leaveRequested = false;
         this.autoClaimRoomCode = null;
         this.updateLocation(null);
         this.app.detachOnlineSession();
@@ -1751,7 +1762,6 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const landingDevLab = document.createElement("aside");
     landingDevLab.className = "experience-dev-lab";
     landingDevLab.hidden = !import.meta.env?.DEV;
-    landingDevLab.hidden = !import.meta.env.DEV;
     landingDevLab.innerHTML = `<strong>${this.translate("Laboratório DEV", "DEV laboratory")}</strong><span>${this.translate("Cenários reproduzíveis para bots e modelos externos.", "Reproducible scenarios for bots and external models.")}</span>`;
     const devBotVsBot = document.createElement("a");
     devBotVsBot.className = "experience-button experience-button--secondary";
@@ -2443,6 +2453,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.elements.languageEnglishButton.textContent = this.copy.language.english;
     this.elements.languagePortugueseButton.dataset.active = this.language === "pt" ? "true" : "false";
     this.elements.languageEnglishButton.dataset.active = this.language === "en" ? "true" : "false";
+    this.elements.languagePortugueseButton.setAttribute("aria-pressed", this.language === "pt" ? "true" : "false");
+    this.elements.languageEnglishButton.setAttribute("aria-pressed", this.language === "en" ? "true" : "false");
     this.elements.languagePortugueseButton.disabled = this.language === "pt";
     this.elements.languageEnglishButton.disabled = this.language === "en";
   }

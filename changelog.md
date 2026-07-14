@@ -1,5 +1,18 @@
 # Changelog
 
+## [2026-07-14] — v0.4.3
+
+- Bots passaram a avaliar melhor saturação, retorno e segurança de powerups, chutes e detonação remota.
+- Combate ganhou feedback de bomba, pickup, chama, HUD, início e resultado de rodada.
+- Online/Worker receberam correções de portal, jitter, reconnect, late join, deep routes e tick.
+- Launcher, responsividade, acessibilidade, idioma e Como Jogar foram refinados.
+- Telemetria, temas e lifecycle tiveram contratos corrigidos; 176/176 checks e audit com 0 vulnerabilidades.
+- Lab local do TRAE foi arquivado e excluído por não estar pronto para produção.
+
+Relatório: `DocsDev/releases/release-v0.4.3.md`.
+
+---
+
 ## [2026-07-13] — v0.4.1
 
 - Corrigida a prioridade de direção durante key repeat e ignoradas repetições órfãs.

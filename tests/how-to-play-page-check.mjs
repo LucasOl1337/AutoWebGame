@@ -29,6 +29,7 @@ assert.match(pageHtml, /id="objetivo"/);
 assert.match(pageHtml, /id="controles"/);
 assert.match(pageHtml, /id="arena"/);
 assert.match(pageHtml, /<h3 class="accent-green">Powerups escalam<\/h3>/);
+assert.match(pageHtml, /Colete tipos diferentes em ate 4,2 s para ativar protecao curta contra flames\./);
 assert.match(pageHtml, /escudo absorve um golpe/);
 assert.match(pageHtml, /atravessar bombas abre fuga, enquanto chuta-las reposiciona a ameaca e corta 250 ms do pavio por tile percorrido/);
 assert.match(pageHtml, /Chutes longos exigem fuga imediata/);

@@ -5,7 +5,6 @@ import { FrontendStore, type LauncherMode } from "./frontend-store";
 const MODES: Array<{ id: LauncherMode; number: string; kicker: string; title: string; description: string; meta: string }> = [
   { id: "play", number: "01", kicker: "VERSUS", title: "PvP", description: "Competição online, salas privadas e partidas rápidas.", meta: "ARENA AO VIVO" },
   { id: "training", number: "02", kicker: "DOJO", title: "Treino", description: "Partida local imediata contra bots calibrados.", meta: "LOCAL · IMEDIATO" },
-  { id: "lab", number: "03", kicker: "LAB_00", title: "Lab", description: "Arenas, modificadores e experiências em evolução.", meta: "EXPERIMENTAL" },
 ];
 
 export class LauncherShell {
@@ -34,7 +33,6 @@ export class LauncherShell {
             <a href="${routeHref("launcher")}" aria-current="page">Início</a>
             <a href="${routeHref("play")}">PvP</a>
             <a href="${routeHref("training")}">Treino</a>
-            <a href="${routeHref("lab")}">Lab</a>
           </nav>
           <span class="launcher-live"><i></i> SA-EAST · ONLINE</span>
         </header>
@@ -50,10 +48,10 @@ export class LauncherShell {
             <strong><span>04</span> combatentes</strong>
             <div class="launcher-meter"><i></i></div>
             <p>Servidor autoritativo pronto</p>
-            <footer><span><i></i> DISPONÍVEL</span><b>v0.4.1</b></footer>
+            <footer><span><i></i> DISPONÍVEL</span><b>v0.4.3</b></footer>
           </aside>
           <section class="launcher-modes" aria-labelledby="modes-title">
-            <header><h2 id="modes-title">ESCOLHA O CAMPO</h2><p>três maneiras de entrar na arena</p></header>
+            <header><h2 id="modes-title">ESCOLHA O CAMPO</h2><p>duas maneiras de entrar na arena</p></header>
             <div class="launcher-mode-grid">${MODES.map((mode) => `
               <a class="launcher-mode${mode.id === state.selectedMode ? " is-selected" : ""}" href="${routeHref(mode.id)}" data-mode="${mode.id}" data-route="${mode.id}" ${mode.id === state.selectedMode ? 'aria-current="true"' : ""}>
                 <span class="launcher-mode__number">${mode.number}</span><span class="launcher-mode__copy"><small>${mode.kicker}</small><b>${mode.title}</b><span>${mode.description}</span></span><span class="launcher-mode__meta">${mode.meta}<i>↗</i></span>

@@ -1,0 +1,96 @@
+{
+  "brand": { "name": "AutoWebGame", "vendor": "BOMBA PvP" },
+  "version": "v0.4.3",
+  "date": "14 de julho de 2026",
+  "title": "Bots mais espertos, online mais estável e resultados claros",
+  "baseline": {
+    "version": "v0.4.1",
+    "commit": "a2eff456def6ba89621c49e29ff43420d68c3bcf",
+    "annotatedTagObject": "adb3bb2cedb6655599a1c0b6386e96423cb06765",
+    "publishedAt": "2026-07-13T15:46:12Z"
+  },
+  "preIntegration": {
+    "localMain": "3c77364c89f4cf02e4e8f08bbbb3d8f2d414552b",
+    "originMain": "aa92b7411dfe689983ab26e92fe805c592894120",
+    "intermediateTag": "v0.4.2",
+    "intermediateGithubReleaseExists": false
+  },
+  "semverDecision": "patch-v0.4.3-without-rewriting-v0.4.2",
+  "publicationStatus": "audited-candidate-pending-deploy-and-github-release",
+  "diff": {
+    "files": 113,
+    "additions": 5359,
+    "deletions": 919,
+    "binaryArtifacts": ["release-assets/v0.4.3-card.png"]
+  },
+  "agentAudit": [
+    { "agent": "CLAUDE", "sessions": ["468fc786-6d01-44d3-b09e-88aefb23d532 direct cwd", "contextual mentions from other projects"], "result": "no attributable patch change" },
+    { "agent": "CHATGPT", "sessions": "host app for Codex tasks; no independent session store", "result": "not double-counted" },
+    { "agent": "CODEX", "sessions": ["autowebgame-1affeed128a5/r001-r010", "overnight-1", "overnight-2", "overnight-3/eed3a00", "overnight-4", "overnight-5", "019f5bff-3740", "019f6012-a0fa", "019f601c-7b18", "019f601c-c548"], "result": "integrated, corrected and audited" },
+    { "agent": "TRAEWORK", "sessions": ["c0e82eb", "09578ca", "cd2b193", "trae-lab-ui", "trae-lab-broker"], "result": "production-safe work integrated; Lab archived and excluded" },
+    { "agent": "ZCODE", "sessions": "logs through 2026-07-07", "result": "no attributable patch change" },
+    { "agent": "OPENCODE", "sessions": "two indirect mentions outside AutoWebGame", "result": "no attributable patch change" },
+    { "agent": "WISPR FLOW", "sessions": "one dictation on 2026-07-13T16:11-03:00", "result": "prompt input only; no direct write" }
+  ],
+  "codexFiniteMission": [
+    { "id": "r001", "objective": "telemetry storage/UUID/retry", "status": "included-with-audit-fix" },
+    { "id": "r002", "objective": "sprite fallback", "status": "included" },
+    { "id": "r003", "objective": "Worker HTTP dispatch/cache", "status": "included" },
+    { "id": "r004", "objective": "input", "status": "included" },
+    { "id": "r005", "objective": "matchmaking", "status": "included" },
+    { "id": "r006", "objective": "server tick", "status": "included" },
+    { "id": "r007", "objective": "websocket lifecycle", "status": "included-with-audit-fix" },
+    { "id": "r008", "objective": "sound lifecycle", "status": "included" },
+    { "id": "r009", "objective": "bot state safety", "status": "included" },
+    { "id": "r010", "objective": "additional round", "status": "skipped-no-op" }
+  ],
+  "codexPostReleaseMicroSessions": [
+    "ux-how-to-play-sudden-death",
+    "bot-safe-deterministic-adjacent-kick",
+    "ux-how-to-play-utility-powerups",
+    "ux-utility-powerup-hud-labels",
+    "ux-round-winner-avatar-halo",
+    "default-arena-kick-up-pair",
+    "ux-how-to-play-round-scoring",
+    "ux-shell-prefers-reduced-motion",
+    "ux-how-to-play-hot-kick-risk",
+    "ux-round-start-objective-cue",
+    "ux-bootstrap-loading-feedback",
+    "bot-remote-over-bomb-pass-priority",
+    "ux-bomb-kick-hud-label-bk",
+    "ux-button-press-feedback",
+    "short-fuse-effective-pickup-feedback",
+    "nico-voluntary-cancel-short-cooldown",
+    "bot-shield-second-charge-250",
+    "language-switcher-pressed-state"
+  ],
+  "excludedPreservedWork": [
+    "archive/trae-lab-ui-20260714",
+    "archive/trae-lab-broker-20260714",
+    "archive/trae-lab-broker-tests-20260714",
+    "archive/trae-lab-broker-final-20260714",
+    "archive/trae-lab-broker-final-tests-20260714",
+    "archive/trae-lab-frontend-final-20260714",
+    "archive/trae-lab-frontend-final-tests-20260714"
+  ],
+  "gitCleanup": {
+    "archiveTagsCreatedForBranchTips": 35,
+    "auxiliaryWorktreesRemoved": 8,
+    "missingWorktreeEntriesPruned": true,
+    "localBranchesRemaining": ["main"],
+    "remoteBranchDeletion": "pending archive-tag and main push"
+  },
+  "validation": {
+    "build": "passed: Vite 7.3.6, 52 modules",
+    "contractChecks": "176/176 passed twice, including after dependency upgrades",
+    "dependencyAudit": "0 vulnerabilities",
+    "worker": "syntax and Wrangler 4.110.0 dry-run passed; deploy pending",
+    "browser": "5/5 local HTTP routes passed; visual automation blocked by official plugin process-property error"
+  },
+  "verdict": {
+    "netValue": "positive",
+    "usefulOrRiskReducing": "70-80%",
+    "noiseOverlapOrRework": "20-30%",
+    "humanReworkBeforeAudit": "required and completed for confirmed release blockers"
+  }
+}

@@ -30,6 +30,8 @@ This repository is the central release line for the deployed game. Keep `main` a
 
 Install dependencies:
 
+Requisito de desenvolvimento: Node.js 22 ou mais recente.
+
 ```bash
 npm install
 ```
