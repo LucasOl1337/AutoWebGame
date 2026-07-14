@@ -4931,7 +4931,10 @@ export class GameApp {
   }
 
   private drawBomb(bomb: BombState): void {
-    const pulse = 0.6 + 0.4 * Math.sin((bomb.fuseMs / 80) * Math.PI);
+    const fuseProgress = 1 - Math.min(1, Math.max(0, bomb.fuseMs) / 3000);
+    const smoothUrgency = fuseProgress * fuseProgress * (3 - 2 * fuseProgress);
+    const pulseIntervalMs = 80 - smoothUrgency * 32;
+    const pulse = 0.6 + 0.4 * Math.sin((bomb.fuseMs / pulseIntervalMs) * Math.PI);
     const armedScale = 1 + (pulse - 0.6) * 0.1;
     const x = bomb.tile.x * TILE_SIZE;
     const y = bomb.tile.y * TILE_SIZE;
