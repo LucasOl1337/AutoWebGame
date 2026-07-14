@@ -5,6 +5,8 @@ const projectRoot = process.cwd();
 const configPath = path.join(projectRoot, "configs", "arena-theme-library.json");
 const raw = await readFile(configPath, "utf8");
 const config = JSON.parse(raw);
+const { ARENA_THEME_LIBRARY } = await import("../output/esm/Arenas/arena-theme-library.js");
+const skyfoundryBastion = ARENA_THEME_LIBRARY.find((theme) => theme.id === "skyfoundry-bastion");
 
 const themeIds = new Set((config.themes ?? []).map((theme) => theme.id));
 const defaultThemeExists = themeIds.has(config.defaultTheme);
@@ -22,15 +24,19 @@ for (const theme of themedEntries) {
   }
 }
 
+const skyfoundryBastionUsesProceduralRender = skyfoundryBastion?.renderMode === "procedural";
 const pass = defaultThemeExists
   && themedEntries.length >= 2
   && missingFiles.length === 0
+  && skyfoundryBastionUsesProceduralRender
   && (config.themes ?? []).every((theme) => typeof theme.pixellabDescription === "string" && theme.pixellabDescription.length > 40);
 
 console.log(JSON.stringify({
   defaultTheme: config.defaultTheme,
   themeCount: (config.themes ?? []).length,
   themedEntries: themedEntries.length,
+  skyfoundryBastionRenderMode: skyfoundryBastion?.renderMode ?? null,
+  skyfoundryBastionUsesProceduralRender,
   missingFiles,
   pass,
 }, null, 2));

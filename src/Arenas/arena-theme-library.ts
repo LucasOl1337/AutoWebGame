@@ -265,7 +265,7 @@ export const ARENA_THEME_LIBRARY: readonly ArenaThemeDefinition[] = [
       "Crate uses warmer wood planes so destructibility is still obvious.",
     ],
     pixellabDescription: "1). steel-blue bastion floor tile with subtle riveted slab seams and dark center 2). brighter route lane tile with amber guide cuts near edges only 3). restrained spawn dais tile with circular brass inlay and open center 4). heavy skyforge wall tile with layered stone-metal crown and strong silhouette 5). breakable cargo crate with wood face, steel corners and readable crack geometry 6). optional accent tile with tiny spark vent and soot edge",
-    renderMode: "sprite",
+    renderMode: "procedural",
     tilePaths: {
       base: "/Assets/TileMaps/themes/skyfoundry-bastion/floor-base.png",
       lane: "/Assets/TileMaps/themes/skyfoundry-bastion/floor-lane.png",
