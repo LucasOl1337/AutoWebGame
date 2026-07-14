@@ -1,5 +1,16 @@
 # Swarm Ledger - Geral
 
+## 2026-07-14 - Imutabilidade runtime do FrontendStore
+
+- Automacao: `SOLO`.
+- Escopo registrado antes da implementacao: alterar somente `src/UiLayouts/frontend-store.ts`, criar `tests/frontend-store-immutability-check.mjs` e registrar esta rodada nos dois ledgers; preservar diffs alheios; commit local seletivo; sem push/deploy/branch/worktree.
+- Evidencia antes: `getSnapshot()` e listeners prometem `Readonly<FrontendState>` apenas no tipo, mas retornam o mesmo objeto mutavel em runtime; um consumidor JavaScript pode alterar `route` sem passar por `setRoute` e sem notificacao.
+- Criterio de sucesso: congelar cada snapshot inicial/atualizado, preservar deduplicacao e notificacoes, e passar teste focal, contrato da arquitetura frontend, build e diff-check seletivo.
+- Antes -> depois: os snapshots compartilhados podiam ser mutados em JavaScript apesar do tipo `Readonly`; agora o estado inicial e cada novo estado sao congelados com `Object.freeze`, sem alterar a API publica.
+- Evidencia RED -> GREEN: o teste falhou inicialmente porque `Object.isFrozen(initialSnapshot)` era `false`; depois confirmou `TypeError` na mutacao, rota interna preservada, snapshot notificado congelado e apenas uma notificacao para updates equivalentes.
+- Validacao: `npm run compile:esm`, teste focal, `npm run test:frontend-architecture`, `npm run build` (56 modulos) e `git diff --check` seletivo passaram.
+- Revisao/fechamento: diff funcional limitado ao store e ao teste novo; ledgers preservados fora do commit por conterem conteudo concorrente; commit local seletivo somente de runtime/teste; sem push ou deploy.
+
 ## 2026-07-14 - Contagem regressiva de perigo no HUD
 
 - Automacao: `SOLO`.

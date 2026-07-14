@@ -1,3 +1,24 @@
+## 2026-07-14 — pickup-chain-rolling-window
+- Claim/escopo: alterar somente `src/Gameplay/pickup-chain.ts`, fortalecer `tests/pickup-chain-guard-check.mjs` e anexar registros aos dois ledgers existentes; após A→B bem-sucedido manter B armado por janela reduzida explícita para A→B→C produzir duas guards, preservando repetição e expiração; sem commit, push ou deploy.
+- RED: A→B deixava `previousType=null`/`remainingMs=0`; C apenas rearmava a janela normal e registrava `chainGuard=false`.
+- Implementação/resultado: `PICKUP_CHAIN_ROLLING_WINDOW_MS=1400` é explícita; uma cadeia bem-sucedida mantém o tipo recém-coletado armado nessa janela. A→B→C produziu `chainGuard=true` em B e C, ambos com janela rolante de 1400ms; repetição e expiração permaneceram sem guard.
+- Validações: `npm run compile:esm`, teste focal, `npm run build` (57 módulos) e `git diff --check` seletivo passaram; conteúdo concorrente preservado; sem commit/push/deploy.
+
+## 2026-07-14 — bot-initial-speed-over-bomb
+- Resultado: Speed Up inicial passou de `460` para `461`, exatamente `+1` sobre Bomb Up inicial `460`; `tests/bot-powerup-priority-check.mjs` exige tanto o valor `461` quanto `speedScores[0] === bombScores[0] + 1`. `compile:esm`, teste focal e diff-check seletivo passaram; conteúdo concorrente preservado; sem commit, push ou deploy.
+
+## 2026-07-14 — bomb-place-deterministic-playback-rate
+- Claim/resultado: `bombPlace` alterna deterministicamente `playbackRate` entre `0.98` e `1.02` apenas em reproduções aceitas; chamadas barradas não avançam a sequência e o fallback mantém a taxa escolhida. Teste focal observou `bombPlaceRates=[0.98,1.02]`, uma reprodução no mesmo frame e recuperação para duas; `compile:esm`, lifecycle, retry, unlock, build (56 módulos) e diff-check seletivo passaram; conteúdo concorrente preservado; sem commit/push/deploy.
+
+## 2026-07-14 — ranni-invalidated-projected-destination-full-cooldown
+- Claim/escopo: alterar somente `src/Characters/CustomMechanics/ranni-skill.ts`, fortalecer `tests/ranni-ult-ice-blink-check.mjs` e anexar claim/resultado aos dois ledgers existentes; preservar diffs alheios; commit local seletivo apenas se validado; sem push/deploy.
+- RED: após projetar deslocamento até o tile `(7,4)` e tornar esse destino sólido antes da conclusão, o blink foi corretamente rejeitado, mas recebeu cooldown curto de `300 ms` (`invalidatedDestinationFullCooldown=false`).
+- Implementação: a decisão de cooldown agora distingue intenção/projeção deslocada de deslocamento efetivamente aplicado; projeção deslocada recebe `8000 ms` mesmo se invalidada ao concluir, enquanto projeção estacionária continua recebendo `300 ms`.
+- Resultado/validação: `npm run test:ranni-ult`, `npm run test:skill-contract`, `npm run test:online-skill-reconcile`, `npm run test:server-character-skill` e `npm run build` passaram. GREEN observou destino rejeitado com `8000 ms` e blink estacionário com `283.33 ms` restantes após o tick; diff-check e revisão seletiva concluídos no fechamento; commit local seletivo somente de runtime/teste, ledgers preservados no working tree por conterem diffs concorrentes; sem push/deploy.
+
+## 2026-07-14 — skyfoundry-bastion-procedural-render
+- Resultado: `skyfoundry-bastion` mudou exclusivamente de `renderMode: "sprite"` para `"procedural"`; o teste da biblioteca agora exige o modo na definição TypeScript compilada. `compile:esm`, testes `arena-theme-library`/`selection`/`runtime`, build e diff-check seletivo passaram; conteúdo concorrente preservado; sem commit, push ou deploy.
+
 ## 2026-07-14 — solo-remote-chain-self-safety
 - Claim/escopo: alterar somente `src/Engine/bot-ai.ts`, fortalecer `tests/bot-remote-detonation-check.mjs` e atualizar apenas esta entrada nos dois registros concorrentes; preservar todos os diffs alheios; commit local seletivo; sem push/deploy/branch/worktree.
 - Evidência antes: `getRemoteDetonationBomb` rejeitava apenas quando o blast direto da bomba selecionada alcançava o bot; não percorria bombas atingidas por esse blast, embora a explosão real faça reação em cadeia.
@@ -5,6 +26,48 @@
 - Evidência focal: bomba remota em `(5,5)` atinge o inimigo e aciona bomba em `(5,3)` cujo blast alcança o bot em `(3,3)`; o bot agora retorna movimento sem `detonate`, enquanto os cenários seguros continuam detonando.
 - Resultado/validações: `npm run test:bot-remote`, `npm run test:bot`, `npm run test:bomb-chain`, `npm run build` e diff-check seletivo concluíram com código 0; revisão confirmou o diff funcional limitado ao runtime e teste focal, com mudanças concorrentes preservadas.
 - Fechamento: commit local seletivo somente dos nossos arquivos/hunks; sem push, deploy, branch ou worktree.
+
+## 2026-07-14 — ux-channeled-ultimate-release-cancel
+- Claim/escopo antes da intervenção: alterar somente a orientação da ultimate em `how-to-play.html`, fortalecer `tests/how-to-play-page-check.mjs` e acrescentar registros nos dois arquivos de coordenação; preservar runtime, balanceamento, assets e todos os diffs alheios.
+- Evidência antes: o guia diz apenas `Ativar ou sustentar`, enquanto `src/Engine/game-app.ts:1376-1377` entrega separadamente press e hold ao sistema de skill e as habilidades canalizadas existentes cancelam ao soltar antes do disparo.
+- Critério de sucesso: o guia informa que soltar cancela habilidades canalizadas antes do disparo; teste focal, teste completo do guia, build e diff-check seletivo aprovados.
+- Antes → depois: a linha da ultimate apenas dizia `Ativar ou sustentar`; agora avisa que soltar antes do disparo cancela habilidades canalizadas, preservando teclas, identidade textual e toda a mecânica.
+- Resultado/validação: `node tests/how-to-play-page-check.mjs`, `npm run build` (56 módulos) e `git diff --check` seletivo passaram com código 0. O contrato lê o HTML real; inspeção visual adicional não foi necessária porque não houve mudança estrutural ou de estilo.
+- Commit: local seletivo somente de `how-to-play.html` e `tests/how-to-play-page-check.mjs`; os dois registros permaneceram fora do stage por conterem mudanças concorrentes; sem push, deploy, branch, worktree, merge ou rebase.
+
+## 2026-07-14 — bomb-fuse-accelerating-pulse
+- Claim/escopo antes da intervenção: alterar exclusivamente o cálculo visual do pulso em `drawBomb`, criar teste focal e acrescentar registros nos dois ledgers concorrentes; preservar amplitude, escala, anel, timing, gameplay e todos os demais arquivos sujos; sem commit/push.
+- RED: o teste focal exigiu progressão suavizada do intervalo de pulso e falhou contra o divisor fixo de 80 ms.
+- Implementação: progresso normalizado nos 3000 ms finais usa smoothstep e reduz somente o intervalo de 80 ms para 48 ms ao chegar a zero; a fórmula de amplitude `0.6 + 0.4 * sin`, `armedScale`, janela/anel final de 450 ms e estado de jogo permanecem intocados.
+- Resultado: teste focal novo e regressões focais de escala/anel aprovados; `npm run build` transformou 55 módulos e concluiu com código 0; `git diff --check` seletivo não encontrou erros (somente avisos LF→CRLF). Arquivos sujos alheios permaneceram intocados; sem commit/push.
+
+## 2026-07-14 — killer-bee-final-destination-revalidation
+- Claim/escopo antes da intervenção: revalidar exclusivamente o destino final do dash Killer Bee contra ocupação surgida durante os 240 ms; alterar runtime, fortalecer o teste focal existente e atualizar os dois registros; preservar todos os diffs alheios; commit local seletivo somente se todas as validações passarem; sem push/deploy/branch/worktree.
+- Evidência antes: `finishKillerBeeDash` copiava incondicionalmente `projectedPosition`, calculada no início do dash, sem consultar novamente `canOccupyPosition` ao concluir.
+- Critério de sucesso: ocupação adicionada ao destino durante o channel impede a finalização naquele ponto; `test:killer-bee-ult`, `skill-contract`, `online-skill-reconcile`, `server-character-skill`, `build` e diff-check aprovados.
+- RED → GREEN: o cenário determinístico adicionou solid no tile final após o primeiro frame; antes terminou em `x=300`, tile `7,4`, atravessando a nova ocupação; depois terminou na última posição válida (`x=255`, tile `6,4`) com `newlyOccupiedDestinationRejected=true`.
+- Implementação: `updateKillerBeeDash` revalida cada próximo passo e encerra ao detectar bloqueio; `finishKillerBeeDash` revalida também o destino projetado antes de aplicá-lo e usa a posição válida de fallback, preservando cooldown integral e limpeza da projeção.
+- Validação/resultado: `npm run test:killer-bee-ult`, `npm run test:skill-contract`, `npm run test:online-skill-reconcile`, `npm run test:server-character-skill`, `npm run build` e `git diff --check` seletivo concluíram com código 0; diff funcional revisado e limitado ao runtime/teste focal; diffs alheios preservados; commit local seletivo somente de runtime/teste; sem push/deploy/branch/worktree.
+
+## 2026-07-14 — solo-flame-up-priority-curve
+- Claim/escopo antes da intervenção: ajustar exclusivamente `getPowerUpPriorityScore` em `src/Gameplay/powerups.ts` para a curva Flame Up `[460,340,300,...,0]`, alinhando o teste existente `tests/bot-powerup-priority-check.mjs`; atualizar somente os dois registros de coordenação, preservando conteúdo concorrente; sem alterar testes e sem push.
+- Critério de sucesso: `compile:esm`, `test:bot-powerup`, `test:bot-survival`, `test:bot-target`, `build` e diff-check seletivo aprovados.
+- Antes → depois: a curva Flame Up `[460,300,280,...,0]` passou a `[460,340,300,280,0]`; `getPowerUpPriorityScore` mantém `460` no primeiro upgrade, explicita `340` no segundo e usa `260 + 40 / 2 ** (flameRange - 3)` nos níveis seguintes.
+- Resultado: commit local seletivo `e58f31d42abb69a446e966475bc80fa46ff53ef9` (`feat(bot): rebalance flame upgrade priority`) criado somente para `src/Gameplay/powerups.ts`, com 4 inserções e 1 remoção; teste existente permaneceu intocado.
+- Validações: `compile:esm`, `test:bot-powerup`, `test:bot-survival`, `test:bot-target`, `build` e diff-check seletivo concluíram com código 0; sobrevivência e seleção de alvo retornaram `pass=true`; build Vite transformou 55 módulos; diff-check emitiu somente avisos LF→CRLF. Conteúdo concorrente preservado; sem push.
+
+## 2026-07-14 — crocodilo-voluntary-cancel-short-cooldown
+- Claim/escopo: alterar somente `src/Characters/CustomMechanics/crocodilo-skill.ts`, fortalecer `tests/crocodilo-ult-emerald-surge-check.mjs` e registrar coordenação/ledger; preservar todos os diffs alheios; somente commit local seletivo, sem push/deploy/branch/worktree/rebase/merge.
+- Evidência antes: `cancelCrocodiloEmeraldSurge` retornava a habilidade para `idle` com cooldown `0`, e o teste focal fixava explicitamente esse reinício imediato após aproximadamente 600 ms de channel.
+- Antes → depois: o cancelamento voluntário agora entra em `cooldown` por `CROCODILO_VOLUNTARY_CANCEL_COOLDOWN_MS = 600`; channel/cast/projeção são zerados, nenhuma flame é criada e o inimigo permanece vivo; o cast completo continua encerrando no cooldown integral de 6000 ms.
+- Validação: `npm run test:crocodilo-ult`, `npm run test:skill-contract`, `npm run build` e `git diff --check` seletivo passaram com código 0. A execução focal determinística do servidor observou `canceledBeforeFire=true`, `finishedIntoCooldown=true` e `pass=true`; inspeção visual manual não se aplica a esta transição de estado sem mudança de UI.
+- Fechamento: revisão seletiva confirmou apenas dois hunks funcionais no runtime/teste; registros mantidos no working tree por já conterem mudanças concorrentes; commit local seletivo somente de runtime e teste.
+
+## 2026-07-14 — ux-victory-point-secured-overlay
+- Claim/escopo antes da intervenção: alterar somente `src/UiLayouts/i18n.ts`, fortalecer `tests/round-outcome-localization-check.mjs` e atualizar os dois registros; o overlay de vitória deve explicitar o ponto garantido em PT/EN reutilizando `arenaRebooting`; preservar mudanças alheias; sem commit/push.
+- Antes → depois: a legenda de vitória dizia apenas que a arena reiniciaria; agora diz `Ponto garantido. Arena reiniciando...` e `Point secured. Arena rebooting...`, sem alterar os textos de Double KO ou timeout; o overlay alterado apareceu corretamente.
+- Critério de sucesso: teste focal observa as cópias exatas no overlay real para PT/EN; build aprovado.
+- Validação/status: localização focal e `npm run build` passaram. `npm run test:round-outcome` falhou por expectativa preexistente desatualizada de `roundStartSubtitle`: o teste ainda espera `Seja o ultimo...`, enquanto a copy atual é `Objetivo... primeiro a 2`. Status parcial/bloqueado-sem-commit; runtime e testes não foram alterados neste fechamento; sem commit.
 
 ## 2026-07-14 — bot-remote-over-second-shield
 - Claim/escopo antes da intervenção: alterar somente `src/Gameplay/powerups.ts`, fortalecer `tests/bot-powerup-priority-check.mjs` com cenário determinístico equidistante e atualizar os dois registros; `remote-up` deve superar minimamente a segunda carga de shield (`250`), preservando a primeira carga em `500`; finalização seletiva concluída, sem push ou deploy.
@@ -617,9 +680,19 @@
 - Correção: projeção local de explosões respeitando paredes/caixas, busca de rota segura, rejeição de bomba/detonação suicida, controle de sobrevivência de alta prioridade a cada 120 ms e comando de parada ao concluir a fuga. Warmup não pode mais publicar bomba sem estado espacial.
 - Regressão: cobre agente cercado, bomba insegura pedida pelo modelo, bomba segura com primeiro passo obrigatório, mudança de direção no meio da fuga e `escape-complete` fora da explosão.
 - Validação real: GPT-5.6 SOL publicou bomba com `Survival guard: bomb allowed with escape down`, recebeu múltiplas correções `survival-control`, publicou `escape-complete`, sobreviveu à detonação e retomou a coleta de power-ups.
+
 ## 2026-07-14 — lab-agent-self-preservation
 - Sintoma reproduzido: a recuperação tática plantava bomba quando todas as direções haviam falhado, mesmo sem provar uma rota para fora da cruz de chamas; o teste focal falhou com `a trapped agent must not plant a bomb without a proven escape route`.
 - Causa confirmada: fallback de bomba incondicional e ausência de uma trava determinística sobre respostas do modelo. A direção publicada também persistia durante o pavio sem recalcular a curva da fuga.
 - Correção: projeção local de explosões respeitando paredes/caixas, busca de rota segura, rejeição de bomba/detonação suicida, controle de sobrevivência de alta prioridade a cada 120 ms e comando de parada ao concluir a fuga. Warmup não pode mais publicar bomba sem estado espacial.
 - Regressão: cobre agente cercado, bomba insegura pedida pelo modelo, bomba segura com primeiro passo obrigatório, mudança de direção no meio da fuga e `escape-complete` fora da explosão.
 - Validação real: GPT-5.6 SOL publicou bomba com `Survival guard: bomb allowed with escape down`, recebeu múltiplas correções `survival-control`, publicou `escape-complete`, sobreviveu à detonação e retomou a coleta de power-ups.
+
+## 2026-07-14 — revalidação da oportunidade de restaurar gate remoto
+
+- Oportunidade: restaurar o gate remoto.
+- Classificação: Inadequada após `npm run test:remote` passar com `pass=true`; backlog obsoleto.
+- Mudanças runtime/teste: nenhuma.
+- Antes → depois: sem alteração.
+- Arquivos pretendidos: somente `SwarmLedger-gameplay.md` e `DocsDev/swarm-coordination.md` (ledgers).
+- Fechamento: sem commit/push.
