@@ -8,6 +8,7 @@ const { TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
 const CROCODILO_CHANNEL_MS = 1_600;
 const CROCODILO_RELEASE_MS = 240;
 const CROCODILO_COOLDOWN_MS = 6_000;
+const CROCODILO_VOLUNTARY_CANCEL_COOLDOWN_MS = 600;
 
 const emptyDirectionalSprites = {
   up: null,
@@ -216,8 +217,10 @@ cancelGame.setServerPlayerInput(1, {
 });
 cancelGame.advanceServerSimulation(17);
 
-const canceledBeforeFire = cancelCrocodilo.skill.phase === "idle"
-  && cancelCrocodilo.skill.cooldownRemainingMs === 0
+const canceledBeforeFire = cancelCrocodilo.skill.phase === "cooldown"
+  && cancelCrocodilo.skill.cooldownRemainingMs === CROCODILO_VOLUNTARY_CANCEL_COOLDOWN_MS
+  && cancelCrocodilo.skill.channelRemainingMs === 0
+  && cancelCrocodilo.skill.castElapsedMs === 0
   && cancelGame.flames.length === 0
   && cancelEnemy.alive === true;
 

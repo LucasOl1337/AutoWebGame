@@ -14,6 +14,7 @@ export {
 
 export const CROCODILO_SKILL_CHANNEL_MS = 1_600;
 export const CROCODILO_SKILL_RELEASE_MS = 240;
+export const CROCODILO_VOLUNTARY_CANCEL_COOLDOWN_MS = 600;
 export const CROCODILO_SURGE_DURATION_MS = 720;
 export const CROCODILO_SURGE_RANGE = 2;
 
@@ -94,9 +95,9 @@ export function cancelCrocodiloEmeraldSurge(player: PlayerState): void {
   }
   player.velocity.x = 0;
   player.velocity.y = 0;
-  player.skill.phase = "idle";
+  player.skill.phase = "cooldown";
   player.skill.channelRemainingMs = 0;
-  player.skill.cooldownRemainingMs = 0;
+  player.skill.cooldownRemainingMs = CROCODILO_VOLUNTARY_CANCEL_COOLDOWN_MS;
   player.skill.castElapsedMs = 0;
   player.skill.projectedPosition = null;
   player.skill.projectedLastMoveDirection = null;
