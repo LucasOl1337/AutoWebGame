@@ -4794,9 +4794,15 @@ export class GameApp {
     const x = flame.tile.x * TILE_SIZE;
     const y = flame.tile.y * TILE_SIZE;
     const alpha = Math.min(1, Math.max(0, flame.remainingMs) / FLAME_DISSIPATE_TAIL_MS);
+    const dissipateScale = 0.9 + alpha * 0.1;
+    const centerX = x + TILE_SIZE * 0.5;
+    const centerY = y + TILE_SIZE * 0.5;
     if (this.assets.props.flame && (!flame.style || flame.style === "normal")) {
       this.ctx.save();
       this.ctx.globalAlpha = alpha;
+      this.ctx.translate(centerX, centerY);
+      this.ctx.scale(dissipateScale, dissipateScale);
+      this.ctx.translate(-centerX, -centerY);
       this.ctx.drawImage(this.assets.props.flame, x, y, TILE_SIZE, TILE_SIZE);
       this.ctx.restore();
       return;
@@ -4812,6 +4818,10 @@ export class GameApp {
         inner: `rgba(255, 244, 159, ${alpha})`,
       };
 
+    this.ctx.save();
+    this.ctx.translate(centerX, centerY);
+    this.ctx.scale(dissipateScale, dissipateScale);
+    this.ctx.translate(-centerX, -centerY);
     this.ctx.fillStyle = palette.outer;
     this.ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
     this.ctx.fillStyle = palette.inner;
@@ -4822,6 +4832,7 @@ export class GameApp {
     this.ctx.lineTo(x + 6, y + 16);
     this.ctx.closePath();
     this.ctx.fill();
+    this.ctx.restore();
   }
 
   private drawMagicBeam(beam: MagicBeamState): void {
