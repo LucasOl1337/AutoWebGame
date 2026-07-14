@@ -6,9 +6,10 @@
     <title>BOMBA PvP — O jogo de bombas competitivo</title>
     <meta name="description" content="Plante bombas. Destrua tudo. Sobreviva. BOMBA é o jogo de bombas competitivo com personagens únicos, arenas temáticas e partidas online.">
     <link rel="icon" href="/Assets/UiLayouts/ICON.png" />
+    <link rel="preload" as="image" href="/Assets/marketing/hero-match-control-v2.webp" fetchpriority="high">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&family=Playfair+Display:ital,wght@0,700;0,900;1,700&display=swap" rel="stylesheet">
     <style>
       :root {
         --accent-rgb:  0,229,160;
@@ -954,6 +955,413 @@
         object-fit: contain;
       }
 
+      /* MATCH CONTROL LANDING: START */
+      :root {
+        --landing-paper: #eae8e3;
+        --landing-paper-raised: #f5f3ee;
+        --landing-ink: #050505;
+        --landing-muted: #77736b;
+        --landing-rule: #9b978e;
+        --landing-signal: #e61919;
+        --landing-safe-top: env(safe-area-inset-top, 0px);
+        --landing-safe-right: env(safe-area-inset-right, 0px);
+        --landing-safe-bottom: env(safe-area-inset-bottom, 0px);
+        --landing-safe-left: env(safe-area-inset-left, 0px);
+      }
+
+      .topbar {
+        height: calc(64px + var(--landing-safe-top));
+        padding: var(--landing-safe-top) calc(24px + var(--landing-safe-right)) 0 calc(24px + var(--landing-safe-left));
+        background: var(--landing-paper-raised);
+        border-bottom: 1px solid var(--landing-ink);
+        backdrop-filter: none;
+      }
+
+      .topbar-logo {
+        color: var(--landing-ink);
+        font: 900 15px/1 "Archivo Black", Inter, sans-serif;
+        letter-spacing: -0.02em;
+        text-transform: uppercase;
+      }
+
+      .topbar-logo span { color: var(--landing-ink); }
+
+      .topbar-links a {
+        color: #47443f;
+        font: 700 10px/1 Inter, sans-serif;
+      }
+
+      .topbar-links a:hover,
+      .topbar-links a:focus-visible {
+        color: var(--landing-ink);
+        outline: 2px solid var(--landing-signal);
+        outline-offset: 6px;
+      }
+
+      .topbar-cta {
+        min-height: 64px;
+        margin-right: calc(-24px - var(--landing-safe-right));
+        padding: 0 calc(28px + var(--landing-safe-right)) 0 28px;
+        border-radius: 0;
+        color: #fff;
+        background: var(--landing-signal);
+        font: 800 11px/1 Inter, sans-serif;
+        transition: background-color 140ms linear;
+      }
+
+      .topbar-cta:hover,
+      .topbar-cta:focus-visible {
+        color: #fff;
+        background: var(--landing-ink);
+        filter: none;
+        transform: none;
+        outline: 3px solid var(--landing-signal);
+        outline-offset: -6px;
+      }
+
+      .sidenav {
+        left: var(--landing-safe-left);
+        gap: 0;
+        background: var(--landing-ink);
+        border: 1px solid #464646;
+      }
+
+      .sidenav a {
+        width: 48px;
+        height: 48px;
+        border: 0;
+        border-bottom: 1px solid #464646;
+        border-radius: 0;
+        color: #9c9992;
+        background: var(--landing-ink);
+        font: 700 9px/1 "JetBrains Mono", monospace;
+        transition: background-color 120ms linear, color 120ms linear;
+      }
+
+      .sidenav a:hover,
+      .sidenav a:focus-visible,
+      .sidenav a.active {
+        color: var(--landing-ink);
+        border-color: #464646;
+        background: var(--landing-paper);
+        outline: 0;
+      }
+
+      .hero {
+        min-height: 100svh;
+        display: block;
+        padding: calc(64px + var(--landing-safe-top)) var(--landing-safe-right) var(--landing-safe-bottom) var(--landing-safe-left);
+        text-align: left;
+        background: var(--landing-ink);
+        overflow: hidden;
+        isolation: isolate;
+      }
+
+      .hero::after {
+        content: '';
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 53%;
+        background: var(--landing-ink);
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      .hero-art {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center center;
+        opacity: 1;
+        filter: none;
+      }
+
+      .hero-control-grid {
+        position: relative;
+        z-index: 2;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+        align-items: end;
+        gap: clamp(40px, 7vw, 112px);
+        min-height: calc(100svh - 112px - var(--landing-safe-top) - var(--landing-safe-bottom));
+        padding: clamp(48px, 7vw, 96px) clamp(24px, 5vw, 76px) 40px clamp(72px, 8vw, 126px);
+      }
+
+      .hero-copy {
+        align-self: center;
+        max-width: 720px;
+      }
+
+      .hero-registration {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        max-width: 560px;
+        padding: 12px 0;
+        border-top: 1px solid #585858;
+        border-bottom: 1px solid #585858;
+        color: #aaa69e;
+        font: 700 10px/1 "JetBrains Mono", monospace;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .hero-eyebrow {
+        display: block;
+        margin: 34px 0 16px;
+        color: var(--landing-paper);
+        font: 800 11px/1 Inter, sans-serif;
+        letter-spacing: 0.18em;
+      }
+
+      .hero-eyebrow::before,
+      .hero-eyebrow::after { display: none; }
+
+      .hero h1 {
+        margin: 0;
+        color: var(--landing-paper-raised);
+        font: 900 clamp(58px, 7.5vw, 126px)/0.79 "Archivo Black", Inter, sans-serif;
+        letter-spacing: -0.065em;
+        text-transform: uppercase;
+      }
+
+      .hero h1 em {
+        display: block;
+        color: var(--landing-paper-raised);
+        font-style: normal;
+      }
+
+      .hero-desc {
+        max-width: 520px;
+        margin-top: 28px;
+        color: #cbc7be;
+        font: 500 clamp(16px, 1.35vw, 20px)/1.5 Inter, sans-serif;
+      }
+
+      .hero-actions {
+        flex-direction: row;
+        align-items: stretch;
+        gap: 0;
+        margin-top: 34px;
+      }
+
+      .btn-play,
+      .btn-explore {
+        min-height: 72px;
+        border-radius: 0;
+        font: 800 12px/1 Inter, sans-serif;
+        letter-spacing: 0.08em;
+        transition: background-color 140ms linear, color 140ms linear;
+      }
+
+      .btn-play {
+        justify-content: space-between;
+        min-width: min(100%, 290px);
+        padding: 0 24px;
+        color: #fff;
+        background: var(--landing-signal);
+        box-shadow: none;
+      }
+
+      .btn-play:hover,
+      .btn-play:focus-visible {
+        color: #fff;
+        background: var(--landing-paper);
+        color: var(--landing-ink);
+        box-shadow: none;
+        filter: none;
+        transform: none;
+        outline: 3px solid var(--landing-signal);
+        outline-offset: -6px;
+      }
+
+      .btn-explore {
+        padding: 0 24px;
+        border: 1px solid #585858;
+        color: var(--landing-paper);
+      }
+
+      .btn-explore:hover,
+      .btn-explore:focus-visible {
+        color: var(--landing-ink);
+        background: var(--landing-paper);
+        outline: 0;
+      }
+
+      .hero-match-sheet {
+        width: 100%;
+        margin-bottom: 22px;
+        color: var(--landing-ink);
+        background: var(--landing-paper-raised);
+        border: 1px solid var(--landing-ink);
+      }
+
+      .hero-sheet-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--landing-ink);
+        font: 700 10px/1 "JetBrains Mono", monospace;
+        text-transform: uppercase;
+      }
+
+      .hero-match-sheet dl { margin: 0; }
+
+      .hero-match-sheet dl div {
+        display: grid;
+        grid-template-columns: 96px minmax(0, 1fr);
+        gap: 14px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--landing-rule);
+      }
+
+      .hero-match-sheet dt {
+        color: var(--landing-muted);
+        font: 700 9px/1.3 "JetBrains Mono", monospace;
+        text-transform: uppercase;
+      }
+
+      .hero-match-sheet dd {
+        margin: 0;
+        font: 800 12px/1.3 Inter, sans-serif;
+        text-align: right;
+      }
+
+      .hero-sheet-link {
+        display: flex;
+        justify-content: space-between;
+        min-height: 64px;
+        align-items: center;
+        padding: 0 16px;
+        color: #fff;
+        background: var(--landing-ink);
+        font: 800 12px/1 Inter, sans-serif;
+        text-decoration: none;
+        text-transform: uppercase;
+      }
+
+      .hero-sheet-link:hover,
+      .hero-sheet-link:focus-visible {
+        background: var(--landing-signal);
+        outline: 0;
+      }
+
+      .hero-route-index {
+        position: relative;
+        z-index: 2;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        border-top: 1px solid #585858;
+        background: var(--landing-ink);
+      }
+
+      .hero-route-index a,
+      .hero-route-index span {
+        min-height: 48px;
+        display: flex;
+        align-items: center;
+        padding: 0 18px;
+        border-right: 1px solid #585858;
+        color: #aaa69e;
+        font: 700 9px/1 "JetBrains Mono", monospace;
+        letter-spacing: 0.06em;
+        text-decoration: none;
+        text-transform: uppercase;
+      }
+
+      .hero-route-index a:hover,
+      .hero-route-index a:focus-visible {
+        color: var(--landing-ink);
+        background: var(--landing-paper);
+        outline: 0;
+      }
+
+      @media (max-width: 960px) {
+        .sidenav { display: none; }
+        .hero-control-grid {
+          grid-template-columns: minmax(0, 1fr) minmax(270px, 330px);
+          padding-left: clamp(24px, 5vw, 64px);
+        }
+      }
+
+      @media (max-width: 760px) {
+        .topbar {
+          height: calc(56px + var(--landing-safe-top));
+          padding-right: calc(14px + var(--landing-safe-right));
+          padding-left: calc(14px + var(--landing-safe-left));
+        }
+
+        .topbar-cta {
+          min-height: 56px;
+          margin-right: calc(-14px - var(--landing-safe-right));
+          padding-inline: 18px calc(18px + var(--landing-safe-right));
+        }
+
+        .hero {
+          min-height: 100svh;
+          padding: calc(56px + var(--landing-safe-top)) var(--landing-safe-right) var(--landing-safe-bottom) var(--landing-safe-left);
+        }
+
+        .hero::after {
+          inset: 33svh 0 0;
+          width: 100%;
+        }
+
+        .hero-art {
+          height: 35svh;
+          object-position: 66% center;
+        }
+
+        .hero-control-grid {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 26px;
+          min-height: auto;
+          padding: calc(32svh - 56px) 14px 26px;
+        }
+
+        .hero-copy { max-width: none; }
+        .hero-registration { max-width: none; }
+
+        .hero h1 {
+          font-size: clamp(50px, 16vw, 76px);
+          line-height: 0.82;
+        }
+
+        .hero-desc { margin-top: 22px; }
+
+        .hero-actions {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+        }
+
+        .btn-play { min-width: 0; }
+        .hero-match-sheet { margin: 0; }
+
+        .hero-route-index {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 430px) {
+        .hero-actions { grid-template-columns: minmax(0, 1fr); }
+        .btn-explore { justify-content: center; }
+        .hero-match-sheet dl div { grid-template-columns: 78px minmax(0, 1fr); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .topbar-cta,
+        .sidenav a,
+        .btn-play,
+        .btn-explore {
+          transition: none;
+        }
+      }
+      /* MATCH CONTROL LANDING: END */
+
       /* ── Responsive ── */
       @media (max-width: 700px) {
         .sidenav { display: none; }
@@ -1034,45 +1442,51 @@
 
     <!-- ── HERO ── -->
     <section class="hero" id="top">
-      <div class="hero-eyebrow">Online · Competitivo · Grátis</div>
+      <img class="hero-art" src="/Assets/marketing/hero-match-control-v2.webp" alt="" aria-hidden="true" fetchpriority="high" decoding="async">
 
-      <h1>
-        BOMBA
-        <em>PvP</em>
-      </h1>
+      <div class="hero-control-grid">
+        <div class="hero-copy">
+          <div class="hero-registration">
+            <span>BP / MATCH 01</span>
+            <span>Browser competitivo</span>
+          </div>
+          <div class="hero-eyebrow">Bombas mudam o mapa. Decisões mudam o round.</div>
+          <h1>
+            PLANTE.
+            <em>CERQUE.</em>
+            SOBREVIVA.
+          </h1>
+          <p class="hero-desc">
+            Um grid, até quatro jogadores e nenhuma rota segura por muito tempo. Abra espaço, feche saídas e seja o último bomber vivo.
+          </p>
+          <div class="hero-actions">
+            <a href="/game" class="btn-play" aria-label="Entrar em uma partida rápida de BOMBA PvP">
+              Partida rápida <span aria-hidden="true">→</span>
+            </a>
+            <a href="#combate" class="btn-explore">Ver o combate ↓</a>
+          </div>
+        </div>
 
-      <p class="hero-desc">
-        Plante bombas. Destrua tudo. Sobreviva. Arena competitiva com personagens únicos, ultis devastadoras e partidas online em tempo real.
-      </p>
-
-      <div class="stats-row">
-        <div class="stat">
-          <span class="stat-n">4+</span>
-          <span class="stat-l">Personagens</span>
-        </div>
-        <div class="stat">
-          <span class="stat-n">9</span>
-          <span class="stat-l">Arenas</span>
-        </div>
-        <div class="stat">
-          <span class="stat-n">4</span>
-          <span class="stat-l">Jogadores online</span>
-        </div>
-        <div class="stat">
-          <span class="stat-n">∞</span>
-          <span class="stat-l">Caos</span>
-        </div>
+        <aside class="hero-match-sheet" aria-label="Ficha da partida">
+          <div class="hero-sheet-head"><span>Entrada / 01</span><span>BOMBA PvP</span></div>
+          <dl>
+            <div><dt>Modo</dt><dd>Arena PvP</dd></div>
+            <div><dt>Formato</dt><dd>2–4 jogadores</dd></div>
+            <div><dt>Ritmo</dt><dd>Rounds rápidos</dd></div>
+            <div><dt>Mapas</dt><dd>9 arenas em rotação</dd></div>
+          </dl>
+          <a class="hero-sheet-link" href="/game">
+            <span>Entrar na arena</span><span aria-hidden="true">↗</span>
+          </a>
+        </aside>
       </div>
 
-      <div class="hero-actions">
-        <a href="/game" class="btn-play" aria-label="Jogar BOMBA PvP agora">Jogar Agora</a>
-        <a href="#combate" class="btn-explore">
-          Explorar
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8 3v10M3 8l5 5 5-5"/>
-          </svg>
-        </a>
-      </div>
+      <nav class="hero-route-index" aria-label="Atalhos da apresentação">
+        <span>BOMBA PvP / 2026</span>
+        <a href="#combate">01 / Combate</a>
+        <a href="#personagens">02 / Personagens</a>
+        <a href="#arenas">03 / Arenas</a>
+      </nav>
     </section>
 
     <div class="rule"></div>
