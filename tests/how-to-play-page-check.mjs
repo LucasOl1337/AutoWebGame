@@ -25,6 +25,8 @@ assert.match(pageHtml, /Quando o anel ficar vermelho, a explosao esta a instante
 assert.match(pageHtml, /saia da linha reta imediatamente/);
 assert.match(pageHtml, /<kbd>R<\/kbd><kbd>U<\/kbd>/);
 assert.match(pageHtml, /Detonar bomba remota quando o powerup estiver ativo: P1 usa R e P2 usa U\./);
+assert.match(pageHtml, /Ativar ou sustentar a habilidade: P1 usa Espaco e P2 usa I\./);
+assert.match(pageHtml, /Em habilidades canalizadas, soltar antes do disparo cancela a acao/);
 assert.doesNotMatch(pageHtml, /<div><kbd>E<\/kbd><\/div>\s*<p>Detonar bomba remota/);
 assert.match(pageHtml, /id="objetivo"/);
 assert.match(pageHtml, /id="controles"/);
