@@ -178,7 +178,9 @@ const shieldScores = Array.from({ length: MAX_SHIELD_CHARGES + 1 }, (_, shieldCh
   bot.shieldCharges = shieldCharges;
   return getPowerUpPriorityScore(bot, "shield-up");
 });
-const hasDiminishingShieldReturns = JSON.stringify(shieldScores) === JSON.stringify([500, 210, 0]);
+const hasDiminishingShieldReturns = shieldScores[0] === 500
+  && shieldScores[1] === 250
+  && shieldScores[2] === 0;
 
 const bombPassScores = Array.from({ length: MAX_BOMB_PASS_LEVEL + 1 }, (_, bombPassLevel) => {
   bot.bombPassLevel = bombPassLevel;
