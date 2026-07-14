@@ -427,6 +427,8 @@ def _call_openrouter(
     app_name: str = "BombaPVP AutoImprovements",
     max_tokens: int = 1024,
     timeout: float = DEFAULT_TURN_TIMEOUT,
+    reasoning_effort: str = "",
+    json_mode: bool = False,
 ) -> tuple[str | None, str]:
     api_key = os.environ.get(api_key_env, "").strip()
     if not api_key:
@@ -446,6 +448,10 @@ def _call_openrouter(
         # Some OpenAI-compatible routers default to SSE unless this is explicit.
         "stream": False,
     }
+    if reasoning_effort:
+        payload["reasoning_effort"] = reasoning_effort
+    if json_mode:
+        payload["response_format"] = {"type": "json_object"}
     raw = json.dumps(payload, ensure_ascii=True).encode("utf-8")
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -544,6 +550,7 @@ def call_model(
     openrouter_base_url: str = DEFAULT_OPENROUTER_BASE,
     max_tokens: int = 1024,
     timeout: float = DEFAULT_TURN_TIMEOUT,
+    json_mode: bool = False,
 ) -> tuple[str | None, str]:
     """
     Call a model and return (text_result, status).
@@ -576,6 +583,8 @@ def call_model(
             base_url=base_url,
             max_tokens=max_tokens,
             timeout=timeout,
+            reasoning_effort=reasoning_effort,
+            json_mode=json_mode,
         )
 
     if p == "ollama":

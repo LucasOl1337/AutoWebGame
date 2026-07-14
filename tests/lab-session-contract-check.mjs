@@ -53,7 +53,13 @@ assert.equal(bridge.includes('const BROKER_BASE = "http://127.0.0.1:8766"'), fal
 assertIncludes(bridge, 'const LAB_API_BASE = "/api/lab"', "bridge same-origin API");
 assertIncludes(bridge, "mountSidePanels: mountLiveLabHud", "bridge production Lab HUD");
 assertIncludes(bridge, "_latestNavigation = snapshot.navigation ?? {}", "bridge navigation cache");
-assertIncludes(bridge, "navigation.blockedDirections.includes(entry.d.direction)", "bridge blocked movement guard");
+assert.equal(
+  bridge.includes("navigation.blockedDirections.includes(entry.d.direction)"),
+  false,
+  "bridge must not override model movement with a deterministic blocked-direction guard",
+);
+assertIncludes(bridge, "_decisionTtlMs(entry.d)", "bridge model-selected short decision horizon");
+assertIncludes(bridge, "_consumedDecisionActions", "bridge one-shot action pulses");
 assertIncludes(modelPy, '"9router"', "model_manager.py");
 assert.equal(modelPy.includes('"temperature"'), false, "9Router requests must support models that reject temperature");
 assertIncludes(brokerPy, "POST /lab/session", "game_broker.py");

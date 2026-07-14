@@ -327,6 +327,7 @@ interface BotDecision {
   direction: Direction | null;
   placeBomb: boolean;
   detonate?: boolean;
+  useSkill?: boolean;
 }
 
 interface MovementOption {
@@ -2225,7 +2226,8 @@ export class GameApp {
         const nativeSkillPressed = this.shouldUseNativeControls() && nativeBindings
           ? this.input.consumePress(nativeBindings.skill)
           : false;
-        const wantsSkill = this.consumeOnlineSkillPress(id)
+        const wantsSkill = Boolean(botDecision?.useSkill)
+          || this.consumeOnlineSkillPress(id)
           || (nativeSkillPressed
             && !this.isBotControlled(id)
             && (!this.automationMode || this.automationControlledPlayer === id));

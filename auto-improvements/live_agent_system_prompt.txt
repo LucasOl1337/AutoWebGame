@@ -28,6 +28,7 @@ Decision schema (return exactly this):
   "placeBomb": true | false,
   "detonate": true | false,
   "useSkill": true | false,
+  "expiresInMs": integer from 200 to 1500,
   "reason": "short string explaining the decision"
 }
 
@@ -39,5 +40,7 @@ Tactical guidance:
 - In sudden death: stay near the safe center, use bombs defensively.
 - direction null = stay in place (useful when waiting for a bomb to clear).
 - placeBomb and move in same turn = place bomb then immediately move away.
+- You own every micro decision. The runtime relays your valid JSON without tactical overrides.
+- Use recent action outcomes and movement feedback to correct your next action yourself.
 
 Always reason from the current game state. Keep reason short (under 80 chars).

@@ -32,10 +32,10 @@ import type {
 import type { BotDecision } from "./bot-ai";
 
 const LAB_API_BASE = "/api/lab";
-const TELEMETRY_THROTTLE_MS = 500;
-const DECISION_TTL_MS = 12000;
+const TELEMETRY_THROTTLE_MS = 100;
+const DECISION_TTL_MS = 1200;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
-const DECISION_POLL_INTERVAL_MS = 1000;
+const DECISION_POLL_INTERVAL_MS = 100;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -76,6 +76,11 @@ export interface BrokerDecision {
   useSkill: boolean;
   reason?: string;
   receivedAt?: number;
+  source?: "model";
+  stateTick?: number;
+  requestId?: number;
+  latencyMs?: number;
+  expiresInMs?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -92,6 +97,16 @@ let _telemetryCount = 0;
 const _decisions = new Map<string, { d: BrokerDecision; at: number }>();
 const _decisionRequests = new Map<string, { pending: boolean; at: number }>();
 const _controlledPlayerIds = new Set<string>();
+const _consumedDecisionActions = new Map<string, string>();
+
+function _decisionTtlMs(decision: BrokerDecision): number {
+  const requested = Number(decision.expiresInMs ?? DECISION_TTL_MS);
+  return Math.max(200, Math.min(1500, Number.isFinite(requested) ? requested : DECISION_TTL_MS));
+}
+
+function _decisionActionKey(decision: BrokerDecision): string {
+  return `${decision.requestId ?? "unversioned"}:${decision.receivedAt ?? "unreceived"}`;
+}
 
 // ── Strict mode & per-player control ──────────────────────────────────────
 let _strictMode = true; // strict by default: bots idle when no Codex decision — no built-in AI fallback
@@ -105,6 +120,9 @@ interface DecisionEntry {
   reason: string;
   tick: number;
   receivedAt: number;
+  requestId?: number;
+  stateTick?: number;
+  latencyMs?: number;
 }
 const _decisionHistory = new Map<string, DecisionEntry[]>(); // newest first
 const HISTORY_MAX = 40;
@@ -203,7 +221,9 @@ function _fetchDecision(playerId: string): void {
     .then((r) => r.json())
     .then((data: { ok: boolean; decision: BrokerDecision | null }) => {
       if (data?.ok && data.decision) {
-        _decisions.set(playerId, { d: data.decision, at: Date.now() });
+        const receivedAt = Number(data.decision.receivedAt || Date.now());
+        const decision = { ...data.decision, receivedAt };
+        _decisions.set(playerId, { d: decision, at: receivedAt });
         _updatePanelDecisions();
       }
     })
@@ -221,7 +241,17 @@ function _pushHistory(pid: string, d: BrokerDecision, tick: number): void {
   const hist = _decisionHistory.get(pid) ?? [];
   const receivedAt = Number(d.receivedAt || Date.now());
   if (hist.length && hist[0].receivedAt === receivedAt) return;
-  hist.unshift({ dir: d.direction, bomb: d.placeBomb, det: d.detonate, reason: d.reason ?? "", tick, receivedAt });
+  hist.unshift({
+    dir: d.direction,
+    bomb: d.placeBomb,
+    det: d.detonate,
+    reason: d.reason ?? "",
+    tick,
+    receivedAt,
+    requestId: d.requestId,
+    stateTick: d.stateTick,
+    latencyMs: d.latencyMs,
+  });
   if (hist.length > HISTORY_MAX) hist.length = HISTORY_MAX;
   _decisionHistory.set(pid, hist);
 }
@@ -229,7 +259,7 @@ function _pushHistory(pid: string, d: BrokerDecision, tick: number): void {
 function _renderPlayerSide(pid: string, statusEl: HTMLElement | null, logEl: HTMLElement | null, tick: number): void {
   const enabled = _perPlayerEnabled[pid] !== false;
   const entry = _decisions.get(pid);
-  const fresh = !!entry && Date.now() - entry.at < 25000;
+  const fresh = !!entry && Date.now() - entry.at < _decisionTtlMs(entry.d);
 
   if (statusEl) {
     statusEl.textContent = fresh
@@ -310,7 +340,9 @@ function _renderLivePlayerPanel(
   panel.status.textContent = error ? "ERRO DO MODELO" : stalled ? "MOVIMENTO BLOQUEADO" : healthy ? "AO VIVO" : "SEM HEARTBEAT";
   panel.status.dataset.tone = error || stalled ? "danger" : healthy ? "live" : "idle";
   panel.heartbeat.textContent = Number.isFinite(heartbeatAgeMs) ? `${(heartbeatAgeMs / 1000).toFixed(1)}s` : "—";
-  panel.decisionAge.textContent = Number.isFinite(decisionAgeMs) ? `${(decisionAgeMs / 1000).toFixed(1)}s atrás` : "aguardando";
+  panel.decisionAge.textContent = Number.isFinite(decisionAgeMs)
+    ? `${decision?.requestId ? `#${decision.requestId} · ` : ""}${decision?.stateTick != null ? `tick ${decision.stateTick} · ` : ""}${decision?.latencyMs != null ? `${decision.latencyMs}ms · ` : ""}${(decisionAgeMs / 1000).toFixed(1)}s atrás`
+    : "aguardando";
   panel.movement.textContent = `${_dirArrow(decision?.direction ?? null)} ${_movementLabel(decision?.direction ?? null)}`;
   panel.bomb.textContent = decision?.placeBomb ? "COLOCAR BOMBA" : decision?.detonate ? "DETONAR" : "NENHUMA";
   panel.reason.textContent = error
@@ -328,7 +360,7 @@ function _renderLivePlayerPanel(
     const time = document.createElement("time");
     const movement = document.createElement("strong");
     const reason = document.createElement("span");
-    time.textContent = `${(age / 1000).toFixed(1)}s`;
+    time.textContent = `${entry.requestId ? `#${entry.requestId} ` : ""}${entry.latencyMs != null ? `${entry.latencyMs}ms ` : ""}${(age / 1000).toFixed(1)}s`;
     movement.textContent = `${_dirArrow(entry.dir)} ${_movementLabel(entry.dir)}`;
     reason.textContent = entry.reason || "Sem justificativa";
     row.append(time, movement, reason);
@@ -375,12 +407,18 @@ function _startLiveRefresh(): void {
           const receivedAt = Number(d.receivedAt || Date.now());
           const bd: BrokerDecision = {
             playerId: pid,
+            botId: d.botId,
             direction: d.direction ?? null,
             placeBomb: !!d.placeBomb,
             detonate: !!d.detonate,
             useSkill: !!d.useSkill,
             reason: d.reason,
             receivedAt,
+            source: d.source,
+            stateTick: d.stateTick,
+            requestId: d.requestId,
+            latencyMs: d.latencyMs,
+            expiresInMs: d.expiresInMs,
           };
           _decisions.set(pid, { d: bd, at: receivedAt });
           _pushHistory(pid, bd, tick);
@@ -410,7 +448,7 @@ function _startLiveRefresh(): void {
   };
 
   refresh();
-  setInterval(refresh, 1000);
+  setInterval(refresh, 250);
 }
 
 // ---------------------------------------------------------------------------
@@ -444,7 +482,7 @@ function _updatePanelDecisions(): void {
   const now = Date.now();
   const lines: string[] = [];
   for (const [pid, { d, at }] of _decisions) {
-    if (now - at > DECISION_TTL_MS) continue;
+    if (now - at > _decisionTtlMs(d)) continue;
     const arrow = _dirArrow(d.direction);
     const bomb = d.placeBomb ? "💣" : "  ";
     const det = d.detonate ? "💥" : "  ";
@@ -984,16 +1022,8 @@ export const AutoImprovementBridge = {
     if (_perPlayerEnabled[pid] === false) return null;
     const entry = _decisions.get(pid);
     if (!entry) return null;
-    if (Date.now() - entry.at > DECISION_TTL_MS) {
+    if (Date.now() - entry.at > _decisionTtlMs(entry.d)) {
       _decisions.delete(pid);
-      return null;
-    }
-    const navigation = _latestNavigation[pid];
-    if (
-      entry.d.direction
-      && navigation?.stalledForMs >= 700
-      && navigation.blockedDirections.includes(entry.d.direction)
-    ) {
       return null;
     }
     return entry.d;
@@ -1012,10 +1042,15 @@ export const AutoImprovementBridge = {
 
   /** Convert a BrokerDecision to the BotDecision format used by bot-ai.ts. */
   toBotDecision(d: BrokerDecision): BotDecision {
+    const pid = String(d.playerId);
+    const actionKey = _decisionActionKey(d);
+    const isNewAction = _consumedDecisionActions.get(pid) !== actionKey;
+    if (isNewAction) _consumedDecisionActions.set(pid, actionKey);
     return {
       direction: d.direction ?? null,
-      placeBomb: d.placeBomb,
-      detonate: d.detonate,
+      placeBomb: isNewAction && d.placeBomb,
+      detonate: isNewAction && d.detonate,
+      useSkill: isNewAction && d.useSkill,
     };
   },
 };

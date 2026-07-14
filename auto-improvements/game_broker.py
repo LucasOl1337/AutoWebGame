@@ -517,6 +517,7 @@ class BrokerHandler(BaseHTTPRequestHandler):
         self._send_json(200, {"ok": True, "source": "9router", "models": curated})
 
     def _handle_post_lab_session(self, body: dict[str, Any]) -> None:
+        global _latest_telemetry, _latest_telemetry_at_ms, _telemetry_tick, _last_phase
         # Reject any secret fields from the browser.
         for forbidden in ("apiKey", "api_key", "token", "secret", "authorization", "Authorization"):
             if forbidden in body:
@@ -590,6 +591,12 @@ class BrokerHandler(BaseHTTPRequestHandler):
         )
 
         _stop_lab_agents()
+        with _lock:
+            _latest_telemetry = {}
+            _latest_telemetry_at_ms = 0
+            _telemetry_tick = 0
+            _last_phase = ""
+            _latest_decisions.clear()
         for agent in agents:
             _start_lab_agent(agent)
 

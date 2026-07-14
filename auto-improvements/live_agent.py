@@ -29,7 +29,7 @@ import threading
 import time
 from collections import deque
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -55,7 +55,10 @@ POLL_INTERVAL = float(os.environ.get("AGENT_POLL_INTERVAL_SEC", "0.25"))
 IDLE_INTERVAL = float(os.environ.get("AGENT_IDLE_INTERVAL_SEC", "1.0"))
 PROVIDER = compact_line(os.environ.get("AGENT_PROVIDER", "openai_codex"))
 MODEL = compact_line(os.environ.get("AGENT_MODEL", ""))
-REASONING_EFFORT = compact_line(os.environ.get("CODEX_REASONING_EFFORT", ""))
+REASONING_EFFORT = compact_line(os.environ.get(
+    "CODEX_REASONING_EFFORT",
+    "none" if PROVIDER == "9router" else "",
+))
 CODEX_HOME = os.environ.get("CODEX_HOME", "").strip()
 CODEX_HOME_CHAIN_JSON = os.environ.get("AGENT_CODEX_HOME_CHAIN_JSON", "").strip()
 OPENROUTER_API_KEY_ENV = os.environ.get("OPENROUTER_API_KEY_ENV_VAR", "OPENROUTER_API_KEY")
@@ -65,19 +68,13 @@ TOOLS_DIR = Path(__file__).resolve().parent
 SYSTEM_PROMPT = (TOOLS_DIR / "live_agent_system_prompt.txt").read_text(encoding="utf-8").strip()
 
 VALID_DIRECTIONS = {"up", "down", "left", "right"}
-DIR_STEP: dict[str, tuple[int, int]] = {
-    "up": (0, -1),
-    "down": (0, 1),
-    "left": (-1, 0),
-    "right": (1, 0),
-}
 ACCOUNT_FAILURE_THRESHOLD = 3
 STALL_FAILURE_MS = 900
-TACTICAL_RECOVERY_COOLDOWN_MS = 700
-SURVIVAL_DECISION_COOLDOWN_MS = 120
-SURVIVAL_DANGER_HORIZON_MS = 3000
-ESTIMATED_TILE_TRAVEL_MS = 260
-ESCAPE_TIMING_BUFFER_MS = 350
+MAX_IN_FLIGHT_MODEL_CALLS = max(1, int(os.environ.get("AGENT_MAX_IN_FLIGHT", "3")))
+MODEL_TURN_MIN_INTERVAL_MS = max(50, int(os.environ.get("AGENT_TURN_INTERVAL_MS", "100")))
+MODEL_DECISION_TTL_MS = max(200, int(os.environ.get("AGENT_DECISION_TTL_MS", "1200")))
+MODEL_MAX_TOKENS = max(48, int(os.environ.get("AGENT_MAX_TOKENS", "96")))
+MODEL_TURN_TIMEOUT_SECONDS = max(3.0, float(os.environ.get("AGENT_TURN_TIMEOUT_SEC", "20")))
 _QUOTA_OR_AUTH_ERROR_KEYWORDS = (
     "rate_limit",
     "rate limit",
@@ -287,196 +284,107 @@ def _navigation_for_player(state: dict[str, Any]) -> dict[str, Any]:
     return player_navigation if isinstance(player_navigation, dict) else {}
 
 
-def _local_tile_index(state: dict[str, Any]) -> dict[tuple[int, int], dict[str, Any]]:
-    index: dict[tuple[int, int], dict[str, Any]] = {}
-    for tile in (_navigation_for_player(state).get("localTiles") or []):
-        if not isinstance(tile, dict):
-            continue
-        index[_tile_key(tile)] = tile
-    return index
+class ConcurrentTurnCoordinator:
+    """Bounded model concurrency with newest-completed response ordering."""
+
+    def __init__(self, max_in_flight: int = MAX_IN_FLIGHT_MODEL_CALLS) -> None:
+        self._lock = threading.Lock()
+        self._max_in_flight = max(1, int(max_in_flight))
+        self._next_request_id = 1
+        self._in_flight: dict[int, dict[str, int]] = {}
+        self._latest_applied_request_id = 0
+
+    @property
+    def in_flight_count(self) -> int:
+        with self._lock:
+            return len(self._in_flight)
+
+    def reset(self) -> None:
+        with self._lock:
+            self._in_flight.clear()
+            self._latest_applied_request_id = 0
+
+    def reserve(self, *, tick: int, round_epoch: int, life_epoch: int) -> dict[str, int] | None:
+        with self._lock:
+            if len(self._in_flight) >= self._max_in_flight:
+                return None
+            request_id = self._next_request_id
+            self._next_request_id += 1
+            token = {
+                "requestId": request_id,
+                "tick": int(tick),
+                "roundEpoch": int(round_epoch),
+                "lifeEpoch": int(life_epoch),
+                "startedAtMs": now_ms(),
+            }
+            self._in_flight[request_id] = token
+            return dict(token)
+
+    def complete(self, token: dict[str, int], *, round_epoch: int, life_epoch: int) -> bool:
+        request_id = int(token.get("requestId", 0) or 0)
+        with self._lock:
+            self._in_flight.pop(request_id, None)
+            if int(token.get("roundEpoch", -1)) != int(round_epoch):
+                return False
+            if int(token.get("lifeEpoch", -1)) != int(life_epoch):
+                return False
+            if request_id <= self._latest_applied_request_id:
+                return False
+            self._latest_applied_request_id = request_id
+            return True
+
+    def release(self, token: dict[str, int]) -> None:
+        """Free capacity after a failed call without advancing response ordering."""
+        request_id = int(token.get("requestId", 0) or 0)
+        with self._lock:
+            self._in_flight.pop(request_id, None)
+
+    def publish(
+        self,
+        token: dict[str, int],
+        *,
+        round_epoch: int,
+        life_epoch: int,
+        publisher: Callable[[], int],
+    ) -> tuple[bool, int | None]:
+        """Serialize publication so an older HTTP POST cannot finish after a newer one."""
+        request_id = int(token.get("requestId", 0) or 0)
+        with self._lock:
+            self._in_flight.pop(request_id, None)
+            if int(token.get("roundEpoch", -1)) != int(round_epoch):
+                return False, None
+            if int(token.get("lifeEpoch", -1)) != int(life_epoch):
+                return False, None
+            if request_id <= self._latest_applied_request_id:
+                return False, None
+            status = publisher()
+            if status != 200:
+                return False, status
+            self._latest_applied_request_id = request_id
+            return True, status
 
 
-def _bomb_fuse_ms(bomb: dict[str, Any]) -> int:
-    try:
-        return max(0, int(bomb.get("fuseMs", 99999)))
-    except (TypeError, ValueError):
-        return 99999
-
-
-def _projected_danger_tiles(
+def relay_model_decision(
+    decision: dict[str, Any],
     state: dict[str, Any],
     *,
-    hypothetical_bomb: bool = False,
-    detonate_owned: bool = False,
-) -> set[tuple[int, int]]:
-    """Project imminent flame crosses using the same wall/crate stop rules as GameApp."""
-    tile_index = _local_tile_index(state)
-    danger = {
-        _tile_key(flame.get("tile", {}))
-        for flame in (state.get("flames") or [])
-        if isinstance(flame, dict)
-    }
-    bombs = [
-        bomb
-        for bomb in (state.get("bombs") or [])
-        if isinstance(bomb, dict) and (
-            _bomb_fuse_ms(bomb) <= SURVIVAL_DANGER_HORIZON_MS
-            or (detonate_owned and str(bomb.get("ownerId")) == PLAYER_ID)
-        )
-    ]
-    if hypothetical_bomb:
-        me = _player_state(state, PLAYER_ID)
-        if me:
-            bombs.append({
-                "tile": me.get("tile", {}),
-                "flameRange": max(1, int(me.get("flameRange", 1) or 1)),
-                "fuseMs": 2000,
-            })
-
-    for bomb in bombs:
-        origin = _tile_key(bomb.get("tile", {}))
-        danger.add(origin)
-        try:
-            flame_range = max(1, int(bomb.get("flameRange", 1) or 1))
-        except (TypeError, ValueError):
-            flame_range = 1
-        for dx, dy in DIR_STEP.values():
-            for step in range(1, flame_range + 1):
-                position = (origin[0] + dx * step, origin[1] + dy * step)
-                tile = tile_index.get(position)
-                # The 7x7 snapshot is deliberately conservative: an unknown tile
-                # is never accepted as proof that a bomb has a safe exit.
-                if tile is None:
-                    break
-                kind = str(tile.get("kind", "open"))
-                if kind == "solid":
-                    break
-                danger.add(position)
-                if kind == "breakable":
-                    break
-    return danger
-
-
-def _find_escape_direction(
-    state: dict[str, Any],
-    *,
-    hypothetical_bomb: bool = False,
-    excluded_directions: set[str] | None = None,
-) -> str | None:
-    """Return the first step of a locally proven route outside all imminent blasts."""
-    me = _player_state(state, PLAYER_ID)
-    if not me:
-        return None
-    start = _tile_key(me.get("tile", {}))
-    tile_index = _local_tile_index(state)
-    if start not in tile_index:
-        return None
-
-    danger = _projected_danger_tiles(state, hypothetical_bomb=hypothetical_bomb)
-    navigation = _navigation_for_player(state)
-    raw_walkable = navigation.get("walkableDirections")
-    first_step_allowlist = None
-    if isinstance(raw_walkable, list):
-        first_step_allowlist = {
-            str(direction) for direction in raw_walkable if str(direction) in VALID_DIRECTIONS
-        }
-    excluded = excluded_directions or set()
-    blocked_kinds = {"solid", "breakable", "bomb", "flame", "enemy"}
-    queue: deque[tuple[tuple[int, int], str | None, int]] = deque([(start, None, 0)])
-    visited = {start}
-
-    while queue:
-        position, first_direction, depth = queue.popleft()
-        tile = tile_index.get(position, {})
-        if depth > 0 and position not in danger and tile.get("dangerEtaMs") is None:
-            return first_direction
-        if depth >= 6:
-            continue
-
-        for direction, (dx, dy) in DIR_STEP.items():
-            if depth == 0:
-                if direction in excluded:
-                    continue
-                if first_step_allowlist is not None and direction not in first_step_allowlist:
-                    continue
-            next_position = (position[0] + dx, position[1] + dy)
-            if next_position in visited:
-                continue
-            next_tile = tile_index.get(next_position)
-            if not next_tile or str(next_tile.get("kind", "open")) in blocked_kinds:
-                continue
-            arrival_ms = (depth + 1) * ESTIMATED_TILE_TRAVEL_MS
-            danger_eta = next_tile.get("dangerEtaMs")
-            if danger_eta is not None:
-                try:
-                    if int(danger_eta) <= arrival_ms + ESCAPE_TIMING_BUFFER_MS:
-                        continue
-                except (TypeError, ValueError):
-                    continue
-            visited.add(next_position)
-            queue.append((next_position, first_direction or direction, depth + 1))
-    return None
-
-
-def _current_tile_threatened(state: dict[str, Any]) -> bool:
-    me = _player_state(state, PLAYER_ID)
-    if not me:
-        return False
-    current = _tile_key(me.get("tile", {}))
-    if current in _projected_danger_tiles(state):
-        return True
-    tile = _local_tile_index(state).get(current, {})
-    danger_eta = tile.get("dangerEtaMs")
+    request_id: int,
+    latency_ms: int,
+) -> dict[str, Any]:
+    """Attach transport metadata without changing any gameplay choice made by the model."""
+    relayed = dict(decision)
     try:
-        return danger_eta is not None and int(danger_eta) <= SURVIVAL_DANGER_HORIZON_MS
+        requested_ttl = int(relayed.get("expiresInMs", MODEL_DECISION_TTL_MS) or MODEL_DECISION_TTL_MS)
     except (TypeError, ValueError):
-        return False
-
-
-def build_survival_decision(state: dict[str, Any]) -> dict[str, Any] | None:
-    """Deterministic high-priority escape action while the current tile will burn."""
-    if not _current_tile_threatened(state):
-        return None
-    direction = _find_escape_direction(state)
-    return {
-        "playerId": PLAYER_ID,
-        "botId": AGENT_ID,
-        "direction": direction,
-        "placeBomb": False,
-        "detonate": False,
-        "useSkill": False,
-        "reason": (
-            "Survival control: follow proven blast escape route"
-            if direction
-            else "Survival control: no proven escape path; never add another bomb"
-        ),
-    }
-
-
-def enforce_survival_safety(decision: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
-    """Prevent model/local decisions from overriding deterministic self-preservation."""
-    safe = dict(decision)
-    survival = build_survival_decision(state)
-    if survival is not None:
-        return survival
-
-    if safe.get("detonate"):
-        me = _player_state(state, PLAYER_ID)
-        current = _tile_key(me.get("tile", {})) if me else (0, 0)
-        if current in _projected_danger_tiles(state, detonate_owned=True):
-            safe["detonate"] = False
-            safe["reason"] = "Survival guard: detonation rejected inside owned bomb blast"
-
-    if safe.get("placeBomb"):
-        escape_direction = _find_escape_direction(state, hypothetical_bomb=True)
-        if escape_direction is None:
-            safe["placeBomb"] = False
-            safe["detonate"] = False
-            safe["reason"] = "Survival guard: bomb rejected; no proven escape route"
-        else:
-            safe["direction"] = escape_direction
-            safe["reason"] = f"Survival guard: bomb allowed with escape {escape_direction}"
-    return safe
+        requested_ttl = MODEL_DECISION_TTL_MS
+    relayed.update({
+        "source": "model",
+        "stateTick": int(state.get("tick", -1) or -1),
+        "requestId": int(request_id),
+        "latencyMs": max(0, int(latency_ms)),
+        "expiresInMs": max(200, min(1500, requested_ttl)),
+    })
+    return relayed
 
 
 class ActionOutcomeMemory:
@@ -560,11 +468,6 @@ class ActionOutcomeMemory:
         with self._lock:
             return self._failed_directions_unlocked(state)
 
-    def should_reject(self, decision: dict[str, Any], state: dict[str, Any]) -> bool:
-        with self._lock:
-            direction = str(decision.get("direction") or "")
-            return direction in self._failed_directions_unlocked(state)
-
     def prompt_context(self, state: dict[str, Any]) -> str:
         with self._lock:
             lines: list[str] = []
@@ -581,228 +484,84 @@ class ActionOutcomeMemory:
             return "\n".join(lines) if lines else "No evaluated actions yet."
 
 
-def _local_fast_decision(
-    state: dict[str, Any],
-    *,
-    excluded_directions: set[str] | None = None,
-    recovery: bool = False,
-) -> dict[str, Any] | None:
-    me = _player_state(state, PLAYER_ID)
-    if not me or not me.get("alive") or not me.get("active"):
-        return None
-
-    survival = build_survival_decision(state)
-    if survival is not None:
-        return survival
-
-    me_tile = me.get("tile", {})
-    mx, my = _tile_key(me_tile)
-    bombs = [b for b in (state.get("bombs") or []) if isinstance(b, dict)]
-    flames = [f for f in (state.get("flames") or []) if isinstance(f, dict)]
-    enemies = [
-        p for p in (state.get("players") or [])
-        if isinstance(p, dict) and str(p.get("id")) != PLAYER_ID and p.get("alive") and p.get("active")
-    ]
-    nearest_enemy = min(enemies, key=lambda p: _tile_distance(me_tile, p.get("tile", {})), default=None)
-    powerups = [p for p in (state.get("powerUps") or []) if isinstance(p, dict)]
-    nearest_powerup = min(powerups, key=lambda p: _tile_distance(me_tile, p.get("tile", {})), default=None)
-    threat_tiles = {_tile_key(f.get("tile", {})) for f in flames}
-    close_flames = [f for f in flames if _tile_distance(me_tile, f.get("tile", {})) <= 1]
-    close_bombs = [b for b in bombs if _tile_distance(me_tile, b.get("tile", {})) <= 2]
-    immediate_danger = bool(close_flames or close_bombs)
-    navigation = _navigation_for_player(state)
-    reported_walkable = {
-        str(direction)
-        for direction in (navigation.get("walkableDirections") or [])
-        if str(direction) in VALID_DIRECTIONS
-    }
-    excluded = excluded_directions or set()
-    candidate_directions = [
-        direction
-        for direction in DIR_STEP
-        if (not reported_walkable or direction in reported_walkable) and direction not in excluded
-    ]
-
-    best_direction: str | None = None
-    best_score = -10**9
-    for direction in candidate_directions:
-        dx, dy = DIR_STEP[direction]
-        candidate = {"x": mx + dx, "y": my + dy}
-        score = 0
-        if _tile_key(candidate) in threat_tiles:
-            score -= 1000
-        for bomb in close_bombs:
-            score += _tile_distance(candidate, bomb.get("tile", {})) * 25
-        if nearest_enemy is not None:
-            enemy_tile = nearest_enemy.get("tile", {})
-            enemy_dist = _tile_distance(candidate, enemy_tile)
-            score += (-enemy_dist * 12) if not immediate_danger else 0
-        if nearest_powerup is not None and not immediate_danger:
-            score -= _tile_distance(candidate, nearest_powerup.get("tile", {})) * 18
-        if direction == str(me.get("direction", "")):
-            score += 3
-        if score > best_score:
-            best_score = score
-            best_direction = direction
-
-    place_bomb = False
-    if not immediate_danger and nearest_enemy is not None:
-        enemy_dist = _tile_distance(me_tile, nearest_enemy.get("tile", {}))
-        bomb_here = any(_tile_distance(me_tile, b.get("tile", {})) == 0 for b in bombs)
-        if enemy_dist <= 1 and not bomb_here and int(me.get("activeBombs", 0) or 0) < int(me.get("maxBombs", 0) or 0):
-            place_bomb = True
-
-    if recovery and best_direction is None:
-        bomb_here = any(_tile_distance(me_tile, b.get("tile", {})) == 0 for b in bombs)
-        can_bomb = int(me.get("activeBombs", 0) or 0) < int(me.get("maxBombs", 0) or 0)
-        escape_direction = _find_escape_direction(
-            state,
-            hypothetical_bomb=True,
-            excluded_directions=excluded,
-        )
-        place_bomb = bool(not immediate_danger and not bomb_here and can_bomb and escape_direction)
-        if place_bomb:
-            best_direction = escape_direction
-
-    reason = (
-        "Tactical recovery after failed movement"
-        if recovery
-        else "Immediate evasive bootstrap" if immediate_danger else "Fast bootstrap pressure"
-    )
-    return enforce_survival_safety({
-        "playerId": PLAYER_ID,
-        "botId": AGENT_ID,
-        "direction": best_direction,
-        "placeBomb": place_bomb,
-        "detonate": False,
-        "useSkill": False,
-        "reason": reason,
-    }, state)
-
-
-def build_recovery_decision(
-    state: dict[str, Any],
-    failed_directions: set[str] | None = None,
-) -> dict[str, Any] | None:
-    return _local_fast_decision(
-        state,
-        excluded_directions=failed_directions or set(),
-        recovery=True,
-    )
 
 
 def build_prompt(state: dict[str, Any], *, outcome_context: str = "") -> str:
-    players = state.get("players", [])
-    bombs = state.get("bombs", [])
-    flames = state.get("flames", [])
-    powerups = state.get("powerUps", [])
-    sudden_death = state.get("suddenDeath", {})
-    score = state.get("matchScore", {})
-
-    me = next((p for p in (players or []) if str(p.get("id")) == PLAYER_ID), None)
+    players = [p for p in (state.get("players") or []) if isinstance(p, dict)]
+    me = next((p for p in players if str(p.get("id")) == PLAYER_ID), None)
     if me is None:
-        return f"No data for player {PLAYER_ID}. Return idle: {{\"direction\":null,\"placeBomb\":false,\"detonate\":false,\"useSkill\":false,\"reason\":\"no_self_state\"}}"
-    me_tile = me.get("tile", {}) if isinstance(me, dict) else {}
-    living_enemies = [
-        p for p in (players or [])
-        if isinstance(p, dict) and str(p.get("id")) != PLAYER_ID and p.get("alive")
-    ]
-    nearest_enemies = sorted(living_enemies, key=lambda p: _tile_distance(me_tile, p.get("tile", {})))[:3]
-    nearby_bombs = sorted(
-        [b for b in (bombs or []) if isinstance(b, dict)],
-        key=lambda b: _tile_distance(me_tile, b.get("tile", {})),
-    )[:6]
-    nearby_flames = sorted(
-        [f for f in (flames or []) if isinstance(f, dict)],
-        key=lambda f: _tile_distance(me_tile, f.get("tile", {})),
-    )[:8]
-    nearby_powerups = sorted(
-        [p for p in (powerups or []) if isinstance(p, dict)],
-        key=lambda p: _tile_distance(me_tile, p.get("tile", {})),
-    )[:6]
-    nearest_enemy_distance = _tile_distance(me_tile, nearest_enemies[0].get("tile", {})) if nearest_enemies else 999
-    close_bomb_threats = [
-        b for b in nearby_bombs
-        if _tile_distance(me_tile, b.get("tile", {})) <= 2 and int(b.get("fuseMs", 99999) or 99999) <= 2200
-    ]
-    close_flame_threats = [f for f in nearby_flames if _tile_distance(me_tile, f.get("tile", {})) <= 1]
-    immediate_danger = bool(close_bomb_threats or close_flame_threats)
-    navigation = state.get("navigation", {}) if isinstance(state.get("navigation"), dict) else {}
-    my_navigation = navigation.get(PLAYER_ID, {}) if isinstance(navigation.get(PLAYER_ID), dict) else {}
-    walkable_directions = [
-        str(direction) for direction in (my_navigation.get("walkableDirections") or [])
-        if str(direction) in VALID_DIRECTIONS
-    ]
-    blocked_directions = [
-        str(direction) for direction in (my_navigation.get("blockedDirections") or [])
-        if str(direction) in VALID_DIRECTIONS
-    ]
-    try:
-        stalled_for_ms = max(0, int(my_navigation.get("stalledForMs", 0) or 0))
-    except (TypeError, ValueError):
-        stalled_for_ms = 0
+        return '{"direction":null,"placeBomb":false,"detonate":false,"useSkill":false,"expiresInMs":250,"reason":"no self state"}'
 
-    lines = [
-        f"Tick: {state.get('tick', 0)} | Phase: {state.get('phase')} | Score: {json.dumps(score)}",
-        f"Sudden death: {sudden_death.get('active', False)}",
-        (
-            "Tactical summary: "
-            f"nearestEnemy={nearest_enemy_distance} "
-            f"bombThreats={len(close_bomb_threats)} "
-            f"flameThreats={len(close_flame_threats)} "
-            f"immediateDanger={immediate_danger}"
-        ),
-        f"Walkable directions: {', '.join(walkable_directions) if walkable_directions else 'unknown'}",
-        f"Blocked directions: {', '.join(blocked_directions) if blocked_directions else 'unknown'}",
-        f"Movement feedback: stalledForMs={stalled_for_ms} lastDelta={json.dumps(my_navigation.get('lastMovementDelta', {}))}",
-        "Local map:",
-        *[
-            (
-                f"  ({tile.get('x')},{tile.get('y')})={tile.get('kind', 'unknown')}"
-                + (f" danger={tile.get('dangerEtaMs')}ms" if tile.get("dangerEtaMs") is not None else "")
+    me_tile = me.get("tile", {})
+    navigation = _navigation_for_player(state)
+
+    def compact_player(player: dict[str, Any]) -> dict[str, Any]:
+        return {
+            key: player.get(key)
+            for key in (
+                "id", "alive", "active", "tile", "direction", "activeBombs", "maxBombs",
+                "flameRange", "speedLevel", "remoteLevel", "shieldCharges", "bombPassLevel",
+                "kickLevel", "shortFuseLevel", "flameGuardMs", "spawnProtectionMs", "skill",
             )
-            for tile in (my_navigation.get("localTiles") or [])
-            if isinstance(tile, dict)
+            if key in player
+        }
+
+    enemies = sorted(
+        [p for p in players if str(p.get("id")) != PLAYER_ID and p.get("alive")],
+        key=lambda player: _tile_distance(me_tile, player.get("tile", {})),
+    )[:3]
+    bombs = sorted(
+        [b for b in (state.get("bombs") or []) if isinstance(b, dict)],
+        key=lambda bomb: _tile_distance(me_tile, bomb.get("tile", {})),
+    )[:8]
+    flames = sorted(
+        [f for f in (state.get("flames") or []) if isinstance(f, dict)],
+        key=lambda flame: _tile_distance(me_tile, flame.get("tile", {})),
+    )[:10]
+    powerups = sorted(
+        [p for p in (state.get("powerUps") or []) if isinstance(p, dict)],
+        key=lambda powerup: _tile_distance(me_tile, powerup.get("tile", {})),
+    )[:8]
+
+    payload = {
+        "tick": state.get("tick", 0),
+        "phase": state.get("phase", ""),
+        "score": state.get("matchScore", {}),
+        "suddenDeath": state.get("suddenDeath", {}),
+        "self": compact_player(me),
+        "enemies": [compact_player(enemy) for enemy in enemies],
+        "bombs": [
+            {key: bomb.get(key) for key in ("ownerId", "tile", "fuseMs", "flameRange") if key in bomb}
+            for bomb in bombs
         ],
-        "Recent action outcomes:",
-        outcome_context or "No evaluated actions yet.",
-        "",
-        "Players:",
-    ]
-    for p in (players or []):
-        lines.append("  " + _fmt_player(p))
-
-    if nearest_enemies:
-        lines.append("\nNearest enemies:")
-        for p in nearest_enemies:
-            lines.append("  " + _fmt_enemy(me_tile, p))
-
-    if nearby_bombs:
-        lines.append("\nNearest bombs:")
-        for b in nearby_bombs:
-            lines.append("  " + _fmt_bomb(b))
-
-    if nearby_flames:
-        lines.append("\nNearest flames:")
-        for f in nearby_flames:
-            lines.append("  " + _fmt_flame(f))
-
-    if nearby_powerups:
-        lines.append("\nNearby powerups:")
-        for powerup in nearby_powerups:
-            lines.append("  " + _fmt_powerup(powerup))
-
-    lines.append(f"\nYou are: {_fmt_player(me)}")
-    lines.append(
-        f"\nDecide the next action for P{PLAYER_ID}. "
-        "Survive immediate danger first; otherwise pressure the nearest enemy and create trap bombs when close. "
-        "Never choose a blocked direction. If stalledForMs is above 700, change to a walkable direction immediately. "
-        "Do not repeat FAILED actions at the same tile. Use the local map and action outcomes to choose a different route, "
-        "place a bomb only when a complete escape route outside its flame cross exists, or wait when movement would be lethal. "
-        "Never remain in the same row or column of your own bomb through detonation. "
-        "Be decisive and low-latency. Return JSON only."
+        "flames": [
+            {key: flame.get(key) for key in ("tile", "remainingMs") if key in flame}
+            for flame in flames
+        ],
+        "powerUps": [
+            {key: powerup.get(key) for key in ("type", "tile") if key in powerup}
+            for powerup in powerups
+        ],
+        "navigation": {
+            "walkableDirections": navigation.get("walkableDirections", []),
+            "blockedDirections": navigation.get("blockedDirections", []),
+            "stalledForMs": navigation.get("stalledForMs", 0),
+            "lastMovementDelta": navigation.get("lastMovementDelta", {}),
+            "localTiles": [
+                [tile.get("x"), tile.get("y"), tile.get("kind"), tile.get("dangerEtaMs")]
+                for tile in (navigation.get("localTiles") or [])
+                if isinstance(tile, dict)
+            ],
+        },
+        "recentOutcomes": (outcome_context or "No evaluated actions yet.").splitlines()[-8:],
+    }
+    compact = json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
+    return (
+        f"MICRO DECISION for P{PLAYER_ID}. You alone choose every gameplay action; no local policy will correct it. "
+        "React to this exact snapshot and the previous outcomes. Choose a 200-1500ms horizon in expiresInMs. "
+        "Return only one JSON object with direction, placeBomb, detonate, useSkill, expiresInMs, reason. "
+        f"STATE={compact}"
     )
-    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -845,6 +604,7 @@ def parse_decision(raw: str) -> dict[str, Any] | None:
         "placeBomb": bool(data.get("placeBomb", False)),
         "detonate": bool(data.get("detonate", False)),
         "useSkill": bool(data.get("useSkill", False)),
+        "expiresInMs": data.get("expiresInMs", MODEL_DECISION_TTL_MS),
         "reason": str(data.get("reason", ""))[:120],
     }
 
@@ -862,7 +622,8 @@ def _codex_new(prompt: str, *, codex_home: str = "") -> tuple[str | None, str | 
             codex_home=codex_home or CODEX_HOME,
             openrouter_api_key_env=OPENROUTER_API_KEY_ENV,
             openrouter_base_url=OPENROUTER_BASE_URL,
-            max_tokens=120, timeout=45.0,
+            max_tokens=MODEL_MAX_TOKENS, timeout=MODEL_TURN_TIMEOUT_SECONDS,
+            json_mode=True,
         )
         return text, None, status
 
@@ -875,7 +636,7 @@ def _codex_new(prompt: str, *, codex_home: str = "") -> tuple[str | None, str | 
     return _call_codex_new(
         prompt, SYSTEM_PROMPT,
         model=MODEL, reasoning_effort=REASONING_EFFORT,
-        codex_home=codex_home or CODEX_HOME, timeout=45.0,
+        codex_home=codex_home or CODEX_HOME, timeout=MODEL_TURN_TIMEOUT_SECONDS,
     )
 
 
@@ -889,7 +650,7 @@ def _codex_resume(session_id: str, prompt: str, *, codex_home: str = "") -> tupl
     return _call_codex_resume(
         session_id, prompt,
         model=MODEL, reasoning_effort=REASONING_EFFORT,
-        codex_home=codex_home or CODEX_HOME, timeout=45.0,
+        codex_home=codex_home or CODEX_HOME, timeout=MODEL_TURN_TIMEOUT_SECONDS,
     )
 
 
@@ -919,18 +680,17 @@ def run_warmup(*, codex_home: str = "") -> tuple[str | None, str | None]:
 # Main agent loop
 # ---------------------------------------------------------------------------
 
+
+
 class LiveAgent:
+    """Model-first controller: transport, freshness and feedback only; no gameplay policy."""
+
     def __init__(self) -> None:
         self.last_tick = -1
         self.last_phase = ""
-        self.match_start_tick = 0
         self.decisions_this_match = 0
         self.running = True
         self._codex_session_id: str | None = None
-        # Background thread so Codex calls don't block the poll loop
-        self._ai_thread: threading.Thread | None = None
-        self._ai_busy = False
-        self._ai_lock = threading.Lock()
         self._ai_retry_at_ms = 0
         self._last_model_error = ""
         self._codex_homes = _load_codex_home_chain()
@@ -942,13 +702,9 @@ class LiveAgent:
         self._latest_state_lock = threading.Lock()
         self._was_alive_in_match = False
         self._action_memory = ActionOutcomeMemory()
-        self._last_tactical_recovery_at_ms = 0
-        self._last_survival_decision_at_ms = 0
-        self._survival_active = False
-
-    def _is_ai_busy(self) -> bool:
-        with self._ai_lock:
-            return self._ai_busy
+        concurrency = 1 if PROVIDER == "openai_codex" else MAX_IN_FLIGHT_MODEL_CALLS
+        self._turns = ConcurrentTurnCoordinator(concurrency)
+        self._last_model_turn_started_at_ms = 0
 
     def _current_codex_home(self) -> str:
         if self._codex_homes:
@@ -987,114 +743,26 @@ class LiveAgent:
         with self._latest_state_lock:
             return dict(self._latest_state)
 
-    def _post_bootstrap_decision(self, state: dict[str, Any], *, reason: str) -> None:
-        decision = _local_fast_decision(state)
-        if not decision:
-            return
-        decision = enforce_survival_safety(decision, state)
-        decision["reason"] = f"{reason}: {decision['reason']}"[:120]
-        status, _ = _http_post("/decision", decision)
-        if status == 200:
-            self._action_memory.record(decision, state)
-        log(f"bootstrap | {decision['direction'] or '.'} | {decision['reason']}")
-
-    def _maybe_post_survival_decision(self, state: dict[str, Any], tick: int) -> bool:
-        decision = build_survival_decision(state)
-        if decision is None:
-            if self._survival_active:
-                hold = {
-                    "playerId": PLAYER_ID,
-                    "botId": AGENT_ID,
-                    "direction": None,
-                    "placeBomb": False,
-                    "detonate": False,
-                    "useSkill": False,
-                    "reason": "Survival control: escape complete; hold outside blast",
-                }
-                status, _ = _http_post("/decision", hold)
-                if status == 200:
-                    log(f"survival-control tick={tick:>5} action=hold reason=escape-complete")
-            self._survival_active = False
-            return False
-        self._survival_active = True
-        current_ms = now_ms()
-        if current_ms - self._last_survival_decision_at_ms < SURVIVAL_DECISION_COOLDOWN_MS:
-            return True
-        status, _ = _http_post("/decision", decision)
-        if status != 200:
-            return True
-        self._last_survival_decision_at_ms = current_ms
-        self._action_memory.record(decision, state)
-        send_heartbeat("active")
-        log(
-            f"survival-control tick={tick:>5} "
-            f"action={decision.get('direction') or 'hold'} reason={decision['reason']}"
-        )
-        return True
-
-    def _maybe_post_tactical_recovery(self, state: dict[str, Any], tick: int) -> None:
-        navigation = _navigation_for_player(state)
-        try:
-            stalled_ms = max(0, int(navigation.get("stalledForMs", 0) or 0))
-        except (TypeError, ValueError):
-            stalled_ms = 0
-        current_ms = now_ms()
-        if stalled_ms < STALL_FAILURE_MS:
-            return
-        if current_ms - self._last_tactical_recovery_at_ms < TACTICAL_RECOVERY_COOLDOWN_MS:
-            return
-
-        failed = self._action_memory.failed_directions(state)
-        recovery = build_recovery_decision(state, failed)
-        if not recovery or (recovery.get("direction") is None and not recovery.get("placeBomb")):
-            return
-        status, _ = _http_post("/decision", recovery)
-        if status != 200:
-            return
-        self._last_tactical_recovery_at_ms = current_ms
-        self._action_memory.record(recovery, state)
-        send_heartbeat("active")
-        log(
-            f"tactical-recovery tick={tick:>5} stalled={stalled_ms}ms "
-            f"failed={sorted(failed)} action={recovery.get('direction') or 'bomb'}"
-        )
-
     def run(self) -> None:
         log(
-            f"starting  provider={PROVIDER} model={MODEL or '(default)'}  "
-            f"player={PLAYER_ID} codexHome={self._current_codex_home_label()}"
+            f"starting model-first provider={PROVIDER} model={MODEL or '(default)'} "
+            f"player={PLAYER_ID} concurrency={1 if PROVIDER == 'openai_codex' else MAX_IN_FLIGHT_MODEL_CALLS}"
         )
-        if PROVIDER == "openai_codex":
-            log(f"[auth-fallback] available Codex homes: {self._codex_homes or ['(default)']}")
         send_heartbeat()
         heartbeat_at = now_ms()
 
-        # Warmup: establish Codex session and post a default decision immediately
-        session_id, warmup_raw = run_warmup(codex_home=self._current_codex_home())
-        if PROVIDER == "openai_codex" and not session_id and not warmup_raw and len(self._codex_homes) > 1:
-            for _ in range(len(self._codex_homes) - 1):
-                if not self._rotate_codex_home("warmup_failed"):
-                    break
-                session_id, warmup_raw = run_warmup(codex_home=self._current_codex_home())
-                if session_id or warmup_raw:
-                    self._ai_retry_at_ms = 0
-                    break
-        self._codex_session_id = session_id
-        if warmup_raw:
-            d = parse_decision(warmup_raw)
-            if d:
-                # Warmup has no live spatial state, so it can never prove that a
-                # bomb or remote detonation is survivable.
-                d["placeBomb"] = False
-                d["detonate"] = False
-                _http_post("/decision", d)
-                log(f"warmup decision posted: {d['direction']}  {d['reason'][:50]}")
+        # Persistent Codex sessions need a connection warmup. Stateless 9router
+        # calls start directly from the first real game snapshot.
+        if PROVIDER == "openai_codex":
+            session_id, _ = run_warmup(codex_home=self._current_codex_home())
+            self._codex_session_id = session_id
 
         while self.running:
             try:
-                if now_ms() - heartbeat_at > 5000:
+                current_ms = now_ms()
+                if current_ms - heartbeat_at > 5000:
                     send_heartbeat()
-                    heartbeat_at = now_ms()
+                    heartbeat_at = current_ms
 
                 status, body = _http_get("/state")
                 if status != 200 or not isinstance(body, dict) or not body.get("ok"):
@@ -1108,41 +776,35 @@ class LiveAgent:
                 self._action_memory.observe(state)
                 me_alive = _current_life_active(state)
 
-                # Detect match start
                 if phase == "match" and self.last_phase != "match":
                     self._round_epoch += 1
-                    self.match_start_tick = tick
+                    self._life_epoch += 1 if me_alive else 0
                     self.decisions_this_match = 0
                     self._codex_session_id = None
                     self._action_memory.reset()
-                    self._last_tactical_recovery_at_ms = 0
-                    self._last_survival_decision_at_ms = 0
-                    self._survival_active = False
+                    self._turns.reset()
+                    self._last_model_turn_started_at_ms = 0
                     self._was_alive_in_match = me_alive
-                    if me_alive:
-                        self._life_epoch += 1
-                        self._post_bootstrap_decision(state, reason="Round start")
                     log("=" * 55)
-                    log(f"  MATCH STARTED  player={PLAYER_ID}  session={str(self._codex_session_id or 'new')[:12]}")
+                    log(f"MATCH STARTED player={PLAYER_ID}; waiting only for model decisions")
                     log("=" * 55)
 
-                # Detect match end
                 if phase == "match-result" and self.last_phase == "match":
                     self._round_epoch += 1
+                    self._turns.reset()
                     self._was_alive_in_match = False
                     self._on_match_ended(state)
 
                 self.last_phase = phase
-
                 if phase != "match":
                     time.sleep(IDLE_INTERVAL)
                     continue
 
                 if me_alive and not self._was_alive_in_match:
                     self._life_epoch += 1
-                    self._post_bootstrap_decision(state, reason="Respawn")
+                    self._turns.reset()
+                    self._last_model_turn_started_at_ms = 0
                 self._was_alive_in_match = me_alive
-
                 if not me_alive:
                     time.sleep(POLL_INTERVAL)
                     continue
@@ -1150,15 +812,13 @@ class LiveAgent:
                 if tick == self.last_tick:
                     time.sleep(POLL_INTERVAL)
                     continue
-
                 self.last_tick = tick
-                if self._maybe_post_survival_decision(state, tick):
-                    continue
-                self._maybe_post_tactical_recovery(state, tick)
 
-                # Fire AI call in background; skip tick if previous is still running.
-                # The last decision (25s TTL) keeps the bot moving while we wait.
-                if not self._is_ai_busy() and now_ms() >= self._ai_retry_at_ms:
+                current_ms = now_ms()
+                if (
+                    current_ms >= self._ai_retry_at_ms
+                    and current_ms - self._last_model_turn_started_at_ms >= MODEL_TURN_MIN_INTERVAL_MS
+                ):
                     self._fire_ai_call(state, tick)
 
             except KeyboardInterrupt:
@@ -1170,14 +830,19 @@ class LiveAgent:
         log("stopped")
 
     def _fire_ai_call(self, state: dict[str, Any], tick: int) -> None:
-        """Start an async AI call in a daemon thread."""
-        send_heartbeat("thinking")
+        token = self._turns.reserve(
+            tick=tick,
+            round_epoch=self._round_epoch,
+            life_epoch=self._life_epoch,
+        )
+        if token is None:
+            return
+        self._last_model_turn_started_at_ms = now_ms()
+        request_id = token["requestId"]
         prompt = build_prompt(state, outcome_context=self._action_memory.prompt_context(state))
         session_id = self._codex_session_id
         codex_home = self._current_codex_home()
-        request_round_epoch = self._round_epoch
-        request_life_epoch = self._life_epoch
-        request_alive = _current_life_active(state)
+        send_heartbeat("thinking")
 
         def _worker() -> None:
             new_session_id: str | None = None
@@ -1186,77 +851,79 @@ class LiveAgent:
             else:
                 raw, new_session_id, status = _codex_new(prompt, codex_home=codex_home)
 
-            with self._ai_lock:
-                self._ai_busy = False
-                if new_session_id:
-                    self._codex_session_id = new_session_id
-
             if status != "ok" or raw is None:
+                self._turns.release(token)
                 self._handle_model_error(status, tick)
-                return
-
-            latest_state = self._get_latest_state()
-            if request_round_epoch != self._round_epoch or request_life_epoch != self._life_epoch:
-                log(f"discard stale response tick={tick:>5} round={request_round_epoch}->{self._round_epoch} life={request_life_epoch}->{self._life_epoch}")
-                return
-            if request_alive and not _current_life_active(latest_state):
-                log(f"discard stale response tick={tick:>5} reason=life_inactive")
                 return
 
             decision = parse_decision(raw)
             if decision is None:
-                log(f"parse failed tick={tick:>5} raw={raw[:80]}")
+                self._turns.release(token)
+                log(f"parse failed request={request_id} tick={tick:>5} raw={raw[:80]}")
                 return
 
-            if _current_life_active(latest_state) and "dead" in str(decision.get("reason", "")).lower():
-                log(f"discard dead response tick={tick:>5} while player is alive")
-                bootstrap = _local_fast_decision(latest_state)
-                if bootstrap:
-                    _http_post("/decision", enforce_survival_safety(bootstrap, latest_state))
+            latest_state = self._get_latest_state()
+            if not _current_life_active(latest_state):
+                self._turns.release(token)
+                log(f"discard inactive-life request={request_id} stateTick={tick}")
                 return
 
-            if self._action_memory.should_reject(decision, latest_state):
-                rejected_direction = str(decision.get("direction") or "")
-                recovery = build_recovery_decision(
-                    latest_state,
-                    self._action_memory.failed_directions(latest_state),
-                )
-                log(f"reject repeated failed action tick={tick:>5} direction={rejected_direction}")
-                if recovery is None:
-                    return
-                decision = recovery
+            if new_session_id and PROVIDER == "openai_codex":
+                self._codex_session_id = new_session_id
+            latency_ms = now_ms() - token["startedAtMs"]
+            relayed = relay_model_decision(
+                decision,
+                state,
+                request_id=request_id,
+                latency_ms=latency_ms,
+            )
+            post_result: tuple[int, Any] = (0, None)
+            def _publish() -> int:
+                nonlocal post_result
+                post_result = _http_post("/decision", relayed)
+                return post_result[0]
 
-            decision = enforce_survival_safety(decision, latest_state)
+            published, post_status = self._turns.publish(
+                token,
+                round_epoch=self._round_epoch,
+                life_epoch=self._life_epoch,
+                publisher=_publish,
+            )
+            if post_status is not None and post_status != 200:
+                self._handle_model_error(f"decision_post_{post_status}", tick)
+                return
+            if not published:
+                log(f"discard superseded request={request_id} stateTick={tick}")
+                return
 
             self._last_model_error = ""
             self._account_consecutive_failures = 0
             self._ai_retry_at_ms = 0
-            post_status, _ = _http_post("/decision", decision)
-            if post_status != 200:
-                self._handle_model_error(f"decision_post_{post_status}", tick)
-                return
-            self._action_memory.record(decision, latest_state)
-            send_heartbeat("active")
+            self._action_memory.record(relayed, latest_state)
             self.decisions_this_match += 1
+            send_heartbeat("active")
             arrow = {"up": "^", "down": "v", "left": "<", "right": ">"}.get(
-                str(decision["direction"] or ""), "."
+                str(relayed["direction"] or ""), "."
             )
-            bomb_flag = "BOMB" if decision["placeBomb"] else "    "
-            det_flag  = "DET " if decision["detonate"] else "    "
-            log(f"tick={tick:>5} | {arrow} {bomb_flag} {det_flag}| {decision['reason'][:60]}")
+            flags = "".join(("B" if relayed["placeBomb"] else "-", "D" if relayed["detonate"] else "-", "S" if relayed["useSkill"] else "-"))
+            log(
+                f"request={request_id:>4} stateTick={tick:>5} latency={latency_ms:>4}ms "
+                f"inFlight={self._turns.in_flight_count} action={arrow}/{flags} | {relayed['reason'][:60]}"
+            )
 
-        with self._ai_lock:
-            self._ai_busy = True
-        t = threading.Thread(target=_worker, daemon=True, name=f"ai-p{PLAYER_ID}-t{tick}")
-        self._ai_thread = t
-        t.start()
+        threading.Thread(
+            target=_worker,
+            daemon=True,
+            name=f"model-p{PLAYER_ID}-r{request_id}-t{tick}",
+        ).start()
 
     def _handle_model_error(self, status: str, tick: int) -> None:
         status_l = status.lower()
-        retry_ms = 0
         self._account_consecutive_failures += 1
-        should_rotate = _is_quota_or_auth_error(status) or self._account_consecutive_failures >= ACCOUNT_FAILURE_THRESHOLD
-
+        should_rotate = (
+            _is_quota_or_auth_error(status)
+            or self._account_consecutive_failures >= ACCOUNT_FAILURE_THRESHOLD
+        )
         if should_rotate and self._rotate_codex_home(status):
             retry_ms = 1000
         elif _is_quota_or_auth_error(status):
@@ -1265,13 +932,9 @@ class LiveAgent:
             retry_ms = 3000
         else:
             retry_ms = 1500
-
         self._ai_retry_at_ms = max(self._ai_retry_at_ms, now_ms() + retry_ms)
-
-        suffix = f" retry_in={retry_ms // 1000}s" if retry_ms else ""
-        rotate_suffix = f" fails={self._account_consecutive_failures}" if PROVIDER == "openai_codex" else ""
         if status != self._last_model_error or retry_ms:
-            log(f"model error tick={tick:>5} status={status}{rotate_suffix}{suffix}")
+            log(f"model error tick={tick:>5} status={status} retry_in={retry_ms}ms")
         self._last_model_error = status
         send_heartbeat("error", status)
 
@@ -1280,8 +943,7 @@ class LiveAgent:
         me = next((p for p in (players or []) if str(p.get("id")) == PLAYER_ID), None)
         survivors = [p for p in (players or []) if p.get("alive")]
         won = me is not None and bool(me.get("alive"))
-
-        event = {
+        append_event({
             "type": "match_ended",
             "playerId": PLAYER_ID,
             "botId": AGENT_ID,
@@ -1289,11 +951,9 @@ class LiveAgent:
             "decisionsCount": self.decisions_this_match,
             "survivorCount": len(survivors),
             "tick": state.get("tick", 0),
-        }
-        append_event(event)
-        result = "WON" if won else "LOST"
+        })
         log(f"{'-' * 55}")
-        log(f"  {result}  decisions={self.decisions_this_match}  survivors={len(survivors)}")
+        log(f"{'WON' if won else 'LOST'} decisions={self.decisions_this_match} survivors={len(survivors)}")
         log(f"{'-' * 55}")
 
 

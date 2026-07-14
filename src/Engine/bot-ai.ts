@@ -46,6 +46,7 @@ export interface BotDecision {
   direction: Direction | null;
   placeBomb: boolean;
   detonate?: boolean;
+  useSkill?: boolean;
 }
 
 /**
