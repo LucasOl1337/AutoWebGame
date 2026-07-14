@@ -14,7 +14,10 @@ import json
 import os
 import subprocess
 import sys
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python < 3.11
+    tomllib = None  # type: ignore[assignment]
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -81,7 +84,7 @@ def compact_line(value: str) -> str:
 def read_codex_defaults(codex_home: str = "") -> dict[str, str]:
     base = Path(codex_home) if codex_home else DEFAULT_CODEX_HOME
     config_path = base / "config.toml"
-    if not config_path.exists():
+    if not config_path.exists() or tomllib is None:
         return {"model": "", "reasoning": ""}
     try:
         payload = tomllib.loads(config_path.read_text(encoding="utf-8"))
