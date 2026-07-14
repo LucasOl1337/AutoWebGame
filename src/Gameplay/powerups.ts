@@ -69,7 +69,7 @@ const POWER_UP_DEFINITIONS: Readonly<Record<PowerUpType, PowerUpDefinition>> = {
   "kick-up": {
     type: "kick-up",
     label: "Bomb Kick",
-    shortLabel: "K",
+    shortLabel: "BK",
     tint: "#ffbc73",
     maxLevel: MAX_KICK_LEVEL,
   },

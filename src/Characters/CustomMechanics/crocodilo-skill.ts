@@ -3,10 +3,6 @@ import type {
   PlayerState,
   TileCoord,
 } from "../../Gameplay/types";
-import {
-  GRID_HEIGHT,
-  GRID_WIDTH,
-} from "../../PersonalConfig/config";
 import { tileKey } from "../../Arenas/arena";
 import type { SkillContext } from "../../ultimate/shared";
 import { CROCODILO_SKILL_COOLDOWN_MS } from "../../ultimate/skill-registry";
@@ -168,6 +164,7 @@ export function computeCrocodiloSurgeTiles(
   origin: TileCoord,
   context: SkillContext,
 ): TileCoord[] {
+  const { width, height } = context.arena.config.grid;
   const tiles: TileCoord[] = [];
   for (const delta of Object.values(directionDelta)) {
     for (let step = 1; step <= CROCODILO_SURGE_RANGE; step += 1) {
@@ -175,7 +172,7 @@ export function computeCrocodiloSurgeTiles(
         x: origin.x + delta.x * step,
         y: origin.y + delta.y * step,
       };
-      if (tile.x < 0 || tile.y < 0 || tile.x >= GRID_WIDTH || tile.y >= GRID_HEIGHT) {
+      if (tile.x < 0 || tile.y < 0 || tile.x >= width || tile.y >= height) {
         break;
       }
       const key = tileKey(tile.x, tile.y);

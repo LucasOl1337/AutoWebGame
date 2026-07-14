@@ -197,6 +197,80 @@ const canceledBeforeFire = cancelNico.skill.phase === "idle"
   && cancelGame.magicBeams.length === 0
   && cancelEnemy.alive === true;
 
+const largeArenaGame = createServerMatch({ 1: 0, 2: 1, 3: 2, 4: 0 });
+largeArenaGame.arena.config.grid = { width: 15, height: 13 };
+largeArenaGame.arena.solid.add("14,10");
+const largeArenaNico = largeArenaGame.players[1];
+const largeArenaEnemy = largeArenaGame.players[2];
+
+largeArenaNico.position = { x: 12 * TILE_SIZE + TILE_SIZE * 0.5, y: 10 * TILE_SIZE + TILE_SIZE * 0.5 };
+largeArenaNico.tile = { x: 12, y: 10 };
+largeArenaNico.spawnProtectionMs = 0;
+largeArenaEnemy.position = { x: 13 * TILE_SIZE + TILE_SIZE * 0.5, y: 10 * TILE_SIZE + TILE_SIZE * 0.5 };
+largeArenaEnemy.tile = { x: 13, y: 10 };
+largeArenaEnemy.spawnProtectionMs = 0;
+
+largeArenaGame.setServerPlayerInput(1, {
+  direction: "right",
+  ...neutralInput,
+  skillPressed: true,
+  skillHeld: true,
+});
+largeArenaGame.advanceServerSimulation(17);
+for (let elapsedMs = 17; elapsedMs < 2_600 && largeArenaNico.skill.phase === "channeling"; elapsedMs += 17) {
+  largeArenaGame.setServerPlayerInput(1, {
+    direction: "right",
+    ...neutralInput,
+    skillHeld: true,
+  });
+  largeArenaGame.advanceServerSimulation(17);
+}
+
+const largeArenaBeam = largeArenaGame.magicBeams[0] ?? null;
+const largeArenaBeamTileKeys = new Set(
+  (largeArenaBeam?.tiles ?? []).map((tile) => `${tile.x},${tile.y}`),
+);
+const largeArenaBeamUsesRuntimeBounds = largeArenaBeamTileKeys.has("13,10")
+  && largeArenaBeamTileKeys.size === 1
+  && largeArenaEnemy.alive === false;
+
+const tallArenaGame = createServerMatch({ 1: 0, 2: 1, 3: 2, 4: 0 });
+tallArenaGame.arena.config.grid = { width: 15, height: 13 };
+tallArenaGame.arena.solid.add("12,12");
+const tallArenaNico = tallArenaGame.players[1];
+const tallArenaEnemy = tallArenaGame.players[2];
+
+tallArenaNico.position = { x: 12 * TILE_SIZE + TILE_SIZE * 0.5, y: 10 * TILE_SIZE + TILE_SIZE * 0.5 };
+tallArenaNico.tile = { x: 12, y: 10 };
+tallArenaNico.spawnProtectionMs = 0;
+tallArenaEnemy.position = { x: 12 * TILE_SIZE + TILE_SIZE * 0.5, y: 11 * TILE_SIZE + TILE_SIZE * 0.5 };
+tallArenaEnemy.tile = { x: 12, y: 11 };
+tallArenaEnemy.spawnProtectionMs = 0;
+
+tallArenaGame.setServerPlayerInput(1, {
+  direction: "down",
+  ...neutralInput,
+  skillPressed: true,
+  skillHeld: true,
+});
+tallArenaGame.advanceServerSimulation(17);
+for (let elapsedMs = 17; elapsedMs < 2_600 && tallArenaNico.skill.phase === "channeling"; elapsedMs += 17) {
+  tallArenaGame.setServerPlayerInput(1, {
+    direction: "down",
+    ...neutralInput,
+    skillHeld: true,
+  });
+  tallArenaGame.advanceServerSimulation(17);
+}
+
+const tallArenaBeam = tallArenaGame.magicBeams[0] ?? null;
+const tallArenaBeamTileKeys = new Set(
+  (tallArenaBeam?.tiles ?? []).map((tile) => `${tile.x},${tile.y}`),
+);
+const tallArenaBeamUsesRuntimeBounds = tallArenaBeamTileKeys.has("12,11")
+  && tallArenaBeamTileKeys.size === 1
+  && tallArenaEnemy.alive === false;
+
 const castMarkerA = { id: "cast-a" };
 const castMarkerB = { id: "cast-b" };
 const castMarkerC = { id: "cast-c" };
@@ -274,6 +348,10 @@ const report = {
   blastBrokeCrate,
   blastTriggeredBomb,
   blastMatchesFootprint,
+  largeArenaBeamTileKeys: [...largeArenaBeamTileKeys],
+  largeArenaBeamUsesRuntimeBounds,
+  tallArenaBeamTileKeys: [...tallArenaBeamTileKeys],
+  tallArenaBeamUsesRuntimeBounds,
   canceledBeforeFire,
   usesChannelCastTiming,
   usesReleaseCastTiming,
@@ -288,6 +366,8 @@ const report = {
     && blastBrokeCrate
     && blastTriggeredBomb
     && blastMatchesFootprint
+    && largeArenaBeamUsesRuntimeBounds
+    && tallArenaBeamUsesRuntimeBounds
     && canceledBeforeFire
     && usesChannelCastTiming
     && usesReleaseCastTiming,

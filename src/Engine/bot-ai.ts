@@ -360,11 +360,29 @@ function getOverlappingBomb(player: PlayerState, context: BotContext): BombState
     if (!context.isPlayerOverlappingTile(player, bomb.tile)) {
       continue;
     }
-    if (!bestMatch || bomb.fuseMs < bestMatch.fuseMs || (bomb.ownerId === player.id && bestMatch.ownerId !== player.id)) {
+    if (!bestMatch || isHigherPriorityOverlappingBomb(bomb, bestMatch, player.id)) {
       bestMatch = bomb;
     }
   }
   return bestMatch;
+}
+
+function isHigherPriorityOverlappingBomb(
+  candidate: BombState,
+  current: BombState,
+  playerId: PlayerId,
+): boolean {
+  if (candidate.fuseMs !== current.fuseMs) {
+    return candidate.fuseMs < current.fuseMs;
+  }
+
+  const candidateOwned = candidate.ownerId === playerId;
+  const currentOwned = current.ownerId === playerId;
+  if (candidateOwned !== currentOwned) {
+    return candidateOwned;
+  }
+
+  return candidate.id < current.id;
 }
 
 /**
@@ -381,7 +399,11 @@ function getThreateningOwnedBomb(player: PlayerState, playerTile: TileCoord, con
     if (!blastKeys.has(playerTileKey)) {
       continue;
     }
-    if (!bestMatch || bomb.fuseMs < bestMatch.fuseMs) {
+    if (
+      !bestMatch
+      || bomb.fuseMs < bestMatch.fuseMs
+      || (bomb.fuseMs === bestMatch.fuseMs && bomb.id < bestMatch.id)
+    ) {
       bestMatch = bomb;
     }
   }

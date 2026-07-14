@@ -1,0 +1,10 @@
+{
+  "roundId": "r008",
+  "status": "delivered",
+  "delivery": "Removidos ambos os listeners alternativos após o primeiro gesto de desbloqueio de áudio.",
+  "files": ["src/Engine/sound-manager.ts", "tests/sound-manager-lifecycle-check.mjs"],
+  "evidence": ["Falha anterior: listener keydown permanecia registrado.", "npm run compile:esm passou.", "Teste novo, lazy-load e variation passaram.", "git diff --check passou."],
+  "risks": ["Teste usa EventTarget rastreável em Node, sem navegador real."],
+  "limitations": [],
+  "finishedAt": "2026-07-13T12:04:00.0000000-03:00"
+}

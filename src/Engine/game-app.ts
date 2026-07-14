@@ -1802,6 +1802,10 @@ export class GameApp {
       return;
     }
 
+    if (!this.headless) {
+      return;
+    }
+
     this.matchResultCooldownMs = Math.max(0, this.matchResultCooldownMs - deltaMs);
     if (this.matchResultCooldownMs > 0) {
       return;
@@ -4899,7 +4903,12 @@ export class GameApp {
   private drawNicoBeamPreview(player: PlayerState): void {
     const direction = player.skill.projectedLastMoveDirection ?? player.lastMoveDirection ?? player.direction;
     const origin = this.getTileFromPosition(player.position);
-    const tiles = collectNicoBeamTiles(origin, direction, this.arena.solid);
+    const tiles = collectNicoBeamTiles(
+      origin,
+      direction,
+      this.arena.solid,
+      this.arena.config.grid,
+    );
     if (tiles.length === 0) {
       return;
     }
@@ -5006,6 +5015,7 @@ export class GameApp {
     const alpha = player.alive ? 1 : (deathState ? 1 : 0.35);
     const activeCharacter = this.getActiveCharacterEntry(player.id);
     const baseSprites = this.getPlayerSprites(player.id);
+    this.drawRoundWinnerHalo(player, x, y);
     const idleFrames = baseSprites.idle?.[renderDirection] ?? [];
     const walkFrames = baseSprites.walk?.[renderDirection] ?? [];
     const runFrames = baseSprites.run?.[renderDirection] ?? [];
@@ -5105,6 +5115,19 @@ export class GameApp {
     }
 
     this.ctx.globalAlpha = 1;
+  }
+
+  private drawRoundWinnerHalo(player: PlayerState, x: number, y: number): void {
+    if (this.roundOutcome?.winner !== player.id) {
+      return;
+    }
+    this.ctx.fillStyle = CANVAS_UI_GOLD;
+    this.ctx.fillRect(x + 4, y - 3, TILE_SIZE - 8, 3);
+    this.ctx.fillRect(x + 1, y, 3, TILE_SIZE - 8);
+    this.ctx.fillRect(x + TILE_SIZE - 4, y, 3, TILE_SIZE - 8);
+    this.ctx.fillStyle = CANVAS_UI_GOLD_BRIGHT;
+    this.ctx.fillRect(x + 7, y - 6, TILE_SIZE - 14, 3);
+    this.ctx.fillRect(x + 4, y + TILE_SIZE - 8, TILE_SIZE - 8, 3);
   }
 
   private getActiveSkillAnimationFrames(
@@ -5469,14 +5492,8 @@ export class GameApp {
       const scoreSummary = copy.scoreSummary(this.formatActiveScore());
       return {
         title: this.matchWinner ? copy.matchWinner(this.players[this.matchWinner].name) : copy.matchComplete,
-        subtitle: copy.rematchSummary,
-        footer: this.onlineSession
-          ? scoreSummary
-          : [
-              scoreSummary,
-              copy.nextMatchCue(this.getRoundedCountdownSeconds(this.matchResultCooldownMs)),
-              `${copy.pressToSelect("Enter/Space")} | Esc: ${copy.backToLobby}`,
-            ].join(" | "),
+        subtitle: this.onlineSession ? copy.rematchSummary : copy.localResultActions,
+        footer: scoreSummary,
       };
     }
 

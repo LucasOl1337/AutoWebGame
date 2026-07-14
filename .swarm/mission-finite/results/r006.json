@@ -1,0 +1,40 @@
+{
+  "roundId": "r006",
+  "status": "delivered",
+  "delivery": "O acumulador de tick agora rebasa o timestamp sem cobrar tempo quando Date.now() regride, recupera estados de relogio/acumulador nao finitos sem passos fantasmas e normaliza limites de passos nao finitos para um valor seguro.",
+  "files": [
+    "src/NetCode/server-tick.ts",
+    "tests/server-tick-catchup-check.mjs",
+    ".swarm/mission-finite/results/r006.json"
+  ],
+  "evidence": [
+    "CodeGraph identificou consumeFixedRatePumpSteps como chamado somente por GlobalLobby.pumpRoomMatch no worker; worker/index.js permaneceu somente leitura.",
+    "Reproducao antes da correcao: npm run test:server-tick saiu com codigo 1; a sequencia 1000 -> 900 -> 940 ficou presa em lastUpdateAtMs=1000 e produziu 0 passos, o estado NaN/Infinity produziu 5 passos fantasmas e maxSteps=Infinity produziu 18 passos.",
+    "Depois da correcao, a mesma sequencia rebasa para 900 e avanca 2 passos em 940; o estado corrompido produz 0 passos e o limite nao finito fica contido em 1 passo."
+  ],
+  "validation": [
+    {
+      "command": "npm run test:server-tick",
+      "status": "passed",
+      "detail": "pass=true; regressao de clock, estado numerico corrompido e limite nao finito cobertos."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "detail": "TypeScript e Vite concluidos com sucesso; 42 modulos transformados."
+    },
+    {
+      "command": "git diff --check -- src/NetCode/server-tick.ts tests/server-tick-catchup-check.mjs",
+      "status": "passed",
+      "detail": "Sem erros de whitespace; apenas avisos locais de conversao LF/CRLF."
+    }
+  ],
+  "risks": [
+    "Uma regressao real de relogio agora descarta somente o intervalo regressivo e preserva o residual valido do acumulador; isso muda intencionalmente o comportamento anterior de congelar ate o wall clock alcancar o timestamp antigo."
+  ],
+  "limitations": [
+    "A validacao foi focada no helper compartilhado e no build; nenhum Worker foi iniciado e nenhum deploy foi realizado.",
+    "Valores finitos extremamente grandes fornecidos como maxSteps continuam respeitados como configuracao explicita; o caller de producao usa a constante 5."
+  ],
+  "completedAt": "2026-07-13T11:37:21.2135914-03:00"
+}

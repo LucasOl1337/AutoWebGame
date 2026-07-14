@@ -85,37 +85,30 @@ game.players[2].alive = false;
 game.evaluateRoundState();
 
 let sawMatchResult = false;
-
-let restarted = false;
 for (let step = 0; step < 180; step += 1) {
   game.advanceServerSimulation(1000 / 60);
   const snapshot = game.exportOnlineSnapshot();
   if (snapshot.mode === "match-result" && snapshot.matchWinner === 1) {
     sawMatchResult = true;
-  }
-  if (
-    snapshot.mode === "match"
-    && snapshot.matchWinner === null
-    && snapshot.roundNumber === 1
-    && snapshot.score[1] === 0
-    && snapshot.score[2] === 0
-  ) {
-    restarted = true;
     break;
   }
 }
 
+const resultVisibleForMs = 4_000;
+for (let elapsedMs = 0; elapsedMs < resultVisibleForMs; elapsedMs += 1000 / 60) {
+  game.advanceServerSimulation(1000 / 60);
+}
+
 const finalSnapshot = game.exportOnlineSnapshot();
 const pass = sawMatchResult
-  && restarted
-  && finalSnapshot.mode === "match"
-  && finalSnapshot.matchWinner === null
+  && finalSnapshot.mode === "match-result"
+  && finalSnapshot.matchWinner === 1
   && finalSnapshot.roundNumber === 1;
 
 console.log(JSON.stringify({
   targetWins: TARGET_WINS,
   sawMatchResult,
-  restarted,
+  resultVisibleForMs,
   final: {
     mode: finalSnapshot.mode,
     roundNumber: finalSnapshot.roundNumber,

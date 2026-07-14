@@ -1,0 +1,10 @@
+{
+  "roundId": "r007",
+  "status": "delivered",
+  "delivery": "Preservado o código da sala após queda transitória e ignorados eventos tardios de sockets substituídos.",
+  "files": ["src/NetCode/session-client.ts", "tests/session-websocket-lifecycle-check.mjs"],
+  "evidence": ["Falha anterior: pendingAutoJoinRoom tornava-se null em vez de ROOM42.", "npm run compile:esm passou.", "Teste novo e quatro regressões de sessão passaram.", "git diff --check passou."],
+  "risks": ["Sem E2E com Worker real; WebSocket determinístico exercitou o cliente compilado."],
+  "limitations": ["local-match-chrome-check não é aplicável ao claim e falha no Node por import.meta.env.DEV preexistente."],
+  "finishedAt": "2026-07-13T12:04:00.0000000-03:00"
+}

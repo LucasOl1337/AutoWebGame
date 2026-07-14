@@ -221,6 +221,54 @@ const canceledBeforeFire = cancelCrocodilo.skill.phase === "idle"
   && cancelGame.flames.length === 0
   && cancelEnemy.alive === true;
 
+const largeArenaGame = createServerMatch({ 1: 0, 2: 1, 3: 2, 4: 0 });
+largeArenaGame.arena.config.grid = { width: 15, height: 13 };
+largeArenaGame.arena.solid.add("14,10");
+largeArenaGame.arena.solid.add("12,12");
+const largeArenaCrocodilo = largeArenaGame.players[1];
+const largeArenaEnemy = largeArenaGame.players[2];
+
+largeArenaCrocodilo.position = { x: 12 * TILE_SIZE + TILE_SIZE * 0.5, y: 10 * TILE_SIZE + TILE_SIZE * 0.5 };
+largeArenaCrocodilo.tile = { x: 12, y: 10 };
+largeArenaCrocodilo.spawnProtectionMs = 0;
+largeArenaEnemy.position = { x: 13 * TILE_SIZE + TILE_SIZE * 0.5, y: 10 * TILE_SIZE + TILE_SIZE * 0.5 };
+largeArenaEnemy.tile = { x: 13, y: 10 };
+largeArenaEnemy.spawnProtectionMs = 0;
+
+largeArenaGame.setServerPlayerInput(1, {
+  direction: "right",
+  ...neutralInput,
+  skillPressed: true,
+  skillHeld: true,
+});
+largeArenaGame.advanceServerSimulation(17);
+for (let elapsedMs = 17; elapsedMs < 2_400 && largeArenaCrocodilo.skill.phase === "channeling"; elapsedMs += 17) {
+  largeArenaGame.setServerPlayerInput(1, {
+    direction: "right",
+    ...neutralInput,
+    skillHeld: true,
+  });
+  largeArenaGame.advanceServerSimulation(17);
+}
+
+const largeArenaToxicTileKeys = new Set(
+  largeArenaGame.flames
+    .filter((flame) => flame.style === "toxic")
+    .map((flame) => `${flame.tile.x},${flame.tile.y}`),
+);
+const expectedLargeArenaToxicTileKeys = [
+  "12,9",
+  "12,8",
+  "12,11",
+  "11,10",
+  "10,10",
+  "13,10",
+];
+const largeArenaSurgeUsesRuntimeBounds = expectedLargeArenaToxicTileKeys.every(
+  (key) => largeArenaToxicTileKeys.has(key),
+) && largeArenaToxicTileKeys.size === expectedLargeArenaToxicTileKeys.length
+  && largeArenaEnemy.alive === false;
+
 const castMarkerA = { id: "cast-a" };
 const castMarkerB = { id: "cast-b" };
 const castMarkerC = { id: "cast-c" };
@@ -299,6 +347,8 @@ const report = {
   surgeKeptCasterSafe,
   stayedImmuneDuringChannel,
   canceledBeforeFire,
+  largeArenaToxicTileKeys: [...largeArenaToxicTileKeys],
+  largeArenaSurgeUsesRuntimeBounds,
   usesChannelCastTiming,
   usesReleaseCastTiming,
   pass: stayedFrozen
@@ -313,6 +363,7 @@ const report = {
     && surgeKeptCasterSafe
     && stayedImmuneDuringChannel
     && canceledBeforeFire
+    && largeArenaSurgeUsesRuntimeBounds
     && usesChannelCastTiming
     && usesReleaseCastTiming,
 };

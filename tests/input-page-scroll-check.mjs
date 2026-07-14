@@ -13,7 +13,7 @@ const fire = (event, payload) => {
   }
 };
 
-class FakeHTMLElement {
+class FakeElement {
   constructor({ contentEditable = false, closestMatch = false } = {}) {
     this.isContentEditable = contentEditable;
     this.closestMatch = closestMatch;
@@ -24,10 +24,13 @@ class FakeHTMLElement {
   }
 }
 
+class FakeHTMLElement extends FakeElement {}
+class FakeSVGElement extends FakeElement {}
 class FakeInputElement extends FakeHTMLElement {}
 class FakeTextAreaElement extends FakeHTMLElement {}
 class FakeSelectElement extends FakeHTMLElement {}
 
+globalThis.Element = FakeElement;
 globalThis.HTMLElement = FakeHTMLElement;
 globalThis.HTMLInputElement = FakeInputElement;
 globalThis.HTMLTextAreaElement = FakeTextAreaElement;
@@ -73,6 +76,13 @@ const buttonSpaceUp = keyEvent("Space", buttonChild);
 fire("keyup", buttonSpaceUp);
 const interactiveKeyupClearsWithoutBlocking = !buttonSpaceUp.prevented && !input.isDown("Space");
 
+const buttonSvgChild = new FakeSVGElement({ closestMatch: true });
+const buttonSvgSpace = keyEvent("Space", buttonSvgChild);
+fire("keydown", buttonSvgSpace);
+const svgInteractiveKeydownPassesThrough = !buttonSvgSpace.prevented
+  && !input.isDown("Space")
+  && !input.consumePress("Space");
+
 const typingTarget = new FakeInputElement();
 const typingKey = keyEvent("KeyW", typingTarget);
 fire("keydown", typingKey);
@@ -85,6 +95,7 @@ const pass = gameKeydownPreventsScroll
   && interactiveKeydownPassesThrough
   && gameSpaceCaptured
   && interactiveKeyupClearsWithoutBlocking
+  && svgInteractiveKeydownPassesThrough
   && typingKeyPassesThrough;
 
 console.log(JSON.stringify({
@@ -93,6 +104,7 @@ console.log(JSON.stringify({
   interactiveKeydownPassesThrough,
   gameSpaceCaptured,
   interactiveKeyupClearsWithoutBlocking,
+  svgInteractiveKeydownPassesThrough,
   typingKeyPassesThrough,
   pass,
 }, null, 2));

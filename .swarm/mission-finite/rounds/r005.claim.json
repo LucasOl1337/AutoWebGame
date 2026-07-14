@@ -1,0 +1,13 @@
+{
+  "roundId": "r005",
+  "objective": "Auditar e, se houver evidência, corrigir invariantes e transições nas regras compartilhadas de lobby e matchmaking, incluindo assentos humanos/bots e reset de salas em jogo.",
+  "owner": "r005_matchmaking",
+  "status": "completed",
+  "lease": { "acquiredAt": "2026-07-13T11:34:00.0000000-03:00", "expiresAt": "2026-07-13T12:34:00.0000000-03:00" },
+  "dependencies": ["r001", "r002", "r003"],
+  "readResources": ["AGENTS.md", "DocsDev/codegraph/inventory.md", ".codegraph/ (somente consultas via CodeGraph)", "package.json", "src/NetCode/matchmaking.ts", "src/NetCode/lobby-rules.ts", "src/NetCode/protocol.ts", "src/Gameplay/types.ts", "worker/index.js", "tests/matchmaking-session-state-check.mjs", "tests/lobby-rules-check.mjs", "tests/lobby-disconnected-actions-check.mjs"],
+  "writeResources": ["src/NetCode/matchmaking.ts", "src/NetCode/lobby-rules.ts", "tests/matchmaking-session-state-check.mjs", "tests/lobby-rules-check.mjs", ".swarm/mission-finite/results/r005.json"],
+  "doneCriteria": "Uma falha concreta e relevante é demonstrada e corrigida com teste de regressão, ou um no-op auditável explica por que nenhuma mudança segura é justificada.",
+  "expectedValidation": ["npm run test:matchmaking-state", "npm run test:lobby-rules", "npm run test:lobby-disconnected-actions", "npm run build"],
+  "resultPath": ".swarm/mission-finite/results/r005.json"
+}

@@ -1,4 +1,71 @@
+## 2026-07-13 — ux-disabled-button-cursor
+- Claim/escopo antes da intervenção: tornar exclusivamente o cursor dos `.experience-button:disabled` inequivocamente indisponível (`not-allowed`) em vez de neutro (`default`); alterar somente `src/UiLayouts/main.css`, criar `tests/disabled-button-cursor-check.mjs` e anexar claim/resultado neste ledger, preservando todos os diffs alheios.
+- Evidência antes: `src/UiLayouts/main.css:257-260` já reduz opacidade e impede hover/active por `:not(:disabled)`, porém usa `cursor: default`, que não comunica indisponibilidade com a mesma clareza do estado visual.
+- Critério de sucesso: teste focal RED → GREEN deve comprovar `cursor: not-allowed`, opacidade preservada e ausência de hover/active em desabilitados; `npm run build` e `git diff --check` seletivo devem passar antes de commit seletivo.
+- Antes → depois: o botão desabilitado mantinha cursor neutro `default`; agora usa `not-allowed`, enquanto a opacidade `0.52` e os gates `:not(:disabled)` de hover/active permanecem intactos.
+- RED → GREEN: antes da implementação, `communicatesUnavailableCursor=false` e `pass=false`; após a troca mínima de uma declaração CSS, todas as cinco verificações passaram.
+- Resultado/validação: `node tests/disabled-button-cursor-check.mjs`, `npm run build` (42 módulos) e `git diff --check -- src/UiLayouts/main.css tests/disabled-button-cursor-check.mjs SwarmLedger-gameplay.md` concluíram com código 0; o diff-check emitiu somente avisos LF→CRLF. Validação visual manual não foi realizada e o ganho perceptivo em usuários reais não foi medido.
+- Commit seletivo da implementação e teste: `646c92b` (`fix(ux): clarify disabled button state`). O ledger permaneceu fora do commit porque já continha diffs alheios, mas claim e resultado foram preservados no working tree.
+
+## 2026-07-13 — ux-bomb-armed-scale-pulse
+- Claim/escopo antes da intervenção: melhorar exclusivamente o feedback visual contínuo da ação central de plantar bomba com um pulso sutil de escala no sprite e no fallback existentes; alterar somente `src/Engine/game-app.ts`, `tests/bomb-armed-scale-pulse-check.mjs` e este ledger; preservar fuse, hitbox, tile, áudio, rede, gameplay e todas as mudanças alheias.
+- Evidência antes: `docs/VisualDesignRules.md` prioriza um `Bomb armed pulse` sutil, mas `drawBomb` aplica o pulso existente apenas à opacidade; a silhueta não respira e o fallback pulsa somente o pavio.
+- Critério de sucesso: teste focal RED → GREEN deve comprovar escala pequena, centrada e compartilhada por sprite/fallback sem alterar timing; `compile:esm`, regressões de bomba, `build` e diff-check seletivo devem passar antes de qualquer commit.
+- Antes → depois: o pulso de fuse alterava apenas a opacidade do sprite e apenas o pavio no fallback; agora a silhueta inteira respira de 1,00× a 1,04× em torno do centro do tile, mantendo o anel final, fuse e regras intactos.
+- RED → GREEN: antes da implementação, o teste focal retornou `hasSubtleScale=false`, `centersTransform=false`, `spriteUsesTransform=false` e `fallbackUsesTransform=false`; depois, todas essas flags e `preservesFuseThreshold` passaram.
+- Validação: `node tests/bomb-armed-scale-pulse-check.mjs`, `npm run compile:esm`, `node tests/bomb-hit-window-check.mjs`, `node tests/bomb-chain-reaction-check.mjs` e `npm run build` passaram; revisão/diff-check seletivo e commit serão registrados ao fechamento.
+
+## 2026-07-13 — ranni-no-displacement-short-cooldown
+- Claim/escopo: alterar somente `src/Characters/CustomMechanics/ranni-skill.ts`, `tests/ranni-ult-ice-blink-check.mjs` e este ledger; preservar mudanças concorrentes, sem commit e sem alterar `package.json`.
+- Antes → depois: Ice Blink concluído sem deslocamento efetivo aplicava o cooldown integral de 8000 ms; agora aplica cooldown curto positivo de 300 ms, seguindo o precedente `KILLER_BEE_DASH_BLOCKED_COOLDOWN_MS`, enquanto blinks com deslocamento mantêm 8000 ms.
+- RED → GREEN: o teste focal estacionário falhou com `stationaryBlinkCooldownRemainingMs=7983.33` e passou após a intervenção com `283.33` restantes depois do tick seguinte, `stationaryBlinkShortCooldown=true` e `pass=true`.
+- Validação: `npm run compile:esm` e `node tests/ranni-ult-ice-blink-check.mjs` passaram; diff-check seletivo e revisão final registrados no reporte da intervenção.
+
+## 2026-07-13 — nico-voluntary-cancel-short-cooldown
+- Claim/escopo antes da intervenção: cancelamento voluntário do channel de Nico deve entrar em cooldown curto de 600 ms, em vez de retornar a `idle` com cooldown zero; alterar somente `src/Characters/CustomMechanics/nico-skill.ts`, `tests/nico-ult-arcane-beam-check.mjs` e este ledger; preservar integralmente conteúdo e mudanças alheias; sem commit.
+- Critério de sucesso: exportar constante explícita para os 600 ms, fortalecer o teste focal pelo comportamento observável e passar `test:nico-ult`, `test:skill-contract`, `build` e diff-check seletivo.
+- RED → GREEN: o teste focal atualizado falhou inicialmente apenas com `canceledBeforeFire=false`; após exportar `NICO_VOLUNTARY_CANCEL_COOLDOWN_MS = 600` e aplicar fase `cooldown` no cancelamento, passou com `canceledBeforeFire=true` e `pass=true`.
+- Resultado/bloqueio: após a validação RED → GREEN, a implementação e o teste de Nico foram sobrescritos por uma alteração concorrente; o estado final voltou a `idle` com cooldown `0`. Experimento não entregue e sem commit.
+
 # Swarm Ledger — Gameplay
+
+## 2026-07-13 — ux-audio-range-keyboard-focus
+- Antes → depois: o controle `.experience-audio__range` não participava do estilo compartilhado de `:focus-visible`; agora recebe o mesmo outline de `2px solid rgba(var(--accent-rgb), 0.82)` e `outline-offset: 2px` dos demais controles ao navegar por teclado.
+- Classificação: Comprovada para o contrato objetivo de indicação de foco por teclado.
+- Resultado/validação: `node tests/audio-range-focus-check.mjs` passou, confirmando seletor, outline e offset; `npm run build` passou com 42 módulos transformados; `git diff --check -- src/UiLayouts/main.css tests/audio-range-focus-check.mjs SwarmLedger-gameplay.md` passou com código 0 e apenas avisos LF→CRLF.
+- Limitação de validação visual: não foi realizada inspeção manual em navegador; a evidência é estática/automatizada sobre o CSS efetivamente aplicado ao seletor.
+
+## 2026-07-13 — ux-bomb-kick-hud-label-bk
+- Claim/escopo antes da intervenção: alterar exclusivamente `shortLabel` de Bomb Kick de `K` para `BK` em `src/Gameplay/powerups.ts`, criar `tests/bomb-kick-hud-label-check.mjs` e preservar todos os diffs alheios; sem commit.
+- RED → GREEN: após `compile:esm`, o teste focal falhou com `'K' !== 'BK'`; depois da mudança mínima, passou expondo `type=kick-up`, `label=Bomb Kick` e `shortLabel=BK` pela interface pública `getPowerUpDefinition`.
+- Validação final: teste focal passou; `npm run build` passou (42 módulos); `git diff --check -- src/Gameplay/powerups.ts tests/bomb-kick-hud-label-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` passou com apenas avisos LF→CRLF. `npm run test:powerup-hud` compilou e observou corretamente `kick-up: "BK"`, mas falhou porque o teste preexistente ainda exige `"K"` e também `1.65s`, enquanto o runtime concorrente já produz `1.60s`; esse arquivo ficou intocado conforme o escopo solicitado.
+
+## 2026-07-13 — bot-remote-over-bomb-pass-priority
+- Claim/escopo antes da intervenção: alterar exclusivamente `getPowerUpPriorityScore` para `remote-up` 220→250 e fortalecer `tests/bot-powerup-priority-check.mjs`; preservar demais scores, comportamento de bot e toda sujeira alheia; sem commit.
+- Antes → depois: `remote-up` valia 220 e ficava abaixo de `bomb-pass-up` 240; agora vale 250, supera bomb-pass 240 e permanece abaixo de `short-fuse-up` 260. `remoteLevel >= 1` continua saturando em 0.
+- Contrato focal fortalecido: valida explicitamente `remoteScore === 250`, `saturatedRemoteScore === 0`, `short-fuse 260 > remote 250 > bomb-pass 240`, prioridades universais superiores e `kick-up` situacional abaixo.
+- Evidências: `npm run test:bot-powerup` passou com todas as flags true; `npm run test:bot-survival` passou (`pass: true`, `deadAtFrame: -1`); `npm run test:bot-target` passou (`pass: true`); `npm run build` passou (42 módulos transformados); `git diff --check -- src/Gameplay/powerups.ts tests/bot-powerup-priority-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` passou com código 0 e apenas avisos LF→CRLF.
+- Resultado: intervenção mínima concluída, sem commit; alterações concorrentes fora do escopo permaneceram intocadas.
+
+## 2026-07-13 — short-fuse-step-400ms
+- Claim/escopo: alterar somente `SHORT_FUSE_STEP_MS` de 350 para 400 em `src/Gameplay/powerups.ts` e criar o teste focal `tests/short-fuse-timing-check.mjs`; preservar `package.json`, coordenação e mudanças alheias.
+- Resultado: níveis 0/1/2 agora produzem pavios de 2000/1600/1200 ms; RED confirmou 2000/1650/1300 ms antes da intervenção e GREEN confirmou o novo contrato. Validações finais registradas no retorno da tarefa; sem commit.
+
+## 2026-07-13 — ux-round-start-objective-cue (concluída)
+- Claim/escopo antes da intervenção: alterar somente a legenda PT/EN do aviso existente de início da rodada e adicionar contrato focal; preservar título, timing, render, gameplay, guia sob claim concorrente e mudanças alheias.
+- Arquivos previstos: `src/UiLayouts/i18n.ts`, `tests/round-start-objective-cue-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.
+- Evidência antes: `roundStartSubtitle` dizia apenas `Acao liberada.`/`Action is live.`, enquanto `localControlsHint` já define o objetivo como ser o último bomber vivo.
+- Antes → depois: o aviso genérico de ação agora diz `Seja o ultimo bomber vivo.`/`Be the last bomber alive.`, reutilizando o overlay e o objetivo existentes sem mudar duração ou gameplay.
+- Resultado/validação: `node tests/round-start-objective-cue-check.mjs`, `npm run build` e `git diff --check` seletivo passaram; diff completo do escopo revisado. Validação visual manual não foi realizada, mas o texto exato usado pelo overlay foi demonstrado no contrato focal.
+- Classificação final: Comprovada para a lacuna objetiva de clareza; impacto comportamental em jogadores permanece não medido.
+- Commit seletivo: `efb97e4` (`feat(ux): clarify round objective cue`), contendo somente i18n e teste focal.
+
+## 2026-07-13 - Risco de pavio no guia de chute (parcial)
+- Escopo: somente `how-to-play.html`, contrato focal e arquivos de coordenacao; runtime e balanceamento preservados.
+- Evidencia antes: o guia dizia apenas que chutar reposicionava a ameaca (`how-to-play.html`, card Powerups escalam), enquanto o comportamento validado do jogo reduz 250ms de fuse por tile chutado, com piso de 450ms (`DocsDev/swarm-coordination.md`, registro `creative-hot-kick-fuse`).
+- Depois: o mesmo card informa `250 ms ... por tile percorrido` e orienta fuga imediata em chutes longos; o teste focal fixa ambas as mensagens.
+- Validacao: `npm run test:how-to-play-page`, `npm run compile:esm`, `npm run build` e `git diff --check` focal passaram. `npm run test:bomb-push` ficou bloqueado por fixture alheia sem `window.removeEventListener`, erro ja registrado nesta coordenacao.
+- Resultado: melhoria demonstravel de onboarding, classificada como comprovada, mas validacao global parcial; sem commit.
 
 ## 2026-07-13 — ux-how-to-play-round-scoring
 
@@ -16,6 +83,14 @@
 - Critério de sucesso: teste focal comprova 3–4 fragmentos pixelados no fallback, derivados do mesmo progresso e sem alterar duração, estado ou caminho de sprites; `compile:esm`, regressões relevantes e `build` devem passar.
 - Antes → depois: o fallback exibia somente um pulso circular de poeira; agora também desenha quatro fragmentos quadrados que se afastam e dissipam usando o mesmo `progress` calculado de `effect.elapsedMs / CRATE_BREAK_DURATION_MS`.
 - Resultado/validação: `npm run compile:esm`; `node tests/crate-break-fallback-check.mjs`; `node tests/demolition-combo-drop-check.mjs`; `node tests/ranni-ult-animation-hold-check.mjs`; `npm run build`; `git diff --check -- src/Engine/game-app.ts tests/crate-break-fallback-check.mjs SwarmLedger-gameplay.md` — todos concluídos com código 0; diff-check emitiu apenas avisos LF→CRLF. Commit seletivo realizado após validação; mudanças alheias permaneceram intocadas no working tree.
+
+## 2026-07-13 — ux-round-winner-avatar-halo
+
+- Claim/escopo antes da intervenção: adicionar exclusivamente um halo pixel-art ao avatar vencedor enquanto `roundOutcome` existe; preservar gameplay, estado, sincronização, sprites, paleta e mudanças alheias.
+- Arquivos previstos: `src/Engine/game-app.ts`, `tests/round-winner-halo-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.
+- Critério de sucesso: teste focal comprova gate pelo vencedor do outcome, composição atrás do avatar, uso da paleta existente e ausência de mutação de gameplay; `test:round-outcome`, build e diff-check devem passar.
+- Antes → depois: o resultado aparecia apenas no overlay; agora o avatar cujo `id` coincide com `roundOutcome.winner` recebe moldura/halo em blocos de pixel com `CANVAS_UI_GOLD` e `CANVAS_UI_GOLD_BRIGHT`, removido automaticamente quando o outcome volta a `null`.
+- Resultado/validação: `node tests/round-winner-halo-check.mjs` passou com gate, paleta, pixel-art, ordem atrás do avatar e ausência de mutação confirmados; `npm run build` passou. `npm run test:round-outcome` compilou, mas ficou bloqueado no fixture preexistente porque `window.removeEventListener` não existe e a versão concorrente de `SoundManager.unbindUnlock()` agora o exige; nenhuma correção fora do escopo foi feita.
 
 ## 2026-07-13 — onboarding-bomb-final-telegraph
 
@@ -130,7 +205,7 @@
 - Preservação: toda sujeira e mudanças alheias permaneceram intocadas; sem commit.
 - Antes → depois: a fórmula linear após a primeira carga retornava 245 em `shieldCharges=1`; agora o score usa `210 / 2 ** (shieldCharges - 1)`, produzindo `[500,210,0]` para cargas `[0..MAX_SHIELD_CHARGES]`, com 500 em zero e 0 no máximo preservados.
 - Evidência focal: `shieldScores=[500,210,0]` e `hasDiminishingShieldReturns=true`; as verificações existentes de mobilidade inicial, primeiro shield, atributos saturados, bomb, speed, flame e short-fuse permaneceram aprovadas.
-- Validação: `npm run compile:esm`; `node tests/bot-powerup-priority-check.mjs`; `node tests/bot-survival-10s-check.mjs`; `node tests/bot-target-selection-check.mjs`; `node tests/bot-own-blast-escape-check.mjs`; `npm run build`; `git diff --check -- src/Gameplay/powerups.ts tests/bot-powerup-priority-check.mjs SwarmLedger-gameplay.md` — todos concluídos com código 0. Diff revisado e limitado à intervenção nos três arquivos reivindicados; sem commit.
+- Validação: `npm run compile:esm`; `node tests/bot-powerup-priority-check.mjs`; `node tests/bot-survival-10s-check.mjs`; `node tests/bot-target-selection-check.mjs`; `node tests/bot-own-blast-escape-check.mjs`; `npm run build`; `git diff --check -- src/Gameplay/powerups.ts tests/bot-powerup-priority-check.mjs SwarmLedger-gameplay.md` — todos concluídos com código 0; somente avisos LF→CRLF. Diff revisado e limitado à intervenção nos três arquivos reivindicados; sem commit.
 
 ## 2026-07-12 — input-ignore-orphan-key-repeat
 
@@ -312,3 +387,31 @@
 - Depois: somente no estágio de busca por caixa, candidatos seguros na mesma distância recebem desempate binário pela presença de power-up oculto/precomputado na caixa adjacente; sobrevivência, detonação remota e posicionamento de ataque continuam executados antes e sem novo score.
 - Evidência determinística: `crateTieDecision={direction:"left",placeBomb:false}` e `vulnerableTargetDecision={direction:"down",placeBomb:false}`.
 - Arquivos: `src/Engine/bot-ai.ts`, `tests/bot-breakable-safe-tiebreak-check.mjs`, `DocsDev/swarm-coordination.md`, `SwarmLedger-gameplay.md`.
+
+## 2026-07-13 — ux-canvas-double-ko-simultaneous-elimination
+
+- Claim/escopo antes da intervenção: esclarecer exclusivamente no canvas PT/EN que `doubleKo` representa eliminação simultânea, preservando integralmente `noPoints`, runtime, pontuação, timing, renderização e mudanças alheias; sem commit.
+- Arquivos previstos: `src/UiLayouts/i18n.ts`, novo teste focal `tests/canvas-double-ko-copy-check.mjs` e `SwarmLedger-gameplay.md`.
+- Critério de sucesso: teste focal simples deve comprovar a explicação PT/EN de eliminação simultânea e a preservação literal de `noPoints` nos dois idiomas.
+- Antes → depois: o canvas descrevia apenas a ficção de dois núcleos explodindo/sobrecarregando; agora nomeia primeiro a eliminação simultânea e mantém a confirmação separada de que nenhum ponto foi marcado.
+- Resultado/classificação: intervenção Comprovada para clareza semântica do desfecho; impacto na compreensão de jogadores reais permanece não medido. `npm run compile:esm`, teste focal, `npm run build` e `git diff --check` seletivo passaram; validação manual visual não foi realizada por ausência de caminho determinístico curto para forçar Double KO sem alterar estado.
+- Commit seletivo: `9bfd97a` (`src/UiLayouts/i18n.ts` e `tests/canvas-double-ko-copy-check.mjs`); ledger atualizado depois do commit para preservar alterações concorrentes já existentes.
+
+## 2026-07-13 — ux-short-fuse-effective-time
+
+- Oportunidade parcialmente comprovada: pretendia alterar `src/Engine/game-app.ts` e criar/ajustar teste focal para exibir `SF 1.60s` e `SF 1.20s` no feedback de coleta de Short Fuse.
+- Evidência de gameplay em `src/Gameplay/powerups.ts`: `MAX_SHORT_FUSE_LEVEL = 2`, `SHORT_FUSE_STEP_MS = 400` e `MIN_SHORT_FUSE_MS = 1_200`; `getBombFuseMsForPlayer` aplica `BOMB_FUSE_MS - shortFuseLevel * 400` com piso de 1200ms, e `formatBombFuseSeconds` formata o resultado com duas casas. Com fuse base de 2000ms, os níveis 1 e 2 correspondem a `1.60s` e `1.20s`.
+- Bloqueio/preservação: `git diff -- src/Engine/game-app.ts` já mostrou diff alheio/claim do halo do vencedor, incluindo a chamada e o novo helper `drawRoundWinnerHalo`; para não sobrepor trabalho concorrente no mesmo arquivo, a intervenção foi encerrada.
+- Resultado: bloqueada sem código, sem teste e sem commit; somente os dois registros de coordenação foram acrescentados.
+
+## 2026-07-13 — ux-canvas-double-ko-no-points-copy
+
+- Claim/escopo antes da intervenção: alterar somente `canvas.doubleKo` PT/EN em `src/UiLayouts/i18n.ts` para dizer explicitamente que ninguém pontua, criar `tests/double-ko-no-points-copy-check.mjs` e registrar este antes → depois; preservar estilo, `noPoints`, gameplay, `src/Engine/game-app.ts`, `package.json` e todas as mudanças concorrentes.
+- Antes → depois: `Eliminacao simultanea: os dois nucleos explodiram.` / `Simultaneous elimination: both cores overloaded.` → as mesmas frases, agora concluídas por `e ninguem pontua.` / `and no one scores.`.
+- Resultado/validação final: teste focal, `npm run build` e `git diff --check` seletivo passaram; validação manual visual não foi realizada.
+- Commit seletivo: `1dd817c`.
+
+## 2026-07-13 — killer-bee-zero-distance-short-cooldown
+- Claim/escopo antes da intervenção: quando o dash de Killer Bee computar distância menor que 1 px, aplicar cooldown curto de 300 ms, limpar `projectedPosition` e `projectedLastMoveDirection` e manter posição; alterar somente `src/Characters/CustomMechanics/killer-bee-skill.ts` e `tests/killer-bee-ult-dash-check.mjs`, além deste registro obrigatório; preservar conteúdo e mudanças alheias; sem commit.
+- Resultado: o ramo de distância `< 1` agora entra em `cooldown` por 300 ms, zera canal/cast/velocidade, limpa ambos os campos projetados e não altera posição ou tile; o fluxo normal mantém cooldown de 4000 ms.
+- Validação: `npm run compile:esm` e `node tests/killer-bee-ult-dash-check.mjs` passaram; cenário cercado confirmou `cooldownRemainingMs=300`, posição `(180,180)` preservada e projeções nulas. Diff seletivo revisado; sem commit.

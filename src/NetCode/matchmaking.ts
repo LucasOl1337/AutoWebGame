@@ -130,7 +130,7 @@ export function shouldResetPlayingRoom(
   }
 
   if (room.roomMode === "endless") {
-    return activePlayerIds.some((playerId) => seats[playerId]?.occupantType === "empty");
+    return activePlayerIds.some((playerId) => !isPlayableLobbySeat(seats[playerId]));
   }
 
   const playableSeatIds = activePlayerIds.filter((playerId) => isPlayableLobbySeat(seats[playerId]));

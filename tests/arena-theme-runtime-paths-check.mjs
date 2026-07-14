@@ -1,3 +1,6 @@
+import { access } from "node:fs/promises";
+import path from "node:path";
+
 const {
   ARENA_THEME_LIBRARY,
   getArenaThemeById,
@@ -13,7 +16,8 @@ const expectedFiles = {
 };
 
 const spriteThemes = ARENA_THEME_LIBRARY.filter((theme) => theme.renderMode === "sprite");
-const runtimePathResults = spriteThemes.map((theme) => {
+const expectedSpriteThemeIds = ["arcane-citadel", "skyfoundry-bastion"];
+const runtimePathResults = await Promise.all(spriteThemes.map(async (theme) => {
   const tilePaths = theme.tilePaths ?? {};
   const mismatches = Object.entries(expectedFiles)
     .filter(([key, fileName]) => tilePaths[key] !== `/Assets/TileMaps/themes/${theme.id}/${fileName}`)
@@ -25,24 +29,35 @@ const runtimePathResults = spriteThemes.map((theme) => {
 
   const invalidPublicPaths = Object.values(tilePaths)
     .filter((runtimePath) => runtimePath.includes("public/") || runtimePath.includes("aassets") || !runtimePath.startsWith("/Assets/"));
+  const missingFiles = [];
+  for (const runtimePath of Object.values(tilePaths)) {
+    try {
+      await access(path.join(process.cwd(), "public", runtimePath));
+    } catch {
+      missingFiles.push(runtimePath);
+    }
+  }
 
   return {
     id: theme.id,
     mismatches,
     invalidPublicPaths,
-    pass: mismatches.length === 0 && invalidPublicPaths.length === 0,
+    missingFiles,
+    pass: mismatches.length === 0 && invalidPublicPaths.length === 0 && missingFiles.length === 0,
   };
-});
+}));
 
 const directSelection = getArenaThemeById(" ARCANe-CITADEL ")?.id === "arcane-citadel";
 const querySelection = resolveArenaTheme("?arenaTheme=skyfoundry-bastion").id === "skyfoundry-bastion";
-const pass = spriteThemes.length >= 3
+const spriteThemeIds = spriteThemes.map((theme) => theme.id).sort();
+const pass = JSON.stringify(spriteThemeIds) === JSON.stringify(expectedSpriteThemeIds)
   && runtimePathResults.every((result) => result.pass)
   && directSelection
   && querySelection;
 
 console.log(JSON.stringify({
   spriteThemeCount: spriteThemes.length,
+  spriteThemeIds,
   runtimePathResults,
   directSelection,
   querySelection,

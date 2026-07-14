@@ -8,46 +8,21 @@
     "O agendamento único é desativado e verificado no fechamento."
   ],
   "risks": [
-    "Há mudanças preexistentes em módulos de gameplay e frontend; esses arquivos ficam fora da primeira onda.",
-    "worker/index.js é um orquestrador de alto risco e exige claim exclusivo.",
-    "Testes npm recompilam artefatos em dist; resultados precisam ser atribuídos sem tratar saída gerada como entrega.",
+    "Arquivos centrais de gameplay e frontend permanecem fora desta onda.",
+    "worker/index.js é somente leitura nesta onda; mudanças nele exigiriam claim exclusivo posterior.",
+    "Testes npm recompilam artefatos em output; saídas geradas não são entregas.",
     "Claims fisicamente disjuntos ainda podem ter conflito semântico; a barreira precede a consolidação."
   ],
   "items": [
-    {
-      "roundId": "r001",
-      "priority": 1,
-      "status": "completed",
-      "objective": "Auditar e melhorar robustez de telemetria do cliente diante de falhas de storage/UUID/retry.",
-      "dependencies": []
-    },
-    {
-      "roundId": "r002",
-      "priority": 2,
-      "status": "completed",
-      "objective": "Auditar e melhorar carregamento de assets e fallbacks de sprites sem tocar no orquestrador de gameplay.",
-      "dependencies": []
-    },
-    {
-      "roundId": "r003",
-      "priority": 3,
-      "status": "completed",
-      "objective": "Auditar e melhorar robustez de dispatch/cache HTTP do Worker com validação focada.",
-      "dependencies": []
-    },
-    {
-      "roundId": "r004",
-      "priority": 4,
-      "status": "planned",
-      "objective": "Próxima unidade coesa de auditoria será escolhida pelo coordenador usando o estado atual e evitando mudanças concorrentes.",
-      "dependencies": ["r001", "r002", "r003"]
-    },
-    {
-      "roundId": "r005-r010",
-      "priority": 5,
-      "status": "reserve",
-      "objective": "Capacidade adaptativa para falhas comprovadas, regressões ou validação crítica; não deve ser consumida artificialmente.",
-      "dependencies": ["first-wave-evidence"]
-    }
+    { "roundId": "r001", "priority": 1, "status": "completed", "objective": "Robustez de telemetria do cliente.", "dependencies": [] },
+    { "roundId": "r002", "priority": 2, "status": "completed", "objective": "Fallbacks de carregamento de assets.", "dependencies": [] },
+    { "roundId": "r003", "priority": 3, "status": "completed", "objective": "Dispatch e cache HTTP do Worker.", "dependencies": [] },
+    { "roundId": "r004", "priority": 4, "status": "completed", "objective": "Robustez do gerenciamento de input.", "dependencies": ["r001", "r002", "r003"] },
+    { "roundId": "r005", "priority": 5, "status": "completed", "objective": "Invariantes compartilhados de lobby e matchmaking.", "dependencies": ["r001", "r002", "r003"] },
+    { "roundId": "r006", "priority": 6, "status": "completed", "objective": "Determinismo e recuperação do tick fixo do servidor.", "dependencies": ["r001", "r002", "r003"] },
+    { "roundId": "r007", "priority": 7, "status": "completed", "objective": "Robustez do ciclo de vida WebSocket do cliente online.", "dependencies": ["r004", "r005", "r006"] },
+    { "roundId": "r008", "priority": 8, "status": "completed", "objective": "Robustez do ciclo de vida de áudio.", "dependencies": ["r004", "r005", "r006"] },
+    { "roundId": "r009", "priority": 9, "status": "completed", "objective": "Segurança e determinismo do estado da IA de bots.", "dependencies": ["r004", "r005", "r006"] },
+    { "roundId": "r010", "priority": 10, "status": "skipped", "objective": "Capacidade final não consumida: critérios da missão já atendidos.", "dependencies": ["cycle-003-evidence"] }
   ]
 }

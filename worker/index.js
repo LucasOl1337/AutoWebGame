@@ -984,19 +984,25 @@ export class GlobalLobby extends DurableObject {
       return;
     }
 
-    this.setClientIntent(clientId, room.roomKind === "matchmaking" ? "queue_classic" : "manual");
-
     const alreadySeated = PLAYER_IDS.some((seatId) => room.seats[seatId].clientId === clientId);
+    if (room.status === "playing" && !alreadySeated) {
+      this.sendToClient(clientId, {
+        type: "error",
+        message: "Match already in progress. Pick another open room.",
+      });
+      return;
+    }
+
     const seatsFull = PLAYER_IDS.every((seatId) => Boolean(room.seats[seatId].clientId));
     if (!alreadySeated && seatsFull) {
       this.sendToClient(clientId, {
         type: "error",
-        message: room.status === "playing"
-          ? "Match already in progress. Pick another open room."
-          : "Lobby full. Pick another room or wait for a slot.",
+        message: "Lobby full. Pick another room or wait for a slot.",
       });
       return;
     }
+
+    this.setClientIntent(clientId, room.roomKind === "matchmaking" ? "queue_classic" : "manual");
 
     const currentRoom = this.findRoomForClient(clientId);
     if (currentRoom && currentRoom.roomCode !== roomCode) {
@@ -1006,6 +1012,18 @@ export class GlobalLobby extends DurableObject {
     room.clients.add(clientId);
     await this.persistState();
     this.sendJoinedLobby(clientId, room);
+    const activeMatch = this.matches.get(room.roomCode);
+    const seatedPlayerId = this.findSeatForClient(room, clientId);
+    if (room.status === "playing" && activeMatch && seatedPlayerId) {
+      this.sendMatchStartedToSeat(
+        room,
+        seatedPlayerId,
+        activeMatch.activePlayerIds,
+        activeMatch.characterSelections,
+        activeMatch.botPlayerIds,
+      );
+      this.sendSnapshotToClient(clientId, room.roomCode);
+    }
     this.broadcastLobbyToMembers(room);
     this.broadcastLobbyList();
     this.broadcastQuickMatchState();
@@ -2920,6 +2938,24 @@ export class GlobalLobby extends DurableObject {
     });
   }
 
+  sendSnapshotToClient(clientId, roomCode) {
+    const match = this.matches.get(roomCode);
+    if (!match) {
+      return;
+    }
+    const snapshot = match.game.exportOnlineSnapshot();
+    this.sendToClient(clientId, {
+      type: "host-snapshot",
+      snapshot: {
+        ...snapshot,
+        serverTimeMs: Date.now(),
+        serverTick: match.tick,
+        frameId: match.tick,
+        ackedInputSeq: createSeatMap((playerId) => match.ackedInputSeq[playerId] ?? 0),
+      },
+    });
+  }
+
   broadcastQuickMatchState() {
     const queued = this.countOpenQuickMatchRooms();
     const onlineUsers = this.sockets.size;
@@ -3134,6 +3170,7 @@ export class GlobalLobby extends DurableObject {
     if (!seat?.clientId) {
       return;
     }
+    const match = this.matches.get(room.roomCode);
     this.sendToClient(seat.clientId, {
       type: "match-started",
       config: {

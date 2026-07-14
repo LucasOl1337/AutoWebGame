@@ -16,7 +16,7 @@ const checks = {
     && session.includes("renderAudioControls()"),
   devLabRoutes: session.includes('devBotVsBot.href = "?autobot=3"')
     && session.includes('devExternalModels.href = "?autobot=3&codexbot=1,2,3,4"')
-    && session.includes("landingDevLab.hidden = !import.meta.env.DEV"),
+    && session.includes("landingDevLab.hidden = !import.meta.env?.DEV"),
   responsiveLanding: css.includes("@media (max-width: 560px)")
     && css.includes(".experience-audio, .experience-dev-lab"),
 };

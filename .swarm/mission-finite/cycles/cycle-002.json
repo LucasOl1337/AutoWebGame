@@ -1,0 +1,41 @@
+{
+  "cycleId": "cycle-002",
+  "missionId": "autowebgame-1affeed128a5",
+  "owner": "root-coordinator-20260713-1420",
+  "startedAt": "2026-07-13T11:34:00.0000000-03:00",
+  "status": "completed",
+  "rounds": ["r004", "r005", "r006"],
+  "barrierReached": true,
+  "countsAfterCycle": { "started": 6, "completed": 6, "failed": 0, "skipped": 0 },
+  "deliveries": [
+    "Input: eventos reservados originados em SVG dentro de controles interativos preservam o comportamento nativo.",
+    "Matchmaking: salas endless resetam quando um player ativo não possui assento jogável.",
+    "Tick fixo: regressões de relógio e estados numéricos corrompidos não congelam nem criam passos fantasmas."
+  ],
+  "coordinatorValidation": [
+    { "command": "npm run build", "status": "passed", "details": "42 módulos transformados" },
+    { "command": "npm run compile:esm", "status": "passed" },
+    { "command": "node tests/input-visibility-clear-check.mjs", "status": "passed" },
+    { "command": "node tests/input-page-scroll-check.mjs", "status": "passed" },
+    { "command": "node tests/input-repeat-direction-priority-check.mjs", "status": "passed" },
+    { "command": "node tests/local-input-alias-check.mjs", "status": "passed" },
+    { "command": "node tests/input-transition-check.mjs", "status": "passed" },
+    { "command": "node tests/matchmaking-session-state-check.mjs", "status": "passed" },
+    { "command": "node tests/lobby-rules-check.mjs", "status": "passed" },
+    { "command": "node tests/lobby-disconnected-actions-check.mjs", "status": "passed" },
+    { "command": "node tests/server-tick-catchup-check.mjs", "status": "passed" },
+    { "command": "git diff --check -- <claimed resources>", "status": "passed" }
+  ],
+  "conflicts": [
+    "Mudanças concorrentes fora dos claims surgiram em SwarmLedger-gameplay.md, src/NetCode/online-sync.ts e tests/online-audio-bridge-check.mjs; foram preservadas e não atribuídas ao enxame.",
+    "Os arquivos de estado .swarm/mission-finite são alterações operacionais exclusivas do coordenador."
+  ],
+  "automation": {
+    "id": "enxame-finito-autowebgame-1affeed128a5",
+    "status": "ACTIVE",
+    "cadenceMinutes": 20,
+    "projectPath": "C:\\Projetos\\AutoWebGame",
+    "verifiedAt": "2026-07-13T11:39:11.6416391-03:00"
+  },
+  "releasedAt": "2026-07-13T11:39:11.6416391-03:00"
+}

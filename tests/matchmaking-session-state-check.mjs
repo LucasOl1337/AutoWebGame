@@ -4,6 +4,7 @@ const {
   isManualLobbyVisible,
   isQuickMatchCandidate,
   canReuseCurrentRoomForQuickMatch,
+  shouldResetPlayingRoom,
 } = await import("../output/esm/NetCode/matchmaking.js");
 
 const manualRoom = {
@@ -34,6 +35,16 @@ const manualLobby = resolveOnlineSessionState("manual", manualRoom, false);
 const quickLobby = resolveOnlineSessionState("queue_classic", quickRoom, false);
 const classicMatch = resolveOnlineSessionState("queue_classic", quickRoom, true);
 const endlessMatch = resolveOnlineSessionState("queue_endless", endlessRoom, true);
+const endlessSeats = {
+  1: { clientId: "pilot-a", occupantType: "human" },
+  2: { clientId: null, occupantType: "bot" },
+  3: { clientId: null, occupantType: "bot" },
+  4: { clientId: null, occupantType: "bot" },
+};
+const endlessMissingActiveSeat = {
+  ...endlessSeats,
+  4: undefined,
+};
 
 const pass = idle.kind === "idle"
   && queueClassic.kind === "queueing-classic"
@@ -47,7 +58,9 @@ const pass = idle.kind === "idle"
   && isQuickMatchCandidate(quickRoom)
   && !isQuickMatchCandidate(manualRoom)
   && canReuseCurrentRoomForQuickMatch(quickRoom)
-  && !canReuseCurrentRoomForQuickMatch(manualRoom);
+  && !canReuseCurrentRoomForQuickMatch(manualRoom)
+  && !shouldResetPlayingRoom(endlessRoom, endlessSeats, [1, 2, 3, 4])
+  && shouldResetPlayingRoom(endlessRoom, endlessMissingActiveSeat, [1, 2, 3, 4]);
 
 console.log(JSON.stringify({
   idle,
@@ -57,6 +70,11 @@ console.log(JSON.stringify({
   quickLobby,
   classicMatch,
   endlessMatch,
+  endlessMissingActiveSeatShouldReset: shouldResetPlayingRoom(
+    endlessRoom,
+    endlessMissingActiveSeat,
+    [1, 2, 3, 4],
+  ),
   pass,
 }, null, 2));
 

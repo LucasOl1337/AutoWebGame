@@ -6,8 +6,6 @@ import type {
   TileCoord,
 } from "../../Gameplay/types";
 import {
-  GRID_HEIGHT,
-  GRID_WIDTH,
   TILE_SIZE,
 } from "../../PersonalConfig/config";
 import { tileKey } from "../../Arenas/arena";
@@ -142,7 +140,12 @@ export function computeNicoBeam(
   direction: Direction,
   context: SkillContext,
 ): MagicBeamState {
-  const tiles = collectNicoBeamTiles(origin, direction, context.arena.solid);
+  const tiles = collectNicoBeamTiles(
+    origin,
+    direction,
+    context.arena.solid,
+    context.arena.config.grid,
+  );
   return {
     ownerId,
     origin: { ...origin },
@@ -156,18 +159,19 @@ export function collectNicoBeamTiles(
   origin: TileCoord,
   direction: Direction,
   solidTiles: ReadonlySet<string>,
+  grid: { width: number; height: number },
 ): TileCoord[] {
   const delta = directionDelta[direction];
   const maxSteps = direction === "left" || direction === "right"
-    ? Math.ceil(GRID_WIDTH / 2)
-    : Math.ceil(GRID_HEIGHT / 2);
+    ? Math.ceil(grid.width / 2)
+    : Math.ceil(grid.height / 2);
   const tiles: TileCoord[] = [];
   for (let step = 1; step <= maxSteps; step += 1) {
     const tile = {
       x: origin.x + delta.x * step,
       y: origin.y + delta.y * step,
     };
-    if (tile.x < 0 || tile.y < 0 || tile.x >= GRID_WIDTH || tile.y >= GRID_HEIGHT) {
+    if (tile.x < 0 || tile.y < 0 || tile.x >= grid.width || tile.y >= grid.height) {
       break;
     }
     if (solidTiles.has(tileKey(tile.x, tile.y))) {

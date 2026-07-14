@@ -27,6 +27,7 @@ const ONLINE_INTERPOLATION_JITTER_BUFFER_MS = 6;
 const ONLINE_EXTRAPOLATION_MS = 28;
 const ONLINE_VELOCITY_LEAD_MS = 10;
 const ONLINE_MAX_VISUAL_LEAD_PX = TILE_SIZE * 0.34;
+const ONLINE_VISUAL_DISCONTINUITY_PX = TILE_SIZE * 3;
 const ONLINE_SAMPLE_BUFFER_SIZE = 12;
 
 export interface OnlineRenderSample {
@@ -312,8 +313,13 @@ export function projectNetworkPlayerPosition(
     };
   }
 
-  const elapsedSinceLatestMs = Math.max(0, nowMs - latestSample.receivedAtMs);
-  const estimatedServerNowMs = latestSample.serverTimeMs + elapsedSinceLatestMs;
+  // A newer snapshot can arrive later than the cadence established by earlier
+  // samples. Keep the fastest observed server clock so packet jitter cannot
+  // move the render timeline backwards when that delayed snapshot is appended.
+  const estimatedServerNowMs = samples.reduce((estimate, sample) => Math.max(
+    estimate,
+    sample.serverTimeMs + Math.max(0, nowMs - sample.receivedAtMs),
+  ), latestSample.serverTimeMs);
   const renderAtServerMs = estimatedServerNowMs - getOnlineInterpolationDelayMs(samples);
   const oldestSample = samples[0] ?? latestSample;
   if (renderAtServerMs <= oldestSample.serverTimeMs) {
@@ -408,6 +414,15 @@ export function updateVisualPlayerPositions({
         x: target.x + offsetX * scale,
         y: target.y + offsetY * scale,
       };
+    }
+
+    const visualCorrectionDistance = Math.hypot(
+      projected.x - current.x,
+      projected.y - current.y,
+    );
+    if (visualCorrectionDistance > ONLINE_VISUAL_DISCONTINUITY_PX) {
+      visualPlayerPositions[id] = projected;
+      continue;
     }
 
     visualPlayerPositions[id] = {

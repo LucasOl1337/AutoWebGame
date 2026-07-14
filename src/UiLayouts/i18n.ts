@@ -241,6 +241,7 @@ export interface SiteCopy {
     matchWinner: (name: string) => string;
     matchComplete: string;
     rematchSummary: string;
+    localResultActions: string;
     scoreSummary: (score: string) => string;
     nextRoundCue: (seconds: number) => string;
     matchResultCue: (seconds: number) => string;
@@ -521,6 +522,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       matchWinner: (name) => `${name} venceu a partida!`,
       matchComplete: "Partida encerrada",
       rematchSummary: "Proxima partida iniciando automaticamente...",
+      localResultActions: "Enter/Espaco: jogar novamente | Esc: voltar ao menu",
       scoreSummary: (score) => `Placar: ${score}`,
       nextRoundCue: (seconds) => `Proxima rodada em ${seconds}s`,
       matchResultCue: (seconds) => `Resultado final em ${seconds}s`,
@@ -788,6 +790,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       matchWinner: (name) => `${name} wins the match!`,
       matchComplete: "Match complete",
       rematchSummary: "Next match starting automatically...",
+      localResultActions: "Enter/Space: play again | Esc: back to menu",
       scoreSummary: (score) => `Score: ${score}`,
       nextRoundCue: (seconds) => `Next round in ${seconds}s`,
       matchResultCue: (seconds) => `Final result in ${seconds}s`,

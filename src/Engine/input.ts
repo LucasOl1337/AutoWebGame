@@ -151,7 +151,7 @@ export class InputManager {
   }
 
   private isInteractiveTarget(target: EventTarget | null): boolean {
-    if (typeof HTMLElement === "undefined" || !(target instanceof HTMLElement)) {
+    if (typeof Element === "undefined" || !(target instanceof Element)) {
       return false;
     }
     return target.closest("button, a[href], summary, [role='button'], [role='link'], [role='menuitem']") !== null;

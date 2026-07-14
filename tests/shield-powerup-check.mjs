@@ -10,6 +10,11 @@ function on(type, handler) {
   listeners.set(type, list);
 }
 
+function off(type, handler) {
+  const list = listeners.get(type) ?? [];
+  listeners.set(type, list.filter((candidate) => candidate !== handler));
+}
+
 function emit(type, event) {
   const list = listeners.get(type) ?? [];
   for (const handler of list) {
@@ -67,6 +72,7 @@ globalThis.window = {
   innerWidth: 1280,
   innerHeight: 720,
   addEventListener: on,
+  removeEventListener: off,
   requestAnimationFrame: noop,
 };
 

@@ -1,0 +1,15 @@
+{
+  "roundId": "r008",
+  "objective": "Auditar e corrigir uma falha comprovada de alto impacto no carregamento, reprodução ou descarte de áudio.",
+  "owner": "worker-r008",
+  "status": "completed",
+  "claimedAt": "2026-07-13T11:54:00.0000000-03:00",
+  "leaseExpiresAt": "2026-07-13T12:35:49.0395774-03:00",
+  "dependencies": ["r004", "r005", "r006"],
+  "readResources": ["AGENTS.md", "DocsDev/codegraph/inventory.md", "src/Engine/sound-manager.ts", "tests/sound-manager-lazy-load-check.mjs", "tests/sound-manager-variation-check.mjs", "tests/audio-asset-decode-check.mjs", "package.json", "tsconfig.runtime.json"],
+  "writeResources": ["src/Engine/sound-manager.ts", "tests/sound-manager-lifecycle-check.mjs"],
+  "doneCriteria": "Uma falha reproduzível é corrigida sem ampliar o claim, com teste focado novo e compilação/testes relevantes verdes; se nenhuma falha segura for comprovada, registrar auditoria sem mudança e evidência.",
+  "expectedValidation": ["npm run compile:esm", "node tests/sound-manager-lifecycle-check.mjs", "node tests/sound-manager-lazy-load-check.mjs", "node tests/sound-manager-variation-check.mjs", "git diff --check -- src/Engine/sound-manager.ts tests/sound-manager-lifecycle-check.mjs"],
+  "resultPath": ".swarm/mission-finite/results/r008.json",
+  "releasedAt": "2026-07-13T12:04:00.0000000-03:00"
+}

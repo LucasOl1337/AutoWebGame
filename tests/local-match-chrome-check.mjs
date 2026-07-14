@@ -215,6 +215,11 @@ const app = {
   getCurrentMode() {
     return this.mode;
   },
+  getAudioSettings() {
+    return { volume: 0.7, muted: false };
+  },
+  setAudioVolume: noop,
+  setAudioMuted: noop,
   applyOnlineFrame: noop,
   applyOnlineSnapshot: noop,
   clearOnlinePeer: noop,

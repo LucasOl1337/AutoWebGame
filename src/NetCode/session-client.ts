@@ -793,6 +793,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.socket = socket;
 
     socket.addEventListener("open", () => {
+      if (this.socket !== socket) {
+        return;
+      }
       this.reconnectAttempts = 0;
       this.realtimeReady = true;
       if (this.currentLobby?.roomCode) {
@@ -800,9 +803,20 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       }
       this.renderAll();
     });
-    socket.addEventListener("message", (event) => this.handleMessage(event.data));
+    socket.addEventListener("message", (event) => {
+      if (this.socket !== socket) {
+        return;
+      }
+      this.handleMessage(event.data);
+    });
     socket.addEventListener("close", () => {
+      if (this.socket !== socket) {
+        return;
+      }
       const hadActiveOnlineSession = Boolean(this.currentLobby || this.role || this.roomCode);
+      const reconnectRoomCode = this.currentLobby?.roomCode
+        ?? this.roomCode
+        ?? this.pendingAutoJoinRoom;
       const accountRefresh = this.reconnectingForAccountRefresh;
       this.reconnectingForAccountRefresh = false;
       this.realtimeReady = false;
@@ -813,7 +827,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.currentSessionState = null;
       this.quickMatchSearching = false;
       this.endlessMatchStarting = false;
-      this.pendingAutoJoinRoom = null;
+      this.pendingAutoJoinRoom = reconnectRoomCode;
       if (hadActiveOnlineSession) {
         this.app.detachOnlineSession();
       }
@@ -830,6 +844,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.scheduleReconnect();
     });
     socket.addEventListener("error", () => {
+      if (this.socket !== socket) {
+        return;
+      }
       this.realtimeReady = false;
       if (this.currentLobby || this.role || this.roomCode) {
         this.setStatus(this.copy.status.connectionError);
@@ -1781,7 +1798,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     const landingDevLab = document.createElement("aside");
     landingDevLab.className = "experience-dev-lab";
-    landingDevLab.hidden = !import.meta.env.DEV;
+    landingDevLab.hidden = !import.meta.env?.DEV;
     landingDevLab.innerHTML = `<strong>${this.translate("Laboratório DEV", "DEV laboratory")}</strong><span>${this.translate("Cenários reproduzíveis para bots e modelos externos.", "Reproducible scenarios for bots and external models.")}</span>`;
     const devBotVsBot = document.createElement("a");
     devBotVsBot.className = "experience-button experience-button--secondary";

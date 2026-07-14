@@ -105,3 +105,5 @@ console.log(JSON.stringify({
 if (!pass) {
   process.exit(1);
 }
+
+await import("./online-interpolation-jitter-check.mjs");

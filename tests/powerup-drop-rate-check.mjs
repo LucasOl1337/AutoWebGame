@@ -67,6 +67,7 @@ globalThis.window = {
   innerWidth: 1280,
   innerHeight: 720,
   addEventListener: on,
+  removeEventListener: noop,
   requestAnimationFrame: noop,
 };
 
@@ -125,8 +126,8 @@ const expectedDropTypeCounts = {
   "remote-up": 2,
   "shield-up": 4,
   "short-fuse-up": 2,
-  "bomb-pass-up": 4,
-  "kick-up": 0,
+  "bomb-pass-up": 2,
+  "kick-up": 2,
 };
 const actualDropTypeCounts = Object.fromEntries(
   Object.keys(expectedDropTypeCounts).map((type) => [
@@ -161,6 +162,7 @@ const report = {
     && hasExpectedDeterministicDistribution
     && hasExpectedRemoteToSpeedDistribution
     && speedDropCount > 0
+    && utilityDropCounts["kick-up"] > 0
     && specialDropCount >= 8
     && hasTacticalDrops
   ),
