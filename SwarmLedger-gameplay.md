@@ -1,3 +1,10 @@
+## 2026-07-14 — default-arena-bomb-up-presence
+- Claim/escopo: finalizar a intervenção mínima já implementada em `src/Arenas/arena.ts` e `tests/powerup-drop-rate-check.mjs`, além dos dois registros; commit local seletivo somente desses quatro arquivos, sem push e sem incluir mudanças alheias.
+- Antes → depois: a distribuição determinística da arena padrão gerava zero `bomb-up` entre 22 drops; agora um único slot antes ocupado por `speed-up` passa a `bomb-up`, resultando em 4 `bomb-up` e 4 `speed-up`, com total de 22 drops, taxa, algoritmo, simetria, rede, UI e demais sistemas preservados.
+- Classificação: Comprovada para o contrato determinístico de presença da progressão central de capacidade de bombas na arena padrão.
+- Evidência focal: `bombDropCount=4`, `hasCoreCapacityDrops=true`, distribuição `remote=2`/`speed=4` e contagem esperada por tipo atualizada, sem alterar a quantidade total de drops.
+- Validações: `npm run test:powerup-drop-rate`, `npm run test:arena-runtime`, `npm run test:bot-powerup` e `npm run build` já aprovados; `git diff --check` seletivo e revisão de diff/status concluídos no fechamento.
+
 ## 2026-07-14 — bot-avoid-remote-detonation-flame-guard
 - Claim/escopo: registrar a correção mínima já presente em `src/Engine/bot-ai.ts` e `tests/bot-remote-detonation-check.mjs`, além destes dois registros; preservar `package.json` e todos os diffs alheios; sem commit.
 - Antes → depois: o bot tratava como vulnerável qualquer inimigo sem proteção de spawn e podia gastar detonação remota contra `flameGuard` ativo; agora `enemyVulnerable` também exige `flameGuardMs <= 0`, evitando a detonação enquanto a guarda está ativa e retomando-a assim que expira.

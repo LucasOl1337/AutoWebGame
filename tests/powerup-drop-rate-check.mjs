@@ -100,11 +100,13 @@ const dropRatio = breakableCount > 0 ? dropCount / breakableCount : 0;
 const roundedDropRatio = Math.round(dropRatio * 1000) / 1000;
 const speedDropCount = game.arena.powerUps.filter((powerUp) => powerUp.type === "speed-up").length;
 const remoteDropCount = game.arena.powerUps.filter((powerUp) => powerUp.type === "remote-up").length;
-const expectedRemoteToSpeedDistribution = { remote: 2, speed: 8 };
+const expectedRemoteToSpeedDistribution = { remote: 2, speed: 4 };
 const hasExpectedRemoteToSpeedDistribution = (
   remoteDropCount === expectedRemoteToSpeedDistribution.remote
   && speedDropCount === expectedRemoteToSpeedDistribution.speed
 );
+const bombDropCount = game.arena.powerUps.filter((powerUp) => powerUp.type === "bomb-up").length;
+const hasCoreCapacityDrops = bombDropCount === 4;
 const utilityDropTypes = ["shield-up", "bomb-pass-up", "kick-up"];
 const tacticalDropTypes = ["short-fuse-up"];
 const utilityDropCounts = Object.fromEntries(
@@ -120,9 +122,9 @@ const hasDenseBreakables = breakableCount >= 24;
 const expectedDropCount = 22;
 const expectedDropRatio = 0.611;
 const expectedDropTypeCounts = {
-  "bomb-up": 0,
+  "bomb-up": 4,
   "flame-up": 2,
-  "speed-up": 8,
+  "speed-up": 4,
   "remote-up": 2,
   "shield-up": 4,
   "short-fuse-up": 2,
@@ -146,6 +148,8 @@ const report = {
   expectedDropRatio,
   speedDropCount,
   remoteDropCount,
+  bombDropCount,
+  hasCoreCapacityDrops,
   expectedRemoteToSpeedDistribution,
   hasExpectedRemoteToSpeedDistribution,
   utilityDropCounts,
@@ -161,6 +165,7 @@ const report = {
     && roundedDropRatio === expectedDropRatio
     && hasExpectedDeterministicDistribution
     && hasExpectedRemoteToSpeedDistribution
+    && hasCoreCapacityDrops
     && speedDropCount > 0
     && utilityDropCounts["kick-up"] > 0
     && specialDropCount >= 8

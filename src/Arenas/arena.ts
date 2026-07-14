@@ -331,7 +331,7 @@ function createDefaultBreakableTiles(width: number, height: number, solidKeys: s
 }
 
 function createPowerUpsFromBreakables(breakable: Set<string>, config: ArenaRuntimeConfig): PowerUpState[] {
-  // Stable weighted state: speed-up has 5 slots and remote-up has 2; keep slot order deterministic.
+  // Stable weighted state: bomb-up and speed-up each have 5 slots; remote-up has 2. Keep slot order deterministic.
   const dropPool: readonly PowerUpType[] = [
     "speed-up",
     "speed-up",
@@ -345,7 +345,7 @@ function createPowerUpsFromBreakables(breakable: Set<string>, config: ArenaRunti
     "short-fuse-up",
     "kick-up",
     "kick-up",
-    "speed-up",
+    "bomb-up",
     "speed-up",
     "speed-up",
     "bomb-up",
