@@ -219,13 +219,33 @@ const preservesHigherPriorities = bombScores[0] > remoteScore
   && shieldScores[0] > remoteScore
   && shortFuseScores[0] > remoteScore;
 
+bot.bombPassLevel = 0;
+bot.kickLevel = 0;
+const kickBeforeBombPassScore = getPowerUpPriorityScore(bot, "kick-up");
+const bombPassBeforeAcquisitionScore = getPowerUpPriorityScore(bot, "bomb-pass-up");
+const prefersKickByMinimumMargin = kickBeforeBombPassScore === bombPassBeforeAcquisitionScore + 1;
+
+for (const powerUp of game.arena.powerUps) {
+  powerUp.collected = true;
+  powerUp.revealed = false;
+}
+game.arena.powerUps.push(
+  { type: "bomb-pass-up", tile: { x: 4, y: 3 }, revealed: true, collected: false },
+  { type: "kick-up", tile: { x: 4, y: 5 }, revealed: true, collected: false },
+);
+setPlayerTile(bot, { x: 4, y: 4 });
+const equidistantKickDecision = game.getBotDecision(bot);
+const prefersKickWhenEquidistant = equidistantKickDecision.placeBomb === false
+  && equidistantKickDecision.direction === "down";
+
+bot.bombPassLevel = MAX_BOMB_PASS_LEVEL;
 const kickScores = Array.from({ length: MAX_KICK_LEVEL + 1 }, (_, kickLevel) => {
   bot.kickLevel = kickLevel;
   return getPowerUpPriorityScore(bot, "kick-up");
 });
-const hasExpectedKickPriority = JSON.stringify(kickScores) === JSON.stringify([180, 0]);
-const preservesKickAsSituational = kickScores[0] < bombPassScores[0]
-  && kickScores[0] < remoteScore
+const hasExpectedKickPriority = kickBeforeBombPassScore === 241
+  && JSON.stringify(kickScores) === JSON.stringify([180, 0]);
+const preservesKickAsSituationalAfterBombPass = kickScores[0] < remoteScore
   && kickScores[0] < shortFuseScores[0];
 
 const report = {
@@ -258,9 +278,14 @@ const report = {
   prefersRemoteOverBombPass,
   keepsRemoteBelowShortFuse,
   preservesHigherPriorities,
+  kickBeforeBombPassScore,
+  bombPassBeforeAcquisitionScore,
+  prefersKickByMinimumMargin,
+  equidistantKickDecision,
+  prefersKickWhenEquidistant,
   kickScores,
   hasExpectedKickPriority,
-  preservesKickAsSituational,
+  preservesKickAsSituationalAfterBombPass,
 };
 
 console.log(JSON.stringify(report, null, 2));
@@ -272,7 +297,8 @@ if (!prefersBaseMobility || !prefersFirstShield || !prefersRemoteOverSecondShiel
   || !hasDiminishingShortFuseReturns || !hasDiminishingShieldReturns
   || !hasExpectedRemotePriority || !hasExpectedBombPassPriority
   || !prefersRemoteOverSecondShieldByMinimumMargin || !prefersRemoteOverBombPass || !keepsRemoteBelowShortFuse
-  || !preservesHigherPriorities || !hasExpectedKickPriority
-  || !preservesKickAsSituational) {
+  || !preservesHigherPriorities || !prefersKickByMinimumMargin
+  || !prefersKickWhenEquidistant || !hasExpectedKickPriority
+  || !preservesKickAsSituationalAfterBombPass) {
   process.exit(1);
 }

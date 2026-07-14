@@ -217,8 +217,8 @@ export function getPowerUpPriorityScore(player: PlayerState, type: PowerUpType):
     if (player.kickLevel >= MAX_KICK_LEVEL) {
       return 0;
     }
-    // Sem passagem por bombas, o chute reutiliza a prioridade situacional com uma margem mínima.
-    return player.bombPassLevel === 0 ? 181 : 180;
+    // Antes de obter passagem por bombas, o chute vence Bomb Pass pela margem mínima de um ponto.
+    return player.bombPassLevel === 0 ? 241 : 180;
   }
   if (type === "short-fuse-up") {
     if (player.shortFuseLevel >= MAX_SHORT_FUSE_LEVEL) {
