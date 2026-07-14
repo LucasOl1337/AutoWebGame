@@ -37,13 +37,24 @@ assert.match(pageHtml, /Morte subita fecha as bordas/);
 assert.match(pageHtml, /aviso SD aparecer, migre cedo para o centro/);
 assert.match(pageHtml, /arena fecha de fora para dentro/);
 assert.match(pageHtml, /id="plano"/);
-assert.match(pageHtml, /class="back-to-top"/);
+assert.match(pageHtml, /class="back-to-top"[^>]*data-visible="false" hidden/);
 assert.match(pageHtml, /aria-label="Voltar ao inicio"/);
+assert.match(pageHtml, /backToTop\.hidden = !shouldShow/);
 assert.match(pageHtml, /new IntersectionObserver/);
 assert.match(pageHtml, /link\.setAttribute\("aria-current", "true"\)/);
 assert.match(pageHtml, /@media \(prefers-reduced-motion: reduce\)/);
 
 assert.match(landingHtml, /href="\/how-to-play\.html">Como jogar<\/a>/);
+assert.match(landingHtml, /<a href="#main-content" class="skip-link">Pular para o conteudo<\/a>/);
+assert.match(landingHtml, /<main id="main-content" tabindex="-1">/);
+assert.ok(
+  landingHtml.indexOf('class="skip-link"') < landingHtml.indexOf('id="main-content"'),
+  "landing skip link should appear before the main landmark",
+);
+assert.ok(
+  landingHtml.indexOf('id="main-content"') < landingHtml.indexOf("<footer>"),
+  "landing main landmark should wrap content before the footer",
+);
 assert.match(viteConfig, /howToPlay:\s*"\.\/how-to-play\.html"/);
 assert.ok(assetStats.size > 100_000, "how-to-play banner should be a real generated image asset");
 

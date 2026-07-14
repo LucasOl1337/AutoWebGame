@@ -54,6 +54,9 @@ export interface GameAssets {
     bomb: HTMLImageElement | null;
     flame: HTMLImageElement | null;
   };
+  effects?: {
+    speedSparkTrail: HTMLImageElement | null;
+  };
   powerUps: Partial<Record<PowerUpType, HTMLImageElement | null>>;
 }
 
@@ -186,18 +189,36 @@ async function loadStaticDirectionalSprites(
   },
   assetVersion?: string,
 ): Promise<DirectionalSprites> {
-  const [down, right, up, left] = await Promise.all([
+  const loadOptionalCycle = (
+    animationName: "idle" | "walk" | "run" | "cast" | "attack" | "death",
+  ): Promise<Record<Direction, HTMLImageElement[]>> => (
+    animations?.[animationName]
+      ? loadCharacterCycle(basePath, animationName, assetVersion)
+      : Promise.resolve(createEmptyDirectionalFrameSet())
+  );
+  const [
+    down,
+    right,
+    up,
+    left,
+    idleFrames,
+    walkFrames,
+    runFrames,
+    castFrames,
+    attackFrames,
+    deathFrames,
+  ] = await Promise.all([
     loadImage(appendAssetVersion(`${basePath}/south.png`, assetVersion)),
     loadImage(appendAssetVersion(`${basePath}/east.png`, assetVersion)),
     loadImage(appendAssetVersion(`${basePath}/north.png`, assetVersion)),
     loadImage(appendAssetVersion(`${basePath}/west.png`, assetVersion)),
+    loadOptionalCycle("idle"),
+    loadOptionalCycle("walk"),
+    loadOptionalCycle("run"),
+    loadOptionalCycle("cast"),
+    loadOptionalCycle("attack"),
+    loadOptionalCycle("death"),
   ]);
-  const idleFrames = animations?.idle ? await loadCharacterCycle(basePath, "idle", assetVersion) : { up: [], down: [], left: [], right: [] };
-  const walkFrames = animations?.walk ? await loadCharacterCycle(basePath, "walk", assetVersion) : { up: [], down: [], left: [], right: [] };
-  const runFrames = animations?.run ? await loadCharacterCycle(basePath, "run", assetVersion) : { up: [], down: [], left: [], right: [] };
-  const castFrames = animations?.cast ? await loadCharacterCycle(basePath, "cast", assetVersion) : { up: [], down: [], left: [], right: [] };
-  const attackFrames = animations?.attack ? await loadCharacterCycle(basePath, "attack", assetVersion) : { up: [], down: [], left: [], right: [] };
-  const deathFrames = animations?.death ? await loadCharacterCycle(basePath, "death", assetVersion) : { up: [], down: [], left: [], right: [] };
   return {
     up,
     down,
@@ -406,10 +427,15 @@ export async function loadGameAssets(arenaThemeId?: string | null): Promise<Game
     crateBreak3,
     bomb,
     flame,
+    speedSparkTrail,
     bombUp,
     flameUp,
     speedUp,
     remoteUp,
+    shieldUp,
+    bombPassUp,
+    kickUp,
+    shortFuseUp,
   ] = await Promise.all([
     loadDirectionalSprites(assetUrl("/Assets/Characters/Animations/default-players/player1"), ["hires", ""]),
     loadDirectionalSprites(assetUrl("/Assets/Characters/Animations/default-players/player2")),
@@ -435,10 +461,15 @@ export async function loadGameAssets(arenaThemeId?: string | null): Promise<Game
     loadImage(assetUrl("/Assets/TileMaps/crate-break-3.png")),
     loadImage(assetUrl("/Assets/VisualEffects/bomb.png")),
     loadImage(assetUrl("/Assets/VisualEffects/flame.png")),
+    loadImage(assetUrl("/Assets/VisualEffects/speed-spark-trail.png")),
     loadImage(assetUrl("/Assets/UiLayouts/power-bomb.png")),
     loadImage(assetUrl("/Assets/UiLayouts/power-flame.png")),
     loadImage(assetUrl("/Assets/UiLayouts/power-speed.png")),
     loadImage(assetUrl("/Assets/UiLayouts/power-remote.png")),
+    loadImage(assetUrl("/Assets/UiLayouts/power-shield.png")),
+    loadImage(assetUrl("/Assets/UiLayouts/power-bomb-pass.png")),
+    loadImage(assetUrl("/Assets/UiLayouts/power-kick.png")),
+    loadImage(assetUrl("/Assets/UiLayouts/power-short-fuse.png")),
   ]);
   const playerSprites: Partial<Record<PlayerId, DirectionalSprites>> = {
     1: playerOne,
@@ -488,11 +519,18 @@ export async function loadGameAssets(arenaThemeId?: string | null): Promise<Game
       bomb,
       flame,
     },
+    effects: {
+      speedSparkTrail,
+    },
     powerUps: {
       "bomb-up": bombUp,
       "flame-up": flameUp,
       "speed-up": speedUp,
       "remote-up": remoteUp,
+      "shield-up": shieldUp,
+      "bomb-pass-up": bombPassUp,
+      "kick-up": kickUp,
+      "short-fuse-up": shortFuseUp,
     },
     characterSpriteLoader,
   };

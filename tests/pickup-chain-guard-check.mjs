@@ -1,0 +1,140 @@
+Object.defineProperty(globalThis, "navigator", { value: { webdriver: true }, configurable: true });
+
+const noop = () => {};
+const { GameApp } = await import("../output/esm/Engine/game-app.js");
+const { TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
+const { PICKUP_CHAIN_GUARD_MS, PICKUP_CHAIN_WINDOW_MS } = await import("../output/esm/Gameplay/pickup-chain.js");
+
+const emptySprites = {
+  up: null,
+  down: null,
+  left: null,
+  right: null,
+  idle: { up: [], down: [], left: [], right: [] },
+  walk: { up: [], down: [], left: [], right: [] },
+  run: { up: [], down: [], left: [], right: [] },
+  cast: { up: [], down: [], left: [], right: [] },
+  attack: { up: [], down: [], left: [], right: [] },
+  death: { up: [], down: [], left: [], right: [] },
+};
+
+const root = { appendChild: noop };
+const assets = {
+  players: { 1: emptySprites, 2: emptySprites, 3: emptySprites, 4: emptySprites },
+  floor: { base: null, lane: null, spawn: null },
+  props: { wall: null, crate: null, bomb: null, flame: null },
+  powerUps: {
+    "bomb-up": null,
+    "flame-up": null,
+    "speed-up": null,
+    "remote-up": null,
+    "shield-up": null,
+    "bomb-pass-up": null,
+    "kick-up": null,
+    "short-fuse-up": null,
+  },
+};
+
+const neutralInput = {
+  direction: null,
+  bombPressed: false,
+  detonatePressed: false,
+  skillPressed: false,
+  skillHeld: false,
+};
+
+function createOpenMatch() {
+  const game = new GameApp(root, assets);
+  game.startServerAuthoritativeMatch([1, 2], { 1: 0, 2: 0, 3: 0, 4: 0 });
+  game.arena.solid.clear();
+  game.arena.breakable.clear();
+  game.arena.powerUps = [];
+  game.bombs = [];
+  game.flames = [];
+  const player = game.players[1];
+  player.position = { x: 2.5 * TILE_SIZE, y: 1.5 * TILE_SIZE };
+  player.tile = { x: 2, y: 1 };
+  player.spawnProtectionMs = 0;
+  player.flameGuardMs = 0;
+  game.setServerPlayerInput(1, neutralInput);
+  return game;
+}
+
+function collect(game, type) {
+  game.arena.powerUps = [{
+    type,
+    tile: { x: 2, y: 1 },
+    revealed: true,
+    collected: false,
+  }];
+  game.advanceServerSimulation(17);
+}
+
+function getPlayerTextState(game) {
+  return JSON.parse(game.renderGameToText()).players.find((player) => player.id === 1);
+}
+
+const chainGame = createOpenMatch();
+collect(chainGame, "bomb-up");
+const armedState = getPlayerTextState(chainGame);
+chainGame.advanceServerSimulation(1_000);
+collect(chainGame, "flame-up");
+const guardedState = getPlayerTextState(chainGame);
+const guardedPlayer = chainGame.players[1];
+chainGame.flames = [{ tile: { x: 2, y: 1 }, remainingMs: 300 }];
+chainGame.resolvePlayerDeathsFromFlames();
+const survivedFlame = guardedPlayer.alive;
+
+const repeatGame = createOpenMatch();
+collect(repeatGame, "bomb-up");
+repeatGame.advanceServerSimulation(500);
+collect(repeatGame, "bomb-up");
+const repeatedState = getPlayerTextState(repeatGame);
+
+const expiredGame = createOpenMatch();
+collect(expiredGame, "bomb-up");
+expiredGame.advanceServerSimulation(PICKUP_CHAIN_WINDOW_MS + 100);
+collect(expiredGame, "flame-up");
+const expiredState = getPlayerTextState(expiredGame);
+
+const report = {
+  constants: { PICKUP_CHAIN_WINDOW_MS, PICKUP_CHAIN_GUARD_MS },
+  armedState: {
+    pickupChain: armedState.pickupChain,
+    flameGuardMs: armedState.flameGuardMs,
+  },
+  guardedState: {
+    pickupChain: guardedState.pickupChain,
+    flameGuardMs: guardedState.flameGuardMs,
+    hudStatus: guardedState.hudStatus,
+    recentPowerUpPickup: guardedState.recentPowerUpPickup,
+  },
+  survivedFlame,
+  repeatedState: {
+    pickupChain: repeatedState.pickupChain,
+    flameGuardMs: repeatedState.flameGuardMs,
+  },
+  expiredState: {
+    pickupChain: expiredState.pickupChain,
+    flameGuardMs: expiredState.flameGuardMs,
+  },
+  pass: armedState.pickupChain.previousType === "bomb-up"
+    && armedState.pickupChain.remainingMs > 0
+    && armedState.flameGuardMs === 0
+    && guardedState.pickupChain.previousType === null
+    && guardedState.pickupChain.remainingMs === 0
+    && guardedState.flameGuardMs > 0
+    && guardedState.flameGuardMs <= PICKUP_CHAIN_GUARD_MS
+    && guardedState.hudStatus.label === "GUARD"
+    && guardedState.recentPowerUpPickup?.chainGuard === true
+    && survivedFlame
+    && repeatedState.flameGuardMs === 0
+    && repeatedState.pickupChain.previousType === "bomb-up"
+    && expiredState.flameGuardMs === 0
+    && expiredState.pickupChain.previousType === "flame-up",
+};
+
+console.log(JSON.stringify(report, null, 2));
+if (!report.pass) {
+  process.exit(1);
+}

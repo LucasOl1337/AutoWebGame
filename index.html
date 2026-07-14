@@ -2,7 +2,7 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>BOMBA PvP — O jogo de bombas competitivo</title>
     <meta name="description" content="Plante bombas. Destrua tudo. Sobreviva. BOMBA é o jogo de bombas competitivo com personagens únicos, arenas temáticas e partidas online.">
     <link rel="icon" href="/Assets/UiLayouts/ICON.png" />
@@ -908,6 +908,30 @@
 
       .topbar-cta:hover { filter: brightness(1.1); transform: translateY(-1px); }
 
+      .skip-link {
+        position: fixed;
+        left: 16px;
+        top: 12px;
+        z-index: 300;
+        transform: translateY(-140%);
+        padding: 8px 14px;
+        border: 1px solid var(--border-gold);
+        border-radius: 6px;
+        color: var(--text);
+        background: var(--bg-2);
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-decoration: none;
+        transition: transform 160ms;
+      }
+
+      .skip-link:focus,
+      .skip-link:focus-visible {
+        transform: translateY(0);
+        outline: 2px solid var(--gold-bright);
+        outline-offset: 2px;
+      }
+
       /* ── Char sprite ── */
       .char-sprite {
         width: 72px;
@@ -979,11 +1003,12 @@
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   </head>
   <body>
+    <a href="#main-content" class="skip-link">Pular para o conteudo</a>
 
     <!-- Topbar -->
     <header class="topbar">
       <a href="#top" class="topbar-logo">BOMBA <span>PvP</span></a>
-      <nav class="topbar-links">
+      <nav class="topbar-links" aria-label="Navegacao principal">
         <a href="#combate">Combate</a>
         <a href="/how-to-play.html">Como jogar</a>
         <a href="#personagens">Personagens</a>
@@ -991,7 +1016,7 @@
         <a href="#modos">Modos</a>
         <a href="#confianca">Confianca</a>
       </nav>
-      <a href="/game" class="topbar-cta">Jogar →</a>
+      <a href="/game" class="topbar-cta" aria-label="Jogar BOMBA PvP agora">Jogar →</a>
     </header>
 
     <!-- Side nav -->
@@ -1004,6 +1029,8 @@
       <a href="#em-breve"    data-s="em-breve">06</a>
       <a href="#confianca"   data-s="confianca">07</a>
     </nav>
+
+    <main id="main-content" tabindex="-1">
 
     <!-- ── HERO ── -->
     <section class="hero" id="top">
@@ -1024,12 +1051,12 @@
           <span class="stat-l">Personagens</span>
         </div>
         <div class="stat">
-          <span class="stat-n">7</span>
+          <span class="stat-n">9</span>
           <span class="stat-l">Arenas</span>
         </div>
         <div class="stat">
-          <span class="stat-n">4v4</span>
-          <span class="stat-l">Online</span>
+          <span class="stat-n">4</span>
+          <span class="stat-l">Jogadores online</span>
         </div>
         <div class="stat">
           <span class="stat-n">∞</span>
@@ -1038,7 +1065,7 @@
       </div>
 
       <div class="hero-actions">
-        <a href="/game" class="btn-play">Jogar Agora</a>
+        <a href="/game" class="btn-play" aria-label="Jogar BOMBA PvP agora">Jogar Agora</a>
         <a href="#combate" class="btn-explore">
           Explorar
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1181,7 +1208,7 @@
     <section class="section reveal" id="arenas">
       <div class="section-head" data-num="03">
         <span class="section-kicker">03 — Arenas</span>
-        <h2>7 cenários.<br>7 atmosferas.</h2>
+        <h2>9 cenários.<br>9 atmosferas.</h2>
         <p class="section-desc">Cada arena tem paleta de cores, motivo visual e estilo arquitetônico próprio.</p>
       </div>
 
@@ -1409,9 +1436,10 @@
         <a href="/how-to-play.html">Como jogar</a>
         <a href="/privacy.html">Privacidade</a>
         <a href="/terms.html">Termos de uso</a>
-        <a href="/game">Jogar agora</a>
+        <a href="/game" aria-label="Jogar BOMBA PvP agora">Jogar agora</a>
       </div>
     </section>
+    </main>
 
     <div class="rule"></div>
 
@@ -1420,7 +1448,7 @@
       <p>
         <strong style="color:var(--text)">BOMBA PvP</strong>
         &nbsp;·&nbsp;
-        <a href="/game">Jogar agora</a>
+        <a href="/game" aria-label="Jogar BOMBA PvP agora">Jogar agora</a>
         &nbsp;·&nbsp;
         <a href="/how-to-play.html">Como jogar</a>
         &nbsp;&middot;&nbsp;

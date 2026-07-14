@@ -2,7 +2,7 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Como jogar | BOMBA PvP</title>
     <meta name="description" content="Guia rapido de BOMBA PvP: objetivo, controles, leitura da arena, bombas, flames, powerups e primeiros passos para jogar melhor." />
     <link rel="icon" href="/Assets/UiLayouts/ICON.png" />
@@ -571,20 +571,20 @@
         </div>
         <div class="control-list">
           <div class="control-row">
-            <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div>
-            <p>Mover o personagem local principal. Em teclado alternativo, as setas tambem cobrem movimento.</p>
+            <div><kbd>WASD</kbd><kbd>Setas</kbd></div>
+            <p>Mover no PvP local: P1 usa WASD e P2 usa as setas.</p>
           </div>
           <div class="control-row">
-            <div><kbd>Space</kbd></div>
-            <p>Plantar bomba no tile atual. Quando o anel ficar vermelho, a explosao esta a instantes: saia da linha reta imediatamente.</p>
+            <div><kbd>Q</kbd><kbd>O</kbd></div>
+            <p>Plantar bomba: P1 usa Q e P2 usa O. Quando o anel ficar vermelho, saia da linha reta imediatamente.</p>
           </div>
           <div class="control-row">
             <div><kbd>R</kbd><kbd>U</kbd></div>
             <p>Detonar bomba remota quando o powerup estiver ativo: P1 usa R e P2 usa U. Use para surpreender em vez de esperar o fuse.</p>
           </div>
           <div class="control-row">
-            <div><kbd>Q</kbd></div>
-            <p>Ativar a habilidade do personagem quando estiver carregada. Cada lutador muda uma situacao diferente.</p>
+            <div><kbd>Space</kbd><kbd>I</kbd></div>
+            <p>Ativar ou sustentar a habilidade: P1 usa Espaco e P2 usa I. Cada lutador muda uma situacao diferente.</p>
           </div>
         </div>
       </section>
@@ -675,7 +675,7 @@
         <a href="/terms.html">Termos</a>
       </p>
     </footer>
-    <button class="back-to-top" type="button" aria-label="Voltar ao inicio" data-visible="false">Topo</button>
+    <button class="back-to-top" type="button" aria-label="Voltar ao inicio" data-visible="false" hidden>Topo</button>
     <script>
       const guideLinks = Array.from(document.querySelectorAll('.quick-strip a[href^="#"]'));
       const guideSections = guideLinks
@@ -707,7 +707,9 @@
       }
 
       const updateBackToTop = () => {
-        backToTop.dataset.visible = window.scrollY > window.innerHeight * 0.8 ? "true" : "false";
+        const shouldShow = window.scrollY > window.innerHeight * 0.8;
+        backToTop.dataset.visible = shouldShow ? "true" : "false";
+        backToTop.hidden = !shouldShow;
       };
       window.addEventListener("scroll", updateBackToTop, { passive: true });
       updateBackToTop();

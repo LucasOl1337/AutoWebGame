@@ -72,6 +72,13 @@ import {
   type SkillPowerUpType,
   SKILL_POWER_UP_TYPES,
 } from "../Gameplay/powerups";
+import {
+  advancePickupChain,
+  createPickupChainState,
+  PICKUP_CHAIN_GUARD_MS,
+  registerPickupForChain,
+  type PickupChainState,
+} from "../Gameplay/pickup-chain";
 import type {
   LobbyMode,
   MatchStartConfig,
@@ -89,9 +96,17 @@ import {
 } from "./sound-manager";
 import type { BotContext } from "./bot-ai";
 import {
+  buildBotDangerMap as botAI_buildDangerMap,
   getBotDecision as botAI_getBotDecision,
   getStableBotDirection as botAI_getStableBotDirection,
 } from "./bot-ai";
+import {
+  buildDangerMap,
+  getBombBlastKeys as projectBombBlastKeys,
+  SUDDEN_DEATH_FALL_MS,
+  SUDDEN_DEATH_TICK_MS,
+  type ProjectedBomb,
+} from "./danger-map";
 import { AutoImprovementBridge } from "./auto-improvement-bridge";
 import type { SkillContext } from "../ultimate/skill-system";
 import {
@@ -159,12 +174,12 @@ const directionDelta: Record<Direction, TileCoord> = {
   left: { x: -1, y: 0 },
   right: { x: 1, y: 0 },
 };
-
-interface CenterOverlayState {
-  title: string;
-  subtitle: string;
-  footer: string | null;
-}
+const cardinalDirectionDeltas: readonly TileCoord[] = [
+  directionDelta.up,
+  directionDelta.down,
+  directionDelta.left,
+  directionDelta.right,
+];
 
 const PLAYER_HITBOX_HALF = TILE_SIZE * 0.5;
 const LANE_SNAP_THRESHOLD = TILE_SIZE * 0.45;
@@ -180,7 +195,6 @@ const LOCAL_BOT_TOGGLE_KEY = "KeyB";
 const LOCAL_BOT_CYCLE_KEY = "KeyN";
 const MAX_LOCAL_BOT_FILL = 3;
 const BOT_BOMB_COOLDOWN_MS = 900;
-const BOT_DANGER_FUSE_MS = 1000;
 const FULLSCREEN_HUD_HEIGHT = 34;
 const FULLSCREEN_HUD_CENTER_WIDTH = 224;
 const WALK_FRAME_MS = 100;
@@ -196,10 +210,10 @@ const PERFECT_START_SPEED_MULTIPLIER = 1.35;
 const PICKUP_SPRINT_BOOST_MS = 420;
 const DANGER_ADRENALINE_ETA_MS = 900;
 const DANGER_ADRENALINE_SPEED_MULTIPLIER = 1.18;
+const SPEED_SPARK_TRAIL_ACTIVE_ALPHA = 0.72;
+const SPEED_SPARK_TRAIL_PASSIVE_ALPHA = 0.42;
 const SUDDEN_DEATH_ELAPSED_MS = 40_000;
 const SUDDEN_DEATH_START_MS = ROUND_DURATION_MS - SUDDEN_DEATH_ELAPSED_MS;
-const SUDDEN_DEATH_TICK_MS = 900;
-const SUDDEN_DEATH_FALL_MS = 340;
 const SUDDEN_DEATH_IMPACT_LINGER_MS = 180;
 const SHIELD_GUARD_MS = 600;
 const SHIELD_BREAKAWAY_BOOST_MS = 520;
@@ -295,6 +309,8 @@ function createHeadlessCanvas(): {
     strokeText: noop,
     save: noop,
     restore: noop,
+    translate: noop,
+    rotate: noop,
     createLinearGradient: () => ({ addColorStop: noop }),
   } as unknown as CanvasRenderingContext2D;
   fakeContext.imageSmoothingEnabled = false;
@@ -352,6 +368,7 @@ interface PowerUpPickupNotice {
   playerId: PlayerId;
   type: SkillPowerUpType;
   valueLabel: string;
+  chainGuard: boolean;
   elapsedMs: number;
   remainingMs: number;
 }
@@ -451,6 +468,7 @@ export class GameApp {
   private crateBreakAnimations: CrateBreakAnimation[] = [];
   private powerUpRevealStartedAtMs = new Map<PowerUpState, number>();
   private powerUpPickupNotices: PowerUpPickupNotice[] = [];
+  private pickupChains: Record<PlayerId, PickupChainState> = createPlayerRecord(() => createPickupChainState());
   private playerDeathAnimations: Record<PlayerId, PlayerDeathAnimationState | null> = createPlayerRecord(() => null);
   private suddenDeathActive = false;
   private suddenDeathTickMs = SUDDEN_DEATH_TICK_MS;
@@ -472,6 +490,8 @@ export class GameApp {
   private arenaStaticCache: HTMLCanvasElement | null = null;
   private arenaStaticDirty = true;
   private cachedDangerMap: Map<string, number> | null = null;
+  private cachedBotDangerMap: Map<string, number> | null = null;
+  private botDangerCacheActive = false;
   private arenaStaticMistGradient: CanvasGradient | null = null;
 
   constructor(root: HTMLElement, assets: GameAssets, arenaDefinition: ArenaDefinition = createDefaultArenaDefinition()) {
@@ -595,7 +615,7 @@ export class GameApp {
     return this.arena.config.spawnMap[playerId];
   }
 
-  private createBotContext(): BotContext {
+  private createBotContext(dangerMap?: Map<string, number>): BotContext {
     return {
       players: this.players,
       activePlayerIds: this.activePlayerIds,
@@ -611,6 +631,7 @@ export class GameApp {
       botCommittedDirection: this.botCommittedDirection,
       botPendingReverseDirection: this.botPendingReverseDirection,
       botPendingReverseFrames: this.botPendingReverseFrames,
+      dangerMap,
       canOccupyPosition: (_pos, _tile) => true,
       evaluateMovementOption: (player, dir, dt) => this.evaluateMovementOption(player, dir, dt),
       canMovementOptionAdvance: (pos, opt) => this.canMovementOptionAdvance(pos, opt),
@@ -1087,11 +1108,11 @@ export class GameApp {
       return;
     }
     const storage = this.getLocalStorage();
-    const storedVolume = Number(storage?.getItem(AUDIO_VOLUME_STORAGE_KEY));
+    const storedVolume = Number(this.readStorageItem(storage, AUDIO_VOLUME_STORAGE_KEY));
     if (Number.isFinite(storedVolume)) {
       this.soundManager.setVolume(storedVolume);
     }
-    this.soundManager.setMuted(storage?.getItem(AUDIO_MUTED_STORAGE_KEY) === "true");
+    this.soundManager.setMuted(this.readStorageItem(storage, AUDIO_MUTED_STORAGE_KEY) === "true");
     void this.soundManager.loadSounds(SFX_MANIFEST);
     this.root.appendChild(this.canvas);
     if (import.meta.env?.DEV) {
@@ -1148,11 +1169,13 @@ export class GameApp {
   public setAudioVolume(volume: number): void {
     this.soundManager.setVolume(volume);
     this.getLocalStorage()?.setItem(AUDIO_VOLUME_STORAGE_KEY, String(this.soundManager.getVolume()));
+    this.writeStorageItem(AUDIO_VOLUME_STORAGE_KEY, String(this.soundManager.getVolume()));
   }
 
   public setAudioMuted(muted: boolean): void {
     this.soundManager.setMuted(muted);
     this.getLocalStorage()?.setItem(AUDIO_MUTED_STORAGE_KEY, String(muted));
+    this.writeStorageItem(AUDIO_MUTED_STORAGE_KEY, String(muted));
   }
 
   public getAudioSettings(): { volume: number; muted: boolean } {
@@ -1959,6 +1982,7 @@ export class GameApp {
     this.crateBreakAnimations = [];
     this.powerUpRevealStartedAtMs.clear();
     this.powerUpPickupNotices = [];
+    this.pickupChains = createPlayerRecord(() => createPickupChainState());
     this.playerDeathAnimations = createPlayerRecord(() => null);
     this.nextBombId = 1;
     this.roundTimeMs = ROUND_DURATION_MS;
@@ -2139,62 +2163,63 @@ export class GameApp {
   }
 
   private updatePlayers(deltaMs: number): void {
-    for (const id of this.activePlayerIds) {
-      const player = this.players[id];
-      if (!player.alive) {
-        continue;
-      }
+    this.cachedBotDangerMap = null;
+    this.botDangerCacheActive = true;
+    try {
+      for (const id of this.activePlayerIds) {
+        const player = this.players[id];
+        if (!player.alive) {
+          continue;
+        }
 
-      const botDecision = this.isBotControlled(id) ? this.getBotDecision(player) : null;
-      const automationBomb = this.automationMode
-        ? this.automationControlledPlayer === id && this.input.consumePress("Space")
-        : false;
-      const onlineBomb = this.consumeOnlineBombPress(id);
-      const nativeBindings = MENU_PLAYER_IDS.includes(id as MenuPlayerId)
-        ? KEY_BINDINGS[id as MenuPlayerId]
-        : null;
-      const nativeBomb = this.shouldUseNativeControls()
-        ? nativeBindings ? this.input.consumePress(nativeBindings.bomb) : false
-        : false;
-      const wantsBomb = botDecision?.placeBomb || automationBomb || nativeBomb || onlineBomb;
-      if (wantsBomb) {
-        const placedBomb = this.placeBomb(player);
+        const botDecision = this.isBotControlled(id) ? this.getBotDecision(player) : null;
+        const automationBomb = this.automationMode
+          ? this.automationControlledPlayer === id && this.input.consumePress("Space")
+          : false;
+        const onlineBomb = this.consumeOnlineBombPress(id);
+        const nativeBindings = MENU_PLAYER_IDS.includes(id as MenuPlayerId)
+          ? KEY_BINDINGS[id as MenuPlayerId]
+          : null;
+        const nativeBomb = this.shouldUseNativeControls()
+          ? nativeBindings ? this.input.consumePress(nativeBindings.bomb) : false
+          : false;
+        const wantsBomb = botDecision?.placeBomb || automationBomb || nativeBomb || onlineBomb;
+        const wantsDetonate = botDecision?.detonate
+          || this.consumeOnlineDetonatePress(id)
+          || (this.shouldUseNativeControls()
+            ? nativeBindings ? this.input.consumePress(nativeBindings.detonate) : false
+            : false);
+        const wantsSkill = this.consumeOnlineSkillPress(id)
+          || (this.shouldUseNativeControls()
+            ? nativeBindings ? this.input.consumePress(nativeBindings.skill) : false
+            : false);
+        const skillHeld = this.isSkillHeld(id);
+
+        const desiredDirection = botDecision?.direction ?? this.getMovementDirection(id);
+        const direction = this.isBotControlled(id)
+          ? this.getStableBotDirection(player, desiredDirection, deltaMs)
+          : desiredDirection;
+        const placedBomb = this.simulatePlayerInputStep(
+          player,
+          {
+            direction,
+            bombPressed: wantsBomb,
+            detonatePressed: wantsDetonate,
+            skillPressed: wantsSkill,
+            skillHeld,
+          },
+          deltaMs,
+        );
+        if (this.isBotControlled(id) && direction && player.skill.phase !== "channeling") {
+          this.rememberBotDirection(id, player.direction);
+        }
         if (placedBomb && botDecision?.placeBomb && this.isBotControlled(id)) {
           this.botBombCooldownMs = BOT_BOMB_COOLDOWN_MS;
         }
       }
-      const wantsDetonate = botDecision?.detonate
-        || this.consumeOnlineDetonatePress(id)
-        || (this.shouldUseNativeControls()
-          ? nativeBindings ? this.input.consumePress(nativeBindings.detonate) : false
-          : false);
-      const wantsSkill = this.consumeOnlineSkillPress(id)
-        || (this.shouldUseNativeControls()
-          ? id === 1 && this.input.consumePress(SKILL_KEY)
-          : false);
-      const skillHeld = this.isSkillHeld(id);
-
-      const desiredDirection = botDecision?.direction ?? this.getMovementDirection(id);
-      const direction = this.isBotControlled(id)
-        ? this.getStableBotDirection(player, desiredDirection, deltaMs)
-        : desiredDirection;
-      const placedBomb = this.simulatePlayerInputStep(
-        player,
-        {
-          direction,
-          bombPressed: wantsBomb,
-          detonatePressed: wantsDetonate,
-          skillPressed: wantsSkill,
-          skillHeld,
-        },
-        deltaMs,
-      );
-      if (this.isBotControlled(id) && direction && player.skill.phase !== "channeling") {
-        this.rememberBotDirection(id, player.direction);
-      }
-      if (placedBomb && botDecision?.placeBomb && this.isBotControlled(id)) {
-        this.botBombCooldownMs = BOT_BOMB_COOLDOWN_MS;
-      }
+    } finally {
+      this.botDangerCacheActive = false;
+      this.cachedBotDangerMap = null;
     }
   }
 
@@ -2230,7 +2255,10 @@ export class GameApp {
     if (this.automationMode) {
       return this.automationControlledPlayer === id && this.input.isDown(SKILL_KEY);
     }
-    return id === 1 && this.shouldUseNativeControls() && this.input.isDown(SKILL_KEY);
+    if (!this.shouldUseNativeControls() || !MENU_PLAYER_IDS.includes(id as MenuPlayerId)) {
+      return false;
+    }
+    return this.input.isDown(KEY_BINDINGS[id as MenuPlayerId].skill);
   }
 
   private isBotControlled(id: PlayerId): boolean {
@@ -2264,7 +2292,7 @@ export class GameApp {
     if (import.meta.env?.DEV && AutoImprovementBridge.isEnabled && this.isLiveBridgeControlled(player.id)) {
       // Per-player AI explicitly disabled → stand completely idle (no built-in AI)
       if (!AutoImprovementBridge.isPlayerEnabled(player.id)) {
-        return botAI_getBotDecision(player, this.createBotContext());
+        return botAI_getBotDecision(player, this.createBotContext(this.getSharedBotDangerMap()));
       }
       const aiDecision = AutoImprovementBridge.getDecision(player.id);
       if (aiDecision) return AutoImprovementBridge.toBotDecision(aiDecision);
@@ -2273,7 +2301,17 @@ export class GameApp {
         return { direction: null, placeBomb: false, detonate: false };
       }
     }
-    return botAI_getBotDecision(player, this.createBotContext());
+    return botAI_getBotDecision(player, this.createBotContext(this.getSharedBotDangerMap()));
+  }
+
+  private getSharedBotDangerMap(): Map<string, number> {
+    if (!this.botDangerCacheActive) {
+      return botAI_buildDangerMap(this.createBotContext());
+    }
+    if (!this.cachedBotDangerMap) {
+      this.cachedBotDangerMap = botAI_buildDangerMap(this.createBotContext());
+    }
+    return this.cachedBotDangerMap;
   }
 
   private getOldestOwnedBomb(playerId: PlayerId): BombState | null {
@@ -2289,100 +2327,12 @@ export class GameApp {
     return selectedBomb;
   }
 
-  private getDangerMap(extraBomb?: { tile: TileCoord; range: number; fuseMs: number }): Map<string, number> {
-    const danger = new Map<string, number>();
-    const registerDanger = (key: string, fuseMs: number): void => {
-      const previous = danger.get(key);
-      if (previous === undefined || fuseMs < previous) {
-        danger.set(key, fuseMs);
-      }
-    };
-
-    for (const flame of this.flames) {
-      registerDanger(tileKey(flame.tile.x, flame.tile.y), 0);
-    }
-
-    const bombsToProject: Array<{ tile: TileCoord; range: number; fuseMs: number; blastKeys: Set<string> }> = this.bombs
-      .filter((bomb) => bomb.fuseMs <= BOMB_FUSE_MS + BOT_DANGER_FUSE_MS)
-      .map((bomb) => ({
-        tile: bomb.tile,
-        range: bomb.flameRange,
-        fuseMs: Math.max(0, bomb.fuseMs),
-        blastKeys: this.getBombBlastKeys(bomb.tile, bomb.flameRange),
-      }));
-
-    if (extraBomb) {
-      bombsToProject.push({
-        tile: extraBomb.tile,
-        range: extraBomb.range,
-        fuseMs: Math.max(0, extraBomb.fuseMs),
-        blastKeys: this.getBombBlastKeys(extraBomb.tile, extraBomb.range),
-      });
-    }
-
-    let updated = true;
-    while (updated) {
-      updated = false;
-      for (const source of bombsToProject) {
-        for (const target of bombsToProject) {
-          if (source === target || source.fuseMs >= target.fuseMs) {
-            continue;
-          }
-          if (source.blastKeys.has(tileKey(target.tile.x, target.tile.y))) {
-            target.fuseMs = source.fuseMs;
-            updated = true;
-          }
-        }
-      }
-    }
-
-    for (const bomb of bombsToProject) {
-      for (const key of bomb.blastKeys) {
-        registerDanger(key, bomb.fuseMs);
-      }
-    }
-
-    for (const effect of this.suddenDeathClosureEffects) {
-      if (effect.impacted) {
-        continue;
-      }
-      const impactMs = Math.max(0, SUDDEN_DEATH_FALL_MS - effect.elapsedMs);
-      registerDanger(tileKey(effect.tile.x, effect.tile.y), impactMs);
-    }
-
-    if (this.suddenDeathActive && this.suddenDeathPath.length > 0 && this.suddenDeathIndex < this.suddenDeathPath.length) {
-      const nextTickMs = Math.max(0, this.suddenDeathTickMs);
-      for (let index = this.suddenDeathIndex; index < this.suddenDeathPath.length; index += 1) {
-        const stepFromNow = index - this.suddenDeathIndex;
-        const impactMs = nextTickMs + stepFromNow * SUDDEN_DEATH_TICK_MS;
-        const tile = this.suddenDeathPath[index];
-        registerDanger(tileKey(tile.x, tile.y), impactMs);
-      }
-    }
-
-    return danger;
+  private getDangerMap(extraBomb?: ProjectedBomb): Map<string, number> {
+    return buildDangerMap(this.createBotContext(), extraBomb);
   }
 
   private getBombBlastKeys(origin: TileCoord, range: number): Set<string> {
-    const keys = new Set<string>([tileKey(origin.x, origin.y)]);
-    for (const delta of Object.values(directionDelta)) {
-      for (let step = 1; step <= range; step += 1) {
-        const x = origin.x + delta.x * step;
-        const y = origin.y + delta.y * step;
-        if (x < 0 || y < 0 || x >= this.getArenaGridWidth() || y >= this.getArenaGridHeight()) {
-          break;
-        }
-        const key = tileKey(x, y);
-        if (this.arena.solid.has(key)) {
-          break;
-        }
-        keys.add(key);
-        if (this.arena.breakable.has(key)) {
-          break;
-        }
-      }
-    }
-    return keys;
+    return projectBombBlastKeys(origin, range, this.arena);
   }
 
   private getMoveDuration(player: PlayerState): number {
@@ -2437,7 +2387,12 @@ export class GameApp {
     desiredDirection: Direction | null,
     deltaMs: number,
   ): Direction | null {
-    return botAI_getStableBotDirection(player, desiredDirection, deltaMs, this.createBotContext());
+    return botAI_getStableBotDirection(
+      player,
+      desiredDirection,
+      deltaMs,
+      this.createBotContext(this.getSharedBotDangerMap()),
+    );
   }
 
   private rememberBotDirection(playerId: PlayerId, direction: Direction): void {
@@ -2828,6 +2783,7 @@ export class GameApp {
       ownerCanPass: true,
       flameRange: player.flameRange,
     });
+    this.cachedBotDangerMap = null;
     this.nextBombId += 1;
     player.activeBombs += 1;
     if (playAudio) {
@@ -2883,7 +2839,7 @@ export class GameApp {
     const range = bomb.flameRange;
     flameTiles.add(tileKey(bomb.tile.x, bomb.tile.y));
 
-    for (const direction of Object.values(directionDelta)) {
+    for (const direction of cardinalDirectionDeltas) {
       for (let step = 1; step <= range; step += 1) {
         const x = bomb.tile.x + direction.x * step;
         const y = bomb.tile.y + direction.y * step;
@@ -3004,6 +2960,10 @@ export class GameApp {
   }
 
   private updateVisualEffects(deltaMs: number): void {
+    for (const playerId of this.activePlayerIds) {
+      advancePickupChain(this.pickupChains[playerId], deltaMs);
+    }
+
     if (this.powerUpPickupNotices.length > 0) {
       for (const notice of this.powerUpPickupNotices) {
         notice.elapsedMs += deltaMs;
@@ -3230,13 +3190,17 @@ export class GameApp {
         }
         if (powerUp.tile.x === tile.x && powerUp.tile.y === tile.y) {
           if (isPowerUpMaxed(player, powerUp.type)) {
-            this.addPowerUpPickupNotice(id, powerUp.type, "MAX");
+            this.addPowerUpPickupNotice(id, powerUp.type, false, "MAX");
             continue;
           }
           powerUp.collected = true;
           applyPowerUpToPlayer(player, powerUp.type);
+          const chainGuard = registerPickupForChain(this.pickupChains[id], powerUp.type);
+          if (chainGuard) {
+            player.flameGuardMs = Math.max(player.flameGuardMs, PICKUP_CHAIN_GUARD_MS);
+          }
           player.pickupSprintMs = Math.max(player.pickupSprintMs ?? 0, PICKUP_SPRINT_BOOST_MS);
-          this.addPowerUpPickupNotice(id, powerUp.type);
+          this.addPowerUpPickupNotice(id, powerUp.type, chainGuard);
           this.soundManager.playOneShot("powerCollect");
         }
       }
@@ -3321,6 +3285,22 @@ export class GameApp {
       return window.localStorage ?? null;
     } catch {
       return null;
+    }
+  }
+
+  private readStorageItem(storage: Storage | null, key: string): string | null {
+    try {
+      return storage?.getItem(key) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private writeStorageItem(key: string, value: string): void {
+    try {
+      this.getLocalStorage()?.setItem(key, value);
+    } catch {
+      // Audio controls remain usable when storage is blocked or full.
     }
   }
 
@@ -3826,7 +3806,7 @@ export class GameApp {
       ? this.formatPowerUpPickupNotice(recentPickup, compact ? 8 : 12)
       : this.shortenCharacterName(this.getCharacterLabel(playerId, compact ? 8 : 12), compact ? 8 : 12);
     const subtitleColor = recentPickup
-      ? getPowerUpDefinition(recentPickup.type).tint
+      ? recentPickup.chainGuard ? CANVAS_UI_GOLD_BRIGHT : getPowerUpDefinition(recentPickup.type).tint
       : CANVAS_UI_TEXT;
     const allSkillSlots = this.getHudSkillSlots(playerId);
     const skillSlots = compact
@@ -3984,12 +3964,18 @@ export class GameApp {
     } satisfies HudSkillSlot;
   }
 
-  private addPowerUpPickupNotice(playerId: PlayerId, type: SkillPowerUpType, valueLabel?: string): void {
+  private addPowerUpPickupNotice(
+    playerId: PlayerId,
+    type: SkillPowerUpType,
+    chainGuard = false,
+    valueLabel?: string,
+  ): void {
     const slot = this.getHudSkillSlot(playerId, type);
     const notice: PowerUpPickupNotice = {
       playerId,
       type,
       valueLabel: valueLabel ?? slot.valueLabel,
+      chainGuard,
       elapsedMs: 0,
       remainingMs: POWER_UP_PICKUP_NOTICE_MS,
     };
@@ -4010,7 +3996,13 @@ export class GameApp {
   }
 
   private formatPowerUpPickupNotice(notice: PowerUpPickupNotice, maxLength: number): string {
+    if (notice.chainGuard) {
+      return maxLength <= 8 ? "CHAIN!" : "CHAIN GUARD";
+    }
     const definition = getPowerUpDefinition(notice.type);
+    if (notice.type === "short-fuse-up") {
+      return `${definition.shortLabel} ${notice.valueLabel}`;
+    }
     const label = maxLength <= 8 ? definition.shortLabel : definition.label;
     return this.shortenCharacterName(`+${label} ${notice.valueLabel}`, maxLength);
   }
@@ -4998,6 +4990,59 @@ export class GameApp {
     this.ctx.restore();
   }
 
+  private isSpeedSparkTrailActive(player: PlayerState, moving: boolean): boolean {
+    if (!player.active || !player.alive || !moving) {
+      return false;
+    }
+    return player.speedLevel > 0
+      || (player.perfectStartBoostMs ?? 0) > 0
+      || (player.breakawayBoostMs ?? 0) > 0
+      || (player.pickupSprintMs ?? 0) > 0
+      || this.hasDangerAdrenalineStep(player);
+  }
+
+  private getSpeedSparkTrailAlpha(player: PlayerState): number {
+    const hasTimedBoost = (player.perfectStartBoostMs ?? 0) > 0
+      || (player.breakawayBoostMs ?? 0) > 0
+      || (player.pickupSprintMs ?? 0) > 0
+      || this.hasDangerAdrenalineStep(player);
+    const baseAlpha = hasTimedBoost ? SPEED_SPARK_TRAIL_ACTIVE_ALPHA : SPEED_SPARK_TRAIL_PASSIVE_ALPHA;
+    return Math.max(0.32, Math.min(0.86, baseAlpha + Math.sin(this.animationClockMs / 90) * 0.06));
+  }
+
+  private drawSpeedSparkTrail(
+    player: PlayerState,
+    x: number,
+    y: number,
+    renderDirection: Direction,
+  ): void {
+    const sprite = this.assets.effects?.speedSparkTrail;
+    if (!sprite) {
+      return;
+    }
+
+    const direction = player.lastMoveDirection ?? renderDirection;
+    const delta = directionDelta[direction];
+    const angle: Record<Direction, number> = {
+      right: 0,
+      down: Math.PI / 2,
+      left: Math.PI,
+      up: -Math.PI / 2,
+    };
+    const trailWidth = TILE_SIZE * 1.36;
+    const trailHeight = TILE_SIZE * 0.94;
+    const centerX = x + TILE_SIZE * 0.5 - delta.x * TILE_SIZE * 0.24;
+    const centerY = y + TILE_SIZE * 0.58 - delta.y * TILE_SIZE * 0.24;
+
+    this.ctx.save();
+    this.ctx.globalAlpha = this.getSpeedSparkTrailAlpha(player);
+    this.ctx.globalCompositeOperation = "lighter";
+    this.ctx.translate(centerX, centerY);
+    this.ctx.rotate(angle[direction]);
+    this.ctx.drawImage(sprite, -trailWidth * 0.74, -trailHeight * 0.5, trailWidth, trailHeight);
+    this.ctx.restore();
+  }
+
   private drawPlayer(player: PlayerState): void {
     const existingDeathState = this.playerDeathAnimations[player.id];
     if (!player.active && !existingDeathState) {
@@ -5054,6 +5099,10 @@ export class GameApp {
     let sprite = deathSprite ?? castSprite ?? movementSprite ?? spriteForDirection(baseSprites, renderDirection);
     if (!sprite || !this.getSpriteTrimBounds(sprite)) {
       sprite = this.getRenderableSprite(baseSprites, renderDirection);
+    }
+
+    if (this.isSpeedSparkTrailActive(player, moving)) {
+      this.drawSpeedSparkTrail(player, x, y, renderDirection);
     }
 
     this.ctx.fillStyle = "rgba(10, 8, 7, 0.32)";
@@ -5665,9 +5714,14 @@ export class GameApp {
             ? {
                 type: recentPowerUpPickup.type,
                 value: recentPowerUpPickup.valueLabel,
+                chainGuard: recentPowerUpPickup.chainGuard,
                 remainingMs: Math.round(recentPowerUpPickup.remainingMs),
               }
             : null,
+          pickupChain: {
+            previousType: this.pickupChains[id].previousType,
+            remainingMs: Math.round(this.pickupChains[id].remainingMs),
+          },
           flameGuardMs: Math.round(player.flameGuardMs),
           breakawayBoostMs: Math.round(player.breakawayBoostMs ?? 0),
           pickupSprintMs: Math.round(player.pickupSprintMs ?? 0),

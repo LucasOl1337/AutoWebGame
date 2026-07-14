@@ -1,7 +1,7 @@
 const {
   normalizeRoomCode,
   readRoomCodeFromUrl,
-} = await import("../output/esm/NetCode/session-client.js");
+} = await import("../output/esm/NetCode/room-invite.js");
 
 const normalizationCases = [
   {
@@ -24,6 +24,16 @@ const normalizationCases = [
     actual: normalizeRoomCode("https%3A%2F%2Fbomba.test%2Fen%2Fplay%3Froom%3Def-45gh"),
     expected: "EF45GH",
   },
+  {
+    name: "extracts standalone code from chat message",
+    actual: normalizeRoomCode("Bora jogar agora na sala AB12CD antes que lote"),
+    expected: "AB12CD",
+  },
+  {
+    name: "extracts separated standalone code from chat message",
+    actual: normalizeRoomCode("codigo da sala: zx-91-km"),
+    expected: "ZX91KM",
+  },
 ];
 
 const urlCases = [
@@ -31,6 +41,11 @@ const urlCases = [
     name: "extracts nested pasted invite from room query",
     actual: readRoomCodeFromUrl("https://bomba.test/play?room=https%3A%2F%2Fbomba.test%2Fen%2Fplay%3Froom%3Dcd-34ef"),
     expected: "CD34EF",
+  },
+  {
+    name: "extracts loose room query text from invite",
+    actual: readRoomCodeFromUrl("https://bomba.test/play?room=Bora%20sala%20gh78jk"),
+    expected: "GH78JK",
   },
   {
     name: "still ignores missing room query",

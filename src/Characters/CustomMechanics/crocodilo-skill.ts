@@ -23,6 +23,12 @@ const directionDelta: Record<Direction, TileCoord> = {
   left: { x: -1, y: 0 },
   right: { x: 1, y: 0 },
 };
+const cardinalDeltas = [
+  directionDelta.up,
+  directionDelta.down,
+  directionDelta.left,
+  directionDelta.right,
+] as const;
 
 export function startCrocodiloEmeraldSurge(
   player: PlayerState,
@@ -166,7 +172,7 @@ export function computeCrocodiloSurgeTiles(
 ): TileCoord[] {
   const { width, height } = context.arena.config.grid;
   const tiles: TileCoord[] = [];
-  for (const delta of Object.values(directionDelta)) {
+  for (const delta of cardinalDeltas) {
     for (let step = 1; step <= CROCODILO_SURGE_RANGE; step += 1) {
       const tile = {
         x: origin.x + delta.x * step,

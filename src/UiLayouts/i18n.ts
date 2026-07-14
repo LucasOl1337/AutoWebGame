@@ -26,6 +26,7 @@ export interface SiteCopy {
   landing: {
     kicker: string;
     lead: string;
+    commercialProof: string[];
     quickMatch: string;
     quickMatchBusy: string;
     botMatch: string;
@@ -44,6 +45,7 @@ export interface SiteCopy {
     feedbackSending: string;
     feedbackThanks: string;
     feedbackError: string;
+    feedbackTimeout: string;
     feedbackEmpty: string;
     feedbackCharactersRemaining: (remaining: number) => string;
     feedbackCharactersOverLimit: (overLimitBy: number, maxLength: number) => string;
@@ -116,6 +118,7 @@ export interface SiteCopy {
     entering: (title: string) => string;
     joinUnavailable: string;
     roomStatusLive: string;
+    roomStatusFull: string;
     roomStatusOpen: string;
     freeSeat: (playerId: number) => string;
     filledSeat: (playerId: number) => string;
@@ -151,7 +154,8 @@ export interface SiteCopy {
     enterSeat: (playerId: number) => string;
     enterHint: string;
     readyDisabledSolo: string;
-    readyDisabledQueue: string;
+    readyWaitingFor: (players: string, count: number) => string;
+    readyStarting: string;
     readyButton: string;
     readyHint: string;
     reconnectingHint: string;
@@ -170,6 +174,7 @@ export interface SiteCopy {
     pendingNote: string;
     quickMatchNote: string;
     defaultNote: string;
+    surpriseAction: string;
     selectable: string;
     defaultSlot: (slot: number) => string;
   };
@@ -220,6 +225,7 @@ export interface SiteCopy {
     lobbyActionUnavailable: string;
     inviteCopied: string;
     inviteCopyFailed: string;
+    inviteCopyManual: (roomCode: string) => string;
     chatUnavailable: string;
     enteringLobby: string;
     chooseStart: string;
@@ -275,15 +281,20 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
     },
     landing: {
       kicker: "Arena online",
-      lead: "Entre, escolha um bomber e entenda o jogo em segundos.",
-      quickMatch: "Partida rapida",
+      lead: "Arena bomber de navegador para rounds curtos: escolha um personagem, entre no lobby online ou teste contra bots antes de comprar o acesso fundador.",
+      commercialProof: [
+        "Partida jogavel no browser",
+        "Lobby online com quick match",
+        "Compra vinculada a conta rapida",
+      ],
+      quickMatch: "Jogar partida rapida",
       quickMatchBusy: "Buscando partida...",
-      botMatch: "Partida contra bots",
-      enterLobby: "Entrar em lobby",
-      feedback: "Dar feedback",
+      botMatch: "Testar contra bots",
+      enterLobby: "Ver lobbies abertos",
+      feedback: "Enviar feedback",
       searching: "Procurando a melhor sala para voce entrar.",
       meta: (queuedRooms, onlineUsers) => `${queuedRooms} salas abertas agora | ${onlineUsers} jogadores online`,
-      releaseBadge: "v0.2.2 no ar",
+      releaseBadge: "v0.4.1 no ar",
       releaseTitle: "Novidades do patch",
       releaseItems: [
         "Escolha 1, 2 ou 3 bots antes da partida local.",
@@ -298,6 +309,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedbackSending: "Enviando...",
       feedbackThanks: "Feedback enviado.",
       feedbackError: "Nao foi possivel enviar agora.",
+      feedbackTimeout: "O envio demorou demais. Seu texto foi preservado; tente novamente.",
       feedbackEmpty: "Escreva alguma coisa antes de enviar.",
       feedbackCharactersRemaining: (remaining) => `${remaining} ${remaining === 1 ? "caractere restante" : "caracteres restantes"}.`,
       feedbackCharactersOverLimit: (overLimitBy, maxLength) => `Remova ${overLimitBy} ${overLimitBy === 1 ? "caractere" : "caracteres"} para enviar. Limite: ${maxLength}.`,
@@ -386,7 +398,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       title: "Escolha um lobby para entrar",
       create: "Criar lobby",
       joinCodeTitle: "Entrar por codigo",
-      joinCodeHint: "Cole um codigo ou link de convite e pressione Enter.",
+      joinCodeHint: "Cole um codigo de 6 caracteres ou convite para entrar automaticamente. Se digitar, pressione Enter.",
       joinCodeUnavailableHint: "Reconectando ao lobby. A entrada por codigo volta em instantes.",
       joinCodePlaceholder: "Codigo ou link da sala",
       joinCodeButton: "Entrar",
@@ -397,6 +409,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       entering: (title) => `Entrando em ${title}...`,
       joinUnavailable: "Nao foi possivel entrar no lobby agora.",
       roomStatusLive: "Ao vivo",
+      roomStatusFull: "Sala cheia",
       roomStatusOpen: "Pronto para entrar",
       freeSeat: (playerId) => `P${playerId} livre`,
       filledSeat: (playerId) => `P${playerId}`,
@@ -432,7 +445,10 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       enterSeat: (playerId) => `Entrar na vaga P${playerId}`,
       enterHint: "A entrada na vaga livre acontece com um clique.",
       readyDisabledSolo: "Sua vaga esta pronta. Falta mais gente para iniciar.",
-      readyDisabledQueue: "Tudo certo. A partida comeca assim que o servidor iniciar o match.",
+      readyWaitingFor: (players, count) => count === 1
+        ? `Ainda precisa marcar pronto: ${players}.`
+        : `Ainda precisam marcar pronto: ${players}.`,
+      readyStarting: "Todos estao prontos. Iniciando partida...",
       readyButton: "Pronto para jogar",
       readyHint: "Seu personagem escolhido ja sera usado na vaga atual.",
       reconnectingHint: "Reconectando ao lobby. A acao volta assim que o backend responder.",
@@ -451,6 +467,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       pendingNote: "Esse personagem sera aplicado assim que voce ficar pronto.",
       quickMatchNote: "Partida rapida so te coloca em uma sala. O inicio continua sendo decidido dentro do lobby.",
       defaultNote: "Escolha agora e entre no setup com tudo explicado na mesma tela.",
+      surpriseAction: "Surpreenda-me",
       selectable: "Selecionavel",
       defaultSlot: (slot) => `Default P${slot}`,
     },
@@ -501,6 +518,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       lobbyActionUnavailable: "Conexao do lobby indisponivel. Reconectando...",
       inviteCopied: "Convite copiado.",
       inviteCopyFailed: "Nao foi possivel copiar o convite.",
+      inviteCopyManual: (roomCode) => `Nao foi possivel copiar. Compartilhe o codigo ${roomCode}.`,
       chatUnavailable: "Chat indisponivel no momento.",
       enteringLobby: "Entrando no lobby...",
       chooseStart: "Escolha partida rapida, bots ou entre em um lobby.",
@@ -554,15 +572,20 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
     },
     landing: {
       kicker: "Online arena",
-      lead: "Jump in, pick a bomber, and understand the game in seconds.",
-      quickMatch: "Quick match",
+      lead: "Browser bomber arena for short competitive rounds: pick a character, join the online lobby, or test against bots before buying founder access.",
+      commercialProof: [
+        "Playable in the browser",
+        "Online lobby with quick match",
+        "Purchase tied to a quick account",
+      ],
+      quickMatch: "Play quick match",
       quickMatchBusy: "Finding match...",
-      botMatch: "Match vs bots",
-      enterLobby: "Enter lobby",
-      feedback: "Leave feedback",
+      botMatch: "Try vs bots",
+      enterLobby: "View open lobbies",
+      feedback: "Send feedback",
       searching: "Looking for the best room for you.",
       meta: (queuedRooms, onlineUsers) => `${queuedRooms} open rooms right now | ${onlineUsers} players online`,
-      releaseBadge: "v0.2.2 live",
+      releaseBadge: "v0.4.1 live",
       releaseTitle: "Patch highlights",
       releaseItems: [
         "Choose 1, 2, or 3 bots before a local match.",
@@ -577,6 +600,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedbackSending: "Sending...",
       feedbackThanks: "Feedback sent.",
       feedbackError: "Could not send feedback right now.",
+      feedbackTimeout: "Sending took too long. Your text was preserved; try again.",
       feedbackEmpty: "Write something before sending.",
       feedbackCharactersRemaining: (remaining) => `${remaining} ${remaining === 1 ? "character" : "characters"} remaining.`,
       feedbackCharactersOverLimit: (overLimitBy, maxLength) => `Remove ${overLimitBy} ${overLimitBy === 1 ? "character" : "characters"} to send. Limit: ${maxLength}.`,
@@ -654,7 +678,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       title: "Choose a lobby to join",
       create: "Create lobby",
       joinCodeTitle: "Join by code",
-      joinCodeHint: "Paste a room code or invite link and press Enter.",
+      joinCodeHint: "Paste a 6-character room code or invite to join automatically. If typing, press Enter.",
       joinCodeUnavailableHint: "Reconnecting to the lobby. Code entry returns in a moment.",
       joinCodePlaceholder: "Room code or invite link",
       joinCodeButton: "Join",
@@ -665,6 +689,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       entering: (title) => `Joining ${title}...`,
       joinUnavailable: "Could not join the lobby right now.",
       roomStatusLive: "Live",
+      roomStatusFull: "Room full",
       roomStatusOpen: "Ready to join",
       freeSeat: (playerId) => `P${playerId} open`,
       filledSeat: (playerId) => `P${playerId}`,
@@ -700,7 +725,10 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       enterSeat: (playerId) => `Join seat P${playerId}`,
       enterHint: "Joining the first open slot takes one click.",
       readyDisabledSolo: "Your seat is ready. More players are still needed to start.",
-      readyDisabledQueue: "All set. The match starts as soon as the server launches it.",
+      readyWaitingFor: (players, count) => count === 1
+        ? `Still needs to ready up: ${players}.`
+        : `Still need to ready up: ${players}.`,
+      readyStarting: "Everyone is ready. Starting match...",
       readyButton: "Ready to play",
       readyHint: "Your selected character will be used in this seat.",
       reconnectingHint: "Reconnecting to the lobby. This action returns when the backend responds.",
@@ -719,6 +747,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       pendingNote: "This character will be applied as soon as you ready up.",
       quickMatchNote: "Quick match only places you into a room. Match start is still decided inside the lobby.",
       defaultNote: "Pick now and enter setup with everything explained on one screen.",
+      surpriseAction: "Surprise me",
       selectable: "Selectable",
       defaultSlot: (slot) => `Default P${slot}`,
     },
@@ -769,6 +798,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       lobbyActionUnavailable: "Lobby connection is unavailable. Reconnecting...",
       inviteCopied: "Invite copied.",
       inviteCopyFailed: "Could not copy the invite.",
+      inviteCopyManual: (roomCode) => `Could not copy. Share room code ${roomCode}.`,
       chatUnavailable: "Chat is unavailable right now.",
       enteringLobby: "Joining lobby...",
       chooseStart: "Choose quick match, bots, or join a lobby.",

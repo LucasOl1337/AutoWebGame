@@ -66,6 +66,7 @@ export const KEY_BINDINGS: Record<MenuPlayerId, {
   right: string;
   bomb: string;
   detonate: string;
+  skill: string;
   ready: string;
 }> = {
   1: {
@@ -75,6 +76,7 @@ export const KEY_BINDINGS: Record<MenuPlayerId, {
     right: "KeyD",
     bomb: "KeyQ",
     detonate: "KeyR",
+    skill: SKILL_KEY,
     ready: "KeyE",
   },
   2: {
@@ -84,6 +86,7 @@ export const KEY_BINDINGS: Record<MenuPlayerId, {
     right: "ArrowRight",
     bomb: "KeyO",
     detonate: "KeyU",
+    skill: "KeyI",
     ready: "KeyP",
   },
 };

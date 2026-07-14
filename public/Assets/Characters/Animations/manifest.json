@@ -71,7 +71,7 @@
         "idle": true,
         "walk": true,
         "run": true,
-        "cast": false,
+        "cast": true,
         "attack": false,
         "death": false
       },

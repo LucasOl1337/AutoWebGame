@@ -6,6 +6,7 @@ const constantsMatch = workerSource.match(
   /const HASHED_VITE_ASSET_RE[\s\S]*?const IMMUTABLE_STATIC_CACHE_CONTROL = "public, max-age=31536000, immutable";/,
 );
 const helperMatch = workerSource.match(/function getStaticAssetCacheControl\(pathname, contentType, status\) \{[\s\S]*?\n\}/);
+const helperMatch = workerSource.match(/function getStaticAssetCacheControl\(pathname, contentType, status = 200\) \{[\s\S]*?\n\}/);
 
 if (!constantsMatch || !helperMatch) {
   console.error("Could not find static asset cache helper in worker/index.js");
@@ -62,6 +63,8 @@ const cases = [
   {
     label: "missing hashed chunk",
     pathname: "/Assets/game-app-MISSING1.js",
+    label: "missing hashed asset",
+    pathname: "/Assets/game-app-CX670W2N.js",
     contentType: "application/javascript",
     status: 404,
     before: "public, max-age=31536000, immutable",
@@ -80,6 +83,7 @@ const cases = [
 const results = cases.map((entry) => ({
   ...entry,
   actual: getStaticAssetCacheControl(entry.pathname, entry.contentType, entry.status),
+  actual: getStaticAssetCacheControl(entry.pathname, entry.contentType, entry.status ?? 200),
 }));
 
 const pass = results.every((entry) => entry.actual === entry.expected);

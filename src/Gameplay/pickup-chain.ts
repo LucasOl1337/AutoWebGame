@@ -1,0 +1,39 @@
+import type { PowerUpType } from "./types";
+
+export const PICKUP_CHAIN_WINDOW_MS = 4_200;
+export const PICKUP_CHAIN_GUARD_MS = 1_400;
+
+export interface PickupChainState {
+  previousType: PowerUpType | null;
+  remainingMs: number;
+}
+
+export function createPickupChainState(): PickupChainState {
+  return {
+    previousType: null,
+    remainingMs: 0,
+  };
+}
+
+export function advancePickupChain(state: PickupChainState, deltaMs: number): void {
+  state.remainingMs = Math.max(0, state.remainingMs - deltaMs);
+  if (state.remainingMs === 0) {
+    state.previousType = null;
+  }
+}
+
+export function registerPickupForChain(state: PickupChainState, type: PowerUpType): boolean {
+  const completedChain = state.remainingMs > 0
+    && state.previousType !== null
+    && state.previousType !== type;
+
+  if (completedChain) {
+    state.previousType = null;
+    state.remainingMs = 0;
+    return true;
+  }
+
+  state.previousType = type;
+  state.remainingMs = PICKUP_CHAIN_WINDOW_MS;
+  return false;
+}

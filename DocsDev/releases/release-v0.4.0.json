@@ -1,0 +1,52 @@
+{
+  "brand": { "name": "AutoWebGame", "vendor": "BOMBA PvP" },
+  "version": "v0.4.0",
+  "date": "12 de julho de 2026",
+  "title": "Gameplay Trae consolidado, mobile seguro e Worker mais eficiente",
+  "baseline": {
+    "version": "v0.3.0",
+    "commit": "15b372109008942b2db32552b53d74d95dbf23bb"
+  },
+  "productionBefore": {
+    "contentVersion": "v0.2.5",
+    "workerVersion": 167,
+    "deploymentIdPrefix": "feea36d3"
+  },
+  "semverDecision": "minor",
+  "validation": {
+    "checks": "136/136",
+    "build": "passed",
+    "workerSyntax": "passed",
+    "dependencyAudit": "0 vulnerabilities",
+    "wranglerDryRun": "passed",
+    "browserQa": "desktop and mobile passed"
+  },
+  "breakingChanges": [],
+  "migrationSteps": [],
+  "deferred": [
+    "Agent-First Arena API production architecture",
+    "Live billing configuration",
+    "Public support SLA/refund policy",
+    "Expanded funnel telemetry",
+    "New branded social/hero asset"
+  ],
+  "publicationStatus": "published-and-smoke-verified",
+  "publication": {
+    "pullRequest": 2,
+    "releaseCommit": "20eb22facd0314ccd4889904bc05b18f599b044a",
+    "initialMergeCommit": "1bccda7bd2b21cd62ad49a4dfb4a7e80f560322c",
+    "domains": ["bombapvp.com", "bombpvp.com"],
+    "worker": "autowebgame-online",
+    "assets": 740,
+    "smoke": "passed",
+    "assetParity": "sampled-sha256-identical"
+  },
+  "artifacts": [
+    "DocsDev/releases/PRD-v0.4.0.md",
+    "DocsDev/releases/before-after-v0.4.0.md",
+    "DocsDev/releases/release-v0.4.0.md",
+    "DocsDev/releases/release-v0.4.0.json",
+    "patchnotes.md",
+    "changelog.md"
+  ]
+}

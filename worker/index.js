@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { resolveAdminAuthConfig } from './admin-auth.js';
 import { GameApp } from "../src/Engine/game-app";
 import {
   buildArenaRuntimeConfig,
@@ -17,7 +18,11 @@ import {
   resolveOnlineSessionState,
   shouldResetPlayingRoom,
 } from "../src/NetCode/matchmaking";
-import { getLobbySeatSnapshot, isPlayableLobbySeat } from "../src/NetCode/lobby-rules";
+import {
+  getLobbyJoinBlockReason,
+  getLobbySeatSnapshot,
+  isPlayableLobbySeat,
+} from "../src/NetCode/lobby-rules";
 import { validateUsername } from "../src/NetCode/account";
 import {
   billingRecordToStatus,
@@ -28,6 +33,12 @@ import {
 } from "../src/NetCode/billing";
 import { mergeSequencedOnlineInputState } from "../src/NetCode/input-latch";
 import { createFixedRatePumpState, consumeFixedRatePumpSteps } from "../src/NetCode/server-tick";
+import { getVacantRoomRecoveryState } from "../src/NetCode/lobby-reconnect-grace";
+import {
+  createReconnectToken,
+  getActiveMatchReconnectState,
+  normalizeReconnectToken,
+} from "../src/NetCode/reconnect-session";
 
 const STATE_VERSION = 3;
 const MATCH_TICK_MS = 1000 / 60;
@@ -42,8 +53,7 @@ const ACCOUNT_SESSION_COOKIE = "bomba_session";
 const ACCOUNT_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 180;
 const ADMIN_SESSION_COOKIE = "bomba_admin_session";
 const ADMIN_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
-const ADMIN_DEFAULT_USERNAME = "slicingstorm";
-const ADMIN_DEFAULT_PASSWORD = "pingodilocorvo00";
+const ADMIN_SESSION_STORAGE_VERSION = 2;
 const ANALYTICS_TIME_ZONE = "America/Sao_Paulo";
 const ANALYTICS_LOOKBACK_DAYS = 7;
 const TELEMETRY_EVENT_NAMES = new Set([
@@ -71,6 +81,7 @@ const TELEMETRY_EVENT_NAMES = new Set([
   "lobby_left",
 ]);
 const LEGACY_ASSET_PREFIX = "/assets/";
+const GAME_DOCUMENT_ROUTES = new Set(["/game/play", "/game/training", "/game/lab"]);
 const ACTIVE_ARENA_ID_KEY = "arena:active-id";
 const ARENA_KEY_PREFIX = "arena:def:";
 const HASHED_VITE_ASSET_RE = /^\/Assets\/[^/?#]+-[A-Za-z0-9_-]{8,}\.(?:js|css)$/;
@@ -94,6 +105,7 @@ const PUBLIC_API_ROUTES = new Map([
 ]);
 
 function getStaticAssetCacheControl(pathname, contentType, status) {
+function getStaticAssetCacheControl(pathname, contentType, status = 200) {
   if (status >= 400) {
     return "no-store";
   }
@@ -107,6 +119,16 @@ function getStaticAssetCacheControl(pathname, contentType, status) {
     return IMMUTABLE_STATIC_CACHE_CONTROL;
   }
   return SHORT_STATIC_CACHE_CONTROL;
+}
+
+function resolveGameDocumentRequest(request, pathname) {
+  if ((request.method !== "GET" && request.method !== "HEAD") || !GAME_DOCUMENT_ROUTES.has(pathname)) {
+    return null;
+  }
+
+  const gameUrl = new URL(request.url);
+  gameUrl.pathname = "/game.html";
+  return new Request(gameUrl, request);
 }
 
 function resolvePublicApiRoute(pathname, method) {
@@ -142,10 +164,12 @@ function resolvePublicApiRoute(pathname, method) {
  *   roomMode: "classic" | "endless";
  *   roomKind: "manual" | "matchmaking" | "endless";
  *   createdAt: number;
-  *   hostClientId: string | null;
+ *   emptySince: number | null;
+ *   hostClientId: string | null;
  *   clients: Set<string>;
  *   chat: ChatEntry[];
  *   seats: Record<1 | 2 | 3 | 4, LobbySeat>;
+ *   reconnectReservations: Record<1 | 2 | 3 | 4, ActiveMatchReconnectReservation | null>;
  * }} LobbyRoom
  *
  * @typedef {{
@@ -155,6 +179,12 @@ function resolvePublicApiRoute(pathname, method) {
  *   ready: boolean;
  *   occupantType: "empty" | "human" | "bot";
  * }} LobbySeat
+ *
+ * @typedef {{
+ *   clientId: string;
+ *   reconnectToken: string;
+ *   disconnectedAt: number | null;
+ * }} ActiveMatchReconnectReservation
  *
  * @typedef {{
  *   id: string;
@@ -208,7 +238,8 @@ export default {
       return new Response("Not found", { status: 404 });
     }
 
-    const assetResponse = await env.ASSETS.fetch(request);
+    const gameDocumentRequest = resolveGameDocumentRequest(request, url.pathname);
+    const assetResponse = await env.ASSETS.fetch(gameDocumentRequest ?? request);
     const contentType = assetResponse.headers.get("content-type") || "";
     const headers = new Headers(assetResponse.headers);
     headers.set("cache-control", getStaticAssetCacheControl(url.pathname, contentType, assetResponse.status));
@@ -246,6 +277,8 @@ export class GlobalLobby extends DurableObject {
   sockets = new Map();
   /** @type {Map<string, import("../src/NetCode/account").PlayerAccount | null>} */
   clientAccounts = new Map();
+  /** @type {Map<string, string>} */
+  clientReconnectTokens = new Map();
   /** @type {Map<string, import("../src/NetCode/matchmaking").OnlineClientIntent>} */
   clientIntents = new Map();
   /** @type {Set<string>} */
@@ -285,10 +318,14 @@ export class GlobalLobby extends DurableObject {
             roomMode: room.roomMode === "endless" ? "endless" : "classic",
             roomKind: normalizeStoredRoomKind(room.roomKind, room.roomMode),
             createdAt: room.createdAt,
+            emptySince: Number.isFinite(room.emptySince) ? room.emptySince : null,
             hostClientId: null,
             clients: new Set(room.clients),
             chat: Array.isArray(room.chat) ? room.chat.slice(-40) : [],
             seats: createSeatMap((seatId) => normalizeStoredSeat(room.seats?.[seatId], room.roomMode === "endless")),
+            reconnectReservations: createSeatMap((seatId) => (
+              normalizeStoredReconnectReservation(room.reconnectReservations?.[seatId])
+            )),
           },
         ]),
       );
@@ -298,6 +335,10 @@ export class GlobalLobby extends DurableObject {
         if (attachment && typeof attachment === "object" && typeof attachment.clientId === "string") {
           this.sockets.set(attachment.clientId, websocket);
           this.clientAccounts.set(attachment.clientId, normalizeStoredAttachmentAccount(attachment.account));
+          const reconnectToken = normalizeReconnectToken(attachment.reconnectToken);
+          if (reconnectToken) {
+            this.clientReconnectTokens.set(attachment.clientId, reconnectToken);
+          }
           this.clientIntents.set(attachment.clientId, "idle");
         }
       }
@@ -425,20 +466,37 @@ export class GlobalLobby extends DurableObject {
       return new Response("Expected websocket upgrade", { status: 426 });
     }
 
+    const reconciledRooms = this.reconcileRoomsWithActiveSockets();
+    if (reconciledRooms) {
+      await this.persistState();
+    }
+    const requestedReconnectToken = normalizeReconnectToken(url.searchParams.get("resumeToken"));
+    const resumedClient = requestedReconnectToken
+      ? this.restoreActiveMatchClient(requestedReconnectToken)
+      : null;
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    const clientId = createId("cli");
+    const clientId = resumedClient?.clientId ?? createId("cli");
+    const reconnectToken = createReconnectToken();
+    if (resumedClient) {
+      resumedClient.reconnectToken = reconnectToken;
+    }
     const account = await this.readCurrentAccountFromRequest(request);
     await this.recordDailyIp(request);
 
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ clientId, account });
+    server.serializeAttachment({ clientId, account, reconnectToken });
     this.sockets.set(clientId, server);
     this.clientAccounts.set(clientId, account);
+    this.clientReconnectTokens.set(clientId, reconnectToken);
     this.clientIntents.set(clientId, "idle");
+    if (resumedClient) {
+      await this.persistState();
+    }
     this.send(server, {
       type: "hello",
       clientId,
+      reconnectToken,
       account,
       sessionState: this.buildClientSessionState(clientId),
       lobbies: this.buildLobbyList(),
@@ -950,8 +1008,10 @@ export class GlobalLobby extends DurableObject {
       roomKind: "manual",
       hostClientId: null,
       clients: new Set([clientId]),
+      emptySince: null,
       chat: [],
       seats: createSeatMap(() => createEmptySeat()),
+      reconnectReservations: createSeatMap(() => null),
     };
 
     this.rooms.set(roomCode, room);
@@ -966,7 +1026,6 @@ export class GlobalLobby extends DurableObject {
    * @param {string} rawRoomCode
    */
   async handleJoinLobby(clientId, rawRoomCode) {
-    this.quickMatchPendingClients.delete(clientId);
     this.reconcileRoomsWithActiveSockets();
     const roomCode = normalizeRoomCode(rawRoomCode);
     if (roomCode === ENDLESS_ROOM_CODE) {
@@ -998,10 +1057,19 @@ export class GlobalLobby extends DurableObject {
       this.sendToClient(clientId, {
         type: "error",
         message: "Lobby full. Pick another room or wait for a slot.",
+    const seatsFull = PLAYER_IDS.every((seatId) => isPlayableLobbySeat(room.seats[seatId]));
+    const joinBlockReason = getLobbyJoinBlockReason(room.status, alreadySeated, seatsFull);
+    if (joinBlockReason) {
+      this.sendToClient(clientId, {
+        type: "error",
+        message: joinBlockReason === "match-in-progress"
+          ? "Match already in progress. Pick another open room."
+          : "Lobby full. Pick another room or wait for a slot.",
       });
       return;
     }
 
+    this.quickMatchPendingClients.delete(clientId);
     this.setClientIntent(clientId, room.roomKind === "matchmaking" ? "queue_classic" : "manual");
 
     const currentRoom = this.findRoomForClient(clientId);
@@ -1010,6 +1078,7 @@ export class GlobalLobby extends DurableObject {
     }
 
     room.clients.add(clientId);
+    room.emptySince = null;
     await this.persistState();
     this.sendJoinedLobby(clientId, room);
     const activeMatch = this.matches.get(room.roomCode);
@@ -1018,6 +1087,12 @@ export class GlobalLobby extends DurableObject {
       this.sendMatchStartedToSeat(
         room,
         seatedPlayerId,
+    const resumedSeatId = this.findSeatForClient(room, clientId);
+    const activeMatch = this.matches.get(room.roomCode);
+    if (room.status === "playing" && resumedSeatId && activeMatch) {
+      this.sendMatchStartedToSeat(
+        room,
+        resumedSeatId,
         activeMatch.activePlayerIds,
         activeMatch.characterSelections,
         activeMatch.botPlayerIds,
@@ -1091,6 +1166,7 @@ export class GlobalLobby extends DurableObject {
     for (const seatId of PLAYER_IDS) {
       if (room.seats[seatId].clientId === clientId && seatId !== seat) {
         room.seats[seatId] = createEmptySeat();
+        room.reconnectReservations[seatId] = null;
       }
     }
 
@@ -1229,10 +1305,12 @@ export class GlobalLobby extends DurableObject {
       status: "playing",
       roomMode: "endless",
       roomKind: "endless",
+      emptySince: null,
       hostClientId: null,
       clients: new Set(),
       chat: [],
       seats: createSeatMap((seatId) => createBotSeat((seatId - 1) % 4)),
+      reconnectReservations: createSeatMap(() => null),
     };
     this.refreshSeatLabels(room);
     return room;
@@ -1264,6 +1342,7 @@ export class GlobalLobby extends DurableObject {
 
     const fallbackCharacterIndex = room.seats[seatId]?.characterIndex ?? ((seatId - 1) % 4);
     room.clients.add(clientId);
+    room.emptySince = null;
     room.seats[seatId] = createHumanSeat(clientId, normalizeCharacterIndex(rawCharacterIndex, fallbackCharacterIndex));
     room.hostClientId = room.hostClientId && this.sockets.has(room.hostClientId)
       ? room.hostClientId
@@ -1529,15 +1608,27 @@ export class GlobalLobby extends DurableObject {
     if (!clientId) {
       return;
     }
+    if (this.sockets.get(clientId) !== websocket) {
+      return;
+    }
 
+    const room = this.findRoomForClient(clientId);
+    const reservedActiveMatchSeat = room
+      ? this.reserveActiveMatchSeatForReconnect(room, clientId)
+      : false;
     this.sockets.delete(clientId);
     this.clientAccounts.delete(clientId);
+    this.clientReconnectTokens.delete(clientId);
     this.quickMatchPendingClients.delete(clientId);
     this.preferredCharacterSelections.delete(clientId);
     this.clientIntents.delete(clientId);
-    const room = this.findRoomForClient(clientId);
     if (room) {
-      await this.releaseClientFromRoom(room, clientId);
+      if (reservedActiveMatchSeat) {
+        await this.persistState();
+        this.broadcastLobbyToMembers(room);
+      } else {
+        await this.releaseClientFromRoom(room, clientId, { preserveVacantRoom: true });
+      }
     }
     this.reconcileRoomsWithActiveSockets();
     this.broadcastLobbyList();
@@ -1674,6 +1765,11 @@ export class GlobalLobby extends DurableObject {
    * @returns {Promise<Response>}
    */
   async handleAdminLogin(request, env) {
+    const authConfig = resolveAdminAuthConfig(env);
+    if (!authConfig.login) {
+      return createAdminUnavailableResponse();
+    }
+
     /** @type {unknown} */
     let payload;
     try {
@@ -1684,8 +1780,8 @@ export class GlobalLobby extends DurableObject {
 
     const username = typeof payload?.username === "string" ? payload.username.trim() : "";
     const password = typeof payload?.password === "string" ? payload.password.trim() : "";
-    const expectedUsername = getAdminUsername(env);
-    const expectedPassword = getAdminPassword(env);
+    const expectedUsername = authConfig.login.username;
+    const expectedPassword = authConfig.login.password;
 
     if (!username || !password) {
       return Response.json({ ok: false, error: "Username and password are required." }, { status: 400 });
@@ -1758,7 +1854,7 @@ export class GlobalLobby extends DurableObject {
    * @returns {Promise<Response>}
    */
   async handleActiveArena() {
-    const arena = cloneArenaDefinition(await this.readActiveArenaDefinition());
+    const arena = cloneArenaDefinition(this.activeArenaDefinition);
     return Response.json(
       { arena },
       {
@@ -2141,13 +2237,12 @@ export class GlobalLobby extends DurableObject {
    */
   async buildAdminSummary() {
     const todayKey = formatDateKey(Date.now());
-    const todaySummary = await this.readAnalyticsDay(todayKey);
-    const recentDays = [];
-
-    for (let index = 0; index < ANALYTICS_LOOKBACK_DAYS; index += 1) {
-      const dateKey = shiftDateKey(todayKey, -index);
-      recentDays.push(await this.readAnalyticsDay(dateKey));
-    }
+    const recentDays = await Promise.all(
+      Array.from({ length: ANALYTICS_LOOKBACK_DAYS }, (_, index) => (
+        this.readAnalyticsDay(shiftDateKey(todayKey, -index))
+      )),
+    );
+    const todaySummary = recentDays[0];
 
     const openRooms = [];
     let playingRooms = 0;
@@ -2362,8 +2457,9 @@ export class GlobalLobby extends DurableObject {
   /**
    * @param {LobbyRoom} room
    * @param {string} clientId
+   * @param {{ preserveVacantRoom?: boolean }} [options]
    */
-  async releaseClientFromRoom(room, clientId) {
+  async releaseClientFromRoom(room, clientId, options = {}) {
     if (room.roomMode === "endless") {
       await this.leaveEndlessRoom(room, clientId);
       return;
@@ -2373,6 +2469,7 @@ export class GlobalLobby extends DurableObject {
     for (const seatId of PLAYER_IDS) {
       if (room.seats[seatId].clientId === clientId) {
         room.seats[seatId] = createEmptySeat();
+        room.reconnectReservations[seatId] = null;
       }
     }
 
@@ -2395,6 +2492,11 @@ export class GlobalLobby extends DurableObject {
     }
 
     if (!PLAYER_IDS.some((seatId) => room.seats[seatId].clientId)) {
+      if (options.preserveVacantRoom) {
+        room.emptySince = Date.now();
+        await this.persistState();
+        return;
+      }
       this.rooms.delete(room.roomCode);
       await this.persistState();
       return;
@@ -2537,6 +2639,10 @@ export class GlobalLobby extends DurableObject {
       normalizeCharacterIndex(rawCharacterIndex, room.seats[seat].characterIndex ?? ((seat - 1) % 2)),
       this.getHumanSeatDisplayName(clientId, seat),
     );
+    const reconnectToken = this.clientReconnectTokens.get(clientId) ?? null;
+    room.reconnectReservations[seat] = reconnectToken
+      ? { clientId, reconnectToken, disconnectedAt: null }
+      : null;
   }
 
   /**
@@ -2625,15 +2731,84 @@ export class GlobalLobby extends DurableObject {
     }
   }
 
-  reconcileRoomsWithActiveSockets() {
+  /**
+   * @param {LobbyRoom} room
+   * @param {string} clientId
+   * @returns {boolean}
+   */
+  reserveActiveMatchSeatForReconnect(room, clientId) {
+    if (room.status !== "playing" || room.roomMode !== "classic") {
+      return false;
+    }
+    const seatId = this.findSeatForClient(room, clientId);
+    const match = this.matches.get(room.roomCode);
+    const reconnectToken = this.clientReconnectTokens.get(clientId) ?? null;
+    if (!seatId || !match || !reconnectToken) {
+      return false;
+    }
+
+    room.clients.delete(clientId);
+    room.reconnectReservations[seatId] = {
+      clientId,
+      reconnectToken,
+      disconnectedAt: Date.now(),
+    };
+    match.inputs[seatId] = createNeutralInput();
+    return true;
+  }
+
+  /**
+   * @param {string} reconnectToken
+   * @param {number} [nowMs]
+   * @returns {ActiveMatchReconnectReservation | null}
+   */
+  restoreActiveMatchClient(reconnectToken, nowMs = Date.now()) {
+    for (const room of this.rooms.values()) {
+      if (room.status !== "playing" || room.roomMode !== "classic" || !this.matches.has(room.roomCode)) {
+        continue;
+      }
+      for (const seatId of PLAYER_IDS) {
+        const reservation = room.reconnectReservations[seatId];
+        if (!reservation || !timingSafeEqual(reservation.reconnectToken, reconnectToken)) {
+          continue;
+        }
+        const recovery = getActiveMatchReconnectState(reservation.disconnectedAt, nowMs);
+        if (!recovery.canResume || room.seats[seatId].clientId !== reservation.clientId) {
+          return null;
+        }
+        if (this.sockets.has(reservation.clientId)) {
+          return null;
+        }
+        reservation.disconnectedAt = null;
+        room.clients.add(reservation.clientId);
+        room.emptySince = null;
+        return reservation;
+      }
+    }
+    return null;
+  }
+
+  reconcileRoomsWithActiveSockets(nowMs = Date.now()) {
     let changed = false;
     for (const [roomCode, room] of this.rooms.entries()) {
-      if (this.sanitizeRoomOccupancy(room)) {
+      if (this.sanitizeRoomOccupancy(room, nowMs)) {
         changed = true;
       }
-      if (!PLAYER_IDS.some((seatId) => room.seats[seatId].clientId) && room.clients.size === 0) {
-        this.stopRoomMatch(roomCode);
-        this.rooms.delete(roomCode);
+      const roomIsVacant = !PLAYER_IDS.some((seatId) => room.seats[seatId].clientId)
+        && room.clients.size === 0;
+      if (roomIsVacant) {
+        const recovery = getVacantRoomRecoveryState(room.emptySince, nowMs);
+        if (room.emptySince !== recovery.emptySince) {
+          room.emptySince = recovery.emptySince;
+          changed = true;
+        }
+        if (recovery.shouldDelete) {
+          this.stopRoomMatch(roomCode);
+          this.rooms.delete(roomCode);
+          changed = true;
+        }
+      } else if (room.emptySince !== null) {
+        room.emptySince = null;
         changed = true;
       }
     }
@@ -2643,8 +2818,9 @@ export class GlobalLobby extends DurableObject {
   /**
    * @param {LobbyRoom} room
    */
-  sanitizeRoomOccupancy(room) {
+  sanitizeRoomOccupancy(room, nowMs = Date.now()) {
     let changed = false;
+    const activeMatch = this.matches.get(room.roomCode);
     const activeClients = new Set(
       Array.from(room.clients).filter((clientId) => this.sockets.has(clientId)),
     );
@@ -2657,9 +2833,20 @@ export class GlobalLobby extends DurableObject {
     for (const seatId of PLAYER_IDS) {
       const seat = room.seats[seatId];
       if (seat.clientId && !this.sockets.has(seat.clientId)) {
+        const reservation = room.reconnectReservations[seatId];
+        const recovery = getActiveMatchReconnectState(reservation?.disconnectedAt, nowMs);
+        const reservationIsValid = room.status === "playing"
+          && room.roomMode === "classic"
+          && Boolean(activeMatch)
+          && reservation?.clientId === seat.clientId
+          && recovery.canResume;
+        if (reservationIsValid) {
+          continue;
+        }
         room.seats[seatId] = room.roomMode === "endless"
           ? createBotSeat(seat.characterIndex ?? ((seatId - 1) % 4))
           : createEmptySeat();
+        room.reconnectReservations[seatId] = null;
         changed = true;
       } else if (seat.clientId) {
         room.clients.add(seat.clientId);
@@ -2671,7 +2858,6 @@ export class GlobalLobby extends DurableObject {
       changed = true;
     }
 
-    const activeMatch = this.matches.get(room.roomCode);
     const mustResetPlayingRoom = room.status === "playing"
       && (
         !activeMatch
@@ -2746,10 +2932,12 @@ export class GlobalLobby extends DurableObject {
         roomMode: room.roomMode === "endless" ? "endless" : "classic",
         roomKind: room.roomKind,
         createdAt: room.createdAt,
+        emptySince: room.emptySince,
         hostClientId: room.hostClientId,
         clients: Array.from(room.clients),
         chat: room.chat.slice(-40),
         seats: createSeatMap((seatId) => room.seats[seatId]),
+        reconnectReservations: createSeatMap((seatId) => room.reconnectReservations[seatId]),
       })),
     });
   }
@@ -2820,6 +3008,14 @@ export class GlobalLobby extends DurableObject {
     if (!room || !match || room.status !== "playing") {
       this.stopRoomMatch(roomCode);
       return;
+    }
+    if (this.sanitizeRoomOccupancy(room)) {
+      await this.persistState();
+      this.broadcastLobbyToMembers(room);
+      this.broadcastLobbyList();
+      if (room.status !== "playing") {
+        return;
+      }
     }
 
     const pump = consumeFixedRatePumpSteps(
@@ -2921,12 +3117,25 @@ export class GlobalLobby extends DurableObject {
    */
   broadcastSnapshot(roomCode) {
     const room = this.rooms.get(roomCode);
+    if (!room) {
+      return;
+    }
+    for (const clientId of room.clients) {
+      this.sendSnapshotToClient(clientId, roomCode);
+    }
+  }
+
+  /**
+   * @param {string} clientId
+   * @param {string} roomCode
+   */
+  sendSnapshotToClient(clientId, roomCode) {
     const match = this.matches.get(roomCode);
-    if (!room || !match) {
+    if (!match) {
       return;
     }
     const snapshot = match.game.exportOnlineSnapshot();
-    this.broadcastToRoom(room, {
+    this.sendToClient(clientId, {
       type: "host-snapshot",
       snapshot: {
         ...snapshot,
@@ -3035,6 +3244,7 @@ export class GlobalLobby extends DurableObject {
     }
 
     room.clients.add(clientId);
+    room.emptySince = null;
     this.assignSeat(room, seatId, clientId, rawCharacterIndex);
     room.seats[seatId].ready = true;
     this.refreshSeatLabels(room);
@@ -3060,10 +3270,12 @@ export class GlobalLobby extends DurableObject {
       status: "open",
       roomMode: "classic",
       roomKind: "matchmaking",
+      emptySince: null,
       hostClientId: null,
       clients: new Set([clientId]),
       chat: [],
       seats: createSeatMap(() => createEmptySeat()),
+      reconnectReservations: createSeatMap(() => null),
     };
 
     this.assignSeat(room, 1, clientId, rawCharacterIndex);
@@ -3276,6 +3488,23 @@ function normalizeStoredSeat(seat, endlessRoom = false) {
   return createEmptySeat();
 }
 
+function normalizeStoredReconnectReservation(reservation) {
+  if (!reservation || typeof reservation !== "object") {
+    return null;
+  }
+  const reconnectToken = normalizeReconnectToken(reservation.reconnectToken);
+  if (typeof reservation.clientId !== "string" || !reconnectToken) {
+    return null;
+  }
+  return {
+    clientId: reservation.clientId,
+    reconnectToken,
+    disconnectedAt: Number.isFinite(reservation.disconnectedAt)
+      ? Math.max(0, reservation.disconnectedAt)
+      : null,
+  };
+}
+
 function normalizeStoredAccount(account) {
   if (!account || typeof account !== "object") {
     return null;
@@ -3481,14 +3710,37 @@ function rewriteRequestPath(request, pathname) {
   return new Request(url.toString(), request);
 }
 
+function createAdminUnavailableResponse() {
+  return Response.json(
+    { ok: false, error: 'Admin access is not configured.' },
+    {
+      status: 503,
+      headers: {
+        'cache-control': 'no-store',
+      },
+    },
+  );
+}
+
 async function authorizeAdminRequest(request, env, storage) {
-  const session = await readStoredAdminSession(request, storage);
+  const authConfig = resolveAdminAuthConfig(env);
+  if (!authConfig.enabled) {
+    return { ok: false, response: createAdminUnavailableResponse() };
+  }
+
+  const session = authConfig.login
+    ? await readStoredAdminSession(request, storage)
+    : null;
   if (session) {
     return { ok: true, session };
   }
 
   const legacyToken = readAdminToken(request);
-  if (legacyToken && env.ADMIN_TOKEN && timingSafeEqual(legacyToken, env.ADMIN_TOKEN)) {
+  if (
+    legacyToken
+    && authConfig.legacyToken
+    && timingSafeEqual(legacyToken, authConfig.legacyToken)
+  ) {
     return { ok: true, legacy: true };
   }
 
@@ -3537,22 +3789,9 @@ async function readStoredAdminSession(request, storage) {
   return stored;
 }
 
-function getAdminUsername(env) {
-  const value = typeof env?.ADMIN_USERNAME === "string" ? env.ADMIN_USERNAME.trim() : "";
-  return value || ADMIN_DEFAULT_USERNAME;
-}
-
-function getAdminPassword(env) {
-  const value = typeof env?.ADMIN_PASSWORD === "string" ? env.ADMIN_PASSWORD.trim() : "";
-  if (value) {
-    return value;
-  }
-  const token = typeof env?.ADMIN_TOKEN === "string" ? env.ADMIN_TOKEN.trim() : "";
-  return token || ADMIN_DEFAULT_PASSWORD;
-}
 
 function buildAdminSessionKey(sessionId) {
-  return `admin-session:${sessionId}`;
+  return `admin-session:v${ADMIN_SESSION_STORAGE_VERSION}:${sessionId}`;
 }
 
 function buildArenaDefinitionKey(arenaId) {
@@ -3896,7 +4135,7 @@ function createReportWebhookPayload(report) {
 }
 
 function renderAdminHtml(env) {
-  const safeUsername = escapeHtml(getAdminUsername(env));
+  const safeUsername = escapeHtml(resolveAdminAuthConfig(env).login?.username ?? '');
   const arenaThemes = JSON.stringify(
     ARENA_THEME_LIBRARY.map((theme) => ({
       id: theme.id,

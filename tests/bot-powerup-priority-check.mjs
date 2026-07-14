@@ -49,6 +49,7 @@ globalThis.window = {
 
 const { GameApp } = await import("../output/esm/Engine/game-app.js");
 const { MAX_BOMBS, MAX_BOMB_PASS_LEVEL, MAX_KICK_LEVEL, MAX_RANGE, MAX_SHIELD_CHARGES, MAX_SPEED_LEVEL, TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
+const { MAX_BOMBS, MAX_SPEED_LEVEL, TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
 const { getPowerUpPriorityScore } = await import("../output/esm/Gameplay/powerups.js");
 
 const root = { appendChild: noop };
@@ -237,6 +238,8 @@ const report = {
   kickScores,
   hasExpectedKickPriority,
   preservesKickAsSituational,
+  speedScores,
+  hasDiminishingSpeedReturns,
 };
 
 console.log(JSON.stringify(report, null, 2));
@@ -249,5 +252,6 @@ if (!prefersBaseMobility || !prefersFirstShield || !skipsUselessSpeedUp
   || !prefersRemoteOverBombPass || !keepsRemoteBelowShortFuse
   || !preservesHigherPriorities || !hasExpectedKickPriority
   || !preservesKickAsSituational) {
+  || !skipsSaturatedBombForSurvival || !hasDiminishingSpeedReturns) {
   process.exit(1);
 }

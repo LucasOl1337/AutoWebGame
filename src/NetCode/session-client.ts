@@ -30,7 +30,28 @@ import {
   validateUsername,
 } from "./account";
 import type { PlayerBillingStatus } from "./billing";
+import { pickSurpriseCharacterIndex } from "./character-surprise";
 import type { OnlineSessionState } from "./matchmaking";
+import { isLobbyCardJoinDisabled } from "./lobby-rules";
+import { buildReconnectWebSocketUrl } from "./reconnect-session";
+import {
+  buildRoomInviteUrl,
+  copyTextWithFallback,
+  formatInviteCopyManualStatus,
+  normalizeRoomCode,
+  readRoomCodeFromUrl,
+  resolveManualLobbyJoinCode,
+  resolvePastedLobbyJoinCode,
+} from "./room-invite";
+export {
+  buildRoomInviteUrl,
+  copyTextWithFallback,
+  formatInviteCopyManualStatus,
+  normalizeRoomCode,
+  readRoomCodeFromUrl,
+  resolveManualLobbyJoinCode,
+  resolvePastedLobbyJoinCode,
+} from "./room-invite";
 import type {
   LobbyState,
   LobbySummary,
@@ -127,6 +148,7 @@ interface SessionElements {
   selectorPortrait: HTMLImageElement;
   selectorName: HTMLParagraphElement;
   selectorNote: HTMLParagraphElement;
+  selectorSurpriseButton: HTMLButtonElement;
   selectorGrid: HTMLDivElement;
   setupPrimaryButton: HTMLButtonElement;
   setupPrimaryHint: HTMLParagraphElement;
@@ -160,6 +182,7 @@ export const SESSION_RETURN_BRIEF_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 export const BOT_MATCH_FILL_STORAGE_KEY = "bomba-bot-match-fill";
 export const BOT_MATCH_FILL_OPTIONS = [1, 2, 3] as const;
 export const FEEDBACK_MAX_LENGTH = 2000;
+export const FEEDBACK_REQUEST_TIMEOUT_MS = 10_000;
 
 export type BotMatchFill = typeof BOT_MATCH_FILL_OPTIONS[number];
 
@@ -356,6 +379,45 @@ export function canSendLobbyAction(realtimeReady: boolean, socketReadyState: num
   return realtimeReady && socketReadyState === WEBSOCKET_OPEN_READY_STATE;
 }
 
+type LobbyCardActionTarget = Pick<HTMLButtonElement, "disabled" | "addEventListener">;
+
+export function configureLobbyCardAction(
+  card: LobbyCardActionTarget,
+  disabled: boolean,
+  onJoin: () => void,
+): void {
+  card.disabled = disabled;
+  if (!disabled) {
+    card.addEventListener("click", onJoin);
+  }
+}
+
+export function resolveReconnectRoomCode(
+  activeLobbyRoomCode: string | null | undefined,
+  roomCode: string | null | undefined,
+  pendingAutoJoinRoom: string | null | undefined,
+): string | null {
+  return activeLobbyRoomCode ?? roomCode ?? pendingAutoJoinRoom ?? null;
+}
+
+export function formatLobbyReadyReminder(copy: SiteCopy, lobby: LobbySummary): string {
+  const waitingPlayers = ALL_PLAYER_IDS
+    .filter((playerId) => {
+      const seat = lobby.seats[playerId];
+      return (Boolean(seat.clientId) || seat.occupantType === "bot") && !seat.ready;
+    })
+    .map((playerId) => {
+      const displayName = lobby.seats[playerId].displayName?.trim();
+      return displayName ? `${displayName} (P${playerId})` : `P${playerId}`;
+    });
+
+  if (waitingPlayers.length === 0) {
+    return copy.setup.readyStarting;
+  }
+
+  return copy.setup.readyWaitingFor(waitingPlayers.join(", "), waitingPlayers.length);
+}
+
 export function formatSetupLoadingBrief(copy: SiteCopy, options: SetupLoadingBriefOptions): SetupLoadingBrief {
   const modeStepText = (() => {
     switch (options.mode) {
@@ -405,84 +467,6 @@ export function formatSetupLoadingBrief(copy: SiteCopy, options: SetupLoadingBri
   };
 }
 
-function normalizeRoomCodeToken(roomCode: string | null | undefined): string {
-  return String(roomCode || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
-}
-
-function readNestedRoomCode(value: string, depth = 0): string | null {
-  if (!value || depth > 2) {
-    return null;
-  }
-
-  const candidates = [value];
-  try {
-    const decodedValue = decodeURIComponent(value);
-    if (decodedValue !== value) {
-      candidates.push(decodedValue);
-    }
-  } catch {
-    // Keep the raw value if it is not valid percent-encoded input.
-  }
-
-  for (const candidate of candidates) {
-    try {
-      const url = new URL(candidate, "https://example.com/");
-      const roomQuery = url.searchParams.get("room");
-      if (roomQuery === null) {
-        continue;
-      }
-
-      const nestedRoomCode = readNestedRoomCode(roomQuery, depth + 1);
-      if (nestedRoomCode) {
-        return nestedRoomCode;
-      }
-
-      const normalizedRoomCode = normalizeRoomCodeToken(roomQuery);
-      if (normalizedRoomCode) {
-        return normalizedRoomCode;
-      }
-    } catch {
-      // Non-URL values are handled by the token fallback.
-    }
-  }
-
-  return null;
-}
-
-export function normalizeRoomCode(roomCode: string | null | undefined): string {
-  const rawRoomCode = String(roomCode || "").trim();
-  return readNestedRoomCode(rawRoomCode) ?? normalizeRoomCodeToken(rawRoomCode);
-}
-
-export function resolveManualLobbyJoinCode(roomCode: string | null | undefined): string | null {
-  const normalizedRoomCode = normalizeRoomCode(roomCode);
-  return normalizedRoomCode || null;
-}
-
-export function readRoomCodeFromUrl(href: string | null | undefined): string | null {
-  if (!href) {
-    return null;
-  }
-  try {
-    const url = new URL(href, "https://example.com/");
-    const roomCode = normalizeRoomCode(url.searchParams.get("room"));
-    return roomCode || null;
-  } catch {
-    return null;
-  }
-}
-
-export function buildRoomInviteUrl(language: SiteLanguage, roomCode: string | null | undefined, href?: string): string {
-  const url = buildLocalizedUrl(language, href);
-  const normalizedRoomCode = normalizeRoomCode(roomCode);
-  if (normalizedRoomCode) {
-    url.searchParams.set("room", normalizedRoomCode);
-  } else {
-    url.searchParams.delete("room");
-  }
-  return url.toString();
-}
-
 export function formatUsernameInputTitle(language: SiteLanguage): string {
   return language === "pt"
     ? `Use ${USERNAME_MIN_LENGTH} a ${USERNAME_MAX_LENGTH} caracteres: letras, numeros e underscore.`
@@ -523,69 +507,6 @@ export function applyUsernameInputConstraints(
   input.spellcheck = false;
 }
 
-type ClipboardFallbackEnvironment = {
-  clipboard?: Pick<Clipboard, "writeText"> | null;
-  document?: Document | null;
-};
-
-function getClipboardFallbackEnvironment(): ClipboardFallbackEnvironment {
-  return {
-    clipboard: typeof navigator === "undefined" ? null : (navigator.clipboard ?? null),
-    document: typeof document === "undefined" ? null : document,
-  };
-}
-
-function removeClipboardFallbackTextarea(textarea: HTMLTextAreaElement): void {
-  try {
-    if (typeof textarea.remove === "function") {
-      textarea.remove();
-      return;
-    }
-    textarea.parentNode?.removeChild(textarea);
-  } catch {
-    // Cleanup must not turn a successful legacy copy into a failed invite action.
-  }
-}
-
-export async function copyTextWithFallback(
-  text: string,
-  environment: ClipboardFallbackEnvironment = getClipboardFallbackEnvironment(),
-): Promise<boolean> {
-  if (environment.clipboard) {
-    try {
-      await environment.clipboard.writeText(text);
-      return true;
-    } catch {
-      // Fall through to the legacy path for browsers that expose but reject Clipboard API calls.
-    }
-  }
-
-  const targetDocument = environment.document;
-  if (!targetDocument?.body || typeof targetDocument.execCommand !== "function") {
-    return false;
-  }
-
-  const textarea = targetDocument.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "true");
-  textarea.style.position = "fixed";
-  textarea.style.top = "-9999px";
-  textarea.style.left = "-9999px";
-  textarea.style.opacity = "0";
-
-  targetDocument.body.appendChild(textarea);
-  textarea.focus();
-  textarea.select();
-
-  try {
-    return targetDocument.execCommand("copy");
-  } catch {
-    return false;
-  } finally {
-    removeClipboardFallbackTextarea(textarea);
-  }
-}
-
 export class OnlineSessionClient implements OnlineSessionBridge {
   public role: OnlineRole | null = null;
   public roomCode: string | null = null;
@@ -597,6 +518,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private socket: WebSocket | null = null;
   private reconnectTimer: number | null = null;
   private clientId: string | null = null;
+  private reconnectToken: string | null = null;
   private lobbies: LobbySummary[] = [];
   private currentLobby: LobbyState | null = null;
   private pendingAutoJoinRoom: string | null;
@@ -789,7 +711,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     }
     this.realtimeReady = false;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const socket = new WebSocket(`${protocol}//${window.location.host}/online`);
+    const socket = new WebSocket(buildReconnectWebSocketUrl(
+      `${protocol}//${window.location.host}/online`,
+      this.reconnectToken,
+    ));
     this.socket = socket;
 
     socket.addEventListener("open", () => {
@@ -814,9 +739,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
         return;
       }
       const hadActiveOnlineSession = Boolean(this.currentLobby || this.role || this.roomCode);
-      const reconnectRoomCode = this.currentLobby?.roomCode
-        ?? this.roomCode
-        ?? this.pendingAutoJoinRoom;
+      const reconnectRoomCode = resolveReconnectRoomCode(
+        this.currentLobby?.roomCode,
+        this.roomCode,
+        this.pendingAutoJoinRoom,
+      );
       const accountRefresh = this.reconnectingForAccountRefresh;
       this.reconnectingForAccountRefresh = false;
       this.realtimeReady = false;
@@ -828,6 +755,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.quickMatchSearching = false;
       this.endlessMatchStarting = false;
       this.pendingAutoJoinRoom = reconnectRoomCode;
+      this.autoClaimRoomCode = null;
       if (hadActiveOnlineSession) {
         this.app.detachOnlineSession();
       }
@@ -875,6 +803,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     });
     this.elements.languageEnglishButton.addEventListener("click", () => {
       this.changeLanguage("en");
+    });
+    this.elements.selectorSurpriseButton.addEventListener("click", () => {
+      this.surprisePreferredCharacter("setup");
     });
     this.elements.landingQuickMatchButton.addEventListener("click", () => {
       this.telemetry.track("quick_match_clicked", {
@@ -944,6 +875,16 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     });
     this.elements.lobbyCodeForm.addEventListener("submit", (event) => {
       event.preventDefault();
+      this.joinLobbyFromCodeEntry();
+    });
+    this.elements.lobbyCodeInput.addEventListener("paste", (event) => {
+      const roomCode = resolvePastedLobbyJoinCode(event.clipboardData?.getData("text"));
+      if (!roomCode) {
+        return;
+      }
+
+      event.preventDefault();
+      this.elements.lobbyCodeInput.value = roomCode;
       this.joinLobbyFromCodeEntry();
     });
     this.elements.setupBackButton.addEventListener("click", () => {
@@ -1222,18 +1163,20 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     if (!this.currentLobby) {
       return;
     }
+    const roomCode = this.currentLobby.roomCode;
+    const inviteUrl = buildRoomInviteUrl(this.language, roomCode);
     try {
-      const copied = await copyTextWithFallback(buildRoomInviteUrl(this.language, this.currentLobby.roomCode));
+      const copied = await copyTextWithFallback(inviteUrl);
       if (!copied) {
-        this.setStatus(this.copy.status.inviteCopyFailed);
+        this.setStatus(formatInviteCopyManualStatus(this.copy, roomCode));
         return;
       }
       this.telemetry.track("invite_copied", {
-        context: { roomCode: this.currentLobby.roomCode, screen: this.getScreen() },
+        context: { roomCode, screen: this.getScreen() },
       });
       this.setStatus(this.copy.status.inviteCopied);
     } catch {
-      this.setStatus(this.copy.status.inviteCopyFailed);
+      this.setStatus(formatInviteCopyManualStatus(this.copy, roomCode));
     }
   }
 
@@ -1293,6 +1236,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     switch (message.type) {
       case "hello":
         this.clientId = message.clientId;
+        this.reconnectToken = message.reconnectToken;
         this.currentAccount = message.account;
         this.applySessionState(message.sessionState);
         this.lobbies = message.lobbies;
@@ -1536,6 +1480,14 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     landingLead.textContent = copy.landing.lead;
 
     landingCopy.append(landingKicker, landingReleaseBadge, landingTitle, landingLead);
+
+    const landingCommercialProof = document.createElement("ul");
+    landingCommercialProof.className = "experience-commercial-proof";
+    for (const proof of copy.landing.commercialProof) {
+      const proofItem = document.createElement("li");
+      proofItem.textContent = proof;
+      landingCommercialProof.append(proofItem);
+    }
 
     const landingMeta = document.createElement("p");
     landingMeta.className = "experience-hero__meta";
@@ -1799,6 +1751,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const landingDevLab = document.createElement("aside");
     landingDevLab.className = "experience-dev-lab";
     landingDevLab.hidden = !import.meta.env?.DEV;
+    landingDevLab.hidden = !import.meta.env.DEV;
     landingDevLab.innerHTML = `<strong>${this.translate("Laboratório DEV", "DEV laboratory")}</strong><span>${this.translate("Cenários reproduzíveis para bots e modelos externos.", "Reproducible scenarios for bots and external models.")}</span>`;
     const devBotVsBot = document.createElement("a");
     devBotVsBot.className = "experience-button experience-button--secondary";
@@ -1873,6 +1826,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     landingControls.append(landingControlsHeader, landingControlsGrid);
     landingCopy.append(
+      landingCommercialProof,
       landingMeta,
       landingReleaseNotes,
       landingReturnBrief,
@@ -2001,6 +1955,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     lobbyCodeInput.autocomplete = "off";
     lobbyCodeInput.inputMode = "text";
     lobbyCodeInput.spellcheck = false;
+    lobbyCodeInput.setAttribute("autocapitalize", "characters");
+    lobbyCodeInput.setAttribute("autocorrect", "off");
+    lobbyCodeInput.setAttribute("enterkeyhint", "join");
     lobbyCodeInput.placeholder = copy.lobbies.joinCodePlaceholder;
     lobbyCodeInput.setAttribute("aria-describedby", lobbyCodeHint.id);
 
@@ -2084,7 +2041,12 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const selectorNote = document.createElement("p");
     selectorNote.className = "experience-character-summary__note";
 
-    selectorSummaryCopy.append(selectorName, selectorNote);
+    const selectorSurpriseButton = document.createElement("button");
+    selectorSurpriseButton.className = "experience-button experience-button--ghost experience-character-surprise";
+    selectorSurpriseButton.type = "button";
+    selectorSurpriseButton.textContent = copy.character.surpriseAction;
+
+    selectorSummaryCopy.append(selectorName, selectorNote, selectorSurpriseButton);
     selectorSummary.append(selectorPortrait, selectorSummaryCopy);
 
     const selectorGrid = document.createElement("div");
@@ -2338,6 +2300,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       selectorPortrait,
       selectorName,
       selectorNote,
+      selectorSurpriseButton,
       selectorGrid,
       setupPrimaryButton,
       setupPrimaryHint,
@@ -2726,7 +2689,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       const card = document.createElement("button");
       card.type = "button";
       card.className = "experience-room-card";
-      card.addEventListener("click", () => {
+      const seatsFull = lobby.occupantCount >= LOBBY_MAX_PLAYERS;
+      configureLobbyCardAction(card, isLobbyCardJoinDisabled(lobby.status, seatsFull), () => {
         this.idleScreen = "lobby-list";
         this.pendingAutoJoinRoom = lobby.roomCode;
         this.telemetry.track("lobby_join_clicked", {
@@ -2750,7 +2714,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
       const status = document.createElement("span");
       status.className = "experience-room-card__status";
-      status.textContent = lobby.status === "playing" ? copy.lobbies.roomStatusLive : copy.lobbies.roomStatusOpen;
+      status.textContent = lobby.status === "playing"
+        ? copy.lobbies.roomStatusLive
+        : seatsFull ? copy.lobbies.roomStatusFull : copy.lobbies.roomStatusOpen;
 
       const occupants = document.createElement("div");
       occupants.className = "experience-room-card__occupants";
@@ -2854,7 +2820,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.elements.setupPrimaryButton.disabled = true;
       this.elements.setupPrimaryHint.textContent = lobby.occupantCount < 2
         ? copy.setup.readyDisabledSolo
-        : copy.setup.readyDisabledQueue;
+        : formatLobbyReadyReminder(copy, lobby);
       return;
     }
 
@@ -2965,6 +2931,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const selected = this.getCharacter(this.preferredCharacterIndex);
     this.renderPortrait(this.elements.selectorPortrait, selected);
     this.elements.selectorName.textContent = selected.name;
+    this.elements.selectorSurpriseButton.disabled = this.roster.length <= 1;
 
     const lobby = this.currentLobby;
     if (lobby?.selfSeat) {
@@ -3038,7 +3005,16 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.updatePreferredCharacter(this.preferredCharacterIndex + 1);
     });
 
-    nav.append(previousButton, nextButton);
+    const surpriseButton = document.createElement("button");
+    surpriseButton.type = "button";
+    surpriseButton.className = "experience-button experience-button--secondary experience-character-surprise";
+    surpriseButton.textContent = this.copy.character.surpriseAction;
+    surpriseButton.disabled = this.roster.length <= 1;
+    surpriseButton.addEventListener("click", () => {
+      this.surprisePreferredCharacter("landing");
+    });
+
+    nav.append(previousButton, surpriseButton, nextButton);
 
     // Compact portrait strip — all chars, no text labels
     const strip = document.createElement("div");
@@ -3115,23 +3091,36 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     return option;
   }
 
-  private updatePreferredCharacter(nextIndex: number): void {
+  private updatePreferredCharacter(
+    nextIndex: number,
+    selectionOrigin: "manual" | "landing" | "setup" = "manual",
+  ): void {
     this.preferredCharacterIndex = this.wrapCharacterIndex(nextIndex);
     this.persistPreferredCharacterIndex();
     this.app.setOfflinePreferredCharacter(this.preferredCharacterIndex);
-      this.telemetry.track("character_selected", {
-        context: { roomCode: this.currentLobby?.roomCode ?? null, screen: this.getScreen() },
-        payload: {
-          characterIndex: this.preferredCharacterIndex,
-          authoritativeCharacterIndex: this.getPreferredAuthoritativeCharacterIndex(),
-          characterId: this.getCharacter(this.preferredCharacterIndex).id,
-        },
-      });
+    this.telemetry.track("character_selected", {
+      context: { roomCode: this.currentLobby?.roomCode ?? null, screen: this.getScreen() },
+      payload: {
+        characterIndex: this.preferredCharacterIndex,
+        authoritativeCharacterIndex: this.getPreferredAuthoritativeCharacterIndex(),
+        characterId: this.getCharacter(this.preferredCharacterIndex).id,
+        selectionOrigin,
+      },
+    });
     this.renderAll();
 
     if (this.currentLobby?.selfSeat && this.currentLobby.status === "open") {
       this.send({ type: "set-character", characterIndex: this.getPreferredAuthoritativeCharacterIndex() });
     }
+  }
+
+  private surprisePreferredCharacter(origin: "landing" | "setup"): void {
+    if (this.roster.length <= 1) {
+      return;
+    }
+
+    const nextIndex = pickSurpriseCharacterIndex(this.preferredCharacterIndex, this.roster.length);
+    this.updatePreferredCharacter(nextIndex, origin);
   }
 
   private syncPreferredCharacterFromLobby(): void {
@@ -3515,12 +3504,19 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.feedbackRequestPending = true;
     this.elements.feedbackStatus.textContent = "";
     this.renderAll();
+    const controller = new AbortController();
+    let requestTimedOut = false;
+    const timeoutId = window.setTimeout(() => {
+      requestTimedOut = true;
+      controller.abort();
+    }, FEEDBACK_REQUEST_TIMEOUT_MS);
     try {
       const response = await fetch("/api/feedback", {
         method: "POST",
         headers: {
           "content-type": "application/json",
         },
+        signal: controller.signal,
         body: JSON.stringify({
           message,
           screen: this.getScreen(),
@@ -3545,8 +3541,11 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       this.setStatus(this.copy.landing.feedbackThanks);
       this.renderAll();
     } catch {
-      this.elements.feedbackStatus.textContent = this.copy.landing.feedbackError;
+      this.elements.feedbackStatus.textContent = requestTimedOut
+        ? this.copy.landing.feedbackTimeout
+        : this.copy.landing.feedbackError;
     } finally {
+      window.clearTimeout(timeoutId);
       this.feedbackRequestPending = false;
       this.renderAll();
     }

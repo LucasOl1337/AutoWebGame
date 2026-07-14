@@ -23,6 +23,7 @@ export class InputManager {
     KEY_BINDINGS[1].right,
     KEY_BINDINGS[1].bomb,
     KEY_BINDINGS[1].detonate,
+    KEY_BINDINGS[1].skill,
     KEY_BINDINGS[1].ready,
     KEY_BINDINGS[2].up,
     KEY_BINDINGS[2].down,
@@ -30,6 +31,7 @@ export class InputManager {
     KEY_BINDINGS[2].right,
     KEY_BINDINGS[2].bomb,
     KEY_BINDINGS[2].detonate,
+    KEY_BINDINGS[2].skill,
     KEY_BINDINGS[2].ready,
     SKILL_KEY,
     "Space",
@@ -86,6 +88,10 @@ export class InputManager {
     });
 
     target.addEventListener("blur", () => {
+      this.clearHeldState();
+    });
+
+    target.addEventListener("pagehide", () => {
       this.clearHeldState();
     });
 

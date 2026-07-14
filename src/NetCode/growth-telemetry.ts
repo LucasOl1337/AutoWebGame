@@ -276,7 +276,11 @@ export class GrowthTelemetryClient {
       return normalized;
     }
 
-    for (const [key, value] of Object.entries(source)) {
+    for (const key in source) {
+      if (!Object.prototype.hasOwnProperty.call(source, key)) {
+        continue;
+      }
+      const value = source[key];
       if (value === undefined) {
         continue;
       }

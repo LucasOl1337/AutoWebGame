@@ -12,7 +12,7 @@ This repository is the central release line for the deployed game. Keep `main` a
 - Online lobby flow through the Cloudflare Worker shell.
 - Quick match, manual room entry, and invite-link helpers.
 - Four skill-enabled signature characters: `Ranni`, `Killer Bee`, `Nico`, and `Crocodilo Arcano`.
-- Seven arena themes: `tournament-clean`, `arcane-citadel`, `verdant-ruins`, `skyfoundry-bastion`, `royal-marble`, `glacier-sanctum`, and `obsidian-garden`.
+- Nine arena themes: `tournament-clean`, `arcane-citadel`, `verdant-ruins`, `skyfoundry-bastion`, `royal-marble`, `glacier-sanctum`, `obsidian-garden`, `tidal-foundry`, and `ember-kiln`.
 - Asset-manifest based character loading so roster changes stay data-driven.
 
 ## Tech Stack

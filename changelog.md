@@ -1,5 +1,48 @@
 # Changelog
 
+## [2026-07-13] — v0.4.1
+
+- Corrigida a prioridade de direção durante key repeat e ignoradas repetições órfãs.
+- Restauradas limpeza de listeners e nova tentativa de playback no gerenciador de áudio.
+- Reforçados retry/UUID de telemetria, fallback de sprites e testes de onboarding/Worker.
+- Excluídos o protótipo Agent API revertido e o diretório interno `.swarm`.
+- Release preparada localmente sem arte, push ou deploy.
+
+Relatório: `DocsDev/releases/release-v0.4.1.md`.
+
+---
+
+## [2026-07-12] — v0.4.0
+
+- Consolidadas 20 rodadas Trae de gameplay/bots sobre `v0.3.0`.
+- Recuperadas correções órfãs e snapshots úteis de input, áudio, convite, mobile e Worker.
+- Melhorados telegraph, pickup/HUD, drop pool, Sudden Death e prioridades dos bots.
+- Corrigida a landing para 9 arenas/4 jogadores; adicionados safe areas, robots e sitemap.
+- Worker ganhou cache de erro correto, arena ativa em memória e admin analytics sem leitura duplicada.
+- Agent-First foi preservado como protótipo e adiado por riscos arquiteturais comprovados.
+- Validação: 136/136 checks, build, audit, Wrangler dry-run e Chrome desktop/mobile.
+
+Estado: publicado em produção nos dois domínios e validado por smoke test e paridade SHA-256 amostrada dos assets.
+
+Relatório: `DocsDev/releases/release-v0.4.0.md`.
+
+---
+
+## [2026-07-10] - v0.3.0 Official Minor Release (Arenas, retomada online e combate mais legivel)
+
+**Project:** AutoWebGame / BOMBA PvP  |  **Branch:** main  |  **State:** approved release
+
+- Duas novas arenas: `tidal-foundry` e `ember-kiln`.
+- Retomada segura de lobby/partida, cards de sala cheia/em andamento e lembretes de pronto.
+- Personagem surpresa, pickup-chain guard, speed sparks, fuse curto visivel e bot revenge pressure.
+- Landing/Como jogar mais acessiveis, copy comercial e recuperacao de bootstrap.
+- Admin fail-closed, `ws` 8.21.0 e melhorias invisiveis de performance/qualidade.
+- Validacao: build, audit de dependencias e 47/47 contratos focados.
+
+Relatorio completo: `DocsDev/releases/release-v0.3.0.md`.
+
+---
+
 ## [2026-07-08] - v0.2.5 Official Patch (Onboarding, QA e APIs mais rapidas)
 
 **Project:** AutoWebGame / BOMBA  |  **Branch:** main  |  **State:** v0.2.5 release candidate

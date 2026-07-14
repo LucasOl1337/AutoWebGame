@@ -1,3 +1,90 @@
+# Patch Notes — 2026-07-13 v0.4.1
+
+**Projeto:** AutoWebGame / BOMBA PvP
+**Baseline:** 0.4.0 (da613c7)
+**Estado:** preparado localmente; não publicado
+
+## Para quem joga
+
+- Controles locais mantêm a direção mais recente durante repetição de teclas e ignoram repetições órfãs.
+- Áudio recupera reprodução após falhas transitórias e limpa listeners de desbloqueio sem vazamentos.
+- Telemetria, carregamento de sprites e superfícies de onboarding receberam correções de resiliência.
+
+## Qualidade e escopo
+
+- Cobertura nova para prioridade de input, retry de áudio/telemetria, UUID fallback, dev lab e Worker dispatch.
+- Protótipo Agent API foi revertido e não integra o patch.
+- `.swarm` interno foi removido desta unidade; evidência preservada em snapshot.
+- Sem arte nova, push, deploy, breaking change ou migração.
+
+Relatórios: `DocsDev/releases/release-v0.4.1.md` e `DocsDev/releases/release-v0.4.1.json`.
+
+---
+
+# Patch Notes — 2026-07-12 v0.4.0
+
+**Projeto:** AutoWebGame / BOMBA PvP
+**Baseline:** `v0.3.0` (`15b3721`)
+**Estado:** publicado e validado em `bombapvp.com` e `bombpvp.com`
+
+## Para quem joga
+
+- Bombas avisam melhor os 450 ms finais e pickups se destacam do piso.
+- Powerup já maximizado permanece na arena e mostra `MAX` no HUD.
+- Drops ficaram menos densos, remote-up mais raro e Sudden Death um pouco menos agressivo.
+- Bots priorizam mobilidade/sobrevivência, ignoram upgrades saturados e evitam bombas ofensivas redundantes.
+- Convites aceitam códigos dentro de mensagens; quando copiar falha, o código aparece para compartilhamento manual.
+- Mobile respeita notch/safe areas e a landing informa corretamente 9 arenas e até 4 jogadores online.
+
+## Invisível, mas importante
+
+- Input é limpo em `pagehide`; áudio se recupera de falha e remove listeners órfãos.
+- Worker não guarda 404 de chunks como immutable, reutiliza arena ativa em memória e reduz leituras do admin.
+- Deltas de blast são reutilizados em vez de alocados a cada explosão/projeção.
+- Robots/sitemap cobrem as páginas públicas e os dois domínios.
+
+## Qualidade e decisões
+
+- Build aprovado, 136/136 checks, audit com 0 vulnerabilidades e Wrangler dry-run aprovado.
+- QA Chrome desktop/mobile sem overflow ou erro de console.
+- Agent-First, suporte/SLA, billing live, telemetria ampliada e novos assets genéricos ficaram fora até atenderem os gates do PRD.
+- Sem breaking change ou migração de Durable Object.
+
+Relatórios: `DocsDev/releases/release-v0.4.0.md`, `PRD-v0.4.0.md` e `before-after-v0.4.0.md`.
+
+---
+
+# Patch Notes - 2026-07-10 v0.3.0 Official Minor Release
+
+**Project:** AutoWebGame / BOMBA PvP
+**Baseline:** `v0.2.5` (`664d616`)
+**State:** aprovado para publicacao
+
+## O que muda para quem joga
+
+- Explore `tidal-foundry` e `ember-kiln`, duas novas arenas com tiles proprios.
+- Retome lobbies e partidas apos quedas breves sem perder imediatamente o assento.
+- Veja claramente quando uma sala esta cheia ou com partida em andamento.
+- Use personagem surpresa, encadeie pickups para ganhar guard e perceba melhor velocidade/fuse curto.
+- Encontre entrada por codigo, guia Como jogar, copy e estados de carregamento mais claros.
+
+## Mudancas invisiveis
+
+- Admin fail-closed e sessoes administrativas anteriores revogadas.
+- Mapa de perigo compartilhado, carregamento paralelo de personagens e menos alocacoes/canvas resets.
+- Dependencia `ws` atualizada para 8.21.0; audit de producao sem vulnerabilidades conhecidas.
+
+## Qualidade
+
+- Build TypeScript/Vite aprovado.
+- 47/47 contratos focados aprovados.
+- Nenhum achado de seguranca P0-P2 confirmado.
+- Sem breaking change ou migracao de dados.
+
+Detalhes, tabela auditavel e riscos residuais: `DocsDev/releases/release-v0.3.0.md`.
+
+---
+
 # Patch Notes - 2026-07-08 v0.2.5 Official Patch
 
 **Project:** AutoWebGame / BOMBA
