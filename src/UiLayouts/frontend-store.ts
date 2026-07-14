@@ -15,11 +15,11 @@ export class FrontendStore {
   private readonly listeners = new Set<Listener>();
 
   constructor(initialRoute: FrontendRoute) {
-    this.state = {
+    this.state = Object.freeze({
       route: initialRoute,
       selectedMode: initialRoute === "launcher" ? "play" : (initialRoute as LauncherMode),
       bootingGame: false,
-    };
+    });
   }
 
   getSnapshot(): Readonly<FrontendState> {
@@ -49,7 +49,7 @@ export class FrontendStore {
   }
 
   private update(patch: Partial<FrontendState>): void {
-    const next = { ...this.state, ...patch };
+    const next = Object.freeze({ ...this.state, ...patch });
     if (JSON.stringify(next) === JSON.stringify(this.state)) {
       return;
     }
