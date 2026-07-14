@@ -48,7 +48,7 @@ const POWER_UP_DEFINITIONS: Readonly<Record<PowerUpType, PowerUpDefinition>> = {
   "remote-up": {
     type: "remote-up",
     label: "Remote Detonation",
-    shortLabel: "R",
+    shortLabel: "RD",
     tint: "#8cd6ff",
     maxLevel: 1,
   },

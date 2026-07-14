@@ -696,3 +696,13 @@
 - Antes → depois: sem alteração.
 - Arquivos pretendidos: somente `SwarmLedger-gameplay.md` e `DocsDev/swarm-coordination.md` (ledgers).
 - Fechamento: sem commit/push.
+
+## 2026-07-14 — ux-remote-detonation-hud-label-rd
+
+- Claim/escopo antes da intervenção: avaliar e, se sustentado, trocar exclusivamente o `shortLabel` de `remote-up` de `R` para `RD` em `src/Gameplay/powerups.ts`, criar `tests/remote-detonation-hud-label-check.mjs` e atualizar os dois registros; preservar toda sujeira alheia; sem commit, push ou deploy.
+- Hipótese: `R` é ambíguo como abreviação isolada, enquanto `RD` identifica diretamente Remote Detonation e segue o padrão de duas letras já usado por `SH`, `BP`, `BK` e `SF`.
+- Critério de sucesso: `compile:esm`, teste focal novo, HUD relacionado, build e diff-check seletivo aprovados, sem tocar outros arquivos.
+- Antes → depois: o `shortLabel` de Remote Detonation passou de `R` para `RD`; a tecla de detonação permanece `R`, portanto o rótulo do power-up ficou mais específico sem alterar controles ou gameplay.
+- Evidência focal: `type="remote-up"`, `label="Remote Detonation"`, `shortLabel="RD"` e `pass=true`.
+- Validação: `npm run compile:esm`; `node tests/remote-detonation-hud-label-check.mjs`; `node tests/powerup-hud-slots-check.mjs`; `npm run build`; `git diff --check -- src/Gameplay/powerups.ts tests/remote-detonation-hud-label-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` — todos concluídos com código 0; build transformou 57 módulos e o diff-check emitiu somente avisos LF→CRLF.
+- Fechamento: diff próprio limitado aos quatro arquivos reivindicados; `tmp/` e todo estado alheio preservados; sem commit, push ou deploy.
