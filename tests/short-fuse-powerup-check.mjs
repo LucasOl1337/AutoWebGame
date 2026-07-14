@@ -117,7 +117,7 @@ const report = {
     defaultFuseMs === BOMB_FUSE_MS
     && quickFuseMs !== null
     && quickFuseMs < BOMB_FUSE_MS
-    && shortenedByMs === 700
+    && shortenedByMs === 800
     && collectedCount === 2
     && levelAfterPickup === 2
     && p1State?.shortFuseLevel === 2

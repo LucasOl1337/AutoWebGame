@@ -104,7 +104,6 @@ const PUBLIC_API_ROUTES = new Map([
   ["/api/billing/webhook", { methods: new Set(["POST"]), targetPath: "/internal/billing/webhook" }],
 ]);
 
-function getStaticAssetCacheControl(pathname, contentType, status) {
 function getStaticAssetCacheControl(pathname, contentType, status = 200) {
   if (status >= 400) {
     return "no-store";

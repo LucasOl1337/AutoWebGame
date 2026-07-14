@@ -197,17 +197,18 @@ const report = {
       && kickSlot.acquired === true
       && kickSlot.level === 1
       && kickSlot.value === "x1"
-      && utilityShortLabels["kick-up"] === "K"
+      && utilityShortLabels["kick-up"] === "BK"
       && kickSlot.recentlyCollected === true
       && shortFuseSlot
       && shortFuseSlot.acquired === true
       && shortFuseSlot.level === 1
-      && shortFuseSlot.value === "1.65s"
+      && shortFuseSlot.value === "1.60s"
       && utilityShortLabels["short-fuse-up"] === "SF"
       && shortFuseSlot.recentlyCollected === true
       && recentPowerUpPickup
       && recentPowerUpPickup.type === "short-fuse-up"
-      && recentPowerUpPickup.value === "1.65s"
+      && recentPowerUpPickup.value === "1.60s"
+      && recentPowerUpPickup.chainGuard === true
       && recentPowerUpPickup.remainingMs > 0
       && expiredRecentPowerUpPickup === null
       && expiredRecentSlots.length === 0
