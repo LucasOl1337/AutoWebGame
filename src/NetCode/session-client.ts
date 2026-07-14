@@ -1488,7 +1488,10 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     const landingLead = document.createElement("p");
     landingLead.className = "experience-hero__lead";
-    landingLead.textContent = copy.landing.lead;
+    landingLead.textContent = this.translate(
+      "Escolha seu bomber, leia a arena e entre no round. Partida rápida online ou treino imediato contra bots.",
+      "Choose your bomber, read the arena, and enter the round. Quick online match or instant bot training.",
+    );
 
     landingCopy.append(landingKicker, landingReleaseBadge, landingTitle, landingLead);
 
@@ -1835,19 +1838,40 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     });
 
     landingControls.append(landingControlsHeader, landingControlsGrid);
-    landingCopy.append(
-      landingCommercialProof,
-      landingMeta,
-      landingReleaseNotes,
-      landingReturnBrief,
-      landingActions,
-      landingAudio,
-      landingDevLab,
+    const landingAdvanced = document.createElement("details");
+    landingAdvanced.className = "experience-landing-advanced";
+
+    const landingAdvancedSummary = document.createElement("summary");
+    landingAdvancedSummary.className = "experience-landing-advanced__summary";
+
+    const landingAdvancedLabel = document.createElement("span");
+    landingAdvancedLabel.textContent = this.translate("Configurar partida", "Configure match");
+
+    const landingAdvancedMeta = document.createElement("span");
+    landingAdvancedMeta.textContent = this.translate("Mapa · bots · controles · conta", "Map · bots · controls · account");
+
+    landingAdvancedSummary.append(landingAdvancedLabel, landingAdvancedMeta);
+
+    const landingAdvancedBody = document.createElement("div");
+    landingAdvancedBody.className = "experience-landing-advanced__body";
+    landingAdvancedBody.append(
       landingBotIntensity,
       landingArenaTheme,
       landingControls,
+      landingAudio,
       landingAccountCard,
       landingBillingPanel,
+      landingReleaseNotes,
+      landingCommercialProof,
+      landingDevLab,
+    );
+    landingAdvanced.append(landingAdvancedSummary, landingAdvancedBody);
+
+    landingCopy.append(
+      landingMeta,
+      landingReturnBrief,
+      landingActions,
+      landingAdvanced,
     );
 
     const landingRoster = document.createElement("div");
