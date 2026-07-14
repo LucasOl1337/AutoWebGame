@@ -1,3 +1,5 @@
+CLAIM | 2026-07-14 | sessao=solo-remote-chain-self-safety | tipo=correcao-gameplay-bot-minima | arquivos=src/Engine/bot-ai.ts, tests/bot-remote-detonation-check.mjs, DocsDev/swarm-coordination.md, SwarmLedger-gameplay.md | status=concluido | antes→depois=selecao remota verificava apenas o blast direto; agora percorre toda a cadeia acionada e recusa detonacao se qualquer blast encadeado atingir o bot | evidencias=cenario focal bomba (5,5) aciona bomba (5,3), cujo blast alcanca bot (3,3), agora sem detonate; cenarios seguros preservados | validacoes=test:bot-remote, test:bot, test:bomb-chain, build e diff-check aprovados | restricoes=diffs concorrentes preservados; commit local seletivo; sem push/deploy/branch/worktree
+
 ﻿# Swarm coordination
 
 Shared coordination file for recurring Codex swarm sessions. Each session should claim a small, valuable, disjoint scope before editing and append evidence before closing.

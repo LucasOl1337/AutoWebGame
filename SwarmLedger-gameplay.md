@@ -1,3 +1,11 @@
+## 2026-07-14 — solo-remote-chain-self-safety
+- Claim/escopo: alterar somente `src/Engine/bot-ai.ts`, fortalecer `tests/bot-remote-detonation-check.mjs` e atualizar apenas esta entrada nos dois registros concorrentes; preservar todos os diffs alheios; commit local seletivo; sem push/deploy/branch/worktree.
+- Evidência antes: `getRemoteDetonationBomb` rejeitava apenas quando o blast direto da bomba selecionada alcançava o bot; não percorria bombas atingidas por esse blast, embora a explosão real faça reação em cadeia.
+- Antes → depois: a seleção remota agora percorre iterativamente toda a cadeia acionada e rejeita a detonação se qualquer blast encadeado atingir o tile atual do bot; escolha segura, proteção do inimigo e demais prioridades permanecem preservadas.
+- Evidência focal: bomba remota em `(5,5)` atinge o inimigo e aciona bomba em `(5,3)` cujo blast alcança o bot em `(3,3)`; o bot agora retorna movimento sem `detonate`, enquanto os cenários seguros continuam detonando.
+- Resultado/validações: `npm run test:bot-remote`, `npm run test:bot`, `npm run test:bomb-chain`, `npm run build` e diff-check seletivo concluíram com código 0; revisão confirmou o diff funcional limitado ao runtime e teste focal, com mudanças concorrentes preservadas.
+- Fechamento: commit local seletivo somente dos nossos arquivos/hunks; sem push, deploy, branch ou worktree.
+
 ## 2026-07-14 — bot-remote-over-second-shield
 - Claim/escopo antes da intervenção: alterar somente `src/Gameplay/powerups.ts`, fortalecer `tests/bot-powerup-priority-check.mjs` com cenário determinístico equidistante e atualizar os dois registros; `remote-up` deve superar minimamente a segunda carga de shield (`250`), preservando a primeira carga em `500`; finalização seletiva concluída, sem push ou deploy.
 - Evidência antes: `remote-up` e a segunda `shield-up` valem ambos `250`, portanto o desempate equidistante depende da ordem de descoberta em vez de expressar a preferência solicitada.
