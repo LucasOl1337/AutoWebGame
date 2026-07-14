@@ -447,7 +447,10 @@ function getRemoteDetonationBomb(
       continue;
     }
     const blastKeys = getBombBlastKeys(bomb.tile, bomb.flameRange, context);
-    if (blastKeys.has(playerKey) || !blastKeys.has(enemyKey)) {
+    if (
+      !blastKeys.has(enemyKey)
+      || doesRemoteDetonationChainHitTile(bomb, playerKey, context)
+    ) {
       continue;
     }
     if (
@@ -460,6 +463,38 @@ function getRemoteDetonationBomb(
   }
 
   return selectedBomb;
+}
+
+function doesRemoteDetonationChainHitTile(
+  initialBomb: BombState,
+  targetKey: string,
+  context: BotContext,
+): boolean {
+  const pending = [initialBomb];
+  const triggeredBombIds = new Set<number>();
+
+  while (pending.length > 0) {
+    const bomb = pending.pop();
+    if (!bomb || triggeredBombIds.has(bomb.id)) {
+      continue;
+    }
+    triggeredBombIds.add(bomb.id);
+
+    const blastKeys = getBombBlastKeys(bomb.tile, bomb.flameRange, context);
+    if (blastKeys.has(targetKey)) {
+      return true;
+    }
+    for (const chainedBomb of context.bombs) {
+      if (
+        !triggeredBombIds.has(chainedBomb.id)
+        && blastKeys.has(tileKey(chainedBomb.tile.x, chainedBomb.tile.y))
+      ) {
+        pending.push(chainedBomb);
+      }
+    }
+  }
+
+  return false;
 }
 
 /**

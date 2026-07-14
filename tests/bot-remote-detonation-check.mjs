@@ -140,6 +140,29 @@ unsafeBot.activeBombs = 1;
 const unsafeDecision = unsafeGame.getBotDecision(unsafeBot);
 const avoidsUnsafeDetonationPass = unsafeDecision.detonate !== true;
 
+const chainUnsafeGame = new GameApp(root, assets);
+chainUnsafeGame.startMatch();
+const chainUnsafeBot = chainUnsafeGame.players[2];
+const chainUnsafeEnemy = chainUnsafeGame.players[1];
+chainUnsafeBot.spawnProtectionMs = 0;
+chainUnsafeEnemy.spawnProtectionMs = 0;
+chainUnsafeBot.remoteLevel = 1;
+chainUnsafeBot.flameRange = 2;
+chainUnsafeBot.maxBombs = 2;
+chainUnsafeGame.flames = [];
+chainUnsafeGame.arena.solid = new Set();
+chainUnsafeGame.arena.breakable = new Set();
+setPlayerTile(chainUnsafeBot, { x: 3, y: 3 });
+setPlayerTile(chainUnsafeEnemy, { x: 7, y: 5 });
+chainUnsafeGame.bombs = [
+  { id: 8501, ownerId: 2, tile: { x: 5, y: 5 }, fuseMs: 1600, ownerCanPass: false, flameRange: 2 },
+  { id: 8502, ownerId: 2, tile: { x: 5, y: 3 }, fuseMs: 1800, ownerCanPass: false, flameRange: 2 },
+];
+chainUnsafeBot.activeBombs = 2;
+
+const chainUnsafeDecision = chainUnsafeGame.getBotDecision(chainUnsafeBot);
+const avoidsChainUnsafeDetonationPass = chainUnsafeDecision.detonate !== true;
+
 const multiBombGame = new GameApp(root, assets);
 multiBombGame.startMatch();
 const multiBombBot = multiBombGame.players[2];
@@ -174,6 +197,8 @@ const report = {
   detonatesAfterProtectionExpiresPass,
   unsafeDecision,
   avoidsUnsafeDetonationPass,
+  chainUnsafeDecision,
+  avoidsChainUnsafeDetonationPass,
   multiBombDecision,
   newerBombDetonationPass,
 };
@@ -186,6 +211,7 @@ if (
   || !avoidsProtectedDetonationPass
   || !detonatesAfterProtectionExpiresPass
   || !avoidsUnsafeDetonationPass
+  || !avoidsChainUnsafeDetonationPass
   || !newerBombDetonationPass
 ) {
   process.exit(1);
