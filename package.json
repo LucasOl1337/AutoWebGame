@@ -85,6 +85,7 @@
     "test:i18n-storage-guard": "npm run compile:esm && node tests/i18n-storage-guard-check.mjs",
     "test:landing-visual-token": "node tests/landing-visual-token-check.mjs",
     "test:touch-focus-css": "node tests/touch-focus-css-check.mjs",
+    "test:disabled-button-cursor": "node tests/disabled-button-cursor-check.mjs",
     "test:audio-range-focus": "node tests/audio-range-focus-check.mjs",
     "test:mobile-viewport-safe-area": "node tests/mobile-viewport-safe-area-check.mjs",
     "test:landing-page": "node tests/landing-page-contract-check.mjs",

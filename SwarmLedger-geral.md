@@ -1,5 +1,16 @@
 # Swarm Ledger - Geral
 
+## 2026-07-14 - Script npm para cursor de botao desabilitado
+
+- Automacao: `SOLO`.
+- Escopo registrado antes da implementacao: expor o check existente `tests/disabled-button-cursor-check.mjs` via um script npm dedicado; sem alterar runtime, CSS, gameplay, rede, assets ou mudancas concorrentes.
+- Classificacao: infraestrutura de teste CSS, baixo risco e comprovavel por execucao focal.
+- Evidencia antes: a execucao direta passou com regra disabled, cursor de indisponibilidade, estado esmaecido e exclusao dos estados hover/active verdadeiros, mas o check nao aparecia nos scripts npm.
+- Mudanca: adicionado somente `test:disabled-button-cursor`, executando o check existente sem compilacao desnecessaria.
+- Validacao: `npm run test:disabled-button-cursor` passou (`pass: true`); `npm run test:package-scripts-unique` passou com 149 scripts; `npm run build` passou com 56 modulos transformados; `git diff --check` seletivo passou com apenas avisos LF -> CRLF.
+- Revisao de escopo: a unica insercao funcional desta rodada e o novo script; a insercao preexistente `test:lab-fast-action-buffer` em `package.json` e todas as demais mudancas concorrentes foram preservadas e excluidas do staging seletivo.
+- Commit: aprovado para criacao local seletiva; sem push ou deploy conforme instrucao explicita desta rodada.
+
 ## 2026-07-13 - Feedback de apontador no volume
 
 - Automacao: `SOLO`.
