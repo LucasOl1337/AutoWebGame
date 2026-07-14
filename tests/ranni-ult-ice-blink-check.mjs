@@ -218,6 +218,40 @@ const stationaryBlinkShortCooldown = stationaryRanni.skill.phase === "cooldown"
   && stationaryRanni.skill.cooldownRemainingMs > 0
   && stationaryRanni.skill.cooldownRemainingMs <= 300;
 
+const invalidatedGame = createServerMatch({ 1: 0, 2: 1, 3: 0, 4: 1 });
+const invalidatedRanni = invalidatedGame.players[1];
+invalidatedRanni.position = { x: beforeX, y: p1.position.y };
+invalidatedRanni.tile = { x: 4, y: 4 };
+invalidatedRanni.spawnProtectionMs = 0;
+invalidatedGame.setServerPlayerInput(1, {
+  direction: "right",
+  ...neutralInput,
+  skillPressed: true,
+});
+invalidatedGame.advanceServerSimulation(17);
+for (let elapsed = 17; elapsed < 600; elapsed += 17) {
+  invalidatedGame.setServerPlayerInput(1, {
+    direction: "right",
+    ...neutralInput,
+  });
+  invalidatedGame.advanceServerSimulation(17);
+}
+const invalidatedProjectedPosition = { ...invalidatedRanni.skill.projectedPosition };
+const invalidatedTargetTile = {
+  x: Math.floor(invalidatedProjectedPosition.x / TILE_SIZE),
+  y: Math.floor(invalidatedProjectedPosition.y / TILE_SIZE),
+};
+invalidatedGame.arena.solid.add(`${invalidatedTargetTile.x},${invalidatedTargetTile.y}`);
+invalidatedGame.setServerPlayerInput(1, {
+  direction: null,
+  ...neutralInput,
+  skillPressed: true,
+});
+invalidatedGame.advanceServerSimulation(17);
+const invalidatedDestinationRejected = Math.abs(invalidatedRanni.position.x - beforeX) < 1.5;
+const invalidatedDestinationFullCooldown = invalidatedRanni.skill.phase === "cooldown"
+  && invalidatedRanni.skill.cooldownRemainingMs > 7_900;
+
 const report = {
   beforeX,
   midX,
@@ -243,6 +277,11 @@ const report = {
   stationaryBlinkStayedInPlace,
   stationaryBlinkCooldownRemainingMs: stationaryRanni.skill.cooldownRemainingMs,
   stationaryBlinkShortCooldown,
+  invalidatedProjectedPosition,
+  invalidatedTargetTile,
+  invalidatedDestinationRejected,
+  invalidatedDestinationCooldownRemainingMs: invalidatedRanni.skill.cooldownRemainingMs,
+  invalidatedDestinationFullCooldown,
   pass: frozenInPlace
     && projectedMovedDuringChannel
     && teleportedAfterChannel
@@ -254,6 +293,8 @@ const report = {
     && canceledToProjectedTrack
     && stationaryBlinkStayedInPlace
     && stationaryBlinkShortCooldown
+    && invalidatedDestinationRejected
+    && invalidatedDestinationFullCooldown
 };
 
 console.log(JSON.stringify(report, null, 2));

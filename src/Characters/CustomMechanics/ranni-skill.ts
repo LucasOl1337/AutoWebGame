@@ -67,9 +67,9 @@ export function finishRanniBlink(player: PlayerState, context: SkillContext): vo
     return;
   }
   const target = player.skill.projectedPosition ?? player.position;
+  const projectedDisplacement = target.x !== player.position.x || target.y !== player.position.y;
   const canMoveToTarget = context.canOccupyPosition(player, target);
-  const moved = canMoveToTarget
-    && (target.x !== player.position.x || target.y !== player.position.y);
+  const moved = canMoveToTarget && projectedDisplacement;
   if (canMoveToTarget) {
     player.position = { ...target };
     player.tile = context.getTileFromPosition(player.position);
@@ -82,7 +82,7 @@ export function finishRanniBlink(player: PlayerState, context: SkillContext): vo
   player.velocity.y = 0;
   player.skill.phase = "cooldown";
   player.skill.channelRemainingMs = 0;
-  player.skill.cooldownRemainingMs = moved
+  player.skill.cooldownRemainingMs = moved || projectedDisplacement
     ? RANNI_SKILL_COOLDOWN_MS
     : RANNI_NO_DISPLACEMENT_COOLDOWN_MS;
   player.skill.castElapsedMs = 0;
