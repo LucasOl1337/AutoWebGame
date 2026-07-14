@@ -82,13 +82,16 @@ function setPlayerTile(player, tile) {
   player.tile = { ...tile };
 }
 
-function runCrateExplosion(crateTiles, animationClockMs = 0) {
+function runCrateExplosion(crateTiles, animationClockMs = 0, powerUps = []) {
   const game = new GameApp(root, assets);
   game.startMatch();
   game.animationClockMs = animationClockMs;
   game.arena.solid.clear();
   game.arena.breakable.clear();
-  game.arena.powerUps = [];
+  game.arena.powerUps = powerUps.map((powerUp) => ({
+    ...powerUp,
+    tile: { ...powerUp.tile },
+  }));
 
   const p1 = game.players[1];
   setPlayerTile(p1, { x: 5, y: 5 });
@@ -111,18 +114,28 @@ const comboCrates = [
   { x: 4, y: 5 },
   { x: 6, y: 5 },
 ];
+const occupiedNormalDropTile = comboCrates[0];
+const normalDrop = {
+  tile: { ...occupiedNormalDropTile },
+  type: "bomb-up",
+  revealed: false,
+  collected: false,
+};
 const comboRevealStartedAtMs = 1234;
-const comboGame = runCrateExplosion(comboCrates, comboRevealStartedAtMs);
-const comboDrop = comboGame.arena.powerUps[0] ?? null;
+const comboGame = runCrateExplosion(comboCrates, comboRevealStartedAtMs, [normalDrop]);
+const revealedNormalDrop = comboGame.arena.powerUps.find((powerUp) => powerUp.type === normalDrop.type) ?? null;
+const comboDrop = comboGame.arena.powerUps.find((powerUp) => powerUp !== revealedNormalDrop) ?? null;
 const comboCrateKeys = new Set(comboCrates.map((tile) => tileKey(tile.x, tile.y)));
 const comboBreaksBothCrates = comboCrates.every((tile) => (
   !comboGame.arena.breakable.has(tileKey(tile.x, tile.y))
 ));
-const comboCreatesDrop = comboGame.arena.powerUps.length === 1;
+const comboCreatesSingleBonus = comboGame.arena.powerUps.length === 2 && comboDrop !== null;
+const normalDropIsRevealed = revealedNormalDrop?.revealed === true;
 const comboDropIsRevealed = comboDrop?.revealed === true && comboDrop?.collected === false;
 const comboDropUsesExistingType = comboDrop ? SKILL_POWER_UP_TYPES.includes(comboDrop.type) : false;
-const comboDropSitsOnBrokenCrate = comboDrop
+const comboDropUsesFreeBrokenCrate = comboDrop
   ? comboCrateKeys.has(tileKey(comboDrop.tile.x, comboDrop.tile.y))
+    && tileKey(comboDrop.tile.x, comboDrop.tile.y) !== tileKey(occupiedNormalDropTile.x, occupiedNormalDropTile.y)
   : false;
 const comboDropRevealTimestamp = comboDrop
   ? comboGame.powerUpRevealStartedAtMs.get(comboDrop)
@@ -136,19 +149,21 @@ const report = {
   comboPowerUps: comboGame.arena.powerUps,
   singlePowerUps: singleGame.arena.powerUps,
   comboBreaksBothCrates,
-  comboCreatesDrop,
+  comboCreatesSingleBonus,
+  normalDropIsRevealed,
   comboDropIsRevealed,
   comboDropUsesExistingType,
-  comboDropSitsOnBrokenCrate,
+  comboDropUsesFreeBrokenCrate,
   comboDropRevealTimestamp,
   comboDropStartsRevealAnimation,
   singleCrateKeepsNormalDropRule,
   pass: (
     comboBreaksBothCrates
-    && comboCreatesDrop
+    && comboCreatesSingleBonus
+    && normalDropIsRevealed
     && comboDropIsRevealed
     && comboDropUsesExistingType
-    && comboDropSitsOnBrokenCrate
+    && comboDropUsesFreeBrokenCrate
     && comboDropStartsRevealAnimation
     && singleCrateKeepsNormalDropRule
   ),

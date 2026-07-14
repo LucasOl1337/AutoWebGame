@@ -3153,12 +3153,11 @@ export class GameApp {
     }
 
     const sortedKeys = [...brokenCrateKeys].sort();
-    const brokenKeySet = new Set(sortedKeys);
-    const revealedDropExists = this.arena.powerUps.some((powerUp) => (
-      !powerUp.collected
-      && brokenKeySet.has(tileKey(powerUp.tile.x, powerUp.tile.y))
-    ));
-    if (revealedDropExists) {
+    const occupiedKeys = new Set(this.arena.powerUps
+      .filter((powerUp) => !powerUp.collected)
+      .map((powerUp) => tileKey(powerUp.tile.x, powerUp.tile.y)));
+    const freeKeys = sortedKeys.filter((key) => !occupiedKeys.has(key));
+    if (freeKeys.length === 0) {
       return;
     }
 
@@ -3169,7 +3168,7 @@ export class GameApp {
       }
     }
 
-    const dropKey = sortedKeys[hash % sortedKeys.length];
+    const dropKey = freeKeys[hash % freeKeys.length];
     const type = DEMOLITION_COMBO_DROP_TYPES[hash % DEMOLITION_COMBO_DROP_TYPES.length] ?? "speed-up";
     if (!dropKey) {
       return;
