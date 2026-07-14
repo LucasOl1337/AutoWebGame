@@ -184,7 +184,10 @@ export function getPowerUpPriorityScore(player: PlayerState, type: PowerUpType):
     if (player.flameRange === 1) {
       return 460;
     }
-    return 260 + 80 / 2 ** (player.flameRange - 2);
+    if (player.flameRange === 2) {
+      return 340;
+    }
+    return 260 + 40 / 2 ** (player.flameRange - 3);
   }
   if (type === "remote-up") {
     if (player.remoteLevel >= 1) {
