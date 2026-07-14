@@ -18,6 +18,9 @@ const makePlayer = (id, x, y) => ({
   maxBombs: 1,
   remoteLevel: 0,
   bombPassLevel: 0,
+  kickLevel: 0,
+  shortFuseLevel: 0,
+  shieldCharges: 0,
 });
 
 const bot = makePlayer(2, 3, 3);
@@ -34,6 +37,11 @@ const context = {
     powerUps: [{
       type: "speed-up",
       tile: { x: 1, y: 3 },
+      revealed: false,
+      collected: false,
+    }, {
+      type: "shield-up",
+      tile: { x: 5, y: 3 },
       revealed: false,
       collected: false,
     }],
@@ -55,8 +63,15 @@ const context = {
 };
 
 enemy.spawnProtectionMs = 1000;
-const crateTieDecision = getBotDecision(bot, context);
-const crateTiePass = crateTieDecision.direction === "left" && crateTieDecision.placeBomb === false;
+const usefulHiddenDropDecision = getBotDecision(bot, context);
+const usefulHiddenDropPass = usefulHiddenDropDecision.direction === "left"
+  && usefulHiddenDropDecision.placeBomb === false;
+
+bot.speedLevel = 4;
+const saturatedHiddenDropDecision = getBotDecision(bot, context);
+const saturatedHiddenDropPass = saturatedHiddenDropDecision.direction === "right"
+  && saturatedHiddenDropDecision.placeBomb === false;
+bot.speedLevel = 0;
 
 enemy.spawnProtectionMs = 0;
 enemy.tile = { x: 3, y: 5 };
@@ -65,6 +80,13 @@ const vulnerableTargetDecision = getBotDecision(bot, context);
 const vulnerableTargetPass = vulnerableTargetDecision.direction === "down"
   && vulnerableTargetDecision.placeBomb === false;
 
-const report = { crateTieDecision, vulnerableTargetDecision, crateTiePass, vulnerableTargetPass };
+const report = {
+  usefulHiddenDropDecision,
+  saturatedHiddenDropDecision,
+  vulnerableTargetDecision,
+  usefulHiddenDropPass,
+  saturatedHiddenDropPass,
+  vulnerableTargetPass,
+};
 console.log(JSON.stringify(report, null, 2));
-if (!crateTiePass || !vulnerableTargetPass) process.exit(1);
+if (!usefulHiddenDropPass || !saturatedHiddenDropPass || !vulnerableTargetPass) process.exit(1);

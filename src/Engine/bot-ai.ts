@@ -286,7 +286,7 @@ export function getBotDecision(player: PlayerState, context: BotContext): BotDec
     (tile) => hasAdjacentBreakable(tile, context) && canBotPlaceBombAtTile(player, tile, false, context),
     strategicSafetyWindowMs,
     context,
-    (tile) => hasAdjacentBreakableWithPrecomputedPowerUp(tile, context) ? 1 : 0,
+    (tile) => hasAdjacentBreakableWithValuablePrecomputedPowerUp(player, tile, context) ? 1 : 0,
   );
   if (breakableTarget) {
     return { direction: breakableTarget, placeBomb: false };
@@ -709,13 +709,18 @@ function hasAdjacentBreakable(tile: TileCoord, context: BotContext): boolean {
   return getAdjacentBreakables(tile, context).length > 0;
 }
 
-function hasAdjacentBreakableWithPrecomputedPowerUp(tile: TileCoord, context: BotContext): boolean {
+function hasAdjacentBreakableWithValuablePrecomputedPowerUp(
+  player: PlayerState,
+  tile: TileCoord,
+  context: BotContext,
+): boolean {
   const adjacentBreakableKeys = new Set(
     getAdjacentBreakables(tile, context).map((neighbor) => tileKey(neighbor.x, neighbor.y)),
   );
   return context.arena.powerUps.some((powerUp) => (
     !powerUp.revealed
     && !powerUp.collected
+    && getPowerUpPriorityScore(player, powerUp.type) > 0
     && adjacentBreakableKeys.has(tileKey(powerUp.tile.x, powerUp.tile.y))
   ));
 }
