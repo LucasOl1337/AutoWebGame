@@ -1,3 +1,10 @@
+## 2026-07-14 — bot-remote-over-second-shield
+- Claim/escopo antes da intervenção: alterar somente `src/Gameplay/powerups.ts`, fortalecer `tests/bot-powerup-priority-check.mjs` com cenário determinístico equidistante e atualizar os dois registros; `remote-up` deve superar minimamente a segunda carga de shield (`250`), preservando a primeira carga em `500`; commit seletivo pendente, sem push ou deploy.
+- Evidência antes: `remote-up` e a segunda `shield-up` valem ambos `250`, portanto o desempate equidistante depende da ordem de descoberta em vez de expressar a preferência solicitada.
+- Critério de sucesso: primeira shield permanece `500`, segunda shield permanece `250`, remote passa ao menor inteiro superior (`251`) e vence o cenário equidistante; teste focal, bot-survival, bot-target, shield, build e diff-check aprovados.
+- Resultado: `remote-up` passou de `250` para `251`; comentário explicita a margem mínima. O cenário equidistante colocou shield acima e remote abaixo do bot: vermelho escolheu `up` com empate em `250`; verde escolheu `down` com remote em `251`. As asserções fixam `[500,250,0]` para shield, `[251,0]` para remote e margem exata de um ponto.
+- Validações: `npm run test:bot-powerup`, `npm run test:bot-survival`, `npm run test:bot-target`, `npm run test:shield`, `npm run build` e `git diff --check -- src/Gameplay/powerups.ts tests/bot-powerup-priority-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` concluídos com código 0; diff-check emitiu somente avisos LF→CRLF. Commit seletivo pendente; sem push ou deploy.
+
 ## 2026-07-14 — lab-agent-outcome-learning
 - Antes: o modelo recebia apenas vizinhanca imediata, nao ligava decisoes aos resultados e podia repetir uma direcao que ja falhara no mesmo tile por 13–20 segundos.
 - Depois: memoria curta registra `SUCCEEDED`/`FAILED`, o prompt recebe mapa local 7x7 e power-ups, repeticoes falhas sao rejeitadas e uma recuperacao tatica publica uma alternativa em menos de um segundo enquanto o modelo pensa.

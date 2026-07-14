@@ -110,6 +110,21 @@ for (const powerUp of game.arena.powerUps) {
   powerUp.collected = true;
   powerUp.revealed = false;
 }
+game.arena.powerUps.push(
+  { type: "shield-up", tile: { x: 4, y: 3 }, revealed: true, collected: false },
+  { type: "remote-up", tile: { x: 4, y: 5 }, revealed: true, collected: false },
+);
+bot.shieldCharges = 1;
+bot.remoteLevel = 0;
+setPlayerTile(bot, { x: 4, y: 4 });
+const preferRemoteOverSecondShieldDecision = game.getBotDecision(bot);
+const prefersRemoteOverSecondShield = preferRemoteOverSecondShieldDecision.placeBomb === false
+  && preferRemoteOverSecondShieldDecision.direction === "down";
+
+for (const powerUp of game.arena.powerUps) {
+  powerUp.collected = true;
+  powerUp.revealed = false;
+}
 game.arena.powerUps.push({ type: "speed-up", tile: { x: 4, y: 3 }, revealed: true, collected: false });
 bot.speedLevel = MAX_SPEED_LEVEL;
 setPlayerTile(bot, { x: 4, y: 4 });
@@ -192,8 +207,9 @@ bot.remoteLevel = 0;
 const remoteScore = getPowerUpPriorityScore(bot, "remote-up");
 bot.remoteLevel = 1;
 const saturatedRemoteScore = getPowerUpPriorityScore(bot, "remote-up");
-const hasExpectedRemotePriority = remoteScore === 250 && saturatedRemoteScore === 0;
+const hasExpectedRemotePriority = remoteScore === 251 && saturatedRemoteScore === 0;
 const hasExpectedBombPassPriority = JSON.stringify(bombPassScores) === JSON.stringify([240, 0]);
+const prefersRemoteOverSecondShieldByMinimumMargin = remoteScore === shieldScores[1] + 1;
 const prefersRemoteOverBombPass = remoteScore > bombPassScores[0];
 const keepsRemoteBelowShortFuse = remoteScore < shortFuseScores[0];
 const preservesHigherPriorities = bombScores[0] > remoteScore
@@ -214,10 +230,12 @@ const preservesKickAsSituational = kickScores[0] < bombPassScores[0]
 const report = {
   preferSpeedDecision,
   preferFirstShieldDecision,
+  preferRemoteOverSecondShieldDecision,
   skipUselessDecision,
   saturatedAttributeDecision,
   prefersBaseMobility,
   prefersFirstShield,
+  prefersRemoteOverSecondShield,
   skipsUselessSpeedUp,
   skipsSaturatedBombForSurvival,
   bombScores,
@@ -235,6 +253,7 @@ const report = {
   saturatedRemoteScore,
   hasExpectedRemotePriority,
   hasExpectedBombPassPriority,
+  prefersRemoteOverSecondShieldByMinimumMargin,
   prefersRemoteOverBombPass,
   keepsRemoteBelowShortFuse,
   preservesHigherPriorities,
@@ -245,12 +264,13 @@ const report = {
 
 console.log(JSON.stringify(report, null, 2));
 
-if (!prefersBaseMobility || !prefersFirstShield || !skipsUselessSpeedUp
+if (!prefersBaseMobility || !prefersFirstShield || !prefersRemoteOverSecondShield
+  || !skipsUselessSpeedUp
   || !skipsSaturatedBombForSurvival || !hasDiminishingBombReturns
   || !hasDiminishingSpeedReturns || !hasDiminishingFlameReturns
   || !hasDiminishingShortFuseReturns || !hasDiminishingShieldReturns
   || !hasExpectedRemotePriority || !hasExpectedBombPassPriority
-  || !prefersRemoteOverBombPass || !keepsRemoteBelowShortFuse
+  || !prefersRemoteOverSecondShieldByMinimumMargin || !prefersRemoteOverBombPass || !keepsRemoteBelowShortFuse
   || !preservesHigherPriorities || !hasExpectedKickPriority
   || !preservesKickAsSituational) {
   process.exit(1);

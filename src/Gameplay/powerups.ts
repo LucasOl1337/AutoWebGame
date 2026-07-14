@@ -190,7 +190,8 @@ export function getPowerUpPriorityScore(player: PlayerState, type: PowerUpType):
     if (player.remoteLevel >= 1) {
       return 0;
     }
-    return 250;
+    // Supera apenas por um ponto a segunda carga de shield, preservando as prioridades maiores.
+    return 251;
   }
   if (type === "shield-up") {
     if (player.shieldCharges >= MAX_SHIELD_CHARGES) {
