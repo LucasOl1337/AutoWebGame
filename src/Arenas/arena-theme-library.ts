@@ -335,7 +335,7 @@ export const ARENA_THEME_LIBRARY: readonly ArenaThemeDefinition[] = [
       lane: "/Assets/TileMaps/themes/tidal-foundry/floor-lane.png",
       spawn: "/Assets/TileMaps/themes/tidal-foundry/floor-spawn.png",
       wall: "/Assets/TileMaps/themes/tidal-foundry/wall.png",
-      crate: "/Assets/TileMaps/themes/tidal-foundry/crate.png",
+      crate: "/Assets/TileMaps/themes/tidal-foundry/crate-mare-de-bronze.png",
     },
     palette: {
       floorBase: "#2f676b",
