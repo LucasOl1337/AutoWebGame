@@ -160,9 +160,14 @@ export class SoundManager {
     }
 
     const previousIndex = this.lastVariantIndexByKey.get(key);
-    let nextIndex = Math.floor(Math.random() * variantCount);
-    if (previousIndex !== undefined && nextIndex === previousIndex) {
-      nextIndex = (nextIndex + 1) % variantCount;
+    let nextIndex: number;
+    if (key === "powerCollect") {
+      nextIndex = previousIndex === undefined ? 0 : (previousIndex + 1) % variantCount;
+    } else {
+      nextIndex = Math.floor(Math.random() * variantCount);
+      if (previousIndex !== undefined && nextIndex === previousIndex) {
+        nextIndex = (nextIndex + 1) % variantCount;
+      }
     }
     this.lastVariantIndexByKey.set(key, nextIndex);
     return nextIndex;

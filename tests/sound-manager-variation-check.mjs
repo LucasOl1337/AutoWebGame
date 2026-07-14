@@ -96,18 +96,26 @@ const powerCollectSameFramePass = playedUrls.filter((url) => url.includes("power
 mockNowMs = 681;
 manager.playOneShot("powerCollect");
 await Promise.resolve();
+mockNowMs = 762;
+manager.playOneShot("powerCollect");
+await Promise.resolve();
+mockNowMs = 843;
+manager.playOneShot("powerCollect");
+await Promise.resolve();
 const powerCollectUrls = playedUrls.filter((url) => url.includes("powerup_collect"));
-const powerCollectRecoveryPass = powerCollectUrls.length === 2;
+const powerCollectRecoveryPass = powerCollectUrls.length === 4;
 const powerCollectVariationPass = powerCollectUrls[0]?.endsWith("powerup_collect.mp3")
-  && powerCollectUrls[1]?.endsWith("powerup_collect_bright.mp3");
+  && powerCollectUrls[1]?.endsWith("powerup_collect_bright.mp3")
+  && powerCollectUrls[2]?.endsWith("powerup_collect_crystal.mp3")
+  && powerCollectUrls[3]?.endsWith("powerup_collect.mp3");
 
-mockNowMs = 800;
+mockNowMs = 1000;
 manager.playOneShot("shieldBlock");
 manager.playOneShot("shieldBlock");
 await Promise.resolve();
 const shieldBlockSameFramePass = playedUrls.filter((url) => url.endsWith("shield_block_deflect.mp3")).length === 1;
 
-mockNowMs = 961;
+mockNowMs = 1161;
 manager.playOneShot("shieldBlock");
 await Promise.resolve();
 const shieldBlockRecoveryPass = playedUrls.filter((url) => url.endsWith("shield_block_deflect.mp3")).length === 2;
