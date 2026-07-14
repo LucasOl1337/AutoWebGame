@@ -64,6 +64,7 @@ export class SoundManager {
   private readonly sounds = new Map<SfxKey, HTMLAudioElement[]>();
   private readonly lastPlayAtMs = new Map<SfxKey, number>();
   private readonly lastVariantIndexByKey = new Map<SfxKey, number>();
+  private bombPlacePlaybackRateIndex = 0;
   private unlocked = false;
   private unlockTarget: EventTarget | null = null;
   private unlockListener: EventListener | null = null;
@@ -142,9 +143,10 @@ export class SoundManager {
     }
 
     const startIndex = this.selectVariantIndex(key, variants.length);
+    const playbackRate = key === "bombPlace" ? this.selectBombPlacePlaybackRate() : 1;
 
     const throttleMarkedAtMs = policy?.minIntervalMs !== undefined ? nowMs : null;
-    void this.playVariantWithFallback(variants, startIndex, gain).then((played) => {
+    void this.playVariantWithFallback(variants, startIndex, gain, playbackRate).then((played) => {
       if (!played && throttleMarkedAtMs !== null && this.lastPlayAtMs.get(key) === throttleMarkedAtMs) {
         this.lastPlayAtMs.delete(key);
       }
@@ -166,15 +168,24 @@ export class SoundManager {
     return nextIndex;
   }
 
+  private selectBombPlacePlaybackRate(): number {
+    const rates = [0.98, 1.02] as const;
+    const rate = rates[this.bombPlacePlaybackRateIndex];
+    this.bombPlacePlaybackRateIndex = (this.bombPlacePlaybackRateIndex + 1) % rates.length;
+    return rate;
+  }
+
   private async playVariantWithFallback(
     variants: HTMLAudioElement[],
     startIndex: number,
     gain: number,
+    playbackRate: number,
   ): Promise<boolean> {
     for (let attempt = 0; attempt < variants.length; attempt += 1) {
       const base = variants[(startIndex + attempt) % variants.length];
       const clone = base.cloneNode(true) as HTMLAudioElement;
       clone.volume = clampVolume(base.volume * gain * this.volume);
+      clone.playbackRate = playbackRate;
       clone.currentTime = 0;
 
       try {

@@ -1,10 +1,12 @@
 const playedUrls = [];
+const playedRates = [];
 let mockNowMs = 0;
 class MockAudio {
   constructor(url = "") {
     this.url = url;
     this.preload = "none";
     this.volume = 1;
+    this.playbackRate = 1;
     this.currentTime = 0;
   }
 
@@ -15,12 +17,14 @@ class MockAudio {
   cloneNode() {
     const clone = new MockAudio(this.url);
     clone.volume = this.volume;
+    clone.playbackRate = this.playbackRate;
     clone.currentTime = this.currentTime;
     return clone;
   }
 
   play() {
     playedUrls.push(this.url);
+    playedRates.push(this.playbackRate);
     return Promise.resolve();
   }
 }
@@ -78,6 +82,10 @@ mockNowMs = 446;
 manager.playOneShot("bombPlace");
 await Promise.resolve();
 const bombPlaceRecoveryPass = playedUrls.filter((url) => url.endsWith("bomb_place.mp3")).length === 2;
+const bombPlaceRates = playedRates.filter((_, index) => playedUrls[index]?.endsWith("bomb_place.mp3"));
+const bombPlacePlaybackRatePass = bombPlaceRates.length === 2
+  && bombPlaceRates[0] === 0.98
+  && bombPlaceRates[1] === 1.02;
 
 mockNowMs = 600;
 manager.playOneShot("powerCollect");
@@ -112,6 +120,7 @@ const pass = manifestPass
   && variationPass
   && bombPlaceSameFramePass
   && bombPlaceRecoveryPass
+  && bombPlacePlaybackRatePass
   && powerCollectSameFramePass
   && powerCollectRecoveryPass
   && powerCollectVariationPass
@@ -127,6 +136,8 @@ console.log(JSON.stringify({
   variationPass,
   bombPlaceSameFramePass,
   bombPlaceRecoveryPass,
+  bombPlacePlaybackRatePass,
+  bombPlaceRates,
   powerCollectSameFramePass,
   powerCollectRecoveryPass,
   powerCollectVariationPass,
