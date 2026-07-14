@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-31T00:00:00.000Z",
+  "generatedAt": "2026-07-14T18:00:00.000Z",
   "totalRequested": 4,
   "imported": 4,
   "skipped": 0,
@@ -73,7 +73,7 @@
         "run": true,
         "cast": true,
         "attack": false,
-        "death": false
+        "death": true
       },
       "order": 3
     }
