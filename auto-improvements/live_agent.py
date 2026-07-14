@@ -47,6 +47,7 @@ except ModuleNotFoundError:
 
 
 BROKER_BASE = os.environ.get("BROKER_BASE", "http://127.0.0.1:8766").rstrip("/")
+BROKER_INTERNAL_SECRET = os.environ.get("BROKER_INTERNAL_SECRET", "").strip()
 AGENT_ID = os.environ.get("AGENT_BOT_ID", "bot-default")
 PLAYER_ID = str(os.environ.get("AGENT_PLAYER_ID", "1"))
 POLL_INTERVAL = float(os.environ.get("AGENT_POLL_INTERVAL_SEC", "0.25"))
@@ -150,8 +151,10 @@ def _is_quota_or_auth_error(status: str) -> bool:
 # ---------------------------------------------------------------------------
 
 def _http_get(path: str) -> tuple[int, Any]:
+    headers = {"x-bomba-lab-secret": BROKER_INTERNAL_SECRET} if BROKER_INTERNAL_SECRET else {}
     try:
-        with urlopen(f"{BROKER_BASE}{path}", timeout=3) as resp:
+        request = Request(f"{BROKER_BASE}{path}", headers=headers, method="GET")
+        with urlopen(request, timeout=3) as resp:
             return resp.status, json.loads(resp.read().decode("utf-8"))
     except HTTPError as exc:
         try:
@@ -167,7 +170,10 @@ def _http_post(path: str, payload: dict[str, Any]) -> tuple[int, Any]:
     request = Request(
         f"{BROKER_BASE}{path}",
         data=raw,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            **({"x-bomba-lab-secret": BROKER_INTERNAL_SECRET} if BROKER_INTERNAL_SECRET else {}),
+        },
         method="POST",
     )
     try:
@@ -182,8 +188,15 @@ def _http_post(path: str, payload: dict[str, Any]) -> tuple[int, Any]:
         return 0, {"ok": False, "error": str(exc)}
 
 
-def send_heartbeat() -> None:
-    _http_post("/agent/heartbeat", {"agentId": f"live-{PLAYER_ID}", "botId": AGENT_ID})
+def send_heartbeat(status: str = "online", error: str = "") -> None:
+    _http_post("/agent/heartbeat", {
+        "agentId": f"live-{PLAYER_ID}",
+        "botId": AGENT_ID,
+        "provider": PROVIDER,
+        "model": MODEL,
+        "status": status,
+        "error": error[:240],
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -339,6 +352,20 @@ def build_prompt(state: dict[str, Any]) -> str:
     ]
     close_flame_threats = [f for f in nearby_flames if _tile_distance(me_tile, f.get("tile", {})) <= 1]
     immediate_danger = bool(close_bomb_threats or close_flame_threats)
+    navigation = state.get("navigation", {}) if isinstance(state.get("navigation"), dict) else {}
+    my_navigation = navigation.get(PLAYER_ID, {}) if isinstance(navigation.get(PLAYER_ID), dict) else {}
+    walkable_directions = [
+        str(direction) for direction in (my_navigation.get("walkableDirections") or [])
+        if str(direction) in VALID_DIRECTIONS
+    ]
+    blocked_directions = [
+        str(direction) for direction in (my_navigation.get("blockedDirections") or [])
+        if str(direction) in VALID_DIRECTIONS
+    ]
+    try:
+        stalled_for_ms = max(0, int(my_navigation.get("stalledForMs", 0) or 0))
+    except (TypeError, ValueError):
+        stalled_for_ms = 0
 
     lines = [
         f"Tick: {state.get('tick', 0)} | Phase: {state.get('phase')} | Score: {json.dumps(score)}",
@@ -350,6 +377,9 @@ def build_prompt(state: dict[str, Any]) -> str:
             f"flameThreats={len(close_flame_threats)} "
             f"immediateDanger={immediate_danger}"
         ),
+        f"Walkable directions: {', '.join(walkable_directions) if walkable_directions else 'unknown'}",
+        f"Blocked directions: {', '.join(blocked_directions) if blocked_directions else 'unknown'}",
+        f"Movement feedback: stalledForMs={stalled_for_ms} lastDelta={json.dumps(my_navigation.get('lastMovementDelta', {}))}",
         "",
         "Players:",
     ]
@@ -375,6 +405,7 @@ def build_prompt(state: dict[str, Any]) -> str:
     lines.append(
         f"\nDecide the next action for P{PLAYER_ID}. "
         "Survive immediate danger first; otherwise pressure the nearest enemy and create trap bombs when close. "
+        "Never choose a blocked direction. If stalledForMs is above 700, change to a walkable direction immediately. "
         "Be decisive and low-latency. Return JSON only."
     )
     return "\n".join(lines)
@@ -666,6 +697,7 @@ class LiveAgent:
 
     def _fire_ai_call(self, state: dict[str, Any], tick: int) -> None:
         """Start an async AI call in a daemon thread."""
+        send_heartbeat("thinking")
         prompt = build_prompt(state)
         session_id = self._codex_session_id
         codex_home = self._current_codex_home()
@@ -713,6 +745,7 @@ class LiveAgent:
             self._account_consecutive_failures = 0
             self._ai_retry_at_ms = 0
             _http_post("/decision", decision)
+            send_heartbeat("active")
             self.decisions_this_match += 1
             arrow = {"up": "^", "down": "v", "left": "<", "right": ">"}.get(
                 str(decision["direction"] or ""), "."
@@ -749,6 +782,7 @@ class LiveAgent:
         if status != self._last_model_error or retry_ms:
             log(f"model error tick={tick:>5} status={status}{rotate_suffix}{suffix}")
         self._last_model_error = status
+        send_heartbeat("error", status)
 
     def _on_match_ended(self, state: dict[str, Any]) -> None:
         players = state.get("players", [])

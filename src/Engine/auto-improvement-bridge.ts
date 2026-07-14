@@ -2,10 +2,10 @@
  * auto-improvement-bridge.ts
  *
  * Telemetry + AI decision bridge between BombaPVP and the auto-improvements
- * Python backend (game_broker.py at localhost:8766).
+ * Python backend, reached through the same-origin Cloudflare Worker proxy.
  *
- * DEV ONLY — Vite's dead-code elimination removes this from production builds
- * when all call sites are guarded with `if (import.meta.env.DEV)`.
+ * Production activation is restricted by GameApp/main.ts to a validated Lab
+ * session URL. Ordinary matches never enable this bridge.
  *
  * Usage (in game-app.ts)
  * ----------------------
@@ -30,10 +30,11 @@ import type {
 } from "../Gameplay/types";
 import type { BotDecision } from "./bot-ai";
 
-const BROKER_BASE = "http://127.0.0.1:8766";
-const TELEMETRY_THROTTLE_MS = 75;
-const DECISION_TTL_MS = 25000; // Codex takes ~20-30s per call; hold decisions until next one arrives
+const LAB_API_BASE = "/api/lab";
+const TELEMETRY_THROTTLE_MS = 500;
+const DECISION_TTL_MS = 12000;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
+const DECISION_POLL_INTERVAL_MS = 1000;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -47,6 +48,15 @@ export interface TelemetrySnapshot {
   flames: FlameState[];
   matchScore?: MatchScore;
   suddenDeath?: { active: boolean; index?: number };
+  navigation?: Record<string, LabNavigationSnapshot>;
+}
+
+export interface LabNavigationSnapshot {
+  tile: { x: number; y: number };
+  walkableDirections: Array<"up" | "down" | "left" | "right">;
+  blockedDirections: Array<"up" | "down" | "left" | "right">;
+  stalledForMs: number;
+  lastMovementDelta: { x: number; y: number };
 }
 
 export interface BrokerDecision {
@@ -57,6 +67,7 @@ export interface BrokerDecision {
   detonate: boolean;
   useSkill: boolean;
   reason?: string;
+  receivedAt?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -71,13 +82,22 @@ let _lastHealthAt = 0;
 let _telemetryCount = 0;
 
 const _decisions = new Map<string, { d: BrokerDecision; at: number }>();
+const _decisionRequests = new Map<string, { pending: boolean; at: number }>();
+const _controlledPlayerIds = new Set<string>();
 
 // ── Strict mode & per-player control ──────────────────────────────────────
 let _strictMode = true; // strict by default: bots idle when no Codex decision — no built-in AI fallback
 const _perPlayerEnabled: Record<string, boolean> = {}; // undefined = on, false = disabled
 
 // ── Decision history for side panels ──────────────────────────────────────
-interface DecisionEntry { dir: BrokerDecision["direction"]; bomb: boolean; det: boolean; reason: string; tick: number; }
+interface DecisionEntry {
+  dir: BrokerDecision["direction"];
+  bomb: boolean;
+  det: boolean;
+  reason: string;
+  tick: number;
+  receivedAt: number;
+}
 const _decisionHistory = new Map<string, DecisionEntry[]>(); // newest first
 const HISTORY_MAX = 40;
 
@@ -97,19 +117,40 @@ let _p1StatusEl: HTMLElement | null = null;
 let _p2StatusEl: HTMLElement | null = null;
 let _sidePanelStatsEl: HTMLElement | null = null;
 let _liveRefreshStarted = false;
+let _latestNavigation: Record<string, LabNavigationSnapshot> = {};
+let _latestPhase = "-";
+let _latestTick = 0;
+const _sessionModels = new Map<string, string>();
+
+interface LivePlayerPanelElements {
+  model: HTMLElement;
+  status: HTMLElement;
+  heartbeat: HTMLElement;
+  decisionAge: HTMLElement;
+  movement: HTMLElement;
+  bomb: HTMLElement;
+  reason: HTMLElement;
+  coords: HTMLElement;
+  delta: HTMLElement;
+  log: HTMLElement;
+}
+
+const _livePlayerPanels = new Map<string, LivePlayerPanelElements>();
+let _liveHudSessionEl: HTMLElement | null = null;
+let _liveHudPhaseEl: HTMLElement | null = null;
 
 // ---------------------------------------------------------------------------
 // Fetch helpers
 // ---------------------------------------------------------------------------
 
 function _get(path: string): Promise<Response> {
-  return fetch(`${BROKER_BASE}${path}`, {
+  return fetch(`${LAB_API_BASE}${path}`, {
     signal: AbortSignal.timeout(2500),
   });
 }
 
 function _post(path: string, body: unknown): Promise<Response> {
-  return fetch(`${BROKER_BASE}${path}`, {
+  return fetch(`${LAB_API_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -125,7 +166,7 @@ function _checkHealth(): void {
   const now = Date.now();
   if (now - _lastHealthAt < HEALTH_CHECK_INTERVAL_MS) return;
   _lastHealthAt = now;
-  _get("/health")
+  _get("/status")
     .then((r) => {
       _brokerOnline = r.ok;
       _updatePanelStatus();
@@ -141,6 +182,10 @@ function _checkHealth(): void {
 // ---------------------------------------------------------------------------
 
 function _fetchDecision(playerId: string): void {
+  const now = Date.now();
+  const requestState = _decisionRequests.get(playerId);
+  if (requestState?.pending || (requestState && now - requestState.at < DECISION_POLL_INTERVAL_MS)) return;
+  _decisionRequests.set(playerId, { pending: true, at: now });
   _get(`/decision/${playerId}`)
     .then((r) => r.json())
     .then((data: { ok: boolean; decision: BrokerDecision | null }) => {
@@ -149,7 +194,10 @@ function _fetchDecision(playerId: string): void {
         _updatePanelDecisions();
       }
     })
-    .catch(() => {});
+    .catch(() => {})
+    .finally(() => {
+      _decisionRequests.set(playerId, { pending: false, at: Date.now() });
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -158,9 +206,9 @@ function _fetchDecision(playerId: string): void {
 
 function _pushHistory(pid: string, d: BrokerDecision, tick: number): void {
   const hist = _decisionHistory.get(pid) ?? [];
-  // skip duplicate ticks
-  if (hist.length && hist[0].tick === tick) return;
-  hist.unshift({ dir: d.direction, bomb: d.placeBomb, det: d.detonate, reason: d.reason ?? "", tick });
+  const receivedAt = Number(d.receivedAt || Date.now());
+  if (hist.length && hist[0].receivedAt === receivedAt) return;
+  hist.unshift({ dir: d.direction, bomb: d.placeBomb, det: d.detonate, reason: d.reason ?? "", tick, receivedAt });
   if (hist.length > HISTORY_MAX) hist.length = HISTORY_MAX;
   _decisionHistory.set(pid, hist);
 }
@@ -193,19 +241,110 @@ function _renderPlayerSide(pid: string, statusEl: HTMLElement | null, logEl: HTM
 // Shared live-refresh loop (started once, updates corner + side panels)
 // ---------------------------------------------------------------------------
 
+function _friendlyModelName(model: string): string {
+  return ({
+    "cx/gpt-5.6-sol": "GPT-5.6 SOL",
+    "cx/gpt-5.6-terra": "GPT-5.6 Terra",
+    "cx/gpt-5.6-luna": "GPT-5.6 Luna",
+    "cc/claude-opus-4-8": "Claude Opus 4.8",
+    "cc/claude-sonnet-5": "Claude Sonnet 5",
+  } as Record<string, string>)[model] ?? model;
+}
+
+function _loadSessionMetadata(): void {
+  _get("/session")
+    .then((response) => response.json())
+    .then((data: {
+      ok?: boolean;
+      session?: { sessionId?: string; agents?: Array<{ slot?: string; model?: string }> } | null;
+    }) => {
+      if (!data.ok || !data.session) return;
+      _sessionModels.clear();
+      for (const agent of data.session.agents ?? []) {
+        if (agent.slot && agent.model) _sessionModels.set(String(agent.slot), agent.model);
+      }
+      for (const [pid, panel] of _livePlayerPanels) {
+        panel.model.textContent = _friendlyModelName(_sessionModels.get(pid) ?? "Modelo aguardando");
+      }
+      if (_liveHudSessionEl) {
+        _liveHudSessionEl.textContent = `Sessão ${data.session.sessionId ?? "ativa"}`;
+      }
+    })
+    .catch(() => {});
+}
+
+function _movementLabel(direction: BrokerDecision["direction"]): string {
+  return ({ up: "CIMA", down: "BAIXO", left: "ESQUERDA", right: "DIREITA" } as Record<string, string>)[direction ?? ""] ?? "PARADO";
+}
+
+function _renderLivePlayerPanel(
+  pid: string,
+  decision: BrokerDecision | undefined,
+  heartbeatAt: number | undefined,
+  agentStatus: { status?: string; error?: string } | undefined,
+): void {
+  const panel = _livePlayerPanels.get(pid);
+  if (!panel) return;
+  const now = Date.now();
+  const nav = _latestNavigation[pid];
+  const heartbeatAgeMs = heartbeatAt ? Math.max(0, now - heartbeatAt) : Number.POSITIVE_INFINITY;
+  const decisionAt = decision?.receivedAt ?? _decisions.get(pid)?.at ?? 0;
+  const decisionAgeMs = decisionAt ? Math.max(0, now - decisionAt) : Number.POSITIVE_INFINITY;
+  const stalled = Boolean(nav && nav.stalledForMs >= 1200 && decision?.direction);
+  const error = agentStatus?.status === "error";
+  const healthy = heartbeatAgeMs < 10_000 && !error;
+
+  panel.status.textContent = error ? "ERRO DO MODELO" : stalled ? "MOVIMENTO BLOQUEADO" : healthy ? "AO VIVO" : "SEM HEARTBEAT";
+  panel.status.dataset.tone = error || stalled ? "danger" : healthy ? "live" : "idle";
+  panel.heartbeat.textContent = Number.isFinite(heartbeatAgeMs) ? `${(heartbeatAgeMs / 1000).toFixed(1)}s` : "—";
+  panel.decisionAge.textContent = Number.isFinite(decisionAgeMs) ? `${(decisionAgeMs / 1000).toFixed(1)}s atrás` : "aguardando";
+  panel.movement.textContent = `${_dirArrow(decision?.direction ?? null)} ${_movementLabel(decision?.direction ?? null)}`;
+  panel.bomb.textContent = decision?.placeBomb ? "COLOCAR BOMBA" : decision?.detonate ? "DETONAR" : "NENHUMA";
+  panel.reason.textContent = error
+    ? (agentStatus?.error || "Falha não identificada").slice(0, 160)
+    : decision?.reason || "Aguardando a primeira decisão do modelo.";
+  panel.coords.textContent = nav ? `(${nav.tile.x}, ${nav.tile.y})` : "—";
+  panel.delta.textContent = nav
+    ? `(${nav.lastMovementDelta.x.toFixed(1)}, ${nav.lastMovementDelta.y.toFixed(1)}) · parado ${Math.round(nav.stalledForMs)}ms`
+    : "—";
+
+  const history = _decisionHistory.get(pid) ?? [];
+  panel.log.replaceChildren(...history.slice(0, 6).map((entry) => {
+    const row = document.createElement("li");
+    const age = Math.max(0, now - entry.receivedAt);
+    const time = document.createElement("time");
+    const movement = document.createElement("strong");
+    const reason = document.createElement("span");
+    time.textContent = `${(age / 1000).toFixed(1)}s`;
+    movement.textContent = `${_dirArrow(entry.dir)} ${_movementLabel(entry.dir)}`;
+    reason.textContent = entry.reason || "Sem justificativa";
+    row.append(time, movement, reason);
+    return row;
+  }));
+  if (!history.length) {
+    const empty = document.createElement("li");
+    empty.className = "lab-live-feed__empty";
+    empty.textContent = "Aguardando decisões reais do 9Router…";
+    panel.log.appendChild(empty);
+  }
+}
+
 function _startLiveRefresh(): void {
   if (_liveRefreshStarted) return;
   _liveRefreshStarted = true;
+  _loadSessionMetadata();
 
-  setInterval(() => {
+  const refresh = () => {
     _get("/report")
       .then((r) => r.json())
       .then((data: {
         ok: boolean;
         report?: {
-          decisions?: Record<string, { direction?: string | null; placeBomb?: boolean; detonate?: boolean; reason?: string }>;
-          phase?: string; tick?: number;
+          decisions?: Record<string, BrokerDecision>;
+          phase?: string;
+          tick?: number;
           agentHeartbeats?: Record<string, number>;
+          agentStatuses?: Record<string, { status?: string; error?: string }>;
           matchCount?: number;
         };
       }) => {
@@ -214,57 +353,51 @@ function _startLiveRefresh(): void {
         const report = data.report;
         const decisions = report.decisions ?? {};
         const heartbeats = report.agentHeartbeats ?? {};
+        const statuses = report.agentStatuses ?? {};
         const tick = report.tick ?? 0;
+        _latestTick = tick;
+        _latestPhase = report.phase ?? "-";
 
-        // Inject into decision cache + history
-        const now = Date.now();
         for (const [pid, d] of Object.entries(decisions)) {
+          const receivedAt = Number(d.receivedAt || Date.now());
           const bd: BrokerDecision = {
             playerId: pid,
-            direction: (d.direction as BrokerDecision["direction"]) ?? null,
+            direction: d.direction ?? null,
             placeBomb: !!d.placeBomb,
             detonate: !!d.detonate,
-            useSkill: false,
+            useSkill: !!d.useSkill,
             reason: d.reason,
+            receivedAt,
           };
-          _decisions.set(pid, { d: bd, at: now });
+          _decisions.set(pid, { d: bd, at: receivedAt });
           _pushHistory(pid, bd, tick);
         }
 
-        // Update corner panel decisions area
         if (_decisionsEl) {
-          const lines: string[] = [];
-          for (const [pid, d] of Object.entries(decisions)) {
-            const arrow = _dirArrow(d.direction ?? null);
-            const bomb = d.placeBomb ? "💣" : "  ";
-            const det = d.detonate ? "💥" : "  ";
-            lines.push(`P${pid}: ${arrow} ${bomb}${det} ${(d.reason ?? "").slice(0, 55)}`);
-          }
-          for (const [agentId, ts] of Object.entries(heartbeats)) {
-            const age = ((now - (ts as number)) / 1000).toFixed(1);
-            lines.push(`🤖 ${agentId}: ${parseFloat(age) < 10 ? "✅" : "⚠️"} ${age}s ago`);
-          }
-          if (report.phase) lines.push(`phase=${report.phase} tick=${tick}`);
-          _decisionsEl.textContent = lines.length ? lines.join("\n") : "(no decisions yet)";
+          _decisionsEl.textContent = Object.entries(decisions).map(([pid, decision]) => (
+            `P${pid}: ${_dirArrow(decision.direction)} ${(decision.reason ?? "").slice(0, 55)}`
+          )).join("\n") || "(no decisions yet)";
         }
 
-        // Update side panels for the actual live Codex-controlled slots.
+        for (const pid of _controlledPlayerIds.size ? _controlledPlayerIds : new Set(["1", "2"])) {
+          _renderLivePlayerPanel(pid, decisions[pid], heartbeats[`live-${pid}`], statuses[`live-${pid}`]);
+        }
         _renderPlayerSide("1", _p1StatusEl, _p1LogEl, tick);
         _renderPlayerSide("2", _p2StatusEl, _p2LogEl, tick);
-
-        // Update stats line in right panel
-        if (_sidePanelStatsEl) {
-          const mc = report.matchCount ?? "—";
-          _sidePanelStatsEl.textContent = `matches: ${mc}`;
-        }
-
+        if (_sidePanelStatsEl) _sidePanelStatsEl.textContent = `matches: ${report.matchCount ?? "—"}`;
+        if (_liveHudSessionEl) _liveHudSessionEl.dataset.online = "true";
+        if (_liveHudPhaseEl) _liveHudPhaseEl.textContent = `${_latestPhase} · tick ${_latestTick}`;
         _updatePanelStatus();
       })
       .catch(() => {
         _brokerOnline = false;
+        if (_liveHudSessionEl) _liveHudSessionEl.dataset.online = "false";
         _updatePanelStatus();
       });
-  }, 2000);
+  };
+
+  refresh();
+  setInterval(refresh, 1000);
 }
 
 // ---------------------------------------------------------------------------
@@ -561,6 +694,78 @@ function _makePerPlayerToggle(pid: string, label: string): HTMLButtonElement {
   return b;
 }
 
+function mountLiveLabHud(container: HTMLElement): void {
+  if (container.querySelector("#lab-live-hud")) return;
+
+  const hud = document.createElement("aside");
+  hud.id = "lab-live-hud";
+  hud.className = "lab-live-hud";
+  hud.setAttribute("aria-label", "Monitor ao vivo do duelo de IAs");
+  hud.innerHTML = `
+    <header class="lab-live-hud__session">
+      <strong>Duelo de IAs</strong>
+      <span data-session data-online="false">Conectando à sessão…</span>
+      <span data-phase>aguardando telemetria</span>
+    </header>
+    <div class="lab-live-hud__players">
+      ${["1", "2"].map((pid) => `
+        <section class="lab-live-player" data-player="${pid}" aria-live="polite">
+          <header class="lab-live-player__header">
+            <span class="lab-live-player__slot">P${pid}</span>
+            <div>
+              <small>MODELO CONTROLADOR</small>
+              <strong data-model>Modelo aguardando</strong>
+            </div>
+            <span class="lab-live-player__status" data-status data-tone="idle">SEM HEARTBEAT</span>
+          </header>
+          <dl class="lab-live-player__metrics">
+            <div><dt>Heartbeat</dt><dd data-heartbeat>—</dd></div>
+            <div><dt>Última decisão</dt><dd data-decision-age>aguardando</dd></div>
+            <div><dt>Movimento</dt><dd data-movement>· PARADO</dd></div>
+            <div><dt>Ação de bomba</dt><dd data-bomb>NENHUMA</dd></div>
+            <div class="lab-live-player__reason"><dt>Motivo da decisão</dt><dd data-reason>Aguardando a primeira decisão do modelo.</dd></div>
+            <div><dt>Coordenadas</dt><dd data-coords>—</dd></div>
+            <div><dt>Delta de movimento</dt><dd data-delta>—</dd></div>
+          </dl>
+          <div class="lab-live-feed">
+            <h3>Feed de decisões <small>recente primeiro</small></h3>
+            <ol data-log></ol>
+          </div>
+        </section>
+      `).join("")}
+    </div>
+  `;
+
+  container.appendChild(hud);
+  _liveHudSessionEl = hud.querySelector<HTMLElement>("[data-session]");
+  _liveHudPhaseEl = hud.querySelector<HTMLElement>("[data-phase]");
+
+  for (const pid of ["1", "2"]) {
+    const player = hud.querySelector<HTMLElement>(`[data-player="${pid}"]`);
+    if (!player) continue;
+    const required = <T extends HTMLElement>(selector: string): T => {
+      const element = player.querySelector<T>(selector);
+      if (!element) throw new Error(`Lab HUD element missing: ${selector}`);
+      return element;
+    };
+    _livePlayerPanels.set(pid, {
+      model: required("[data-model]"),
+      status: required("[data-status]"),
+      heartbeat: required("[data-heartbeat]"),
+      decisionAge: required("[data-decision-age]"),
+      movement: required("[data-movement]"),
+      bomb: required("[data-bomb]"),
+      reason: required("[data-reason]"),
+      coords: required("[data-coords]"),
+      delta: required("[data-delta]"),
+      log: required("[data-log]"),
+    });
+  }
+
+  _loadSessionMetadata();
+  _startLiveRefresh();
+}
+
 export function mountSidePanels(container: HTMLElement): void {
   if (_p1LogEl) return; // already mounted
 
@@ -708,6 +913,13 @@ export const AutoImprovementBridge = {
     _enabled = false;
   },
 
+  setControlledPlayerIds(playerIds: Array<number | string>): void {
+    _controlledPlayerIds.clear();
+    for (const playerId of playerIds) {
+      _controlledPlayerIds.add(String(playerId));
+    }
+  },
+
   get isEnabled(): boolean {
     return _enabled;
   },
@@ -725,6 +937,7 @@ export const AutoImprovementBridge = {
    */
   pushTelemetry(snapshot: TelemetrySnapshot): void {
     if (!_enabled) return;
+    _latestNavigation = snapshot.navigation ?? {};
     _checkHealth();
     const now = Date.now();
     if (now - _lastTelemetryAt < TELEMETRY_THROTTLE_MS) return;
@@ -734,7 +947,10 @@ export const AutoImprovementBridge = {
     _post("/telemetry", snapshot).catch(() => {});
 
     for (const p of snapshot.players) {
-      if (p.active && p.alive) _fetchDecision(String(p.id));
+      const playerId = String(p.id);
+      if (p.active && p.alive && (_controlledPlayerIds.size === 0 || _controlledPlayerIds.has(playerId))) {
+        _fetchDecision(playerId);
+      }
     }
 
     _updatePanelDecisions();
@@ -755,6 +971,14 @@ export const AutoImprovementBridge = {
       _decisions.delete(pid);
       return null;
     }
+    const navigation = _latestNavigation[pid];
+    if (
+      entry.d.direction
+      && navigation?.stalledForMs >= 700
+      && navigation.blockedDirections.includes(entry.d.direction)
+    ) {
+      return null;
+    }
     return entry.d;
   },
 
@@ -766,8 +990,8 @@ export const AutoImprovementBridge = {
     return _perPlayerEnabled[String(playerId)] !== false;
   },
 
-  /** Mount the side panels (left = P2 log, right = P3 log + controls). */
-  mountSidePanels,
+  /** Mount the live Lab HUD (left = P1, right = P2). */
+  mountSidePanels: mountLiveLabHud,
 
   /** Convert a BrokerDecision to the BotDecision format used by bot-ai.ts. */
   toBotDecision(d: BrokerDecision): BotDecision {

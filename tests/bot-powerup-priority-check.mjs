@@ -161,10 +161,12 @@ const flameScores = Array.from({ length: MAX_RANGE }, (_, index) => {
   return getPowerUpPriorityScore(bot, "flame-up");
 });
 const hasDiminishingFlameReturns = flameScores[0] === 460
+  && flameScores[1] === 340
+  && flameScores[2] === 300
   && flameScores[MAX_RANGE - 1] === 0
   && flameScores.slice(1, -1).every((score, index, scores) => index === 0 || score < scores[index - 1])
-  && flameScores.slice(2, -1).every((score, index) => {
-    const previousBonus = flameScores[index + 1] - 260;
+  && flameScores.slice(3, -1).every((score, index) => {
+    const previousBonus = flameScores[index + 2] - 260;
     return score - 260 === previousBonus / 2;
   });
 

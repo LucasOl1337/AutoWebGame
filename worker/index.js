@@ -86,6 +86,18 @@ const ACTIVE_ARENA_ID_KEY = "arena:active-id";
 const ARENA_KEY_PREFIX = "arena:def:";
 const HASHED_VITE_ASSET_RE = /^\/Assets\/[^/?#]+-[A-Za-z0-9_-]{8,}\.(?:js|css)$/;
 const API_ADMIN_ARENA_ROUTE_RE = /^\/api\/admin\/arenas\/([^/]+)(?:\/(activate|validate))?$/;
+const API_LAB_DECISION_ROUTE_RE = /^\/api\/lab\/decision\/([1-4])$/;
+const LAB_PROXY_ROUTES = new Map([
+  ["/api/lab/models", { methods: new Set(["GET"]), targetPath: "/lab/models" }],
+  ["/api/lab/session", { methods: new Set(["GET", "POST"]), targetPath: "/lab/session" }],
+  ["/api/lab/status", { methods: new Set(["GET"]), targetPath: "/health" }],
+  ["/api/lab/telemetry", { methods: new Set(["POST"]), targetPath: "/telemetry" }],
+  ["/api/lab/report", { methods: new Set(["GET"]), targetPath: "/report" }],
+]);
+const LAB_PROXY_TIMEOUT_MS = 8000;
+const LAB_RATE_WINDOW_MS = 60_000;
+const LAB_RATE_LIMIT = 360;
+const labRateBuckets = new Map();
 const SHORT_STATIC_CACHE_CONTROL = "public, max-age=86400, stale-while-revalidate=604800";
 const IMMUTABLE_STATIC_CACHE_CONTROL = "public, max-age=31536000, immutable";
 const PUBLIC_API_ROUTES = new Map([
@@ -126,7 +138,10 @@ function resolveGameDocumentRequest(request, pathname) {
   }
 
   const gameUrl = new URL(request.url);
-  gameUrl.pathname = "/game.html";
+  // Cloudflare Assets canonicalizes /game.html to /game with a redirect. Fetch
+  // the canonical asset path internally so the browser keeps the requested
+  // /game/play, /game/training, or /game/lab URL and its Lab query parameters.
+  gameUrl.pathname = "/game";
   return new Request(gameUrl, request);
 }
 
@@ -153,6 +168,94 @@ function resolvePublicApiRoute(pathname, method) {
     methodAllowed: action ? method === "POST" : method === "GET" || method === "PUT",
     targetPath: `/internal/admin/arenas/${arenaId}${suffix}`,
   };
+}
+
+function resolveLabProxyRoute(pathname, method) {
+  const staticRoute = LAB_PROXY_ROUTES.get(pathname);
+  if (staticRoute) {
+    return {
+      matched: true,
+      methodAllowed: staticRoute.methods.has(method),
+      targetPath: staticRoute.targetPath,
+    };
+  }
+
+  const decisionMatch = API_LAB_DECISION_ROUTE_RE.exec(pathname);
+  if (!decisionMatch) return pathname.startsWith("/api/lab/")
+    ? { matched: true, methodAllowed: false, targetPath: null }
+    : null;
+  return {
+    matched: true,
+    methodAllowed: method === "GET",
+    targetPath: `/decision/${decisionMatch[1]}`,
+  };
+}
+
+function getLabClientKey(request) {
+  return request.headers.get("CF-Connecting-IP") || "unknown";
+}
+
+function consumeLabRateLimit(request) {
+  const now = Date.now();
+  const key = getLabClientKey(request);
+  const bucket = labRateBuckets.get(key);
+  if (!bucket || now - bucket.startedAt >= LAB_RATE_WINDOW_MS) {
+    labRateBuckets.set(key, { startedAt: now, count: 1 });
+    return true;
+  }
+  bucket.count += 1;
+  return bucket.count <= LAB_RATE_LIMIT;
+}
+
+async function proxyLabRequest(request, env, route) {
+  if (!env.LAB_BROKER_URL || !env.LAB_BROKER_SECRET) {
+    return Response.json({ ok: false, error: "lab_backend_not_configured" }, { status: 503 });
+  }
+  if (!consumeLabRateLimit(request)) {
+    return Response.json({ ok: false, error: "rate_limited" }, {
+      status: 429,
+      headers: { "cache-control": "no-store", "retry-after": "60" },
+    });
+  }
+
+  const incomingUrl = new URL(request.url);
+  const targetUrl = new URL(route.targetPath, `${String(env.LAB_BROKER_URL).replace(/\/+$/, "")}/`);
+  targetUrl.search = incomingUrl.search;
+  const headers = new Headers();
+  const contentType = request.headers.get("content-type");
+  if (contentType) headers.set("content-type", contentType);
+  headers.set("x-bomba-lab-secret", env.LAB_BROKER_SECRET);
+
+  try {
+    const response = await fetch(targetUrl, {
+      method: request.method,
+      headers,
+      body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
+      signal: AbortSignal.timeout(LAB_PROXY_TIMEOUT_MS),
+      redirect: "manual",
+    });
+    if (response.status >= 300 && response.status < 400) {
+      return Response.json({ ok: false, error: "lab_backend_redirect_rejected" }, {
+        status: 502,
+        headers: { "cache-control": "no-store" },
+      });
+    }
+    const responseHeaders = new Headers({
+      "cache-control": "no-store",
+      "content-type": response.headers.get("content-type") || "application/json; charset=utf-8",
+    });
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: responseHeaders,
+    });
+  } catch (error) {
+    console.error("Lab broker proxy failed", error instanceof Error ? error.message : "unknown_error");
+    return Response.json({ ok: false, error: "lab_backend_unavailable" }, {
+      status: 502,
+      headers: { "cache-control": "no-store" },
+    });
+  }
 }
 
 /**
@@ -207,6 +310,17 @@ export default {
 
     if (url.pathname === "/health") {
       return Response.json({ ok: true });
+    }
+
+    const labRoute = resolveLabProxyRoute(url.pathname, request.method);
+    if (labRoute) {
+      if (!labRoute.methodAllowed || !labRoute.targetPath) {
+        return Response.json({ ok: false, error: "lab_route_not_allowed" }, {
+          status: 405,
+          headers: { "cache-control": "no-store" },
+        });
+      }
+      return proxyLabRequest(request, env, labRoute);
     }
 
     const apiRoute = resolvePublicApiRoute(url.pathname, request.method);
@@ -370,6 +484,13 @@ export class GlobalLobby extends DurableObject {
 
     if (url.pathname === "/internal/admin/logout") {
       return this.handleAdminLogout(request);
+    }
+
+    if (url.pathname === "/internal/lab/authorize") {
+      const auth = await authorizeAdminRequest(request, this.env, this.ctx.storage);
+      return auth.ok
+        ? Response.json({ ok: true }, { headers: { "cache-control": "no-store" } })
+        : auth.response;
     }
 
     if (url.pathname === "/internal/admin/summary") {

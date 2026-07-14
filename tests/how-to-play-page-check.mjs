@@ -19,6 +19,7 @@ assert.match(pageHtml, /href="\/game"/);
 assert.match(pageHtml, /src="\/Assets\/UiLayouts\/how-to-play-arena\.png"/);
 assert.match(pageHtml, /<kbd>W<\/kbd><kbd>A<\/kbd><kbd>S<\/kbd><kbd>D<\/kbd>/);
 assert.match(pageHtml, /<h3 class="accent-gold">Jogue a rodada<\/h3>\s*<p>Vence a rodada o ultimo bomber vivo\./);
+assert.match(pageHtml, /Na partida classica, vence o primeiro jogador a 2 vitorias\./);
 assert.match(pageHtml, /Double KO e ninguem ganha ponto\./);
 assert.match(pageHtml, /Quando o anel ficar vermelho, a explosao esta a instantes/);
 assert.match(pageHtml, /saia da linha reta imediatamente/);

@@ -69,6 +69,7 @@ globalThis.document = {
 
 globalThis.window = {
   document: globalThis.document,
+  location: { search: "" },
   innerWidth: 1280,
   innerHeight: 720,
   addEventListener: (type, handler) => on(windowListeners, type, handler),
@@ -141,6 +142,21 @@ const onlineBeforeBlur = readState();
 emitWindow("blur");
 const onlineAfterBlur = readState();
 
+window.location.search = "?airi=1";
+document.visibilityState = "visible";
+const airiGame = new GameApp(root, assets);
+airiGame.start();
+airiGame.startServerAuthoritativeMatch([1, 2], { 1: 0, 2: 1, 3: 0, 4: 1 }, {
+  arena: createDefaultArenaDefinition(),
+  botPlayerIds: [2],
+});
+window.advanceTime(34);
+const airiBeforeBlur = readState();
+emitWindow("blur");
+const airiAfterBlur = readState();
+window.advanceTime(1_000);
+const airiAfterBlurAdvance = readState();
+
 const localPass = beforeBlur.mode === "match"
   && beforeBlur.match.paused === false
   && afterBlur.match.paused === true
@@ -157,6 +173,12 @@ const onlinePass = onlineBeforeBlur.mode === "match"
   && onlineBeforeBlur.match.paused === false
   && onlineAfterBlur.match.paused === false
   && onlineAfterBlur.match.autoPausedForHiddenTab === false;
+
+const airiPass = airiBeforeBlur.mode === "match"
+  && airiBeforeBlur.match.paused === false
+  && airiAfterBlur.match.paused === false
+  && airiAfterBlur.match.autoPausedForHiddenTab === false
+  && airiAfterBlurAdvance.match.remainingMs < airiAfterBlur.match.remainingMs;
 
 const report = {
   local: {
@@ -193,7 +215,13 @@ const report = {
     afterBlurPaused: onlineAfterBlur.match.paused,
     autoPausedForHiddenTab: onlineAfterBlur.match.autoPausedForHiddenTab,
   },
-  pass: localPass && onlinePass,
+  airi: {
+    beforeBlurPaused: airiBeforeBlur.match.paused,
+    afterBlurPaused: airiAfterBlur.match.paused,
+    autoPausedForHiddenTab: airiAfterBlur.match.autoPausedForHiddenTab,
+    remainingMsAdvanced: airiAfterBlurAdvance.match.remainingMs < airiAfterBlur.match.remainingMs,
+  },
+  pass: localPass && onlinePass && airiPass,
 };
 
 console.log(JSON.stringify(report, null, 2));

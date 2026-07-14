@@ -1,6 +1,6 @@
 import type { FrontendRoute } from "./frontend-router";
 
-export type LauncherMode = "play" | "training";
+export type LauncherMode = "play" | "training" | "lab";
 
 export interface FrontendState {
   route: FrontendRoute;
@@ -15,7 +15,11 @@ export class FrontendStore {
   private readonly listeners = new Set<Listener>();
 
   constructor(initialRoute: FrontendRoute) {
-    this.state = { route: initialRoute, selectedMode: "play", bootingGame: false };
+    this.state = {
+      route: initialRoute,
+      selectedMode: initialRoute === "launcher" ? "play" : (initialRoute as LauncherMode),
+      bootingGame: false,
+    };
   }
 
   getSnapshot(): Readonly<FrontendState> {
@@ -24,11 +28,16 @@ export class FrontendStore {
 
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   setRoute(route: FrontendRoute): void {
-    this.update({ route, selectedMode: route === "launcher" ? this.state.selectedMode : route });
+    this.update({
+      route,
+      selectedMode: route === "launcher" ? this.state.selectedMode : (route as LauncherMode),
+    });
   }
 
   selectMode(selectedMode: LauncherMode): void {
@@ -41,7 +50,9 @@ export class FrontendStore {
 
   private update(patch: Partial<FrontendState>): void {
     const next = { ...this.state, ...patch };
-    if (JSON.stringify(next) === JSON.stringify(this.state)) return;
+    if (JSON.stringify(next) === JSON.stringify(this.state)) {
+      return;
+    }
     this.state = next;
     this.listeners.forEach((listener) => listener(this.state));
   }

@@ -1,7 +1,8 @@
 import "./main.css";
+import "./lab-live-hud.css";
 import { fetchActiveArenaDefinition } from "../Arenas/arena";
 import { applyArenaThemeSelection } from "../Arenas/arena-theme-selection";
-import { LauncherShell } from "./launcher-shell";
+import { LauncherShell, LabShell } from "./launcher-shell";
 import { resolveFrontendRoute, type FrontendRoute } from "./frontend-router";
 import { FrontendStore } from "./frontend-store";
 
@@ -106,10 +107,12 @@ async function bootstrapGame(rootElement: HTMLDivElement, route: FrontendRoute):
   const [
     { loadGameAssets },
     { GameApp },
+    { installAiriGameBridge },
     { OnlineSessionClient },
   ] = await Promise.all([
     import("../Engine/assets"),
     import("../Engine/game-app"),
+    import("../Engine/airi-bridge"),
     import("../NetCode/session-client"),
   ]);
   const assets = await loadGameAssets(activeArena.themeId);
@@ -118,30 +121,40 @@ async function bootstrapGame(rootElement: HTMLDivElement, route: FrontendRoute):
   rootElement.setAttribute("aria-busy", "false");
   const game = new GameApp(rootElement, assets, activeArena);
   new OnlineSessionClient(rootElement, game, assets.characterRoster ?? [], activeArena.themeId);
+  installAiriGameBridge(game);
+
+  const params = new URLSearchParams(window.location.search);
+  const autobotParam = params.get("autobot");
+  const codexBotParam = params.get("codexbot");
+  const labSessionParam = params.get("labSession");
+  const validLabSession = /^lab-[a-f0-9]{10}$/.test(labSessionParam ?? "");
+  const livePlayerIds = validLabSession && codexBotParam
+    ? codexBotParam
+      .split(",")
+      .map((value) => parseInt(value.trim(), 10))
+      .filter((value, index, values) => (
+        Number.isInteger(value) && value >= 1 && value <= 4 && values.indexOf(value) === index
+      )) as Array<1 | 2 | 3 | 4>
+    : [];
+
+  if (livePlayerIds.length > 0) {
+    game.setLiveBridgePlayers(livePlayerIds);
+  }
   game.start();
 
-  if (route === "training") {
+  // Training alone starts a simple local bot match. Lab sessions open training
+  // with autobot/codexbot and must not be overridden by the default 1-bot start.
+  if (route === "training" && autobotParam === null && codexBotParam === null) {
     game.startOfflineBotMatch(1, "classic");
   }
 
   if (import.meta.env.DEV) {
     (window as Window & { __autobot?: typeof game }).__autobot = game;
-    const params = new URLSearchParams(window.location.search);
-    const autobotParam = params.get("autobot");
-    const codexBotParam = params.get("codexbot");
+  }
 
-    if (codexBotParam) {
-      const playerIds = codexBotParam
-        .split(",")
-        .map((value) => parseInt(value.trim(), 10))
-        .filter((value) => Number.isInteger(value) && value >= 1 && value <= 4) as Array<1 | 2 | 3 | 4>;
-      game.setLiveBridgePlayers(playerIds);
-    }
-
-    if (autobotParam !== null) {
-      const botFill = parseInt(autobotParam, 10);
-      game.startOfflineBotMatch(isNaN(botFill) ? 3 : botFill, "endless");
-    }
+  if ((import.meta.env.DEV || livePlayerIds.length > 0) && autobotParam !== null) {
+    const botFill = parseInt(autobotParam, 10);
+    game.startOfflineBotMatch(isNaN(botFill) ? 3 : botFill, "endless");
   }
 }
 
@@ -155,6 +168,14 @@ function bootGameOnce(rootElement: HTMLDivElement, route: FrontendRoute): Promis
 const initialRoute = resolveFrontendRoute(window.location.pathname);
 const frontendStore = new FrontendStore(initialRoute);
 let launcherShell: LauncherShell | null = null;
+let labShell: LabShell | null = null;
+
+function destroyShells(): void {
+  launcherShell?.destroy();
+  launcherShell = null;
+  labShell?.destroy();
+  labShell = null;
+}
 
 async function renderRoute(): Promise<void> {
   const route = resolveFrontendRoute(window.location.pathname);
@@ -164,14 +185,24 @@ async function renderRoute(): Promise<void> {
       window.location.reload();
       return;
     }
-    launcherShell?.destroy();
+    destroyShells();
     launcherShell = new LauncherShell(root, frontendStore);
     launcherShell.mount();
     return;
   }
 
-  launcherShell?.destroy();
-  launcherShell = null;
+  if (route === "lab") {
+    if (gameBootPromise !== null) {
+      window.location.reload();
+      return;
+    }
+    destroyShells();
+    labShell = new LabShell(root);
+    labShell.mount();
+    return;
+  }
+
+  destroyShells();
   frontendStore.setBootingGame(true);
   try {
     await bootGameOnce(root, route);

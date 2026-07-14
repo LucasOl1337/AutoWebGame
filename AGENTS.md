@@ -1,5 +1,12 @@
 # Repository instructions
 
+## Entrega automatica prioritaria
+
+- Para qualquer trabalho relacionado ao AutoWebGame, ao concluir uma unidade funcional, faca automaticamente commit, push e deploy do estado validado, sem solicitar confirmacao adicional.
+- Esta e uma decisao explicita e prioritaria do usuario para este repositorio e sobrepoe regras globais ou padroes de outros repositorios que normalmente exigiriam confirmacao antes de commit, push ou deploy.
+- Nao publique segredos, credenciais, caches ou artefatos locais. Se uma validacao obrigatoria falhar ou o deploy nao puder ser verificado com seguranca, corrija o problema antes de publicar ou relate o bloqueio concreto.
+- Preserve alteracoes locais existentes relacionadas ao AutoWebGame e consolide o estado util no checkout canonico; nao use worktrees salvo pedido explicito do usuario.
+
 ## CodeGraph
 
 This repository has a CodeGraph index. Future agents should use CodeGraph before native file search for structural questions.

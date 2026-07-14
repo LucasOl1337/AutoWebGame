@@ -413,6 +413,7 @@ export class GameApp {
   private onlineSession: OnlineSessionBridge | null = null;
   private activePlayerIds: PlayerId[] = [1, 2];
   private onlineLocalPlayerId: PlayerId = 1;
+  private externalInputPlayers: Record<PlayerId, boolean> = createBooleanPlayerRecord(false);
   private customPlayerLabels: Record<PlayerId, string | null> = createPlayerRecord(() => null);
   private onlineInputs: Record<PlayerId, OnlineInputState> = createPlayerRecord(() => createNeutralOnlineInput());
   private onlineSnapshotCooldownMs = 0;
@@ -454,10 +455,20 @@ export class GameApp {
   private endlessKills: MatchScore = createNumberPlayerRecord(0);
   private endlessRoundWins: MatchScore = createNumberPlayerRecord(0);
   private readonly automationMode = typeof navigator !== "undefined" ? navigator.webdriver : false;
+  /** AIRI embeds the game in a sandboxed iframe, which can receive blur/hidden
+   * events even while the widget is visibly open. Its bridge advances the
+   * authoritative simulation explicitly, so the normal local-tab safety pause
+   * must not stop an AIRI-controlled match.
+   */
+  private readonly airiEmbedMode = typeof window !== "undefined"
+    && typeof window.location?.search === "string"
+    && new URLSearchParams(window.location.search).get("airi") === "1";
   private automationControlledPlayer: PlayerId = 2;
   private localBotFill = 0;
   private botControlledPlayers: Record<PlayerId, boolean> = createBooleanPlayerRecord(false);
   private liveBridgePlayers: Record<PlayerId, boolean> = createBooleanPlayerRecord(false);
+  private labLastTelemetryPositions: Record<PlayerId, PixelCoord | null> = createPlayerRecord(() => null);
+  private labLastMovementAtMs: Record<PlayerId, number> = createNumberPlayerRecord(0);
   private botEnabled = false;
   private botBombCooldownMs = 0;
   private aiBridgeTick = 0;
@@ -1116,10 +1127,16 @@ export class GameApp {
     this.soundManager.setMuted(this.readStorageItem(storage, AUDIO_MUTED_STORAGE_KEY) === "true");
     void this.soundManager.loadSounds(SFX_MANIFEST);
     this.root.appendChild(this.canvas);
-    if (import.meta.env?.DEV) {
+    const liveLabSession = ([1, 2, 3, 4] as PlayerId[])
+      .some((playerId) => this.liveBridgePlayers[playerId]);
+    if (import.meta.env?.DEV || liveLabSession) {
       AutoImprovementBridge.enable();
-      AutoImprovementBridge.mountDevPanel(this.root.ownerDocument?.body ?? document.body);
-      AutoImprovementBridge.mountSidePanels(this.root.ownerDocument?.body ?? document.body);
+      if (liveLabSession) {
+        AutoImprovementBridge.mountSidePanels(this.root.ownerDocument?.body ?? document.body);
+      }
+      if (import.meta.env?.DEV) {
+        AutoImprovementBridge.mountDevPanel(this.root.ownerDocument?.body ?? document.body);
+      }
     }
     this.syncCanvasDisplaySize();
     this.mode = "menu";
@@ -1200,6 +1217,7 @@ export class GameApp {
   public setLiveBridgePlayers(playerIds: PlayerId[]): void {
     const selected = new Set(playerIds);
     this.liveBridgePlayers = createPlayerRecord((playerId) => selected.has(playerId));
+    AutoImprovementBridge.setControlledPlayerIds(playerIds);
   }
 
   public setOfflinePreferredCharacter(characterIndex: number): void {
@@ -1280,12 +1298,24 @@ export class GameApp {
   };
 
   private pauseLocalMatchForHiddenTab(): void {
-    if (this.onlineSession || this.mode !== "match" || this.roundOutcome || this.paused) {
+    if (this.airiEmbedMode || this.onlineSession || this.mode !== "match" || this.roundOutcome || this.paused) {
       return;
     }
     this.paused = true;
     this.autoPausedForHiddenTab = true;
     this.input.clearPresses();
+    this.render();
+  }
+
+  /** Resume only a pause caused by the browser hiding or blurring the tab.
+   * Manual Escape pauses remain respected by the external controller.
+   */
+  public resumeAiriMatch(): void {
+    if (this.mode !== "match" || !this.autoPausedForHiddenTab) {
+      return;
+    }
+    this.paused = false;
+    this.autoPausedForHiddenTab = false;
     this.render();
   }
 
@@ -1319,7 +1349,7 @@ export class GameApp {
   };
 
   private captureOnlineLocalInput(): void {
-    if (!this.onlineSession) {
+    if (!this.onlineSession || this.externalInputPlayers[this.onlineLocalPlayerId]) {
       return;
     }
     const localBindings = KEY_BINDINGS[1];
@@ -1498,6 +1528,7 @@ export class GameApp {
     this.arena = createArena(this.baseArenaDefinition);
     this.activePlayerIds = normalizeActivePlayerIds(activePlayerIds);
     this.onlineLocalPlayerId = 1;
+    this.externalInputPlayers = createBooleanPlayerRecord(false);
     this.onlineInputs = createPlayerRecord(() => createNeutralOnlineInput());
     this.onlineNextInputSeq = 0;
     this.onlinePendingInputs = [];
@@ -1516,6 +1547,7 @@ export class GameApp {
   }
 
   public setServerPlayerInput(playerId: PlayerId, input: OnlineInputState): void {
+    this.externalInputPlayers[playerId] = true;
     this.onlineInputs[playerId] = mergeLatchedOnlineInput(this.onlineInputs[playerId], input);
   }
 
@@ -1798,7 +1830,7 @@ export class GameApp {
       this.cachedDangerMap = null;
     }
 
-    if (import.meta.env?.DEV) {
+    if (AutoImprovementBridge.isEnabled) {
       this.aiBridgeTick++;
       AutoImprovementBridge.pushTelemetry({
         tick: this.aiBridgeTick,
@@ -1811,6 +1843,7 @@ export class GameApp {
           active: this.suddenDeathActive,
           index: this.suddenDeathIndex,
         },
+        navigation: this.getLabNavigationSnapshot(),
       });
     }
   }
@@ -2293,7 +2326,7 @@ export class GameApp {
   }
 
   private getBotDecision(player: PlayerState): BotDecision {
-    if (import.meta.env?.DEV && AutoImprovementBridge.isEnabled && this.isLiveBridgeControlled(player.id)) {
+    if (AutoImprovementBridge.isEnabled && this.isLiveBridgeControlled(player.id)) {
       // Per-player AI explicitly disabled → stand completely idle (no built-in AI)
       if (!AutoImprovementBridge.isPlayerEnabled(player.id)) {
         return botAI_getBotDecision(player, this.createBotContext(this.getSharedBotDangerMap()));
@@ -2721,6 +2754,59 @@ export class GameApp {
     }
 
     return false;
+  }
+
+  private getLabNavigationSnapshot(): Record<string, {
+    tile: TileCoord;
+    walkableDirections: Direction[];
+    blockedDirections: Direction[];
+    stalledForMs: number;
+    lastMovementDelta: PixelCoord;
+  }> {
+    const now = Date.now();
+    const result: Record<string, {
+      tile: TileCoord;
+      walkableDirections: Direction[];
+      blockedDirections: Direction[];
+      stalledForMs: number;
+      lastMovementDelta: PixelCoord;
+    }> = {};
+
+    for (const playerId of this.activePlayerIds) {
+      if (!this.liveBridgePlayers[playerId]) continue;
+      const player = this.players[playerId];
+      const previous = this.labLastTelemetryPositions[playerId];
+      const delta = previous
+        ? { x: player.position.x - previous.x, y: player.position.y - previous.y }
+        : { x: 0, y: 0 };
+      const moved = Math.hypot(delta.x, delta.y) >= 0.75;
+      if (moved || !this.labLastMovementAtMs[playerId]) {
+        this.labLastMovementAtMs[playerId] = now;
+      }
+      this.labLastTelemetryPositions[playerId] = { ...player.position };
+
+      const walkableDirections: Direction[] = [];
+      const blockedDirections: Direction[] = [];
+      for (const direction of ["up", "down", "left", "right"] as const) {
+        const step = directionDelta[direction];
+        const blocked = this.isTileBlockedForPlayer(
+          player,
+          player.tile.x + step.x,
+          player.tile.y + step.y,
+        );
+        (blocked ? blockedDirections : walkableDirections).push(direction);
+      }
+
+      result[String(playerId)] = {
+        tile: { ...player.tile },
+        walkableDirections,
+        blockedDirections,
+        stalledForMs: player.alive ? Math.max(0, now - this.labLastMovementAtMs[playerId]) : 0,
+        lastMovementDelta: delta,
+      };
+    }
+
+    return result;
   }
 
   private getTileCenter(tile: TileCoord): PixelCoord {

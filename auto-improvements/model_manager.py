@@ -6,6 +6,7 @@ Supported providers
 openai_codex   Codex CLI subprocess (OAuth auth, via codex.exe)
 claude         Anthropic Claude API (ANTHROPIC_API_KEY env var)
 openrouter     OpenRouter HTTP API (OPENROUTER_API_KEY env var)
+9router        9Router OpenAI-compatible gateway (NINE_ROUTER_API_KEY / NINE_ROUTER_BASE_URL)
 ollama         Local Ollama (OLLAMA_HOST)
 """
 
@@ -33,12 +34,17 @@ DEFAULT_CLAUDE_BASE = "https://api.anthropic.com"
 DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6"
 DEFAULT_CLAUDE_VERSION = "2023-06-01"
 DEFAULT_OPENROUTER_BASE = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+DEFAULT_NINE_ROUTER_BASE = os.environ.get(
+    "NINE_ROUTER_BASE_URL",
+    os.environ.get("OPENROUTER_BASE_URL", "http://127.0.0.1:20128/v1"),
+).rstrip("/")
 DEFAULT_TURN_TIMEOUT = float(os.environ.get("MODEL_TURN_TIMEOUT_SEC", "45"))
 
 PROVIDER_PRESETS = [
     ("openai_codex", "OpenAI via Codex auth"),
     ("claude", "Anthropic Claude (direct API)"),
     ("openrouter", "OpenRouter direct API"),
+    ("9router", "9Router OpenAI-compatible gateway"),
     ("ollama", "Ollama local"),
 ]
 
@@ -433,7 +439,13 @@ def _call_openrouter(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
 
-    payload = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": 0.2}
+    payload = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        # Some OpenAI-compatible routers default to SSE unless this is explicit.
+        "stream": False,
+    }
     raw = json.dumps(payload, ensure_ascii=True).encode("utf-8")
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -443,10 +455,31 @@ def _call_openrouter(
     request = Request(f"{base_url}/chat/completions", data=raw, headers=headers, method="POST")
     try:
         with urlopen(request, timeout=timeout) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+            response_text = resp.read().decode("utf-8", errors="replace").strip()
+            if not response_text:
+                return None, "openrouter_empty_response"
+            if response_text.startswith("data:"):
+                chunks: list[str] = []
+                for line in response_text.splitlines():
+                    if not line.startswith("data:"):
+                        continue
+                    item = line[5:].strip()
+                    if not item or item == "[DONE]":
+                        continue
+                    event = json.loads(item)
+                    for choice in event.get("choices", []):
+                        delta = choice.get("delta", {}) if isinstance(choice, dict) else {}
+                        content = delta.get("content", "") if isinstance(delta, dict) else ""
+                        if content:
+                            chunks.append(str(content))
+                result = "".join(chunks).strip()
+                return (result or None), ("ok" if result else "openrouter_empty_stream")
+            data = json.loads(response_text)
     except HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
         return None, f"openrouter_http_{exc.code}:{body[:120]}"
+    except json.JSONDecodeError as exc:
+        return None, f"openrouter_invalid_json:{exc.msg}"
     except (URLError, TimeoutError, OSError) as exc:
         return None, f"openrouter_network:{exc}"
 
@@ -526,11 +559,24 @@ def call_model(
         return _call_claude(prompt, system_prompt, model=model or DEFAULT_CLAUDE_MODEL,
                             max_tokens=max_tokens, timeout=timeout)
 
-    if p == "openrouter":
-        return _call_openrouter(prompt, system_prompt, model=model,
-                                api_key_env=openrouter_api_key_env,
-                                base_url=openrouter_base_url,
-                                max_tokens=max_tokens, timeout=timeout)
+    if p in {"openrouter", "9router", "openai_compatible"}:
+        api_key_env = openrouter_api_key_env
+        base_url = openrouter_base_url
+        if p == "9router":
+            api_key_env = os.environ.get("NINE_ROUTER_API_KEY_ENV_VAR", "NINE_ROUTER_API_KEY")
+            if not openrouter_base_url or openrouter_base_url == DEFAULT_OPENROUTER_BASE:
+                base_url = DEFAULT_NINE_ROUTER_BASE
+            if openrouter_api_key_env == "OPENROUTER_API_KEY":
+                api_key_env = os.environ.get("NINE_ROUTER_API_KEY_ENV_VAR", "NINE_ROUTER_API_KEY")
+        return _call_openrouter(
+            prompt,
+            system_prompt,
+            model=model,
+            api_key_env=api_key_env,
+            base_url=base_url,
+            max_tokens=max_tokens,
+            timeout=timeout,
+        )
 
     if p == "ollama":
         return _call_ollama(prompt, system_prompt, model=model, host=ollama_host, timeout=timeout)

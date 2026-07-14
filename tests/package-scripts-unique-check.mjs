@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 
 const packageJsonUrl = new URL("../package.json", import.meta.url);
 const source = await readFile(packageJsonUrl, "utf8");
-const scriptsMatch = source.match(/"scripts"\s*:\s*\{([\s\S]*?)\n\s*\},\n\s*"(?:devD|d)ependencies"/);
+const scriptsMatch = source.match(/"scripts"\s*:\s*\{([\s\S]*?)\r?\n\s*\},\r?\n\s*"(?:devD|d)ependencies"/);
 
 assert.ok(scriptsMatch, "package.json must contain a scripts object");
 

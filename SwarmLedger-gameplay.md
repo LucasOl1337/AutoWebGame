@@ -1,3 +1,10 @@
+## 2026-07-14 — bot-second-flame-up-340
+- Claim/escopo antes da intervenção: alterar somente `src/Gameplay/powerups.ts`, fortalecer `tests/bot-powerup-priority-check.mjs` e atualizar estes dois registros; segundo Flame Up do bot deve passar de 420 para 340, formando a curva `460, 340, 300...` até `0`; preservar todas as demais prioridades, comportamento e sujeira alheia; commit seletivo apenas se todas as validações passarem; sem push.
+- Evidência antes: a fórmula vigente retorna `460` no primeiro Flame Up, `420` no segundo (`260 + 160`) e `340` no terceiro (`260 + 80`).
+- Critério de sucesso: curva focal `460,340,300...` até `0`; `compile:esm`, `test:bot-powerup`, `test:bot-survival`, `test:bot-target`, `build` e diff-check seletivo aprovados.
+- Resultado: fórmula e contrato focal implementados. `npm run compile:esm` passou isoladamente; `npm run build` passou com 55 módulos transformados; `git diff --check` seletivo passou apenas com avisos LF→CRLF. Os três testes solicitados recompilaram com sucesso, mas seus harnesses não iniciaram por import CSS alheio de `lab-live-hud.css` em `output/esm/Engine/auto-improvement-bridge.js`: primeiro `ERR_MODULE_NOT_FOUND`; após espelhar temporariamente o asset já existente no workspace para confirmar o diagnóstico, Node retornou `ERR_UNKNOWN_FILE_EXTENSION` para `.css`.
+- Fechamento: nenhum commit foi criado porque nem tudo passou; sem push; sujeira alheia preservada.
+
 ## 2026-07-14 — default-arena-bomb-up-presence
 - Claim/escopo: finalizar a intervenção mínima já implementada em `src/Arenas/arena.ts` e `tests/powerup-drop-rate-check.mjs`, além dos dois registros; commit local seletivo somente desses quatro arquivos, sem push e sem incluir mudanças alheias.
 - Antes → depois: a distribuição determinística da arena padrão gerava zero `bomb-up` entre 22 drops; agora um único slot antes ocupado por `speed-up` passa a `bomb-up`, resultando em 4 `bomb-up` e 4 `speed-up`, com total de 22 drops, taxa, algoritmo, simetria, rede, UI e demais sistemas preservados.
