@@ -106,7 +106,7 @@ game.placeBomb(p1);
 const beforeCritical = JSON.parse(window.render_game_to_text());
 window.advanceTime(850);
 const duringCritical = JSON.parse(window.render_game_to_text());
-p1.flameGuardMs = 500;
+p1.flameGuardMs = 1_249;
 const guardedCritical = JSON.parse(window.render_game_to_text());
 
 const p1Before = beforeCritical.players.find((entry) => entry.id === 1);
@@ -125,7 +125,8 @@ const report = {
     && typeof p1During?.hudStatus?.dangerEtaMs === "number"
     && p1During.hudStatus.dangerEtaMs > 0
     && p1During.hudStatus.dangerEtaMs <= 1_200
-    && p1Guarded?.hudStatus?.label === "GUARD"
+    && p1Guarded?.hudStatus?.label === "GUARD 1.2s"
+    && p1Guarded?.hudStatus?.tone === "success"
     && p1Guarded?.hudStatus?.critical === false,
 };
 

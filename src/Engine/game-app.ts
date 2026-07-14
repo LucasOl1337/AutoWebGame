@@ -4293,7 +4293,12 @@ export class GameApp {
       return { label: "ICE", tone: "success", critical: false, dangerEtaMs: null };
     }
     if (player.flameGuardMs > 0) {
-      return { label: "GUARD", tone: "success", critical: false, dangerEtaMs: null };
+      return {
+        label: `GUARD ${(player.flameGuardMs / 1000).toFixed(1)}s`,
+        tone: "success",
+        critical: false,
+        dangerEtaMs: null,
+      };
     }
 
     const dangerEtaMs = this.getPlayerDangerEtaMs(playerId);

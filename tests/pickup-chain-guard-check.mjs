@@ -139,14 +139,14 @@ const report = {
     && firstGuardedState.pickupChain.remainingMs <= PICKUP_CHAIN_ROLLING_WINDOW_MS
     && firstGuardedState.flameGuardMs > 0
     && firstGuardedState.flameGuardMs <= PICKUP_CHAIN_GUARD_MS
-    && firstGuardedState.hudStatus.label === "GUARD"
+    && firstGuardedState.hudStatus.label === `GUARD ${(firstGuardedState.flameGuardMs / 1000).toFixed(1)}s`
     && firstGuardedState.recentPowerUpPickup?.chainGuard === true
     && secondGuardedState.pickupChain.previousType === "speed-up"
     && secondGuardedState.pickupChain.remainingMs > 0
     && secondGuardedState.pickupChain.remainingMs <= PICKUP_CHAIN_ROLLING_WINDOW_MS
     && secondGuardedState.flameGuardMs === PICKUP_CHAIN_GUARD_MS
     && secondGuardedState.flameGuardMs >= firstGuardedState.flameGuardMs
-    && secondGuardedState.hudStatus.label === "GUARD"
+    && secondGuardedState.hudStatus.label === `GUARD ${(secondGuardedState.flameGuardMs / 1000).toFixed(1)}s`
     && secondGuardedState.recentPowerUpPickup?.chainGuard === true
     && survivedFlame
     && repeatedState.flameGuardMs === 0
