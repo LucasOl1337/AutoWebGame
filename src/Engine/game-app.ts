@@ -2189,10 +2189,13 @@ export class GameApp {
           || (this.shouldUseNativeControls()
             ? nativeBindings ? this.input.consumePress(nativeBindings.detonate) : false
             : false);
+        const nativeSkillPressed = this.shouldUseNativeControls() && nativeBindings
+          ? this.input.consumePress(nativeBindings.skill)
+          : false;
         const wantsSkill = this.consumeOnlineSkillPress(id)
-          || (this.shouldUseNativeControls()
-            ? nativeBindings ? this.input.consumePress(nativeBindings.skill) : false
-            : false);
+          || (nativeSkillPressed
+            && !this.isBotControlled(id)
+            && (!this.automationMode || this.automationControlledPlayer === id));
         const skillHeld = this.isSkillHeld(id);
 
         const desiredDirection = botDecision?.direction ?? this.getMovementDirection(id);
@@ -2253,7 +2256,9 @@ export class GameApp {
       return Boolean(this.onlineInputs[id]?.skillHeld);
     }
     if (this.automationMode) {
-      return this.automationControlledPlayer === id && this.input.isDown(SKILL_KEY);
+      return this.automationControlledPlayer === id
+        && MENU_PLAYER_IDS.includes(id as MenuPlayerId)
+        && this.input.isDown(KEY_BINDINGS[id as MenuPlayerId].skill);
     }
     if (!this.shouldUseNativeControls() || !MENU_PLAYER_IDS.includes(id as MenuPlayerId)) {
       return false;

@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 Object.defineProperty(globalThis, "navigator", { value: { webdriver: false }, configurable: true });
 
 const noop = () => {};
@@ -95,6 +97,15 @@ const game = new GameApp(
   },
 );
 
+function resetSkill(player) {
+  player.skill.phase = "idle";
+  player.skill.channelRemainingMs = 0;
+  player.skill.cooldownRemainingMs = 0;
+  player.skill.castElapsedMs = 0;
+  player.skill.projectedPosition = null;
+  player.skill.projectedLastMoveDirection = null;
+}
+
 game.mode = "match";
 game.activePlayerIds = [1, 2];
 game.botControlledPlayers[1] = false;
@@ -125,15 +136,78 @@ const started = {
 game.update(17);
 const heldCastElapsedMs = game.players[2].skill.castElapsedMs;
 
+listeners.get("keyup")?.({ code: skillCode, target: null, preventDefault: noop });
+game.update(17);
+game.automationMode = true;
+game.automationControlledPlayer = 2;
+keydown?.({ code: skillCode, repeat: false, target: null, preventDefault: noop });
+game.update(17);
+const automationStarted = {
+  phase: game.players[2].skill.phase,
+  castElapsedMs: game.players[2].skill.castElapsedMs,
+};
+game.update(17);
+const automationHeldCastElapsedMs = game.players[2].skill.castElapsedMs;
+
+listeners.get("keyup")?.({ code: skillCode, target: null, preventDefault: noop });
+game.update(17);
+game.automationMode = false;
+game.botControlledPlayers[2] = true;
+resetSkill(game.players[2]);
+keydown?.({ code: skillCode, repeat: false, target: null, preventDefault: noop });
+game.update(17);
+const botPhaseAfterHumanSkillKey = game.players[2].skill.phase;
+
+listeners.get("keyup")?.({ code: skillCode, target: null, preventDefault: noop });
+game.botControlledPlayers[2] = false;
+game.automationMode = true;
+game.automationControlledPlayer = 1;
+resetSkill(game.players[2]);
+keydown?.({ code: skillCode, repeat: false, target: null, preventDefault: noop });
+game.update(17);
+const unselectedAutomationPhase = game.players[2].skill.phase;
+
+listeners.get("keyup")?.({ code: skillCode, target: null, preventDefault: noop });
+game.automationMode = false;
+game.selectedCharacterIndex[1] = 1;
+resetSkill(game.players[1]);
+keydown?.({ code: KEY_BINDINGS[1].skill, repeat: false, target: null, preventDefault: noop });
+game.update(17);
+const playerOneStarted = {
+  phase: game.players[1].skill.phase,
+  castElapsedMs: game.players[1].skill.castElapsedMs,
+};
+game.update(17);
+const playerOneHeldCastElapsedMs = game.players[1].skill.castElapsedMs;
+
+const guideSource = await readFile(new URL("../how-to-play.html", import.meta.url), "utf8");
+const guideShowsBothSkillKeys = /<kbd>Space<\/kbd><kbd>I<\/kbd>/.test(guideSource)
+  && guideSource.includes("P1 usa Espaco e P2 usa I");
+
 const report = {
   skillCode,
   started,
   heldCastElapsedMs,
+  automationStarted,
+  automationHeldCastElapsedMs,
+  botPhaseAfterHumanSkillKey,
+  unselectedAutomationPhase,
+  playerOneStarted,
+  playerOneHeldCastElapsedMs,
+  guideShowsBothSkillKeys,
   prevented: preventedCodes.includes(skillCode),
   pass: skillCode === "KeyI"
     && started.id === "nico-arcane-beam"
     && started.phase === "channeling"
     && heldCastElapsedMs > started.castElapsedMs
+    && automationStarted.phase === "channeling"
+    && automationHeldCastElapsedMs > automationStarted.castElapsedMs
+    && botPhaseAfterHumanSkillKey === "idle"
+    && unselectedAutomationPhase === "idle"
+    && KEY_BINDINGS[1].skill === "Space"
+    && playerOneStarted.phase === "channeling"
+    && playerOneHeldCastElapsedMs > playerOneStarted.castElapsedMs
+    && guideShowsBothSkillKeys
     && preventedCodes.includes(skillCode),
 };
 
