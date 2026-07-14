@@ -82,9 +82,10 @@ function setPlayerTile(player, tile) {
   player.tile = { ...tile };
 }
 
-function runCrateExplosion(crateTiles) {
+function runCrateExplosion(crateTiles, animationClockMs = 0) {
   const game = new GameApp(root, assets);
   game.startMatch();
+  game.animationClockMs = animationClockMs;
   game.arena.solid.clear();
   game.arena.breakable.clear();
   game.arena.powerUps = [];
@@ -110,7 +111,8 @@ const comboCrates = [
   { x: 4, y: 5 },
   { x: 6, y: 5 },
 ];
-const comboGame = runCrateExplosion(comboCrates);
+const comboRevealStartedAtMs = 1234;
+const comboGame = runCrateExplosion(comboCrates, comboRevealStartedAtMs);
 const comboDrop = comboGame.arena.powerUps[0] ?? null;
 const comboCrateKeys = new Set(comboCrates.map((tile) => tileKey(tile.x, tile.y)));
 const comboBreaksBothCrates = comboCrates.every((tile) => (
@@ -122,6 +124,10 @@ const comboDropUsesExistingType = comboDrop ? SKILL_POWER_UP_TYPES.includes(comb
 const comboDropSitsOnBrokenCrate = comboDrop
   ? comboCrateKeys.has(tileKey(comboDrop.tile.x, comboDrop.tile.y))
   : false;
+const comboDropRevealTimestamp = comboDrop
+  ? comboGame.powerUpRevealStartedAtMs.get(comboDrop)
+  : undefined;
+const comboDropStartsRevealAnimation = comboDropRevealTimestamp === comboRevealStartedAtMs;
 
 const singleGame = runCrateExplosion([{ x: 6, y: 5 }]);
 const singleCrateKeepsNormalDropRule = singleGame.arena.powerUps.length === 0;
@@ -134,6 +140,8 @@ const report = {
   comboDropIsRevealed,
   comboDropUsesExistingType,
   comboDropSitsOnBrokenCrate,
+  comboDropRevealTimestamp,
+  comboDropStartsRevealAnimation,
   singleCrateKeepsNormalDropRule,
   pass: (
     comboBreaksBothCrates
@@ -141,6 +149,7 @@ const report = {
     && comboDropIsRevealed
     && comboDropUsesExistingType
     && comboDropSitsOnBrokenCrate
+    && comboDropStartsRevealAnimation
     && singleCrateKeepsNormalDropRule
   ),
 };

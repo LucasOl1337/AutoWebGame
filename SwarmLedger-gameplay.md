@@ -1,3 +1,10 @@
+## 2026-07-14 — demolition-combo-drop-reveal-timestamp
+- Claim/escopo antes da intervenção: fazer exclusivamente o drop criado por `ensureDemolitionComboDrop` iniciar `powerUpRevealStartedAtMs` com o relógio de animação atual; fortalecer `tests/demolition-combo-drop-check.mjs` com timestamp observável; alterar somente `src/Engine/game-app.ts`, o teste focal e os dois registros de coordenação; preservar todos os arquivos já sujos; commit seletivo dos quatro arquivos somente após `compile:esm`, testes pop/combo/drop-rate, build, diff-check e revisão do diff.
+- Antes → depois: o drop garantido por combo já nascia revelado, mas não iniciava o timestamp usado pela animação de reveal; agora o objeto recém-criado é inserido no mapa `powerUpRevealStartedAtMs` com `animationClockMs`, igual ao fluxo normal de reveal.
+- Evidência focal: o teste fixa `animationClockMs=1234` antes da explosão e observa `comboDropRevealTimestamp=1234` e `comboDropStartsRevealAnimation=true`, preservando criação, tipo, tile e regra normal de crate única.
+- Validação: `npm run compile:esm`; `node tests/powerup-spawn-pop-check.mjs`; `node tests/demolition-combo-drop-check.mjs`; `node tests/powerup-drop-rate-check.mjs`; `npm run build`; `git diff --check -- src/Engine/game-app.ts tests/demolition-combo-drop-check.mjs DocsDev/swarm-coordination.md SwarmLedger-gameplay.md` — todos concluídos com código 0. A primeira compilação expôs erro TS6133 em `src/UiLayouts/launcher-shell.ts`, arquivo sujo alheio; esses diffs foram isolados temporariamente para validar o escopo e restaurados integralmente antes do commit seletivo dos quatro arquivos.
+- Resultado: diff seletivo revisado e commit seletivo realizado somente com os quatro arquivos reivindicados.
+
 ## 2026-07-14 — onboarding-powerup-variety-flame-protection
 - Claim/escopo antes da intervenção: ensinar somente no card `Powerups escalam` que coletar tipos diferentes em até 4,2 s ativa proteção curta contra flames; alterar exclusivamente `how-to-play.html`, `tests/how-to-play-page-check.mjs` e este ledger; preservar todo conteúdo alheio e não realizar commit.
 

@@ -2921,12 +2921,14 @@ export class GameApp {
       return;
     }
 
-    this.arena.powerUps.push({
+    const comboDrop: PowerUpState = {
       tile: this.parseTileKey(dropKey),
       type,
       revealed: true,
       collected: false,
-    });
+    };
+    this.arena.powerUps.push(comboDrop);
+    this.powerUpRevealStartedAtMs.set(comboDrop, this.animationClockMs);
   }
 
   private breakCrateAtKey(key: string): boolean {
