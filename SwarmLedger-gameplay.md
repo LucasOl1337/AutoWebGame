@@ -1,3 +1,9 @@
+## 2026-07-14 — hud-flame-guard-remaining-duration
+- Commit funcional: `793f5a4` (`feat(hud): show flame guard duration`).
+- Claim/escopo antes da intervenção: alterar somente a apresentação do estado protegido no HUD em `src/Engine/game-app.ts`, fortalecer `tests/hud-critical-state-feedback-check.mjs` e atualizar os dois registros; exibir `flameGuardMs` restante como `GUARD 1.2s` com uma casa decimal, sem alterar gameplay, timers ou sincronização; preservar diffs alheios e integralmente o claim anterior `onboarding-powerup-variety-flame-protection`; commit local seletivo se todas as validações passarem; sem push/deploy.
+- Antes → depois: `getPlayerHudStatus` retornava `GUARD` sem duração; agora deriva somente o label visual de `flameGuardMs`, usando segundos com uma casa decimal (`1249 ms` → `GUARD 1.2s`), preservando tom, criticidade, timer e regras.
+- Evidências/validações: teste focal observou `LIVE`, `DANGER 1.1s` e `GUARD 1.2s`; regressão pickup-chain observou `1400 ms` como `GUARD 1.4s`. `npm run compile:esm`, `node tests/hud-critical-state-feedback-check.mjs`, `node tests/pickup-chain-guard-check.mjs`, `npm run build` (57 módulos) e `git diff --check` seletivo passaram; a primeira regressão identificou somente as expectativas literais antigas de `GUARD`, atualizadas ao novo contrato; diffs alheios preservados; sem push/deploy.
+
 ## 2026-07-14 — round-start-cue-score-footer
 - Claim/escopo: alterar somente o footer do cue de início de rodada em `src/Engine/game-app.ts`, fortalecer `tests/round-start-cue-check.mjs` e registrar esta intervenção nos dois documentos; preservar diffs alheios; commit local seletivo; sem push/deploy.
 - Antes → depois: o cue retornava `footer: null`; agora retorna `copy.scoreSummary(this.formatActiveScore())`, exibindo o placar atual sem duplicar formatação.
