@@ -256,7 +256,7 @@ button {
 
 .experience-button:disabled {
   opacity: 0.52;
-  cursor: default;
+  cursor: not-allowed;
 }
 
 .experience-button:focus-visible,
