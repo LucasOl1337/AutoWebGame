@@ -4295,11 +4295,12 @@ export class GameApp {
 
     const dangerEtaMs = this.getPlayerDangerEtaMs(playerId);
     if (dangerEtaMs !== null && dangerEtaMs <= HUD_CRITICAL_DANGER_MS) {
+      const roundedDangerEtaMs = Math.max(0, Math.round(dangerEtaMs));
       return {
-        label: "DANGER",
+        label: `DANGER ${(roundedDangerEtaMs / 1000).toFixed(1)}s`,
         tone: "danger",
         critical: true,
-        dangerEtaMs: Math.max(0, Math.round(dangerEtaMs)),
+        dangerEtaMs: roundedDangerEtaMs,
       };
     }
 
