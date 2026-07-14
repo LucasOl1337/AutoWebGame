@@ -27,6 +27,7 @@ import type {
   FlameState,
   MatchScore,
   PlayerState,
+  PowerUpState,
 } from "../Gameplay/types";
 import type { BotDecision } from "./bot-ai";
 
@@ -46,6 +47,7 @@ export interface TelemetrySnapshot {
   players: PlayerState[];
   bombs: BombState[];
   flames: FlameState[];
+  powerUps: PowerUpState[];
   matchScore?: MatchScore;
   suddenDeath?: { active: boolean; index?: number };
   navigation?: Record<string, LabNavigationSnapshot>;
@@ -57,6 +59,12 @@ export interface LabNavigationSnapshot {
   blockedDirections: Array<"up" | "down" | "left" | "right">;
   stalledForMs: number;
   lastMovementDelta: { x: number; y: number };
+  localTiles: Array<{
+    x: number;
+    y: number;
+    kind: "self" | "enemy" | "open" | "solid" | "breakable" | "bomb" | "flame" | "powerup";
+    dangerEtaMs: number | null;
+  }>;
 }
 
 export interface BrokerDecision {

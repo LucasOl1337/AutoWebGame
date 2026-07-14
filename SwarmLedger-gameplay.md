@@ -1,3 +1,13 @@
+## 2026-07-14 — lab-agent-outcome-learning
+- Antes: o modelo recebia apenas vizinhanca imediata, nao ligava decisoes aos resultados e podia repetir uma direcao que ja falhara no mesmo tile por 13–20 segundos.
+- Depois: memoria curta registra `SUCCEEDED`/`FAILED`, o prompt recebe mapa local 7x7 e power-ups, repeticoes falhas sao rejeitadas e uma recuperacao tatica publica uma alternativa em menos de um segundo enquanto o modelo pensa.
+- Evidencia: `npm run test:lab-agent-control-loop` falhou antes por ausencia de `ActionOutcomeMemory` e passou depois exercitando a publicacao real da recuperacao; bateria ampla e dry-run aprovados.
+
+## 2026-07-14 — chain-pickup-notice-expanded-item
+- Claim/escopo antes da intervenção: alterar exclusivamente `formatPowerUpPickupNotice` em `src/Engine/game-app.ts`, criar `tests/powerup-chain-pickup-notice-check.mjs` e atualizar os dois registros; preservar `tests/lab-agent-control-loop-check.mjs`, demais diffs alheios e não fazer commit/push.
+- Antes → depois: o aviso de chain guard mostrava `CHAIN!` no HUD compacto e `CHAIN GUARD` no amplo, ocultando qual pickup gerou o encadeamento; agora o compacto permanece `CHAIN!` e o amplo usa `CHAIN <shortLabel> <valueLabel>`.
+- Critério de sucesso: teste focal comprova os dois formatos, disponibilidade da definição antes do branch e remoção do literal legado; executar `compile:esm`, testes powerup relevantes, `build` e `git diff --check`.
+
 ## 2026-07-14 — bot-second-flame-up-340
 - Claim/escopo antes da intervenção: alterar somente `src/Gameplay/powerups.ts`, fortalecer `tests/bot-powerup-priority-check.mjs` e atualizar estes dois registros; segundo Flame Up do bot deve passar de 420 para 340, formando a curva `460, 340, 300...` até `0`; preservar todas as demais prioridades, comportamento e sujeira alheia; commit seletivo apenas se todas as validações passarem; sem push.
 - Evidência antes: a fórmula vigente retorna `460` no primeiro Flame Up, `420` no segundo (`260 + 160`) e `340` no terceiro (`260 + 80`).

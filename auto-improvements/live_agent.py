@@ -27,6 +27,7 @@ import os
 import sys
 import threading
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -71,6 +72,8 @@ DIR_STEP: dict[str, tuple[int, int]] = {
     "right": (1, 0),
 }
 ACCOUNT_FAILURE_THRESHOLD = 3
+STALL_FAILURE_MS = 900
+TACTICAL_RECOVERY_COOLDOWN_MS = 700
 _QUOTA_OR_AUTH_ERROR_KEYWORDS = (
     "rate_limit",
     "rate limit",
@@ -228,6 +231,13 @@ def _fmt_flame(f: dict[str, Any]) -> str:
     return f"flame tile=({tile.get('x')},{tile.get('y')}) rem={f.get('remainingMs')}ms"
 
 
+def _fmt_powerup(powerup: dict[str, Any]) -> str:
+    if not isinstance(powerup, dict):
+        return ""
+    tile = powerup.get("tile", {})
+    return f"powerup type={powerup.get('type')} tile=({tile.get('x')},{tile.get('y')})"
+
+
 def _fmt_enemy(me_tile: dict[str, Any], p: dict[str, Any]) -> str:
     tile = p.get("tile", {})
     return (
@@ -265,7 +275,122 @@ def _current_life_active(state: dict[str, Any]) -> bool:
     return bool(me and me.get("alive") and me.get("active"))
 
 
-def _local_fast_decision(state: dict[str, Any]) -> dict[str, Any] | None:
+def _navigation_for_player(state: dict[str, Any]) -> dict[str, Any]:
+    navigation = state.get("navigation", {})
+    if not isinstance(navigation, dict):
+        return {}
+    player_navigation = navigation.get(PLAYER_ID, {})
+    return player_navigation if isinstance(player_navigation, dict) else {}
+
+
+class ActionOutcomeMemory:
+    """Short-lived per-round memory that connects actions to observed results."""
+
+    def __init__(self, max_outcomes: int = 8) -> None:
+        self._lock = threading.RLock()
+        self._pending: dict[str, Any] | None = None
+        self._outcomes: deque[dict[str, Any]] = deque(maxlen=max_outcomes)
+        self._failed: dict[tuple[int, int, str], int] = {}
+
+    def reset(self) -> None:
+        with self._lock:
+            self._pending = None
+            self._outcomes.clear()
+            self._failed.clear()
+
+    def record(self, decision: dict[str, Any], state: dict[str, Any]) -> None:
+        with self._lock:
+            direction = str(decision.get("direction") or "")
+            me = _player_state(state, PLAYER_ID)
+            if direction not in VALID_DIRECTIONS or not me:
+                self._pending = None
+                return
+            navigation = _navigation_for_player(state)
+            self._pending = {
+                "direction": direction,
+                "origin": _tile_key(me.get("tile", {})),
+                "stalledBeforeMs": int(navigation.get("stalledForMs", 0) or 0),
+            }
+
+    def observe(self, state: dict[str, Any]) -> None:
+        with self._lock:
+            pending = self._pending
+            if not pending:
+                return
+            me = _player_state(state, PLAYER_ID)
+            if not me or not me.get("alive"):
+                self._pending = None
+                return
+            current = _tile_key(me.get("tile", {}))
+            origin = pending["origin"]
+            direction = pending["direction"]
+            navigation = _navigation_for_player(state)
+            try:
+                stalled_ms = max(0, int(navigation.get("stalledForMs", 0) or 0))
+            except (TypeError, ValueError):
+                stalled_ms = 0
+
+            if current != origin:
+                outcome = "SUCCEEDED"
+                self._failed.pop((origin[0], origin[1], direction), None)
+            elif stalled_ms >= STALL_FAILURE_MS:
+                outcome = "FAILED"
+                key = (origin[0], origin[1], direction)
+                self._failed[key] = self._failed.get(key, 0) + 1
+            else:
+                return
+
+            self._outcomes.append({
+                "outcome": outcome,
+                "direction": direction,
+                "origin": origin,
+                "result": current,
+                "stalledMs": stalled_ms,
+            })
+            self._pending = None
+
+    def _failed_directions_unlocked(self, state: dict[str, Any]) -> set[str]:
+        me = _player_state(state, PLAYER_ID)
+        if not me:
+            return set()
+        x, y = _tile_key(me.get("tile", {}))
+        return {
+            direction
+            for (tile_x, tile_y, direction), count in self._failed.items()
+            if tile_x == x and tile_y == y and count > 0
+        }
+
+    def failed_directions(self, state: dict[str, Any]) -> set[str]:
+        with self._lock:
+            return self._failed_directions_unlocked(state)
+
+    def should_reject(self, decision: dict[str, Any], state: dict[str, Any]) -> bool:
+        with self._lock:
+            direction = str(decision.get("direction") or "")
+            return direction in self._failed_directions_unlocked(state)
+
+    def prompt_context(self, state: dict[str, Any]) -> str:
+        with self._lock:
+            lines: list[str] = []
+            for item in self._outcomes:
+                ox, oy = item["origin"]
+                rx, ry = item["result"]
+                lines.append(
+                    f"{item['outcome']} direction={item['direction']} tile=({ox},{oy}) "
+                    f"result=({rx},{ry}) stalled={item['stalledMs']}ms"
+                )
+            failed_here = sorted(self._failed_directions_unlocked(state))
+            if failed_here:
+                lines.append(f"FAILED HERE: {', '.join(failed_here)}")
+            return "\n".join(lines) if lines else "No evaluated actions yet."
+
+
+def _local_fast_decision(
+    state: dict[str, Any],
+    *,
+    excluded_directions: set[str] | None = None,
+    recovery: bool = False,
+) -> dict[str, Any] | None:
     me = _player_state(state, PLAYER_ID)
     if not me or not me.get("alive") or not me.get("active"):
         return None
@@ -279,13 +404,29 @@ def _local_fast_decision(state: dict[str, Any]) -> dict[str, Any] | None:
         if isinstance(p, dict) and str(p.get("id")) != PLAYER_ID and p.get("alive") and p.get("active")
     ]
     nearest_enemy = min(enemies, key=lambda p: _tile_distance(me_tile, p.get("tile", {})), default=None)
+    powerups = [p for p in (state.get("powerUps") or []) if isinstance(p, dict)]
+    nearest_powerup = min(powerups, key=lambda p: _tile_distance(me_tile, p.get("tile", {})), default=None)
     threat_tiles = {_tile_key(f.get("tile", {})) for f in flames}
+    close_flames = [f for f in flames if _tile_distance(me_tile, f.get("tile", {})) <= 1]
     close_bombs = [b for b in bombs if _tile_distance(me_tile, b.get("tile", {})) <= 2]
-    immediate_danger = bool(threat_tiles or close_bombs)
+    immediate_danger = bool(close_flames or close_bombs)
+    navigation = _navigation_for_player(state)
+    reported_walkable = {
+        str(direction)
+        for direction in (navigation.get("walkableDirections") or [])
+        if str(direction) in VALID_DIRECTIONS
+    }
+    excluded = excluded_directions or set()
+    candidate_directions = [
+        direction
+        for direction in DIR_STEP
+        if (not reported_walkable or direction in reported_walkable) and direction not in excluded
+    ]
 
     best_direction: str | None = None
     best_score = -10**9
-    for direction, (dx, dy) in DIR_STEP.items():
+    for direction in candidate_directions:
+        dx, dy = DIR_STEP[direction]
         candidate = {"x": mx + dx, "y": my + dy}
         score = 0
         if _tile_key(candidate) in threat_tiles:
@@ -296,6 +437,8 @@ def _local_fast_decision(state: dict[str, Any]) -> dict[str, Any] | None:
             enemy_tile = nearest_enemy.get("tile", {})
             enemy_dist = _tile_distance(candidate, enemy_tile)
             score += (-enemy_dist * 12) if not immediate_danger else 0
+        if nearest_powerup is not None and not immediate_danger:
+            score -= _tile_distance(candidate, nearest_powerup.get("tile", {})) * 18
         if direction == str(me.get("direction", "")):
             score += 3
         if score > best_score:
@@ -309,7 +452,16 @@ def _local_fast_decision(state: dict[str, Any]) -> dict[str, Any] | None:
         if enemy_dist <= 1 and not bomb_here and int(me.get("activeBombs", 0) or 0) < int(me.get("maxBombs", 0) or 0):
             place_bomb = True
 
-    reason = "Immediate evasive bootstrap" if immediate_danger else "Fast bootstrap pressure"
+    if recovery and best_direction is None:
+        bomb_here = any(_tile_distance(me_tile, b.get("tile", {})) == 0 for b in bombs)
+        can_bomb = int(me.get("activeBombs", 0) or 0) < int(me.get("maxBombs", 0) or 0)
+        place_bomb = bool(not immediate_danger and not bomb_here and can_bomb)
+
+    reason = (
+        "Tactical recovery after failed movement"
+        if recovery
+        else "Immediate evasive bootstrap" if immediate_danger else "Fast bootstrap pressure"
+    )
     return {
         "playerId": PLAYER_ID,
         "botId": AGENT_ID,
@@ -321,10 +473,22 @@ def _local_fast_decision(state: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def build_prompt(state: dict[str, Any]) -> str:
+def build_recovery_decision(
+    state: dict[str, Any],
+    failed_directions: set[str] | None = None,
+) -> dict[str, Any] | None:
+    return _local_fast_decision(
+        state,
+        excluded_directions=failed_directions or set(),
+        recovery=True,
+    )
+
+
+def build_prompt(state: dict[str, Any], *, outcome_context: str = "") -> str:
     players = state.get("players", [])
     bombs = state.get("bombs", [])
     flames = state.get("flames", [])
+    powerups = state.get("powerUps", [])
     sudden_death = state.get("suddenDeath", {})
     score = state.get("matchScore", {})
 
@@ -345,6 +509,10 @@ def build_prompt(state: dict[str, Any]) -> str:
         [f for f in (flames or []) if isinstance(f, dict)],
         key=lambda f: _tile_distance(me_tile, f.get("tile", {})),
     )[:8]
+    nearby_powerups = sorted(
+        [p for p in (powerups or []) if isinstance(p, dict)],
+        key=lambda p: _tile_distance(me_tile, p.get("tile", {})),
+    )[:6]
     nearest_enemy_distance = _tile_distance(me_tile, nearest_enemies[0].get("tile", {})) if nearest_enemies else 999
     close_bomb_threats = [
         b for b in nearby_bombs
@@ -380,6 +548,17 @@ def build_prompt(state: dict[str, Any]) -> str:
         f"Walkable directions: {', '.join(walkable_directions) if walkable_directions else 'unknown'}",
         f"Blocked directions: {', '.join(blocked_directions) if blocked_directions else 'unknown'}",
         f"Movement feedback: stalledForMs={stalled_for_ms} lastDelta={json.dumps(my_navigation.get('lastMovementDelta', {}))}",
+        "Local map:",
+        *[
+            (
+                f"  ({tile.get('x')},{tile.get('y')})={tile.get('kind', 'unknown')}"
+                + (f" danger={tile.get('dangerEtaMs')}ms" if tile.get("dangerEtaMs") is not None else "")
+            )
+            for tile in (my_navigation.get("localTiles") or [])
+            if isinstance(tile, dict)
+        ],
+        "Recent action outcomes:",
+        outcome_context or "No evaluated actions yet.",
         "",
         "Players:",
     ]
@@ -401,11 +580,18 @@ def build_prompt(state: dict[str, Any]) -> str:
         for f in nearby_flames:
             lines.append("  " + _fmt_flame(f))
 
+    if nearby_powerups:
+        lines.append("\nNearby powerups:")
+        for powerup in nearby_powerups:
+            lines.append("  " + _fmt_powerup(powerup))
+
     lines.append(f"\nYou are: {_fmt_player(me)}")
     lines.append(
         f"\nDecide the next action for P{PLAYER_ID}. "
         "Survive immediate danger first; otherwise pressure the nearest enemy and create trap bombs when close. "
         "Never choose a blocked direction. If stalledForMs is above 700, change to a walkable direction immediately. "
+        "Do not repeat FAILED actions at the same tile. Use the local map and action outcomes to choose a different route, "
+        "place a bomb to open a breakable route, or wait only when movement would be lethal. "
         "Be decisive and low-latency. Return JSON only."
     )
     return "\n".join(lines)
@@ -547,6 +733,8 @@ class LiveAgent:
         self._latest_state: dict[str, Any] = {}
         self._latest_state_lock = threading.Lock()
         self._was_alive_in_match = False
+        self._action_memory = ActionOutcomeMemory()
+        self._last_tactical_recovery_at_ms = 0
 
     def _is_ai_busy(self) -> bool:
         with self._ai_lock:
@@ -594,8 +782,37 @@ class LiveAgent:
         if not decision:
             return
         decision["reason"] = f"{reason}: {decision['reason']}"[:120]
-        _http_post("/decision", decision)
+        status, _ = _http_post("/decision", decision)
+        if status == 200:
+            self._action_memory.record(decision, state)
         log(f"bootstrap | {decision['direction'] or '.'} | {decision['reason']}")
+
+    def _maybe_post_tactical_recovery(self, state: dict[str, Any], tick: int) -> None:
+        navigation = _navigation_for_player(state)
+        try:
+            stalled_ms = max(0, int(navigation.get("stalledForMs", 0) or 0))
+        except (TypeError, ValueError):
+            stalled_ms = 0
+        current_ms = now_ms()
+        if stalled_ms < STALL_FAILURE_MS:
+            return
+        if current_ms - self._last_tactical_recovery_at_ms < TACTICAL_RECOVERY_COOLDOWN_MS:
+            return
+
+        failed = self._action_memory.failed_directions(state)
+        recovery = build_recovery_decision(state, failed)
+        if not recovery or (recovery.get("direction") is None and not recovery.get("placeBomb")):
+            return
+        status, _ = _http_post("/decision", recovery)
+        if status != 200:
+            return
+        self._last_tactical_recovery_at_ms = current_ms
+        self._action_memory.record(recovery, state)
+        send_heartbeat("active")
+        log(
+            f"tactical-recovery tick={tick:>5} stalled={stalled_ms}ms "
+            f"failed={sorted(failed)} action={recovery.get('direction') or 'bomb'}"
+        )
 
     def run(self) -> None:
         log(
@@ -639,6 +856,7 @@ class LiveAgent:
                 state = body.get("state") or {}
                 phase = str(state.get("phase", "") or "")
                 self._set_latest_state(state)
+                self._action_memory.observe(state)
                 me_alive = _current_life_active(state)
 
                 # Detect match start
@@ -647,6 +865,8 @@ class LiveAgent:
                     self.match_start_tick = tick
                     self.decisions_this_match = 0
                     self._codex_session_id = None
+                    self._action_memory.reset()
+                    self._last_tactical_recovery_at_ms = 0
                     self._was_alive_in_match = me_alive
                     if me_alive:
                         self._life_epoch += 1
@@ -681,6 +901,7 @@ class LiveAgent:
                     continue
 
                 self.last_tick = tick
+                self._maybe_post_tactical_recovery(state, tick)
 
                 # Fire AI call in background; skip tick if previous is still running.
                 # The last decision (25s TTL) keeps the bot moving while we wait.
@@ -698,7 +919,7 @@ class LiveAgent:
     def _fire_ai_call(self, state: dict[str, Any], tick: int) -> None:
         """Start an async AI call in a daemon thread."""
         send_heartbeat("thinking")
-        prompt = build_prompt(state)
+        prompt = build_prompt(state, outcome_context=self._action_memory.prompt_context(state))
         session_id = self._codex_session_id
         codex_home = self._current_codex_home()
         request_round_epoch = self._round_epoch
@@ -741,10 +962,25 @@ class LiveAgent:
                     _http_post("/decision", bootstrap)
                 return
 
+            if self._action_memory.should_reject(decision, latest_state):
+                rejected_direction = str(decision.get("direction") or "")
+                recovery = build_recovery_decision(
+                    latest_state,
+                    self._action_memory.failed_directions(latest_state),
+                )
+                log(f"reject repeated failed action tick={tick:>5} direction={rejected_direction}")
+                if recovery is None:
+                    return
+                decision = recovery
+
             self._last_model_error = ""
             self._account_consecutive_failures = 0
             self._ai_retry_at_ms = 0
-            _http_post("/decision", decision)
+            post_status, _ = _http_post("/decision", decision)
+            if post_status != 200:
+                self._handle_model_error(f"decision_post_{post_status}", tick)
+                return
+            self._action_memory.record(decision, latest_state)
             send_heartbeat("active")
             self.decisions_this_match += 1
             arrow = {"up": "^", "down": "v", "left": "<", "right": ">"}.get(

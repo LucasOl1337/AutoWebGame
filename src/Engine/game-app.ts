@@ -107,7 +107,7 @@ import {
   SUDDEN_DEATH_TICK_MS,
   type ProjectedBomb,
 } from "./danger-map";
-import { AutoImprovementBridge } from "./auto-improvement-bridge";
+import { AutoImprovementBridge, type LabNavigationSnapshot } from "./auto-improvement-bridge";
 import type { SkillContext } from "../ultimate/skill-system";
 import {
   createDefaultPlayerSkillState,
@@ -1838,6 +1838,7 @@ export class GameApp {
         players: Object.values(this.players),
         bombs: this.bombs,
         flames: this.flames,
+        powerUps: this.arena.powerUps,
         matchScore: this.score,
         suddenDeath: {
           active: this.suddenDeathActive,
@@ -2756,21 +2757,9 @@ export class GameApp {
     return false;
   }
 
-  private getLabNavigationSnapshot(): Record<string, {
-    tile: TileCoord;
-    walkableDirections: Direction[];
-    blockedDirections: Direction[];
-    stalledForMs: number;
-    lastMovementDelta: PixelCoord;
-  }> {
+  private getLabNavigationSnapshot(): Record<string, LabNavigationSnapshot> {
     const now = Date.now();
-    const result: Record<string, {
-      tile: TileCoord;
-      walkableDirections: Direction[];
-      blockedDirections: Direction[];
-      stalledForMs: number;
-      lastMovementDelta: PixelCoord;
-    }> = {};
+    const result: Record<string, LabNavigationSnapshot> = {};
 
     for (const playerId of this.activePlayerIds) {
       if (!this.liveBridgePlayers[playerId]) continue;
@@ -2797,12 +2786,40 @@ export class GameApp {
         (blocked ? blockedDirections : walkableDirections).push(direction);
       }
 
+      const dangerMap = this.cachedDangerMap ?? this.getDangerMap();
+      const localTiles: LabNavigationSnapshot["localTiles"] = [];
+      for (let offsetY = -3; offsetY <= 3; offsetY += 1) {
+        for (let offsetX = -3; offsetX <= 3; offsetX += 1) {
+          const tile = this.normalizeTile({ x: player.tile.x + offsetX, y: player.tile.y + offsetY });
+          const key = tileKey(tile.x, tile.y);
+          let kind: LabNavigationSnapshot["localTiles"][number]["kind"] = "open";
+          if (this.arena.solid.has(key)) kind = "solid";
+          else if (this.arena.breakable.has(key)) kind = "breakable";
+          else if (this.flames.some((flame) => tileKey(flame.tile.x, flame.tile.y) === key)) kind = "flame";
+          else if (this.bombs.some((bomb) => tileKey(bomb.tile.x, bomb.tile.y) === key)) kind = "bomb";
+          else if (this.arena.powerUps.some((powerUp) => tileKey(powerUp.tile.x, powerUp.tile.y) === key)) kind = "powerup";
+          else if (tile.x === player.tile.x && tile.y === player.tile.y) kind = "self";
+          else if (this.activePlayerIds.some((otherId) => {
+            if (otherId === playerId || !this.players[otherId].alive) return false;
+            const otherTile = this.players[otherId].tile;
+            return otherTile.x === tile.x && otherTile.y === tile.y;
+          })) kind = "enemy";
+          localTiles.push({
+            x: tile.x,
+            y: tile.y,
+            kind,
+            dangerEtaMs: dangerMap.get(key) ?? null,
+          });
+        }
+      }
+
       result[String(playerId)] = {
         tile: { ...player.tile },
         walkableDirections,
         blockedDirections,
         stalledForMs: player.alive ? Math.max(0, now - this.labLastMovementAtMs[playerId]) : 0,
         lastMovementDelta: delta,
+        localTiles,
       };
     }
 
@@ -4094,10 +4111,10 @@ export class GameApp {
   }
 
   private formatPowerUpPickupNotice(notice: PowerUpPickupNotice, maxLength: number): string {
-    if (notice.chainGuard) {
-      return maxLength <= 8 ? "CHAIN!" : "CHAIN GUARD";
-    }
     const definition = getPowerUpDefinition(notice.type);
+    if (notice.chainGuard) {
+      return maxLength <= 8 ? "CHAIN!" : `CHAIN ${definition.shortLabel} ${notice.valueLabel}`;
+    }
     if (notice.type === "short-fuse-up") {
       return `${definition.shortLabel} ${notice.valueLabel}`;
     }
