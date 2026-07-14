@@ -294,7 +294,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedback: "Enviar feedback",
       searching: "Procurando a melhor sala para voce entrar.",
       meta: (queuedRooms, onlineUsers) => `${queuedRooms} salas abertas agora | ${onlineUsers} jogadores online`,
-      releaseBadge: "v0.4.1 no ar",
+      releaseBadge: "v0.4.2 no ar",
       releaseTitle: "Novidades do patch",
       releaseItems: [
         "Escolha 1, 2 ou 3 bots antes da partida local.",
@@ -585,7 +585,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       feedback: "Send feedback",
       searching: "Looking for the best room for you.",
       meta: (queuedRooms, onlineUsers) => `${queuedRooms} open rooms right now | ${onlineUsers} players online`,
-      releaseBadge: "v0.4.1 live",
+      releaseBadge: "v0.4.2 live",
       releaseTitle: "Patch highlights",
       releaseItems: [
         "Choose 1, 2, or 3 bots before a local match.",

@@ -1,7 +1,7 @@
 {
   "name": "autowebgame",
   "private": true,
-  "version": "0.4.1",
+  "version": "0.4.2",
   "type": "module",
   "scripts": {
     "dev": "node scripts/run_local_dev.mjs",
