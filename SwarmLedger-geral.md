@@ -1,5 +1,19 @@
 # Swarm Ledger - Geral
 
+## 2026-07-14 - Script npm para feedback de carregamento do bootstrap
+
+- Automacao: `SOLO`.
+- Escopo registrado antes da implementacao: expor o check existente `tests/bootstrap-loading-feedback-check.mjs` via um script npm dedicado; sem alterar runtime, gameplay, rede, CSS, assets ou mudancas concorrentes.
+- Classificacao inicial: infraestrutura de teste de acessibilidade/loading, baixo risco e comprovavel por execucao focal.
+- Evidencia antes: a execucao direta passou com estado busy antes do setup assincrono, anuncio polite, limpeza apos assets e remocao do status temporario, mas o check nao aparecia nos scripts npm.
+- Arquivos previstos: `package.json` e este ledger; `DocsDev/swarm-coordination.md` permanece intocado por conter mudanca concorrente.
+- Criterio de sucesso: script focal, unicidade dos scripts, build e diff-check seletivo devem passar antes de commit local seletivo.
+- Resultado: `npm run test:bootstrap-loading-feedback` e a regressao adjacente `npm run test:bootstrap-load-recovery` passaram com todos os checks verdadeiros; a unicidade passou com 150 scripts.
+- Validacao integral: `npm run build` passou com 56 modulos transformados; `git diff --check -- package.json SwarmLedger-geral.md` passou, com apenas avisos LF -> CRLF.
+- Classificacao final: comprovada; mudanca exclusiva de infraestrutura de teste, sem efeito no runtime do jogo.
+- Revisao de escopo: diff seletivo contem uma insercao em `package.json` e este registro; todas as mudancas concorrentes permaneceram fora do escopo e do staging.
+- Commit: aprovado para criacao local seletiva; sem push, deploy, branch ou worktree conforme instrucao explicita desta rodada.
+
 ## 2026-07-14 - Script npm para cursor de botao desabilitado
 
 - Automacao: `SOLO`.
