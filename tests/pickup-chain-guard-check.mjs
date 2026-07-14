@@ -95,6 +95,7 @@ const survivedFlame = guardedPlayer.alive;
 const repeatGame = createOpenMatch();
 collect(repeatGame, "bomb-up");
 repeatGame.advanceServerSimulation(500);
+const duplicateWindowBeforePickup = getPlayerTextState(repeatGame).pickupChain.remainingMs;
 collect(repeatGame, "bomb-up");
 const repeatedState = getPlayerTextState(repeatGame);
 
@@ -124,6 +125,7 @@ const report = {
   },
   survivedFlame,
   repeatedState: {
+    duplicateWindowBeforePickup,
     pickupChain: repeatedState.pickupChain,
     flameGuardMs: repeatedState.flameGuardMs,
   },
@@ -151,6 +153,8 @@ const report = {
     && survivedFlame
     && repeatedState.flameGuardMs === 0
     && repeatedState.pickupChain.previousType === "bomb-up"
+    && repeatedState.pickupChain.remainingMs > 0
+    && repeatedState.pickupChain.remainingMs <= duplicateWindowBeforePickup
     && expiredState.flameGuardMs === 0
     && expiredState.pickupChain.previousType === "flame-up",
 };

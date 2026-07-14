@@ -34,6 +34,10 @@ export function registerPickupForChain(state: PickupChainState, type: PowerUpTyp
     return true;
   }
 
+  if (state.remainingMs > 0 && state.previousType === type) {
+    return false;
+  }
+
   state.previousType = type;
   state.remainingMs = PICKUP_CHAIN_WINDOW_MS;
   return false;
