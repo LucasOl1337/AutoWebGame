@@ -4741,6 +4741,7 @@ export class GameApp {
 
   private drawBomb(bomb: BombState): void {
     const pulse = 0.6 + 0.4 * Math.sin((bomb.fuseMs / 80) * Math.PI);
+    const armedScale = 1 + (pulse - 0.6) * 0.1;
     const x = bomb.tile.x * TILE_SIZE;
     const y = bomb.tile.y * TILE_SIZE;
     const isFinalFuse = bomb.fuseMs <= 450;
@@ -4758,20 +4759,27 @@ export class GameApp {
     if (this.assets.props.bomb) {
       this.ctx.save();
       this.ctx.globalAlpha = Math.max(0.7, pulse);
-      this.ctx.drawImage(this.assets.props.bomb, x, y, TILE_SIZE, TILE_SIZE);
+      this.ctx.translate(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
+      this.ctx.scale(armedScale, armedScale);
+      this.ctx.translate(-TILE_SIZE / 2, -TILE_SIZE / 2);
+      this.ctx.drawImage(this.assets.props.bomb, 0, 0, TILE_SIZE, TILE_SIZE);
       this.ctx.restore();
       return;
     }
+    this.ctx.save();
+    this.ctx.translate(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
+    this.ctx.scale(armedScale, armedScale);
     this.ctx.fillStyle = `rgba(255, 228, 160, ${Math.max(0.35, pulse)})`;
     this.ctx.beginPath();
-    this.ctx.arc(x + 16, y + 8, 4, 0, Math.PI * 2);
+    this.ctx.arc(0, -8, 4, 0, Math.PI * 2);
     this.ctx.fill();
     this.ctx.fillStyle = "#241f1a";
     this.ctx.beginPath();
-    this.ctx.arc(x + 16, y + 18, 10, 0, Math.PI * 2);
+    this.ctx.arc(0, 2, 10, 0, Math.PI * 2);
     this.ctx.fill();
     this.ctx.strokeStyle = "#f2dfba";
     this.ctx.stroke();
+    this.ctx.restore();
   }
 
   private drawFlame(flame: FlameState): void {
