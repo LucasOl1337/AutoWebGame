@@ -5816,7 +5816,7 @@ export class GameApp {
       return {
         title: copy.pausedTitle,
         subtitle: copy.pausedSubtitle,
-        footer: null,
+        footer: copy.roundStartSubtitle,
         victoryEmblem: false,
         stalemateEmblem: false,
       };
