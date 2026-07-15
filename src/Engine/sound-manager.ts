@@ -206,7 +206,7 @@ export class SoundManager {
       return 1;
     }
 
-    const rates = [0.98, 1.02] as const;
+    const rates = [0.72, 0.76] as const;
     const index = this.playbackRateIndexByKey.get(key) ?? 0;
     this.playbackRateIndexByKey.set(key, (index + 1) % rates.length);
     return rates[index];
