@@ -1,3 +1,9 @@
+## 2026-07-14 — crate-break-deterministic-timbre-variation
+- Claim/escopo: investigar se `crateBreak` repete timbre idêntico e, somente com RED comprobatório, adicionar variação determinística mínima reutilizando áudio existente; alterar apenas `src/Engine/sound-manager.ts`, `tests/sound-manager-variation-check.mjs` e os dois ledgers; sem dependência, push ou deploy; preservar diffs alheios.
+- RED → GREEN: RED comprovou `crateBreakVariationPass: false` com taxas `[1, 1]`; GREEN comprovou `crateBreakVariationPass: true` com taxas `[0.98, 1.02]`.
+- Antes → depois: o mesmo `shield_block_deflect.mp3` permanece reutilizado, mas `crateBreak` agora alterna deterministicamente playback rate `0.98/1.02`, sem asset ou dependência nova.
+- Validações reais: `node tests/sound-manager-variation-check.mjs`, `npm run compile:esm`, `npm run test:sound-manager-lifecycle`, `npm run test:sound-playback-retry`, `npm run test:sound-unlock`, `npm run build` (59 módulos) e `git diff --check -- 'src/Engine/sound-manager.ts' 'tests/sound-manager-variation-check.mjs' 'DocsDev/swarm-coordination.md' 'SwarmLedger-gameplay.md'` passaram. `npm run test:sound-manager-lazy-load` continua falhando pela condição alheia preexistente (`manifestEntries: 13` versus expectativa 12); seu arquivo não foi alterado.
+
 ## 2026-07-14 — player-death-shadow-alpha
 - Claim/escopo: sessão `player-death-shadow-alpha`; alterar somente `src/Engine/game-app.ts`, criar `tests/player-death-shadow-feedback-check.mjs` e atualizar os dois ledgers; não tocar em outros hunks/diffs; commit local seletivo; sem push/deploy.
 - Status: concluído.
@@ -5,6 +11,30 @@
 - Antes → depois: a sombra do jogador ignorava o alpha visual `0.35` aplicado após a morte; agora recebe o mesmo alpha em um bloco `save`/`restore`, mantendo `alpha = 1` e a aparência original da sombra enquanto o jogador está vivo.
 - Evidências: o teste focal observou `deadFallbackAlpha: 0.35`, `liveAlpha: 1`, `shadowUsesVisualAlpha: true` e `shadowStateIsolated: true`.
 - Validações: `node tests/player-death-shadow-feedback-check.mjs`, `npm run compile:esm`, `npm run build` com 58 módulos transformados e `git diff --check` aprovados.
+
+## 2026-07-14 — solo-short-fuse-over-residual-flame
+- Claim/escopo: avaliar, sem tocar em outros diffs, se o primeiro Short Fuse deveria superar por um ponto um suposto Flame Up residual de valor 260; arquivos funcionais inicialmente previstos: `src/Gameplay/powerups.ts` e `tests/bot-powerup-priority-check.mjs`.
+- Resultado: intervenção encerrada sem mudança funcional e sem commit. O teste RED mostrou `firstShortFuseScore: 260`, mas `flameRange: 8` já está saturado e retorna `residualFlameScore: 0`; a curva jogável validada é `[460, 340, 300, 280, 0]`, portanto `MAX_RANGE` impede o empate usado como premissa.
+- Classificação final: Inadequada — a evidência refutou a oportunidade antes da implementação. O teste focal foi restaurado integralmente; nenhum balanceamento foi alterado.
+- Validação: `npm run test:bot-powerup` produziu exit 1 esperado no RED da hipótese; depois da restauração, validações finais registradas abaixo. Diffs alheios preservados; sem push/deploy.
+
+## 2026-07-14 — power-collect-three-variant-cycle
+- Claim/escopo: alterar somente `src/Engine/sound-manager.ts`, `tests/sound-manager-variation-check.mjs` e os dois ledgers; preservar diffs alheios; commit seletivo pendente; sem push/deploy.
+- Antes → depois: `powerCollect` alternava deterministicamente apenas 2 variants; agora percorre 3 variants deterministicamente antes de repetir, na sequência `0,1,2,0`.
+- Classificação: comprovada técnica; impacto perceptivo experimental.
+- Evidências/validações: RED alternava somente 2 variants; GREEN observou a sequência `0,1,2,0`; validações focal, lifecycle, retry, build e diff-check aprovadas.
+
+## 2026-07-14 — pickup-chain-duplicate-no-refresh
+- Claim/escopo: alterar somente `src/Gameplay/pickup-chain.ts`, fortalecer `tests/pickup-chain-guard-check.mjs` e acrescentar registros aos dois documentos de coordenação; preservar toda sujeira alheia; sem commit, push ou deploy.
+- Antes → depois: um pickup do mesmo tipo durante uma janela ativa reatribuía `PICKUP_CHAIN_WINDOW_MS` e renovava 3700 ms para 4200 ms; agora retorna `false` sem alterar `previousType` nem renovar `remainingMs`, que segue decaindo normalmente (3700 ms antes da coleta e 3683 ms após o tick de 17 ms).
+- Evidência RED → GREEN: com a nova expectativa, a implementação anterior produziu `pass: false`, `duplicateWindowBeforePickup: 3700` e `remainingMs: 4200` (exit 1); após o guard mínimo, produziu `pass: true` e `remainingMs: 3683` (exit 0), mantendo `flameGuardMs: 0`.
+- Validações: `npm run compile:esm` passou; `node tests/pickup-chain-guard-check.mjs` passou; `npm run build` passou com 57 módulos transformados; `git diff --check -- 'src/Gameplay/pickup-chain.ts' 'tests/pickup-chain-guard-check.mjs' 'DocsDev/swarm-coordination.md' 'SwarmLedger-gameplay.md'` passou (somente avisos de normalização LF→CRLF).
+- Fechamento: commit local seletivo `cfcc9a1`, somente runtime/teste; sem push/deploy.
+
+## 2026-07-14 — ux-how-to-play-chain-guard-duration
+- Claim/escopo antes da intervenção: alterar somente a frase existente sobre cadeia de powerups em `how-to-play.html`, fortalecer `tests/how-to-play-page-check.mjs` e atualizar os dois registros; explicitar que a proteção dura 1,4 s e aparece como `GUARD 1.4s`, sem mudar runtime, timers, balanceamento ou assets; preservar todos os diffs alheios; commit local seletivo; sem push/deploy.
+- Evidência antes: o guia ensina a janela de 4,2 s, mas chama a proteção apenas de “curta”; `src/Gameplay/pickup-chain.ts:3-5` define janela de 4200 ms e guarda de 1400 ms, e o contrato já validado do HUD observa `GUARD 1.4s`.
+- Classificação: Comprovada para a lacuna objetiva de onboarding; impacto de aprendizagem em jogadores permanece experimental.
 
 ## 2026-07-14 — hud-flame-guard-remaining-duration
 - Commit funcional: `793f5a4` (`feat(hud): show flame guard duration`).

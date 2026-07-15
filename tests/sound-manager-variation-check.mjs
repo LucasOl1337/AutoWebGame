@@ -110,15 +110,25 @@ const powerCollectVariationPass = powerCollectUrls[0]?.endsWith("powerup_collect
   && powerCollectUrls[3]?.endsWith("powerup_collect.mp3");
 
 mockNowMs = 1000;
-manager.playOneShot("shieldBlock");
-manager.playOneShot("shieldBlock");
+manager.playOneShot("crateBreak");
 await Promise.resolve();
-const shieldBlockSameFramePass = playedUrls.filter((url) => url.endsWith("shield_block_deflect.mp3")).length === 1;
+mockNowMs = 1091;
+manager.playOneShot("crateBreak");
+await Promise.resolve();
+const crateBreakRates = playedRates.filter((_, index) => playedUrls[index]?.endsWith("shield_block_deflect.mp3"));
+const crateBreakVariationPass = crateBreakRates.length === 2
+  && crateBreakRates[0] !== crateBreakRates[1];
 
-mockNowMs = 1161;
+mockNowMs = 1300;
+manager.playOneShot("shieldBlock");
 manager.playOneShot("shieldBlock");
 await Promise.resolve();
-const shieldBlockRecoveryPass = playedUrls.filter((url) => url.endsWith("shield_block_deflect.mp3")).length === 2;
+const shieldBlockSameFramePass = playedUrls.filter((url) => url.endsWith("shield_block_deflect.mp3")).length === 3;
+
+mockNowMs = 1461;
+manager.playOneShot("shieldBlock");
+await Promise.resolve();
+const shieldBlockRecoveryPass = playedUrls.filter((url) => url.endsWith("shield_block_deflect.mp3")).length === 4;
 
 const pass = manifestPass
   && powerCollectManifestPass
@@ -132,6 +142,7 @@ const pass = manifestPass
   && powerCollectSameFramePass
   && powerCollectRecoveryPass
   && powerCollectVariationPass
+  && crateBreakVariationPass
   && shieldBlockSameFramePass
   && shieldBlockRecoveryPass;
 
@@ -149,6 +160,8 @@ console.log(JSON.stringify({
   powerCollectSameFramePass,
   powerCollectRecoveryPass,
   powerCollectVariationPass,
+  crateBreakVariationPass,
+  crateBreakRates,
   shieldBlockSameFramePass,
   shieldBlockRecoveryPass,
   playedUrls,

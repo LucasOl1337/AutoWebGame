@@ -64,6 +64,7 @@ export class SoundManager {
   private readonly sounds = new Map<SfxKey, HTMLAudioElement[]>();
   private readonly lastPlayAtMs = new Map<SfxKey, number>();
   private readonly lastVariantIndexByKey = new Map<SfxKey, number>();
+  private readonly playbackRateIndexByKey = new Map<SfxKey, number>();
   private bombPlacePlaybackRateIndex = 0;
   private unlocked = false;
   private unlockTarget: EventTarget | null = null;
@@ -143,7 +144,9 @@ export class SoundManager {
     }
 
     const startIndex = this.selectVariantIndex(key, variants.length);
-    const playbackRate = key === "bombPlace" ? this.selectBombPlacePlaybackRate() : 1;
+    const playbackRate = key === "bombPlace"
+      ? this.selectBombPlacePlaybackRate()
+      : this.selectDeterministicPlaybackRate(key);
 
     const throttleMarkedAtMs = policy?.minIntervalMs !== undefined ? nowMs : null;
     void this.playVariantWithFallback(variants, startIndex, gain, playbackRate).then((played) => {
@@ -178,6 +181,17 @@ export class SoundManager {
     const rate = rates[this.bombPlacePlaybackRateIndex];
     this.bombPlacePlaybackRateIndex = (this.bombPlacePlaybackRateIndex + 1) % rates.length;
     return rate;
+  }
+
+  private selectDeterministicPlaybackRate(key: SfxKey): number {
+    if (key !== "crateBreak") {
+      return 1;
+    }
+
+    const rates = [0.98, 1.02] as const;
+    const index = this.playbackRateIndexByKey.get(key) ?? 0;
+    this.playbackRateIndexByKey.set(key, (index + 1) % rates.length);
+    return rates[index];
   }
 
   private async playVariantWithFallback(
