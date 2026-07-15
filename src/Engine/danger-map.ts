@@ -35,6 +35,103 @@ export interface ProjectedBomb {
   fuseMs: number;
 }
 
+interface BombDangerProjection {
+  tile: TileCoord;
+  fuseMs: number;
+  blastKeys: Set<string>;
+}
+
+interface FuseQueueEntry {
+  bombIndex: number;
+  fuseMs: number;
+}
+
+function pushFuseEntry(queue: FuseQueueEntry[], entry: FuseQueueEntry): void {
+  queue.push(entry);
+  let index = queue.length - 1;
+  while (index > 0) {
+    const parentIndex = Math.floor((index - 1) / 2);
+    if (queue[parentIndex].fuseMs <= entry.fuseMs) {
+      break;
+    }
+    queue[index] = queue[parentIndex];
+    index = parentIndex;
+  }
+  queue[index] = entry;
+}
+
+function popFuseEntry(queue: FuseQueueEntry[]): FuseQueueEntry | undefined {
+  const first = queue[0];
+  const last = queue.pop();
+  if (!first || !last || queue.length === 0) {
+    return first;
+  }
+
+  let index = 0;
+  while (true) {
+    const leftIndex = index * 2 + 1;
+    if (leftIndex >= queue.length) {
+      break;
+    }
+    const rightIndex = leftIndex + 1;
+    const childIndex = rightIndex < queue.length
+      && queue[rightIndex].fuseMs < queue[leftIndex].fuseMs
+      ? rightIndex
+      : leftIndex;
+    if (queue[childIndex].fuseMs >= last.fuseMs) {
+      break;
+    }
+    queue[index] = queue[childIndex];
+    index = childIndex;
+  }
+  queue[index] = last;
+  return first;
+}
+
+function propagateChainReactionFuses(bombs: BombDangerProjection[]): void {
+  const bombIndexesByTile = new Map<string, number[]>();
+  bombs.forEach((bomb, bombIndex) => {
+    const key = tileKey(bomb.tile.x, bomb.tile.y);
+    const indexes = bombIndexesByTile.get(key);
+    if (indexes) {
+      indexes.push(bombIndex);
+    } else {
+      bombIndexesByTile.set(key, [bombIndex]);
+    }
+  });
+
+  const triggeredBombIndexes = bombs.map((source, sourceIndex) => {
+    const targets: number[] = [];
+    for (const blastKey of source.blastKeys) {
+      for (const targetIndex of bombIndexesByTile.get(blastKey) ?? []) {
+        if (targetIndex !== sourceIndex) {
+          targets.push(targetIndex);
+        }
+      }
+    }
+    return targets;
+  });
+
+  const queue: FuseQueueEntry[] = [];
+  bombs.forEach((bomb, bombIndex) => {
+    pushFuseEntry(queue, { bombIndex, fuseMs: bomb.fuseMs });
+  });
+
+  while (queue.length > 0) {
+    const entry = popFuseEntry(queue);
+    if (!entry || entry.fuseMs !== bombs[entry.bombIndex].fuseMs) {
+      continue;
+    }
+    for (const targetIndex of triggeredBombIndexes[entry.bombIndex]) {
+      if (bombs[targetIndex].fuseMs <= entry.fuseMs) {
+        continue;
+      }
+      bombs[targetIndex].fuseMs = entry.fuseMs;
+      pushFuseEntry(queue, { bombIndex: targetIndex, fuseMs: entry.fuseMs });
+    }
+  }
+}
+
 export function buildDangerMap(
   context: DangerMapContext,
   extraBomb?: ProjectedBomb,
@@ -67,21 +164,7 @@ export function buildDangerMap(
     });
   }
 
-  let updated = true;
-  while (updated) {
-    updated = false;
-    for (const source of bombsToProject) {
-      for (const target of bombsToProject) {
-        if (source === target || source.fuseMs >= target.fuseMs) {
-          continue;
-        }
-        if (source.blastKeys.has(tileKey(target.tile.x, target.tile.y))) {
-          target.fuseMs = source.fuseMs;
-          updated = true;
-        }
-      }
-    }
-  }
+  propagateChainReactionFuses(bombsToProject);
 
   for (const bomb of bombsToProject) {
     for (const key of bomb.blastKeys) {

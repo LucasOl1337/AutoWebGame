@@ -208,16 +208,15 @@ bot.remoteLevel = 0;
 const remoteScore = getPowerUpPriorityScore(bot, "remote-up");
 bot.remoteLevel = 1;
 const saturatedRemoteScore = getPowerUpPriorityScore(bot, "remote-up");
-const hasExpectedRemotePriority = remoteScore === 251 && saturatedRemoteScore === 0;
+const hasExpectedRemotePriority = remoteScore === 261 && saturatedRemoteScore === 0;
 const hasExpectedBombPassPriority = JSON.stringify(bombPassScores) === JSON.stringify([240, 0]);
-const prefersRemoteOverSecondShieldByMinimumMargin = remoteScore === shieldScores[1] + 1;
+const remoteScoreBeatsSecondShield = remoteScore > shieldScores[1];
 const prefersRemoteOverBombPass = remoteScore > bombPassScores[0];
-const keepsRemoteBelowShortFuse = remoteScore < shortFuseScores[0];
+const prefersRemoteOverShortFuseByMinimumMargin = remoteScore === shortFuseScores[0] + 1;
 const preservesHigherPriorities = bombScores[0] > remoteScore
   && speedScores[0] > remoteScore
   && flameScores[0] > remoteScore
-  && shieldScores[0] > remoteScore
-  && shortFuseScores[0] > remoteScore;
+  && shieldScores[0] > remoteScore;
 
 bot.bombPassLevel = 0;
 bot.kickLevel = 0;
@@ -274,9 +273,9 @@ const report = {
   saturatedRemoteScore,
   hasExpectedRemotePriority,
   hasExpectedBombPassPriority,
-  prefersRemoteOverSecondShieldByMinimumMargin,
+  remoteScoreBeatsSecondShield,
   prefersRemoteOverBombPass,
-  keepsRemoteBelowShortFuse,
+  prefersRemoteOverShortFuseByMinimumMargin,
   preservesHigherPriorities,
   kickBeforeBombPassScore,
   bombPassBeforeAcquisitionScore,
@@ -296,7 +295,7 @@ if (!prefersBaseMobility || !prefersFirstShield || !prefersRemoteOverSecondShiel
   || !hasDiminishingSpeedReturns || !hasDiminishingFlameReturns
   || !hasDiminishingShortFuseReturns || !hasDiminishingShieldReturns
   || !hasExpectedRemotePriority || !hasExpectedBombPassPriority
-  || !prefersRemoteOverSecondShieldByMinimumMargin || !prefersRemoteOverBombPass || !keepsRemoteBelowShortFuse
+  || !remoteScoreBeatsSecondShield || !prefersRemoteOverBombPass || !prefersRemoteOverShortFuseByMinimumMargin
   || !preservesHigherPriorities || !prefersKickByMinimumMargin
   || !prefersKickWhenEquidistant || !hasExpectedKickPriority
   || !preservesKickAsSituationalAfterBombPass) {
