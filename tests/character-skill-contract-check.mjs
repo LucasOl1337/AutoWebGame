@@ -73,6 +73,14 @@ const negativeDeltaIgnored = negativeDeltaPlayer.skill.phase === "cooldown"
   && negativeDeltaPlayer.skill.cooldownRemainingMs === 1_000
   && negativeDeltaPlayer.skill.castElapsedMs === 275;
 
+const nonFiniteDeltaIgnored = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY].every((deltaMs) => {
+  const player = createCooldownPlayer();
+  advancePlayerSkillTimers(player, deltaMs);
+  return player.skill.phase === "cooldown"
+    && player.skill.cooldownRemainingMs === 1_000
+    && player.skill.castElapsedMs === 275;
+});
+
 const positiveDeltaPlayer = createCooldownPlayer();
 advancePlayerSkillTimers(positiveDeltaPlayer, 250);
 const positiveDeltaAdvances = positiveDeltaPlayer.skill.phase === "cooldown"
@@ -93,6 +101,7 @@ const report = {
   definitionsMatchExpected,
   zeroDeltaIgnored,
   negativeDeltaIgnored,
+  nonFiniteDeltaIgnored,
   positiveDeltaAdvances,
   exhaustedCooldownReturnsIdle,
   pass: exportedCooldownsMatch
@@ -101,6 +110,7 @@ const report = {
     && definitionsMatchExpected
     && zeroDeltaIgnored
     && negativeDeltaIgnored
+    && nonFiniteDeltaIgnored
     && positiveDeltaAdvances
     && exhaustedCooldownReturnsIdle,
 };

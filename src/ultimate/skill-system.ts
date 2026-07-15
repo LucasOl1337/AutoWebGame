@@ -105,7 +105,7 @@ export function syncPlayerSkill(
 }
 
 export function advancePlayerSkillTimers(player: PlayerState, deltaMs: number): void {
-  if (player.skill.phase !== "cooldown" || deltaMs <= 0) {
+  if (player.skill.phase !== "cooldown" || !Number.isFinite(deltaMs) || deltaMs <= 0) {
     return;
   }
   player.skill.cooldownRemainingMs = Math.max(0, player.skill.cooldownRemainingMs - deltaMs);
