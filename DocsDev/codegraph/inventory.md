@@ -1,10 +1,10 @@
 # CodeGraph inventory - AutoWebGame
 
-Generated at: 2026-06-25T22:16:45-03:00
+Generated at: 2026-07-15T11:21:46-03:00
 
 Repository: `C:\Projetos\AutoWebGame`
 
-CodeGraph status: healthy, synchronized, 270 indexed files, 5,787 nodes, 11,653 edges.
+CodeGraph status: healthy, synchronized, 386 indexed files, 7,386 nodes, 14,258 edges.
 
 Scope: real project files in the current working directory. Ignored for analysis: `node_modules`, `.git`, build output and caches. CodeGraph was the primary structural source; direct reads were used only for repository metadata, package scripts and docs.
 
@@ -98,7 +98,7 @@ Scope: real project files in the current working directory. Ignored for analysis
 - Como e acessada/usada: `/account` renderiza login/registro; o Worker expoe `/api/auth/session`, `/api/auth/register`, `/api/auth/login` e `/api/auth/logout`; contas com papel `admin` seguem para `/admin`.
 - Dependencias internas: `AccountAuth`, adaptador de storage do `GlobalLobby`, Web Crypto/PBKDF2, roteador frontend, `handleFeedbackIngest`.
 - Status: funcional
-- Observacoes tecnicas: Credenciais armazenadas usam PBKDF2-SHA256 com salt; sessoes, tentativas e contas ficam no storage do Durable Object. O bootstrap administrativo continua fail-closed e depende dos secrets `ADMIN_USERNAME` e `ADMIN_PASSWORD`.
+- Observacoes tecnicas: Credenciais armazenadas usam PBKDF2-SHA256 com salt; sessoes, tentativas e contas ficam no storage do Durable Object. Operacoes de hash sao serializadas e protegidas por limites globais e por IP; registro tem quota propria. O bootstrap administrativo continua fail-closed, reserva o e-mail configurado e depende dos secrets `ADMIN_USERNAME` e `ADMIN_PASSWORD`.
 
 ## 2. Funcoes de estrutura e backend
 
