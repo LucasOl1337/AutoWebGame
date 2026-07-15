@@ -61,7 +61,7 @@ export function updateCrocodiloEmeraldSurgeChannel(
   if (player.skill.id !== "crocodilo-emerald-surge") {
     return false;
   }
-  if (deltaMs <= 0) {
+  if (!Number.isFinite(deltaMs) || deltaMs <= 0) {
     player.velocity.x = 0;
     player.velocity.y = 0;
     return true;

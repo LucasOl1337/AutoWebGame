@@ -344,8 +344,14 @@ const temporalSnapshots = [];
 for (const scenario of [
   { phase: "channeling", deltaMs: 0, channelRemainingMs: 1_000, castElapsedMs: 600 },
   { phase: "channeling", deltaMs: -17, channelRemainingMs: 1_000, castElapsedMs: 600 },
+  { phase: "channeling", deltaMs: Number.NaN, channelRemainingMs: 1_000, castElapsedMs: 600 },
+  { phase: "channeling", deltaMs: Number.POSITIVE_INFINITY, channelRemainingMs: 1_000, castElapsedMs: 600 },
+  { phase: "channeling", deltaMs: Number.NEGATIVE_INFINITY, channelRemainingMs: 1_000, castElapsedMs: 600 },
   { phase: "releasing", deltaMs: 0, channelRemainingMs: 160, castElapsedMs: 80 },
   { phase: "releasing", deltaMs: -17, channelRemainingMs: 160, castElapsedMs: 80 },
+  { phase: "releasing", deltaMs: Number.NaN, channelRemainingMs: 160, castElapsedMs: 80 },
+  { phase: "releasing", deltaMs: Number.POSITIVE_INFINITY, channelRemainingMs: 160, castElapsedMs: 80 },
+  { phase: "releasing", deltaMs: Number.NEGATIVE_INFINITY, channelRemainingMs: 160, castElapsedMs: 80 },
 ]) {
   Object.assign(nonPositiveDeltaCrocodilo.skill, {
     id: "crocodilo-emerald-surge",
