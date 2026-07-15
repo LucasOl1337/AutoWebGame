@@ -17,6 +17,10 @@ export function createPickupChainState(): PickupChainState {
 }
 
 export function advancePickupChain(state: PickupChainState, deltaMs: number): void {
+  if (deltaMs <= 0) {
+    return;
+  }
+
   state.remainingMs = Math.max(0, state.remainingMs - deltaMs);
   if (state.remainingMs === 0) {
     state.previousType = null;

@@ -7,6 +7,7 @@ const {
   PICKUP_CHAIN_GUARD_MS,
   PICKUP_CHAIN_ROLLING_WINDOW_MS,
   PICKUP_CHAIN_WINDOW_MS,
+  advancePickupChain,
 } = await import("../output/esm/Gameplay/pickup-chain.js");
 
 const emptySprites = {
@@ -105,6 +106,12 @@ expiredGame.advanceServerSimulation(PICKUP_CHAIN_WINDOW_MS + 100);
 collect(expiredGame, "flame-up");
 const expiredState = getPlayerTextState(expiredGame);
 
+const nonPositiveDeltaState = { previousType: "bomb-up", remainingMs: 2_000 };
+advancePickupChain(nonPositiveDeltaState, 0);
+const zeroDeltaState = { ...nonPositiveDeltaState };
+advancePickupChain(nonPositiveDeltaState, -250);
+const negativeDeltaState = { ...nonPositiveDeltaState };
+
 const report = {
   constants: { PICKUP_CHAIN_WINDOW_MS, PICKUP_CHAIN_ROLLING_WINDOW_MS, PICKUP_CHAIN_GUARD_MS },
   armedState: {
@@ -133,7 +140,16 @@ const report = {
     pickupChain: expiredState.pickupChain,
     flameGuardMs: expiredState.flameGuardMs,
   },
-  pass: armedState.pickupChain.previousType === "bomb-up"
+  negativeDeltaState,
+  nonPositiveDeltaNoop: zeroDeltaState.previousType === "bomb-up"
+    && zeroDeltaState.remainingMs === 2_000
+    && negativeDeltaState.previousType === "bomb-up"
+    && negativeDeltaState.remainingMs === 2_000,
+  pass: zeroDeltaState.previousType === "bomb-up"
+    && zeroDeltaState.remainingMs === 2_000
+    && negativeDeltaState.previousType === "bomb-up"
+    && negativeDeltaState.remainingMs === 2_000
+    && armedState.pickupChain.previousType === "bomb-up"
     && armedState.pickupChain.remainingMs > 0
     && armedState.flameGuardMs === 0
     && firstGuardedState.pickupChain.previousType === "flame-up"
