@@ -147,7 +147,7 @@ effect_state["players"][0]["activeBombs"] = 1
 effect_state["players"][0]["skill"] = {"phase": "channeling", "cooldownRemainingMs": 0}
 effect_state["actionAcks"] = [{
     "requestId": 43, "playerId": "1", "positionChanged": True, "tileChanged": True,
-    "movementDelta": {"x": 48, "y": 0}, "bombAttempted": True,
+    "movementDelta": {"x": -48, "y": 0}, "bombAttempted": True,
     "bombPlaced": True, "detonateAttempted": False, "detonated": False,
     "skillPressed": True, "skillHeld": True,
     "skillPhaseBefore": "idle", "skillPhaseAfter": "channeling", "alive": True,
@@ -163,7 +163,7 @@ moved_state["players"][0]["tile"] = {"x": 3, "y": 1}
 causal_memory.record({**model_decision, "requestId": 51, "expiresInMs": 1500}, moved_state)
 moved_state["actionAcks"] = [{
     "requestId": 50, "playerId": "1", "positionChanged": True, "tileChanged": True,
-    "movementDelta": {"x": 48, "y": 0}, "bombAttempted": True,
+    "movementDelta": {"x": -48, "y": 0}, "bombAttempted": True,
     "bombPlaced": True, "detonateAttempted": False, "detonated": False,
     "skillPhaseBefore": "idle", "skillPhaseAfter": "channeling", "alive": True,
 }]
@@ -180,7 +180,7 @@ progress_state["navigation"]["1"]["lastMovementDelta"] = {"x": 4.5, "y": 0}
 progress_memory.record({**model_decision, "requestId": 61, "expiresInMs": 1500}, progress_state)
 progress_state["actionAcks"] = [{
     "requestId": 60, "playerId": "1", "positionChanged": True, "tileChanged": False,
-    "movementDelta": {"x": 4.5, "y": 0}, "bombAttempted": True,
+    "movementDelta": {"x": -4.5, "y": 0}, "bombAttempted": True,
     "bombPlaced": False, "detonateAttempted": False, "detonated": False,
     "skillPhaseBefore": "idle", "skillPhaseAfter": "idle", "alive": True,
 }]
@@ -210,7 +210,7 @@ ack_progress_memory._pending[71]["recordedAtMs"] -= 300
 ack_progress_state = copy.deepcopy(memory_state)
 ack_progress_state["actionAcks"] = [{
     "requestId": 71, "playerId": "1", "positionChanged": True, "tileChanged": False,
-    "movementDelta": {"x": 3.25, "y": 0}, "bombAttempted": False,
+    "movementDelta": {"x": -3.25, "y": 0}, "bombAttempted": False,
     "bombPlaced": False, "detonateAttempted": False, "detonated": False,
     "skillPhaseBefore": "idle", "skillPhaseAfter": "idle", "alive": True,
 }]

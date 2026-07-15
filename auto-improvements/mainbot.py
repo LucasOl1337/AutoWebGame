@@ -22,8 +22,9 @@ import sys
 import threading
 import time
 from collections import deque
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 from urllib.error import URLError
 from urllib.request import urlopen
 import json
@@ -45,6 +46,18 @@ GAME_ROOT = ROOT.parent
 BROKER_BASE = os.environ.get("BROKER_BASE", "http://127.0.0.1:8766").rstrip("/")
 REFRESH_SECONDS = float(os.environ.get("MAINBOT_REFRESH_SECONDS", "2.0"))
 STALL_RESTART_SECONDS = float(os.environ.get("MAINBOT_STALL_RESTART_SEC", "30"))
+LIVE_AGENT_RESTART_BASE_SECONDS = max(
+    0.1,
+    float(os.environ.get("MAINBOT_AGENT_RESTART_BASE_SEC", "2")),
+)
+LIVE_AGENT_RESTART_MAX_SECONDS = max(
+    LIVE_AGENT_RESTART_BASE_SECONDS,
+    float(os.environ.get("MAINBOT_AGENT_RESTART_MAX_SEC", "30")),
+)
+LIVE_AGENT_RESTART_STABLE_SECONDS = max(
+    LIVE_AGENT_RESTART_BASE_SECONDS,
+    float(os.environ.get("MAINBOT_AGENT_RESTART_STABLE_SEC", "30")),
+)
 
 
 def now_ms() -> int:
@@ -78,6 +91,7 @@ class ManagedProcess:
         self.env_overrides = dict(env_overrides or {})
         self.cwd = str(cwd or ROOT)
         self.proc: subprocess.Popen[str] | None = None
+        self.last_exit_code: int | None = None
         self.lines: deque[str] = deque(maxlen=80)
         self._reader: threading.Thread | None = None
 
@@ -96,8 +110,10 @@ class ManagedProcess:
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
-        if self.log_path.exists():
-            self.log_path.unlink()
+        start_marker = f"[supervisor] starting {self.name} at {time.strftime('%Y-%m-%d %H:%M:%S')}"
+        self.lines.append(start_marker)
+        with self.log_path.open("a", encoding="utf-8") as handle:
+            handle.write(start_marker + "\n")
 
         self.proc = subprocess.Popen(
             self.command,
@@ -112,14 +128,15 @@ class ManagedProcess:
             creationflags=creationflags,
             startupinfo=startupinfo,
         )
-        self._reader = threading.Thread(target=self._pump_output, daemon=True)
+        stdout = self.proc.stdout
+        self._reader = threading.Thread(target=self._pump_output, args=(stdout,), daemon=True)
         self._reader.start()
 
-    def _pump_output(self) -> None:
-        if self.proc is None or self.proc.stdout is None:
+    def _pump_output(self, stream: TextIO | None) -> None:
+        if stream is None:
             return
-        with self.log_path.open("a", encoding="utf-8") as handle:
-            for raw_line in self.proc.stdout:
+        with stream, self.log_path.open("a", encoding="utf-8") as handle:
+            for raw_line in stream:
                 line = compact_line(raw_line)
                 if not line:
                     continue
@@ -136,6 +153,7 @@ class ManagedProcess:
                 self.proc.wait(timeout=3)
             except subprocess.TimeoutExpired:
                 self.proc.kill()
+        self.last_exit_code = self.proc.poll()
         self.proc = None
 
     def is_running(self) -> bool:
@@ -143,6 +161,14 @@ class ManagedProcess:
 
     def pid(self) -> int:
         return self.proc.pid if self.proc is not None else 0
+
+    def exit_code(self) -> int | None:
+        if self.proc is None:
+            return self.last_exit_code
+        exit_code = self.proc.poll()
+        if exit_code is not None:
+            self.last_exit_code = exit_code
+        return exit_code
 
     def recent(self, count: int) -> list[str]:
         items = list(self.lines)
@@ -225,6 +251,22 @@ def open_agent_log_console(title: str, log_path: Path) -> None:
 # MainBot orchestrator
 # ---------------------------------------------------------------------------
 
+@dataclass
+class LiveAgentRestartState:
+    failures: int = 0
+    last_start_at_ms: int = 0
+    next_restart_at_ms: int = 0
+    last_exit_code: int | None = None
+    last_error: str = ""
+
+
+def live_agent_controller_label(proc: ManagedProcess) -> str:
+    provider = compact_line(proc.env_overrides.get("AGENT_PROVIDER", ""))
+    model = compact_line(proc.env_overrides.get("AGENT_MODEL", ""))
+    if provider and model:
+        return f"{provider}/{model}"
+    return provider or model or "not configured"
+
 class MainBot:
     def __init__(self, *, with_live_agents: bool = True, with_insights: bool = True, with_manager: bool = True):
         self.with_live_agents = with_live_agents
@@ -240,6 +282,7 @@ class MainBot:
             logs / "broker.log",
         )
         self.live_agents: dict[str, ManagedProcess] = {}
+        self.live_agent_restart_state: dict[str, LiveAgentRestartState] = {}
         self.insights_proc: ManagedProcess | None = None
         self.manager_proc: ManagedProcess | None = None
 
@@ -322,8 +365,18 @@ class MainBot:
             logs / f"live_agent_p{player_id}.log",
             env_overrides=env_overrides,
         )
-        proc.start()
+        start_at_ms = now_ms()
         self.live_agents[slot] = proc
+        self.live_agent_restart_state[slot] = LiveAgentRestartState(
+            last_start_at_ms=start_at_ms,
+        )
+        try:
+            proc.start()
+        except Exception as exc:
+            state = self.live_agent_restart_state[slot]
+            state.failures = 1
+            state.next_restart_at_ms = start_at_ms + int(LIVE_AGENT_RESTART_BASE_SECONDS * 1000)
+            state.last_error = compact_line(str(exc))[:120] or type(exc).__name__
 
     def stop(self) -> None:
         self.running = False
@@ -336,6 +389,7 @@ class MainBot:
         self.broker.stop()
 
     def poll(self) -> None:
+        poll_now_ms = now_ms()
         if not self.broker.is_running():
             self.broker.start()
             time.sleep(1.0)
@@ -343,9 +397,9 @@ class MainBot:
         report = _broker_report()
         if report:
             self.last_report = report
-            self.last_report_at_ms = now_ms()
-            self.last_broker_ok_at_ms = now_ms()
-        elif self.last_broker_ok_at_ms > 0 and now_ms() - self.last_broker_ok_at_ms > 8000:
+            self.last_report_at_ms = poll_now_ms
+            self.last_broker_ok_at_ms = poll_now_ms
+        elif self.last_broker_ok_at_ms > 0 and poll_now_ms - self.last_broker_ok_at_ms > 8000:
             self.broker.stop()
             self.broker.start()
             time.sleep(1.0)
@@ -358,20 +412,69 @@ class MainBot:
             self.manager_proc.start()
 
         for slot, proc in self.live_agents.items():
-            if not proc.is_running():
+            state = self.live_agent_restart_state.setdefault(slot, LiveAgentRestartState())
+            if proc.is_running():
+                stable_for_ms = poll_now_ms - state.last_start_at_ms
+                if (
+                    state.failures > 0
+                    and state.last_start_at_ms > 0
+                    and stable_for_ms >= LIVE_AGENT_RESTART_STABLE_SECONDS * 1000
+                ):
+                    state.failures = 0
+                    state.next_restart_at_ms = 0
+                continue
+
+            if poll_now_ms < state.next_restart_at_ms:
+                continue
+
+            exit_code = getattr(proc, "exit_code", None)
+            state.last_exit_code = exit_code() if callable(exit_code) else None
+            state.failures += 1
+            state.last_start_at_ms = poll_now_ms
+            quiet_seconds = LIVE_AGENT_RESTART_BASE_SECONDS
+            for _ in range(min(state.failures - 1, 32)):
+                quiet_seconds = min(LIVE_AGENT_RESTART_MAX_SECONDS, quiet_seconds * 2)
+                if quiet_seconds >= LIVE_AGENT_RESTART_MAX_SECONDS:
+                    break
+            state.next_restart_at_ms = poll_now_ms + int(quiet_seconds * 1000)
+            try:
                 proc.start()
+                state.last_error = ""
+            except Exception as exc:
+                state.last_error = compact_line(str(exc))[:120] or type(exc).__name__
 
     def render(self) -> None:
         clear_screen()
+        render_now_ms = now_ms()
         print("BombaPVP AutoBot — MainBot")
-        print(f"Broker: {'ONLINE' if self.broker.is_running() else 'OFFLINE':7} pid={self.broker.pid()} url={BROKER_BASE}")
+        broker_state = "PROCESS RUNNING" if self.broker.is_running() else "PROCESS STOPPED"
+        print(f"Broker: {broker_state} pid={self.broker.pid()} url={BROKER_BASE}")
         print()
 
         print("Live agents:")
+        print("  Process state only; model response health is not inferred here. Check heartbeat/decision age dashboard.")
         if not self.live_agents:
             print("  none")
         for slot, proc in sorted(self.live_agents.items()):
-            print(f"  P{slot}: {'ONLINE' if proc.is_running() else 'OFFLINE'} pid={proc.pid()}")
+            state = self.live_agent_restart_state.get(slot, LiveAgentRestartState())
+            running = proc.is_running()
+            if running:
+                process_state = "PROCESS RUNNING"
+                retry_label = ""
+            elif render_now_ms < state.next_restart_at_ms:
+                process_state = "RESTART WAIT"
+                retry_seconds = (state.next_restart_at_ms - render_now_ms) / 1000
+                retry_label = f" retry={retry_seconds:.1f}s"
+            else:
+                process_state = "PROCESS STOPPED"
+                retry_label = " retry=now"
+            controller = live_agent_controller_label(proc)
+            exit_label = f" exit={state.last_exit_code}" if state.last_exit_code is not None else ""
+            error_label = f" error={state.last_error}" if state.last_error else ""
+            print(
+                f"  P{slot}: {process_state} pid={proc.pid()} controller={controller}"
+                f"{retry_label} failures={state.failures}{exit_label}{error_label}"
+            )
 
         if self.insights_proc:
             print(f"Insights: {'ONLINE' if self.insights_proc.is_running() else 'OFFLINE'} pid={self.insights_proc.pid()}")
@@ -386,10 +489,12 @@ class MainBot:
             print(f"Game state: phase={r.get('phase','-')} tick={r.get('tick','-')} players={r.get('activePlayers','-')} age={age:.1f}s")
             print()
             decisions = r.get("decisions", {})
+            print("Latest decisions:")
             if decisions:
-                print("Latest decisions:")
                 for pid, d in decisions.items():
                     print(f"  P{pid}: dir={d.get('direction')} bomb={d.get('placeBomb')} reason={str(d.get('reason',''))[:50]}")
+            else:
+                print("  none received — model response not verified")
             events = r.get("recentEvents", [])
             if events:
                 print(f"\nRecent events ({len(events)}):")

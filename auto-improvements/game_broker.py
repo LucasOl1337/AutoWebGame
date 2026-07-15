@@ -9,6 +9,7 @@ Endpoints
 POST /telemetry           game  → broker   game state snapshot
 GET  /state               agent → broker   latest game state
 POST /decision            agent → broker   bot decision
+POST /decision/revoke     agent → broker   discard one superseded model plan
 GET  /decision/<playerId> game  → broker   latest decision for playerId
 GET  /report              console → broker live dashboard report
 GET  /health              anyone          liveness check
@@ -21,6 +22,7 @@ GET  /lab/models          lab UI → broker  available 9Router models
 import json
 import hmac
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -37,8 +39,10 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 try:
+    from action_outcomes import public_action_code, public_execution_state
     from memory import append_event, append_match
 except ModuleNotFoundError:
+    from auto_improvements.action_outcomes import public_action_code, public_execution_state
     from auto_improvements.memory import append_event, append_match
 
 
@@ -116,6 +120,99 @@ def _sanitize_model_name(value: Any) -> str:
         return ""
     allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/:@+")
     return text if all(ch in allowed for ch in text) else ""
+
+
+def _bounded_nonnegative_int(value: Any, maximum: int) -> int:
+    try:
+        return max(0, min(maximum, int(value or 0)))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _sanitize_agent_error_code(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    action_error = re.search(r"action_(\d{1,2})_invalid", text)
+    if action_error:
+        return f"action_{action_error.group(1)}_invalid"
+    action_count = re.search(r"action_count_(\d{1,3})", text)
+    if action_count:
+        return f"action_count_{action_count.group(1)}"
+    plan_oscillation = re.search(r"plan_oscillation_(\d{1,2})", text)
+    if plan_oscillation:
+        return f"plan_oscillation_{plan_oscillation.group(1)}"
+    allowed = {
+        "", "invalid_json", "response_not_object", "micro_actions_missing",
+        "no_valid_actions", "repair_call_failed", "repair_budget_exhausted", "plan_invalid",
+        "model_timeout", "model_access_error", "agent_error",
+    }
+    return text if text in allowed else "agent_error"
+
+
+def normalize_agent_heartbeat(body: dict[str, Any], *, updated_at_ms: int) -> dict[str, Any]:
+    direction = str(body.get("lastActionDirection", "") or "").lower()
+    if direction not in {"up", "down", "left", "right"}:
+        direction = ""
+
+    def bounded_delta(value: Any) -> float:
+        try:
+            number = float(value or 0)
+        except (TypeError, ValueError):
+            return 0.0
+        if number != number or number in {float("inf"), float("-inf")}:
+            return 0.0
+        return round(max(-9_999.0, min(9_999.0, number)), 2)
+
+    return {
+        "status": str(body.get("status", "online") or "online")[:24],
+        "error": _sanitize_agent_error_code(body.get("error", "")),
+        "provider": str(body.get("provider", "") or "")[:40],
+        "model": _sanitize_model_name(body.get("model", "")),
+        "planActionCount": _bounded_nonnegative_int(body.get("planActionCount"), 100),
+        "planValidActionCount": _bounded_nonnegative_int(body.get("planValidActionCount"), 100),
+        "planRequiredActionCount": _bounded_nonnegative_int(body.get("planRequiredActionCount"), 100),
+        "planDurationMs": _bounded_nonnegative_int(body.get("planDurationMs"), 18_000),
+        "planReversalCount": _bounded_nonnegative_int(body.get("planReversalCount"), 99),
+        "planOscillationRun": _bounded_nonnegative_int(body.get("planOscillationRun"), 30),
+        "planValidUntilMs": _bounded_nonnegative_int(body.get("planValidUntilMs"), 9_999_999_999_999),
+        "latencyMs": _bounded_nonnegative_int(body.get("latencyMs"), 120_000),
+        "repairLatencyMs": _bounded_nonnegative_int(body.get("repairLatencyMs"), 120_000),
+        "planRepaired": bool(body.get("planRepaired")),
+        "lastActionOutcome": public_execution_state(body.get("lastActionOutcome")),
+        "lastActionCode": public_action_code(body.get("lastActionCode")),
+        "lastActionRequestId": _bounded_nonnegative_int(body.get("lastActionRequestId"), 99_999_999),
+        "lastActionStep": _bounded_nonnegative_int(body.get("lastActionStep"), 99),
+        "lastActionDirection": direction,
+        "lastActionDeltaX": bounded_delta(body.get("lastActionDeltaX")),
+        "lastActionDeltaY": bounded_delta(body.get("lastActionDeltaY")),
+        "lastActionObservedAt": _bounded_nonnegative_int(body.get("lastActionObservedAt"), 9_999_999_999_999),
+        "blockedActionStreak": _bounded_nonnegative_int(body.get("blockedActionStreak"), 30),
+        "replanRequestId": _bounded_nonnegative_int(body.get("replanRequestId"), 99_999_999),
+        "replanReason": public_action_code(body.get("replanReason")),
+        "replanTriggeredAt": _bounded_nonnegative_int(body.get("replanTriggeredAt"), 9_999_999_999_999),
+        "modelRequestsInFlight": _bounded_nonnegative_int(body.get("modelRequestsInFlight"), 16),
+        "staleModelRequests": _bounded_nonnegative_int(body.get("staleModelRequests"), 16),
+        "updatedAt": int(updated_at_ms),
+    }
+
+
+def revoke_model_decision(player_id: str, max_request_id: int) -> str:
+    """Remove a plan only when it belongs to the invalidated context window."""
+    with _lock:
+        current = _latest_decisions.get(str(player_id))
+        if current is None:
+            return "missing"
+        try:
+            current_request_id = int(current.get("requestId", 0) or 0)
+        except (TypeError, ValueError):
+            current_request_id = 0
+        try:
+            cutoff = int(max_request_id)
+        except (TypeError, ValueError):
+            return "superseded"
+        if current_request_id <= 0 or current_request_id > cutoff:
+            return "superseded"
+        _latest_decisions.pop(str(player_id), None)
+        return "revoked"
 
 
 def _normalize_lab_agent(raw: Any, fallback_slot: str) -> dict[str, str] | None:
@@ -438,6 +535,8 @@ class BrokerHandler(BaseHTTPRequestHandler):
                 self._handle_post_telemetry(body)
             elif path == "/decision":
                 self._handle_post_decision(body)
+            elif path == "/decision/revoke":
+                self._handle_revoke_decision(body)
             elif path == "/event":
                 self._handle_post_event(body)
             elif path == "/agent/heartbeat":
@@ -708,18 +807,26 @@ class BrokerHandler(BaseHTTPRequestHandler):
 
     def _handle_agent_heartbeat(self, body: dict[str, Any]) -> None:
         agent_id = str(body.get("agentId", "") or "unknown")
-        status = str(body.get("status", "online") or "online")[:24]
-        error = "agent_error" if body.get("error") else ""
+        updated_at_ms = now_ms()
         with _lock:
-            _agent_heartbeats[agent_id] = now_ms()
-            _agent_statuses[agent_id] = {
-                "status": status,
-                "error": error,
-                "provider": str(body.get("provider", "") or "")[:40],
-                "model": _sanitize_model_name(body.get("model", "")),
-                "updatedAt": now_ms(),
-            }
+            _agent_heartbeats[agent_id] = updated_at_ms
+            _agent_statuses[agent_id] = normalize_agent_heartbeat(
+                body,
+                updated_at_ms=updated_at_ms,
+            )
         self._send_json(200, {"ok": True})
+
+    def _handle_revoke_decision(self, body: dict[str, Any]) -> None:
+        player_id = str(body.get("playerId", "") or "")
+        request_id = _bounded_nonnegative_int(body.get("requestId"), 99_999_999)
+        max_request_id = _bounded_nonnegative_int(body.get("maxRequestId"), 99_999_999)
+        if not player_id or request_id <= 0:
+            self._send_json(400, {"ok": False, "error": "invalid_revoke_request"})
+            return
+        result = revoke_model_decision(player_id, max(request_id, max_request_id))
+        if result == "revoked":
+            log(f"decision revoked player={player_id} request={request_id} reason=repeated_block")
+        self._send_json(200, {"ok": True, "revoked": result == "revoked", "result": result})
 
     # ------------------------------------------------------------------
     # Dev-panel endpoints (task/insight read + async triggers)

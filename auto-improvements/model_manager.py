@@ -14,6 +14,8 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime, timezone
+from time import monotonic
 try:
     import tomllib
 except ModuleNotFoundError:  # Python < 3.11
@@ -606,6 +608,7 @@ def probe_model(
     **kwargs: Any,
 ) -> dict[str, Any]:
     """Quick probe to validate a model config. Returns a validation dict."""
+    started_at = monotonic()
     text, status = call_model(
         "Reply with exactly: OK",
         "You are a test probe. Reply with exactly: OK",
@@ -615,10 +618,28 @@ def probe_model(
         timeout=15.0,
         **kwargs,
     )
-    is_ok = status == "ok" and text is not None
+    latency_ms = max(0, round((monotonic() - started_at) * 1000))
+    compact_reply = compact_line(text or "")
+    reply_matches = status == "ok" and compact_reply == "OK"
+    if reply_matches:
+        result_code = "ok"
+        message = "Probe confirmed exact OK"
+    elif status == "ok" and not compact_reply:
+        result_code = "empty_reply"
+        message = "Probe returned no text (expected exact OK)"
+    elif status == "ok":
+        result_code = "unexpected_reply"
+        message = "Unexpected probe reply (expected exact OK)"
+    else:
+        result_code = status
+        message = status
+
     return {
-        "status": "ready" if is_ok else "error",
-        "message": text[:80] if text else status,
+        "status": "ready" if reply_matches else "error",
+        "message": message,
+        "resultCode": result_code,
         "provider": provider,
         "requestedModel": model,
+        "latencyMs": latency_ms,
+        "validatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }

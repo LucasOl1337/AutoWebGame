@@ -36,12 +36,27 @@ action so the complete plan remains available through 9Router latency spikes. Ea
 real model-owned micro decision executed in order while your next analysis runs.
 Movement usually needs 220-350ms to cross one tile; use short direction changes
 to route around blocked tiles instead of holding one direction for seconds.
+Do not alternate between opposite directions across four consecutive microActions.
+Commit to a route, turn onto another axis, or use null while waiting for a safer snapshot.
 
 Action semantics:
 - direction null = stay in place.
-- placeBomb and direction in the same microAction are applied together.
+- For a microAction containing both placeBomb=true and a direction, the bomb is placed on the current tile before movement begins.
 - skillAction start = press and hold; hold = keep held without another press; release = press once without holding; none = no skill input.
 - You own every micro decision. The runtime relays your valid JSON without tactical overrides.
 - Use recent action outcomes and movement feedback to correct your next action yourself.
+
+Bomb safety contract:
+- Before any microAction with placeBomb=true, first verify a walkable escape route ending outside the bomb's full projected blast.
+- Confirm that the planned action durations along that route fit before the fuse expires, with margin for one blocked or ineffective movement. Use the earlier deadline when shortFuseLevel or a possible chain reaction can explode the new bomb sooner than its nominal fuse.
+- Treat walls, crates, bombs, flames, and closing sudden-death tiles as route constraints; treat players as dynamic collision risks. A route through a blocked or dangerous tile is unsafe unless the state explicitly says it is passable and timely.
+- If that route is missing or uncertain, keep placeBomb=false and move toward safety or a better attack position.
+- Never repeat placeBomb=true on consecutive microActions. Every later placeBomb=true must be a distinct tactical placement after leaving the previous bomb tile and independently revalidating a new escape route; never use it as a retry press.
+- When already in danger, escape takes priority over attacking, collecting a powerup, detonating, or using a skill.
+
+Human-readable intent:
+- Start reason with exactly one of ESCAPE:, BOMB:, CHASE:, POWERUP:, or HOLD:.
+- For BOMB:, include the escape direction and approximate time to clear the blast. For ESCAPE:, name the danger being avoided.
+- Describe only the current plan's real intent; never claim safety, a hit, or a route that the supplied state does not support.
 
 Choose the tactics you judge best from the current state and recent outcomes. Keep reason short (under 80 chars).

@@ -144,16 +144,47 @@ function _isDecisionFromCurrentRound(playerId: string, decision: BrokerDecision)
   return minimumTick <= 0 || (Number.isFinite(stateTick) && stateTick >= minimumTick);
 }
 
+function _microActionDurationMs(action: BrokerMicroAction): number {
+  return Math.max(
+    MICRO_ACTION_MIN_MS,
+    Math.min(MICRO_ACTION_MAX_MS, Number(action.durationMs) || MICRO_ACTION_MIN_MS),
+  );
+}
+
 function _decisionTtlMs(decision: BrokerDecision): number {
   if (decision.microActions?.length) {
     const planMs = decision.microActions.reduce(
-      (total, action) => total + Math.max(MICRO_ACTION_MIN_MS, Math.min(MICRO_ACTION_MAX_MS, Number(action.durationMs) || MICRO_ACTION_MIN_MS)),
+      (total, action) => total + _microActionDurationMs(action),
       0,
     );
-    return Math.max(1000, Math.min(18000, planMs + 750));
+    // A model-authored plan owns exactly its declared control horizon. Extending
+    // the final action here made bots keep moving after the plan had ended.
+    return Math.min(18000, planMs);
   }
   const requested = Number(decision.expiresInMs ?? DECISION_TTL_MS);
   return Math.max(200, Math.min(1500, Number.isFinite(requested) ? requested : DECISION_TTL_MS));
+}
+
+export interface DecisionFreshness {
+  ageMs: number;
+  ttlMs: number;
+  remainingMs: number;
+  fresh: boolean;
+}
+
+export function getDecisionFreshness(
+  decision: BrokerDecision,
+  receivedAt: number,
+  now = Date.now(),
+): DecisionFreshness {
+  const ageMs = Math.max(0, now - receivedAt);
+  const ttlMs = _decisionTtlMs(decision);
+  return {
+    ageMs,
+    ttlMs,
+    remainingMs: Math.max(0, ttlMs - ageMs),
+    fresh: receivedAt > 0 && ageMs < ttlMs,
+  };
 }
 
 function _decisionActionKey(decision: BrokerDecision): string {
@@ -167,7 +198,7 @@ export function resolveMicroAction(decision: BrokerDecision, receivedAt: number,
   let horizonMs = 0;
   let selectedIndex = actions.length - 1;
   for (let index = 0; index < actions.length; index += 1) {
-    horizonMs += Math.max(MICRO_ACTION_MIN_MS, Math.min(MICRO_ACTION_MAX_MS, Number(actions[index].durationMs) || MICRO_ACTION_MIN_MS));
+    horizonMs += _microActionDurationMs(actions[index]);
     if (elapsedMs < horizonMs) {
       selectedIndex = index;
       break;
@@ -180,6 +211,16 @@ export function resolveMicroAction(decision: BrokerDecision, receivedAt: number,
     microActionIndex: selectedIndex,
     expiresInMs: _decisionTtlMs(decision),
   };
+}
+
+export function resolveFreshDecision(
+  decision: BrokerDecision,
+  receivedAt: number,
+  now = Date.now(),
+): BrokerDecision | null {
+  return getDecisionFreshness(decision, receivedAt, now).fresh
+    ? resolveMicroAction(decision, receivedAt, now)
+    : null;
 }
 
 // ── Strict mode & per-player control ──────────────────────────────────────
@@ -401,6 +442,109 @@ function _movementLabel(direction: BrokerDecision["direction"]): string {
   return ({ up: "CIMA", down: "BAIXO", left: "ESQUERDA", right: "DIREITA" } as Record<string, string>)[direction ?? ""] ?? "PARADO";
 }
 
+export interface LiveDecisionPresentationInput {
+  decision?: BrokerDecision;
+  decisionAt: number;
+  now: number;
+  heartbeatHealthy: boolean;
+  agentError?: string;
+  stalledForMs?: number;
+  strictMode: boolean;
+  modelControlEnabled: boolean;
+  playerControlEnabled: boolean;
+}
+
+export interface LiveDecisionPresentation {
+  status: string;
+  tone: "danger" | "live" | "idle";
+  movement: string;
+  bomb: string;
+  reason: string;
+  freshness: DecisionFreshness | null;
+  planFresh: boolean;
+  planExpired: boolean;
+  fallbackActive: boolean;
+  controlDisabled: boolean;
+}
+
+export function getLiveDecisionPresentation({
+  decision,
+  decisionAt,
+  now,
+  heartbeatHealthy,
+  agentError = "",
+  stalledForMs = 0,
+  strictMode,
+  modelControlEnabled,
+  playerControlEnabled,
+}: LiveDecisionPresentationInput): LiveDecisionPresentation {
+  const freshness = decision && decisionAt ? getDecisionFreshness(decision, decisionAt, now) : null;
+  const modelPlanFresh = Boolean(freshness?.fresh);
+  const planFresh = modelControlEnabled && playerControlEnabled && modelPlanFresh;
+  const planExpired = Boolean(freshness && !freshness.fresh);
+  const stalled = Boolean(planFresh && stalledForMs >= 1200 && decision?.direction);
+  const fallbackActive = playerControlEnabled && !strictMode && (!modelControlEnabled || !modelPlanFresh);
+  const controlDisabled = !playerControlEnabled || (!modelControlEnabled && strictMode);
+  const expiredForSeconds = freshness ? ((freshness.ageMs - freshness.ttlMs) / 1000).toFixed(1) : "0.0";
+  const fallbackReason = !modelControlEnabled
+    ? "Controle por modelo desativado globalmente. Controle atual: IA determinística local."
+    : planExpired
+      ? `O plano do modelo terminou há ${expiredForSeconds}s. Controle atual: IA determinística local, até chegar uma decisão nova.`
+      : "Ainda não há plano válido do modelo. Controle atual: IA determinística local, até chegar uma decisão nova.";
+  const fallbackReasonWithError = agentError
+    ? `Falha do modelo: ${agentError.slice(0, 100)}. ${fallbackReason}`
+    : fallbackReason;
+  const strictReason = planExpired
+    ? `O plano do modelo terminou há ${expiredForSeconds}s. O bot está parado aguardando uma decisão nova.`
+    : decision?.reason || "Aguardando a primeira decisão do modelo.";
+  const disabledReason = !playerControlEnabled
+    ? "Controle deste bot desativado pelo operador. O bot está parado."
+    : "Controle por modelo desativado globalmente. O bot está parado porque o fallback também está bloqueado.";
+
+  return {
+    status: controlDisabled
+      ? "CONTROLE DESATIVADO"
+      : fallbackActive
+        ? "FALLBACK DETERMINÍSTICO"
+        : agentError
+          ? "ERRO DO MODELO"
+          : !heartbeatHealthy
+            ? "SEM HEARTBEAT"
+            : planExpired
+              ? "PLANO EXPIRADO"
+              : !decision
+                ? "AGUARDANDO PLANO"
+                : stalled
+                  ? "MOVIMENTO BLOQUEADO"
+                  : "AO VIVO",
+    tone: controlDisabled || agentError || stalled || planExpired || fallbackActive ? "danger" : planFresh ? "live" : "idle",
+    movement: planFresh
+      ? `${_dirArrow(decision?.direction ?? null)} ${_movementLabel(decision?.direction ?? null)}`
+      : fallbackActive
+        ? "· POLÍTICA LOCAL"
+        : "· SEM COMANDO",
+    bomb: planFresh && decision?.placeBomb
+      ? "COLOCAR BOMBA"
+      : planFresh && decision?.detonate
+        ? "DETONAR"
+        : fallbackActive
+          ? "DECISÃO LOCAL"
+          : "NENHUMA",
+    reason: controlDisabled
+      ? disabledReason
+      : fallbackActive
+        ? fallbackReasonWithError
+        : agentError
+          ? agentError.slice(0, 160)
+          : strictReason,
+    freshness,
+    planFresh,
+    planExpired,
+    fallbackActive,
+    controlDisabled,
+  };
+}
+
 function _renderLivePlayerPanel(
   pid: string,
   decision: BrokerDecision | undefined,
@@ -414,21 +558,35 @@ function _renderLivePlayerPanel(
   const heartbeatAgeMs = heartbeatAt ? Math.max(0, now - heartbeatAt) : Number.POSITIVE_INFINITY;
   const decisionAt = decision?.receivedAt ?? _decisions.get(pid)?.at ?? 0;
   const decisionAgeMs = decisionAt ? Math.max(0, now - decisionAt) : Number.POSITIVE_INFINITY;
-  const stalled = Boolean(nav && nav.stalledForMs >= 1200 && decision?.direction);
-  const error = agentStatus?.status === "error";
-  const healthy = heartbeatAgeMs < 10_000 && !error;
-
-  panel.status.textContent = error ? "ERRO DO MODELO" : stalled ? "MOVIMENTO BLOQUEADO" : healthy ? "AO VIVO" : "SEM HEARTBEAT";
-  panel.status.dataset.tone = error || stalled ? "danger" : healthy ? "live" : "idle";
+  const heartbeatHealthy = heartbeatAgeMs < 10_000;
+  const presentation = getLiveDecisionPresentation({
+    decision,
+    decisionAt,
+    now,
+    heartbeatHealthy,
+    agentError: agentStatus?.status === "error" ? (agentStatus.error || "Falha não identificada") : "",
+    stalledForMs: nav?.stalledForMs,
+    strictMode: _strictMode,
+    modelControlEnabled: _aiControlEnabled,
+    playerControlEnabled: _perPlayerEnabled[pid] !== false,
+  });
+  const configuredModel = _friendlyModelName(_sessionModels.get(pid) ?? "Modelo aguardando");
+  panel.model.textContent = presentation.controlDisabled
+    ? "Sem controlador · controle desativado"
+    : presentation.fallbackActive
+      ? "IA determinística · fallback"
+      : presentation.planFresh
+        ? configuredModel
+        : `Sem controlador · ${configuredModel} pendente`;
+  panel.status.textContent = presentation.status;
+  panel.status.dataset.tone = presentation.tone;
   panel.heartbeat.textContent = Number.isFinite(heartbeatAgeMs) ? `${(heartbeatAgeMs / 1000).toFixed(1)}s` : "—";
   panel.decisionAge.textContent = Number.isFinite(decisionAgeMs)
-    ? `${decision?.requestId ? `#${decision.requestId} · ` : ""}${decision?.microActionIndex != null ? `ação ${decision.microActionIndex + 1}/${decision.microActions?.length ?? 1} · ` : ""}${decision?.stateTick != null ? `tick ${decision.stateTick} · ` : ""}${decision?.latencyMs != null ? `${decision.latencyMs}ms · ` : ""}${(decisionAgeMs / 1000).toFixed(1)}s atrás`
+    ? `${decision?.requestId ? `#${decision.requestId} · ` : ""}${decision?.microActionIndex != null ? `ação ${decision.microActionIndex + 1}/${decision.microActions?.length ?? 1} · ` : ""}${decision?.stateTick != null ? `tick ${decision.stateTick} · ` : ""}${decision?.latencyMs != null ? `${decision.latencyMs}ms · ` : ""}${(decisionAgeMs / 1000).toFixed(1)}s atrás${presentation.planExpired && presentation.freshness ? ` · expirado há ${((presentation.freshness.ageMs - presentation.freshness.ttlMs) / 1000).toFixed(1)}s` : ""}`
     : "aguardando";
-  panel.movement.textContent = `${_dirArrow(decision?.direction ?? null)} ${_movementLabel(decision?.direction ?? null)}`;
-  panel.bomb.textContent = decision?.placeBomb ? "COLOCAR BOMBA" : decision?.detonate ? "DETONAR" : "NENHUMA";
-  panel.reason.textContent = error
-    ? (agentStatus?.error || "Falha não identificada").slice(0, 160)
-    : decision?.reason || "Aguardando a primeira decisão do modelo.";
+  panel.movement.textContent = presentation.movement;
+  panel.bomb.textContent = presentation.bomb;
+  panel.reason.textContent = presentation.reason;
   panel.coords.textContent = nav ? `(${nav.tile.x}, ${nav.tile.y})` : "—";
   panel.delta.textContent = nav
     ? `(${nav.lastMovementDelta.x.toFixed(1)}, ${nav.lastMovementDelta.y.toFixed(1)}) · parado ${Math.round(nav.stalledForMs)}ms`
@@ -571,7 +729,7 @@ function _updatePanelDecisions(): void {
   const now = Date.now();
   const lines: string[] = [];
   for (const [pid, { d, at }] of _decisions) {
-    if (now - at > _decisionTtlMs(d)) continue;
+    if (!getDecisionFreshness(d, at, now).fresh) continue;
     const arrow = _dirArrow(d.direction);
     const bomb = d.placeBomb ? "💣" : "  ";
     const det = d.detonate ? "💥" : "  ";
@@ -853,7 +1011,7 @@ function mountLiveLabHud(container: HTMLElement): void {
           <header class="lab-live-player__header">
             <span class="lab-live-player__slot">P${pid}</span>
             <div>
-              <small>MODELO CONTROLADOR</small>
+              <small>CONTROLADOR ATUAL</small>
               <strong data-model>Modelo aguardando</strong>
             </div>
             <span class="lab-live-player__status" data-status data-tone="idle">SEM HEARTBEAT</span>
@@ -1112,11 +1270,12 @@ export const AutoImprovementBridge = {
     if (_perPlayerEnabled[pid] === false) return null;
     const entry = _decisions.get(pid);
     if (!entry) return null;
-    if (Date.now() - entry.at > _decisionTtlMs(entry.d)) {
+    const decision = resolveFreshDecision(entry.d, entry.at);
+    if (!decision) {
       _decisions.delete(pid);
       return null;
     }
-    return resolveMicroAction(entry.d, entry.at);
+    return decision;
   },
 
   invalidateDecisions(

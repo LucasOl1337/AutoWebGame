@@ -9,14 +9,16 @@
         "type": "array",
         "minItems": 5,
         "maxItems": 5,
-        "prefixItems": [
-          { "type": ["string", "null"], "enum": ["up", "down", "left", "right", null] },
-          { "type": "integer", "minimum": 400, "maximum": 500 },
-          { "type": "boolean" },
-          { "type": "boolean" },
-          { "type": "string", "enum": ["start", "hold", "release", "none"] }
-        ],
-        "items": false
+        "items": {
+          "anyOf": [
+            {
+              "type": ["string", "null"],
+              "enum": ["up", "down", "left", "right", "start", "hold", "release", "none", null]
+            },
+            { "type": "integer", "minimum": 400, "maximum": 500 },
+            { "type": "boolean" }
+          ]
+        }
       }
     },
     "reason": { "type": "string", "maxLength": 120 }

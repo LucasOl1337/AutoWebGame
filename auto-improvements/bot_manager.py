@@ -6,6 +6,7 @@ The roster index lives at bot_memory/roster.json.
 """
 
 import json
+import os
 import time
 from copy import deepcopy
 from pathlib import Path
@@ -90,6 +91,18 @@ AGGRESSION_PRESETS = [
     ("0.7", "Aggressive — pressure opponents often"),
     ("0.9", "Maximum aggression — constant pressure"),
 ]
+
+
+def _codex_route_health(validation: Any) -> tuple[str, int]:
+    """Normalize account validation into a stable routing health group."""
+    if not isinstance(validation, dict):
+        return "unvalidated", 1
+    status = compact_line(str(validation.get("status", "") or "")).lower()
+    if status == "ready":
+        return "ready", 0
+    if status == "error":
+        return "error", 2
+    return "unvalidated", 1
 
 
 # ---------------------------------------------------------------------------
@@ -261,19 +274,55 @@ class BotManager:
             self.update_profile(bot_id, {"codexAccountIds": account_ids})
         self._save_codex_accounts()
 
-    def resolve_codex_homes_for_profile(self, profile: dict[str, Any]) -> list[str]:
-        homes: list[str] = []
-        seen: set[str] = set()
-        for account_id in profile.get("codexAccountIds", []) or []:
-            account = self._codex_accounts.get(str(account_id))
+    def resolve_codex_route_for_profile(self, profile: dict[str, Any]) -> list[dict[str, Any]]:
+        """Return the next configured Codex route, preferring verified accounts.
+
+        Configuration order remains the tie-breaker inside each health group.
+        Unvalidated and known-error homes stay available as explicit fallbacks so
+        legacy profiles do not become unusable merely because they lack a probe.
+        """
+        candidates: list[dict[str, Any]] = []
+        configured_ids = profile.get("codexAccountIds", []) or []
+        for configured_index, raw_account_id in enumerate(configured_ids):
+            account_id = compact_line(str(raw_account_id or ""))
+            account = self._codex_accounts.get(account_id)
             if not account or not account.get("enabled", True):
                 continue
             home = compact_line(str(account.get("codexHome", "") or ""))
-            if not home or home in seen:
+            if not home:
                 continue
-            homes.append(home)
-            seen.add(home)
+            validation_status, health_rank = _codex_route_health(account.get("validation"))
+            candidates.append({
+                "accountId": account_id,
+                "label": compact_line(str(account.get("label", "") or "")) or account_id,
+                "codexHome": home,
+                "validationStatus": validation_status,
+                "configuredIndex": configured_index,
+                "healthRank": health_rank,
+            })
+
         legacy_home = compact_line(str(profile.get("codexHome", "") or ""))
-        if legacy_home and legacy_home not in seen:
-            homes.append(legacy_home)
-        return homes
+        if legacy_home:
+            candidates.append({
+                "accountId": "legacy-profile",
+                "label": "Legacy profile home",
+                "codexHome": legacy_home,
+                "validationStatus": "unvalidated",
+                "configuredIndex": len(configured_ids),
+                "healthRank": 1,
+            })
+
+        candidates.sort(key=lambda entry: (entry["healthRank"], entry["configuredIndex"]))
+        route: list[dict[str, Any]] = []
+        seen_homes: set[str] = set()
+        for candidate in candidates:
+            home = candidate["codexHome"]
+            home_key = os.path.normcase(os.path.normpath(home))
+            if home_key in seen_homes:
+                continue
+            route.append(candidate)
+            seen_homes.add(home_key)
+        return route
+
+    def resolve_codex_homes_for_profile(self, profile: dict[str, Any]) -> list[str]:
+        return [entry["codexHome"] for entry in self.resolve_codex_route_for_profile(profile)]
