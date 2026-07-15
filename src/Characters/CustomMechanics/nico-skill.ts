@@ -59,8 +59,6 @@ export function updateNicoArcaneBeamChannel(
     return false;
   }
   if (!Number.isFinite(deltaMs) || deltaMs <= 0) {
-    player.velocity.x = 0;
-    player.velocity.y = 0;
     return true;
   }
   if (player.skill.phase === "releasing") {

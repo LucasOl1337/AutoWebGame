@@ -346,7 +346,7 @@ for (const phase of ["channeling", "releasing"]) {
   for (const deltaMs of invalidDeltaValues) {
     const invalidDeltaGame = createServerMatch({ 1: 0, 2: 1, 3: 2, 4: 0 });
     const invalidDeltaNico = invalidDeltaGame.players[1];
-    invalidDeltaNico.velocity = { x: Number.POSITIVE_INFINITY, y: Number.NEGATIVE_INFINITY };
+    invalidDeltaNico.velocity = { x: 37, y: -19 };
     invalidDeltaNico.skill = {
       id: "nico-arcane-beam",
       phase,
@@ -356,7 +356,8 @@ for (const phase of ["channeling", "releasing"]) {
       projectedPosition: null,
       projectedLastMoveDirection: "right",
     };
-    const before = { ...invalidDeltaNico.skill };
+    const beforeSkill = { ...invalidDeltaNico.skill };
+    const beforeVelocity = { ...invalidDeltaNico.velocity };
     const handled = updateNicoArcaneBeamChannel(
       invalidDeltaNico,
       null,
@@ -365,13 +366,13 @@ for (const phase of ["channeling", "releasing"]) {
       invalidDeltaGame.createSkillContext(),
     );
     const scenarioPass = handled
-      && invalidDeltaNico.skill.phase === before.phase
-      && invalidDeltaNico.skill.channelRemainingMs === before.channelRemainingMs
-      && invalidDeltaNico.skill.cooldownRemainingMs === before.cooldownRemainingMs
-      && invalidDeltaNico.skill.castElapsedMs === before.castElapsedMs
+      && invalidDeltaNico.skill.phase === beforeSkill.phase
+      && invalidDeltaNico.skill.channelRemainingMs === beforeSkill.channelRemainingMs
+      && invalidDeltaNico.skill.cooldownRemainingMs === beforeSkill.cooldownRemainingMs
+      && invalidDeltaNico.skill.castElapsedMs === beforeSkill.castElapsedMs
       && invalidDeltaGame.magicBeams.length === 0
-      && invalidDeltaNico.velocity.x === 0
-      && invalidDeltaNico.velocity.y === 0;
+      && invalidDeltaNico.velocity.x === beforeVelocity.x
+      && invalidDeltaNico.velocity.y === beforeVelocity.y;
     invalidDeltaNoop = invalidDeltaNoop && scenarioPass;
     invalidDeltaSnapshots.push({
       phase,
