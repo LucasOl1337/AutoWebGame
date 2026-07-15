@@ -849,6 +849,7 @@ export class GlobalLobby extends DurableObject {
       username: typeof payload.username === "string" ? payload.username : "",
       email: typeof payload.email === "string" ? payload.email : "",
       password: typeof payload.password === "string" ? payload.password : "",
+      clientAddress: readRequestIpAddress(request),
     }, currentSessionId);
     return createAccountAuthResponse(result, request.url);
   }

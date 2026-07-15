@@ -118,6 +118,55 @@ button {
   z-index: 1;
 }
 
+.frontend-account-entry {
+  position: absolute;
+  top: 520px;
+  left: 18px;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 184px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  border-radius: 999px;
+  color: #fff;
+  background: color-mix(in srgb, #050505 92%, transparent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+  text-transform: uppercase;
+  backdrop-filter: blur(12px);
+}
+
+.frontend-account-entry:hover,
+.frontend-account-entry:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+  outline: none;
+}
+
+@media (max-width: 720px) {
+  .frontend-account-entry {
+    top: 142px;
+    left: 210px;
+    width: 165px;
+    min-height: 32px;
+    padding-inline: 10px;
+    font-size: 9px;
+  }
+}
+
+@media (max-width: 400px) {
+  .frontend-account-entry {
+    right: 10px;
+    left: auto;
+    width: 150px;
+  }
+}
+
 .bootstrap-state {
   min-height: 100%;
   display: grid;

@@ -196,6 +196,14 @@ function destroyShells(): void {
   accountPage = null;
 }
 
+function mountAccountEntry(): void {
+  const accountEntry = document.createElement("a");
+  accountEntry.className = "frontend-account-entry";
+  accountEntry.href = "/account";
+  accountEntry.textContent = "Entrar / Criar conta";
+  root.append(accountEntry);
+}
+
 async function renderRoute(): Promise<void> {
   const route = resolveFrontendRoute(window.location.pathname);
   frontendStore.setRoute(route);
@@ -218,6 +226,7 @@ async function renderRoute(): Promise<void> {
     destroyShells();
     launcherShell = new LauncherShell(root, frontendStore);
     launcherShell.mount();
+    mountAccountEntry();
     return;
   }
 

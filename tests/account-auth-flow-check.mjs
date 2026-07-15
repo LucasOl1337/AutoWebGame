@@ -135,12 +135,14 @@ assert.equal(upgraded.account.email, "legado@example.com");
 assert.equal(await auth.current("sess_legacy"), null);
 assert.equal((await auth.current(upgraded.session.id))?.id, legacyAccount.id);
 
-for (let attempt = 0; attempt < 5; attempt += 1) {
-  const rejected = await auth.login({
+const concurrentFailures = await Promise.all(Array.from({ length: 5 }, () => (
+  auth.login({
     email: "jogador@example.com",
     password: "tentativa-incorreta-2026",
     clientAddress: "203.0.113.50",
-  });
+  })
+)));
+for (const rejected of concurrentFailures) {
   assert.equal(rejected.status, 401);
 }
 const throttled = await auth.login({
@@ -160,6 +162,32 @@ const afterThrottle = await auth.login({
 });
 assert.equal(afterThrottle.ok, true);
 
+const oversizedPassword = await auth.login({
+  email: "jogador@example.com",
+  password: "x".repeat(129),
+  clientAddress: "203.0.113.60",
+});
+assert.equal(oversizedPassword.ok, false);
+assert.equal(oversizedPassword.status, 401);
+
+const variedEmailStorage = new MemoryAuthStorage();
+const variedEmailAuth = new AccountAuth(variedEmailStorage, { now: () => now });
+const variedEmailFailures = await Promise.all(Array.from({ length: 5 }, (_, index) => (
+  variedEmailAuth.login({
+    email: `desconhecido-${index}@example.com`,
+    password: "segredo-inexistente-2026",
+    clientAddress: "203.0.113.61",
+  })
+)));
+assert.equal(variedEmailFailures.every((result) => result.status === 401), true);
+const variedEmailThrottled = await variedEmailAuth.login({
+  email: "mais-um-desconhecido@example.com",
+  password: "segredo-inexistente-2026",
+  clientAddress: "203.0.113.61",
+});
+assert.equal(variedEmailThrottled.ok, false);
+assert.equal(variedEmailThrottled.status, 429);
+
 const concurrentStorage = new MemoryAuthStorage();
 const concurrentAuth = new AccountAuth(concurrentStorage, { now: () => now });
 const concurrentRegistrations = await Promise.all([
@@ -176,5 +204,78 @@ const concurrentRegistrations = await Promise.all([
 ]);
 assert.equal(concurrentRegistrations.filter((result) => result.ok).length, 1);
 assert.equal(concurrentRegistrations.filter((result) => !result.ok && result.status === 409).length, 1);
+
+const reservedAdminStorage = new MemoryAuthStorage();
+const configuredAdminAuth = new AccountAuth(reservedAdminStorage, {
+  now: () => now,
+  bootstrapAdmin: {
+    email: "reserved-admin@example.com",
+    password: "segredo-admin-reservado-2026",
+  },
+});
+const reservedRegistration = await configuredAdminAuth.register({
+  username: "AdminImpostor",
+  email: "reserved-admin@example.com",
+  password: "segredo-jogador-reservado-2026",
+  clientAddress: "203.0.113.80",
+});
+assert.equal(reservedRegistration.ok, false);
+assert.equal(reservedRegistration.status, 409);
+assert.equal(reservedRegistration.code, "email-unavailable");
+for (let attempt = 0; attempt < 2; attempt += 1) {
+  const repeatedReservedRegistration = await configuredAdminAuth.register({
+    username: `AdminImpostor${attempt}`,
+    email: "reserved-admin@example.com",
+    password: "segredo-jogador-reservado-2026",
+    clientAddress: "203.0.113.80",
+  });
+  assert.equal(repeatedReservedRegistration.status, 409);
+}
+const registrationQuotaReached = await configuredAdminAuth.register({
+  username: "AdminImpostor3",
+  email: "reserved-admin@example.com",
+  password: "segredo-jogador-reservado-2026",
+  clientAddress: "203.0.113.80",
+});
+assert.equal(registrationQuotaReached.ok, false);
+assert.equal(registrationQuotaReached.status, 429);
+
+const legacyConflictStorage = new MemoryAuthStorage();
+const authBeforeAdminConfiguration = new AccountAuth(legacyConflictStorage, { now: () => now });
+const legacyConflictingUser = await authBeforeAdminConfiguration.register({
+  username: "LegacyConflict",
+  email: "legacy-admin@example.com",
+  password: "segredo-usuario-legado-2026",
+});
+assert.equal(legacyConflictingUser.ok, true);
+const authAfterAdminConfiguration = new AccountAuth(legacyConflictStorage, {
+  now: () => now,
+  bootstrapAdmin: {
+    email: "legacy-admin@example.com",
+    password: "segredo-admin-legado-2026",
+  },
+});
+const isolatedAdmin = await authAfterAdminConfiguration.login({
+  email: "legacy-admin@example.com",
+  password: "segredo-admin-legado-2026",
+  clientAddress: "203.0.113.70",
+});
+assert.equal(isolatedAdmin.ok, true);
+assert.equal(isolatedAdmin.account.role, "admin");
+assert.notEqual(isolatedAdmin.account.id, legacyConflictingUser.account.id);
+const unchangedLegacySession = await authAfterAdminConfiguration.current(legacyConflictingUser.session.id);
+assert.equal(unchangedLegacySession?.role, "user");
+assert.equal(unchangedLegacySession?.id, legacyConflictingUser.account.id);
+assert.equal(unchangedLegacySession?.authLevel, "username");
+assert.equal(unchangedLegacySession?.email, null);
+const recoveredLegacyUser = await authAfterAdminConfiguration.register({
+  username: "LegacyConflict",
+  email: "legacy-user-recovered@example.com",
+  password: "segredo-usuario-recuperado-2026",
+  clientAddress: "203.0.113.71",
+}, legacyConflictingUser.session.id);
+assert.equal(recoveredLegacyUser.ok, true);
+assert.equal(recoveredLegacyUser.account.id, legacyConflictingUser.account.id);
+assert.equal(recoveredLegacyUser.account.email, "legacy-user-recovered@example.com");
 
 console.log("account authentication flow: ok");
