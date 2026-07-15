@@ -394,7 +394,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       localControlsMove: "Mover pelo labirinto",
       localControlsBomb: "Colocar bomba",
       localControlsRemote: "Detonar bomba remota",
-      localControlsUltimate: "Virar a rodada",
+      localControlsUltimate: "Ativar a ultimate do personagem",
     },
     lobbies: {
       kicker: "Salas abertas",
@@ -677,7 +677,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
       localControlsMove: "Move through the maze",
       localControlsBomb: "Place bomb",
       localControlsRemote: "Detonate remote bomb",
-      localControlsUltimate: "Turn the round",
+      localControlsUltimate: "Activate the character ultimate",
     },
     lobbies: {
       kicker: "Open rooms",
