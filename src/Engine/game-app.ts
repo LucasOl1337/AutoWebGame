@@ -5392,10 +5392,13 @@ export class GameApp {
       this.drawSpeedSparkTrail(player, x, y, renderDirection);
     }
 
+    this.ctx.save();
+    this.ctx.globalAlpha = alpha;
     this.ctx.fillStyle = "rgba(10, 8, 7, 0.32)";
     this.ctx.beginPath();
     this.ctx.ellipse(x + TILE_SIZE * 0.5, y + TILE_SIZE - 2, TILE_SIZE * 0.4, TILE_SIZE * 0.18, 0, 0, Math.PI * 2);
     this.ctx.fill();
+    this.ctx.restore();
 
     if (sprite) {
       const fullWidth = sprite.naturalWidth || sprite.width || 1;

@@ -1,3 +1,11 @@
+## 2026-07-14 — player-death-shadow-alpha
+- Claim/escopo: sessão `player-death-shadow-alpha`; alterar somente `src/Engine/game-app.ts`, criar `tests/player-death-shadow-feedback-check.mjs` e atualizar os dois ledgers; não tocar em outros hunks/diffs; commit local seletivo; sem push/deploy.
+- Status: concluído.
+- Classificação: Comprovada.
+- Antes → depois: a sombra do jogador ignorava o alpha visual `0.35` aplicado após a morte; agora recebe o mesmo alpha em um bloco `save`/`restore`, mantendo `alpha = 1` e a aparência original da sombra enquanto o jogador está vivo.
+- Evidências: o teste focal observou `deadFallbackAlpha: 0.35`, `liveAlpha: 1`, `shadowUsesVisualAlpha: true` e `shadowStateIsolated: true`.
+- Validações: `node tests/player-death-shadow-feedback-check.mjs`, `npm run compile:esm`, `npm run build` com 58 módulos transformados e `git diff --check` aprovados.
+
 ## 2026-07-14 — hud-flame-guard-remaining-duration
 - Commit funcional: `793f5a4` (`feat(hud): show flame guard duration`).
 - Claim/escopo antes da intervenção: alterar somente a apresentação do estado protegido no HUD em `src/Engine/game-app.ts`, fortalecer `tests/hud-critical-state-feedback-check.mjs` e atualizar os dois registros; exibir `flameGuardMs` restante como `GUARD 1.2s` com uma casa decimal, sem alterar gameplay, timers ou sincronização; preservar diffs alheios e integralmente o claim anterior `onboarding-powerup-variety-flame-protection`; commit local seletivo se todas as validações passarem; sem push/deploy.
