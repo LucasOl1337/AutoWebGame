@@ -3,6 +3,7 @@ Object.defineProperty(globalThis, "navigator", { value: { webdriver: true }, con
 const noop = () => {};
 
 const { GameApp } = await import("../output/esm/Engine/game-app.js");
+const { updateRanniIceBlinkChannel } = await import("../output/esm/Characters/CustomMechanics/ranni-skill.js");
 const { TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
 
 const RANNI_CHANNEL_MS = 1_500;
@@ -252,6 +253,47 @@ const invalidatedDestinationRejected = Math.abs(invalidatedRanni.position.x - be
 const invalidatedDestinationFullCooldown = invalidatedRanni.skill.phase === "cooldown"
   && invalidatedRanni.skill.cooldownRemainingMs > 7_900;
 
+const invalidDeltaGame = createServerMatch({ 1: 0, 2: 1, 3: 0, 4: 1 });
+const invalidDeltaRanni = invalidDeltaGame.players[1];
+invalidDeltaRanni.velocity = { x: Number.POSITIVE_INFINITY, y: Number.NEGATIVE_INFINITY };
+invalidDeltaRanni.skill = {
+  id: "ranni-ice-blink",
+  phase: "channeling",
+  channelRemainingMs: 1_200,
+  cooldownRemainingMs: 0,
+  castElapsedMs: 300,
+  projectedPosition: { x: 144, y: 208 },
+  projectedLastMoveDirection: "right",
+};
+const invalidDeltaContext = invalidDeltaGame.createSkillContext();
+const invalidDeltaSnapshots = [0, -17, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]
+  .map((deltaMs) => {
+    const handled = updateRanniIceBlinkChannel(
+      invalidDeltaRanni,
+      "right",
+      true,
+      deltaMs,
+      invalidDeltaContext,
+    );
+    return {
+      handled,
+      velocity: { ...invalidDeltaRanni.velocity },
+      skill: {
+        ...invalidDeltaRanni.skill,
+        projectedPosition: { ...invalidDeltaRanni.skill.projectedPosition },
+      },
+    };
+  });
+const invalidDeltaNoop = invalidDeltaSnapshots.every((snapshot) => snapshot.handled
+  && snapshot.velocity.x === 0
+  && snapshot.velocity.y === 0
+  && snapshot.skill.phase === "channeling"
+  && snapshot.skill.channelRemainingMs === 1_200
+  && snapshot.skill.castElapsedMs === 300
+  && snapshot.skill.projectedPosition.x === 144
+  && snapshot.skill.projectedPosition.y === 208
+  && snapshot.skill.projectedLastMoveDirection === "right");
+
 const report = {
   beforeX,
   midX,
@@ -282,6 +324,8 @@ const report = {
   invalidatedDestinationRejected,
   invalidatedDestinationCooldownRemainingMs: invalidatedRanni.skill.cooldownRemainingMs,
   invalidatedDestinationFullCooldown,
+  invalidDeltaSnapshots,
+  invalidDeltaNoop,
   pass: frozenInPlace
     && projectedMovedDuringChannel
     && teleportedAfterChannel
@@ -295,6 +339,7 @@ const report = {
     && stationaryBlinkShortCooldown
     && invalidatedDestinationRejected
     && invalidatedDestinationFullCooldown
+    && invalidDeltaNoop
 };
 
 console.log(JSON.stringify(report, null, 2));

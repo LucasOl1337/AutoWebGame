@@ -33,6 +33,9 @@ export function updateRanniIceBlinkChannel(
 ): boolean {
   player.velocity.x = 0;
   player.velocity.y = 0;
+  if (!Number.isFinite(deltaMs) || deltaMs <= 0) {
+    return true;
+  }
   if (skillPressed && player.skill.castElapsedMs > 0) {
     finishRanniBlink(player, context);
     return true;
