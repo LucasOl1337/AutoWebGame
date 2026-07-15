@@ -362,7 +362,8 @@ for (const scenario of [
     projectedPosition: null,
     projectedLastMoveDirection: "right",
   });
-  nonPositiveDeltaCrocodilo.velocity = { x: Number.POSITIVE_INFINITY, y: Number.NaN };
+  const initialVelocity = { x: 3, y: -2 };
+  nonPositiveDeltaCrocodilo.velocity = { ...initialVelocity };
 
   const handled = updateCrocodiloEmeraldSurgeChannel(
     nonPositiveDeltaCrocodilo,
@@ -378,19 +379,26 @@ for (const scenario of [
     phase: nonPositiveDeltaCrocodilo.skill.phase,
     channelRemainingMs: nonPositiveDeltaCrocodilo.skill.channelRemainingMs,
     castElapsedMs: nonPositiveDeltaCrocodilo.skill.castElapsedMs,
+    initialVelocity,
     velocity: { ...nonPositiveDeltaCrocodilo.velocity },
   });
 }
 
-const nonPositiveDeltaNoop = temporalSnapshots.every(({ scenario, handled, phase, channelRemainingMs, castElapsedMs, velocity }) => (
+const nonPositiveDeltaNoop = temporalSnapshots.every(({
+  scenario,
+  handled,
+  phase,
+  channelRemainingMs,
+  castElapsedMs,
+  initialVelocity,
+  velocity,
+}) => (
   handled === true
     && phase === scenario.phase
     && channelRemainingMs === scenario.channelRemainingMs
     && castElapsedMs === scenario.castElapsedMs
-    && velocity.x === 0
-    && velocity.y === 0
-    && Number.isFinite(velocity.x)
-    && Number.isFinite(velocity.y)
+    && velocity.x === initialVelocity.x
+    && velocity.y === initialVelocity.y
 ));
 
 const report = {
