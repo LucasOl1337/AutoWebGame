@@ -68,7 +68,7 @@ export function updateKillerBeeDash(
   if (player.skill.id !== "killer-bee-wing-dash") {
     return false;
   }
-  if (deltaMs <= 0) {
+  if (!Number.isFinite(deltaMs) || deltaMs <= 0) {
     player.velocity.x = 0;
     player.velocity.y = 0;
     return true;

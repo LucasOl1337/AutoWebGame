@@ -97,6 +97,35 @@ const nonPositiveDeltaZeroesFiniteVelocity = bee.velocity.x === 0
   && Number.isFinite(bee.velocity.x)
   && Number.isFinite(bee.velocity.y);
 
+const nonFiniteDeltaResults = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY].map((deltaMs) => {
+  const position = { ...bee.position };
+  const timers = {
+    channelRemainingMs: bee.skill.channelRemainingMs,
+    cooldownRemainingMs: bee.skill.cooldownRemainingMs,
+    castElapsedMs: bee.skill.castElapsedMs,
+  };
+  bee.velocity = { x: 123, y: -456 };
+  const handled = updateKillerBeeDash(bee, deltaMs, {
+    arena: game.arena,
+    canOccupyPosition: () => true,
+    getTileFromPosition: (currentPosition) => ({
+      x: Math.floor(currentPosition.x / TILE_SIZE),
+      y: Math.floor(currentPosition.y / TILE_SIZE),
+    }),
+    getWrappedDelta: (target, origin) => target - origin,
+    normalizeArenaPosition: (currentPosition) => currentPosition,
+  });
+  return handled
+    && bee.position.x === position.x
+    && bee.position.y === position.y
+    && bee.skill.channelRemainingMs === timers.channelRemainingMs
+    && bee.skill.cooldownRemainingMs === timers.cooldownRemainingMs
+    && bee.skill.castElapsedMs === timers.castElapsedMs
+    && bee.velocity.x === 0
+    && bee.velocity.y === 0;
+});
+const nonFiniteDeltaNoop = nonFiniteDeltaResults.every(Boolean);
+
 const firstStepX = bee.position.x;
 const firstSkill = {
   ...bee.skill,
@@ -270,11 +299,14 @@ const report = {
   nonPositiveDeltaPreservesPosition,
   nonPositiveDeltaPreservesTimers,
   nonPositiveDeltaZeroesFiniteVelocity,
+  nonFiniteDeltaResults,
+  nonFiniteDeltaNoop,
   usesCustomDashAnimation,
   pass: nonPositiveDeltaHandled
     && nonPositiveDeltaPreservesPosition
     && nonPositiveDeltaPreservesTimers
     && nonPositiveDeltaZeroesFiniteVelocity
+    && nonFiniteDeltaNoop
     && dashStarted
     && dashMovedOnFirstFrame
     && dashReachedFullDistance
