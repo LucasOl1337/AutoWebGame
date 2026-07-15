@@ -3,6 +3,7 @@ Object.defineProperty(globalThis, "navigator", { value: { webdriver: true }, con
 const noop = () => {};
 
 const { GameApp } = await import("../output/esm/Engine/game-app.js");
+const { updateNicoArcaneBeamChannel } = await import("../output/esm/Characters/CustomMechanics/nico-skill.js");
 const { TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
 
 const NICO_CHANNEL_MS = 2_000;
@@ -337,6 +338,50 @@ const usesReleaseCastTiming = releaseChoice?.frames?.length === 2
   && releaseChoice?.frameMs === Math.floor(NICO_RELEASE_MS / 2)
   && releaseChoice?.playback === "hold";
 
+const nonPositiveDeltaGame = createServerMatch({ 1: 0, 2: 1, 3: 2, 4: 0 });
+const nonPositiveDeltaNico = nonPositiveDeltaGame.players[1];
+nonPositiveDeltaNico.velocity = { x: Number.POSITIVE_INFINITY, y: Number.NEGATIVE_INFINITY };
+nonPositiveDeltaNico.skill = {
+  id: "nico-arcane-beam",
+  phase: "channeling",
+  channelRemainingMs: 1_400,
+  cooldownRemainingMs: 0,
+  castElapsedMs: 600,
+  projectedPosition: null,
+  projectedLastMoveDirection: "right",
+};
+const nonPositiveDeltaContext = nonPositiveDeltaGame.createSkillContext();
+const zeroDeltaHandled = updateNicoArcaneBeamChannel(
+  nonPositiveDeltaNico,
+  null,
+  true,
+  0,
+  nonPositiveDeltaContext,
+);
+const zeroDeltaSnapshot = {
+  velocity: { ...nonPositiveDeltaNico.velocity },
+  skill: { ...nonPositiveDeltaNico.skill },
+};
+const negativeDeltaHandled = updateNicoArcaneBeamChannel(
+  nonPositiveDeltaNico,
+  null,
+  true,
+  -17,
+  nonPositiveDeltaContext,
+);
+const nonPositiveDeltaNoop = zeroDeltaHandled
+  && negativeDeltaHandled
+  && zeroDeltaSnapshot.skill.phase === "channeling"
+  && zeroDeltaSnapshot.skill.channelRemainingMs === 1_400
+  && zeroDeltaSnapshot.skill.castElapsedMs === 600
+  && zeroDeltaSnapshot.velocity.x === 0
+  && zeroDeltaSnapshot.velocity.y === 0
+  && nonPositiveDeltaNico.skill.phase === "channeling"
+  && nonPositiveDeltaNico.skill.channelRemainingMs === 1_400
+  && nonPositiveDeltaNico.skill.castElapsedMs === 600
+  && nonPositiveDeltaNico.velocity.x === 0
+  && nonPositiveDeltaNico.velocity.y === 0;
+
 const report = {
   channelElapsedMs,
   stayedFrozen,
@@ -356,6 +401,9 @@ const report = {
   tallArenaBeamTileKeys: [...tallArenaBeamTileKeys],
   tallArenaBeamUsesRuntimeBounds,
   canceledBeforeFire,
+  nonPositiveDeltaNoop,
+  zeroDeltaSnapshot,
+  nonPositiveDeltaSkill: { ...nonPositiveDeltaNico.skill },
   usesChannelCastTiming,
   usesReleaseCastTiming,
   pass: stayedFrozen
@@ -372,6 +420,7 @@ const report = {
     && largeArenaBeamUsesRuntimeBounds
     && tallArenaBeamUsesRuntimeBounds
     && canceledBeforeFire
+    && nonPositiveDeltaNoop
     && usesChannelCastTiming
     && usesReleaseCastTiming,
 };
