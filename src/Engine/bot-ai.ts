@@ -25,7 +25,8 @@ import {
 
 // Bot-specific constants
 const BOT_DANGER_ARRIVAL_BUFFER_MS = 140;
-const BOT_SCAN_RADIUS = 7;
+const BOT_SCAN_BASE_RADIUS = 7;
+const BOT_SCAN_MAX_RADIUS = 9;
 const BOT_SUDDEN_DEATH_LOOKAHEAD_MS = 2100;
 const BOT_STRATEGIC_MOVE_WINDOW_STEPS = 2;
 const BOT_PREEMPTIVE_ESCAPE_STEPS = 4;
@@ -608,6 +609,7 @@ function findDirectionToNearestTile(
   const visited = new Set<string>([startKey]);
   const danger = actualDanger ?? resolveDangerMap(actualContext);
   const moveDuration = getMoveDuration(player);
+  const scanRadius = Math.min(BOT_SCAN_MAX_RADIUS, BOT_SCAN_BASE_RADIUS + player.speedLevel);
 
   while (queue.length > 0) {
     const distance = queue[0]?.distance;
@@ -645,7 +647,7 @@ function findDirectionToNearestTile(
       return current.first;
     }
 
-    if (current.distance >= BOT_SCAN_RADIUS) {
+    if (current.distance >= scanRadius) {
       continue;
     }
 

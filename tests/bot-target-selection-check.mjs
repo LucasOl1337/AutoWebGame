@@ -125,12 +125,40 @@ distantPlayer.spawnProtectionMs = 0;
 game.botBombCooldownMs = 0;
 
 const decision = game.getBotDecision(bot);
-const pass = decision.placeBomb === true
+const closeTargetPass = decision.placeBomb === true
   && decision.detonate !== true
   && decision.direction === null;
 
+setPlayerTile(bot, { x: 1, y: 1 });
+setPlayerTile(liveTarget, { x: 13, y: 9 });
+setPlayerTile(distantPlayer, { x: 13, y: 7 });
+liveTarget.spawnProtectionMs = 1000;
+distantPlayer.spawnProtectionMs = 1000;
+const speedRangePowerUp = game.arena.powerUps[0];
+speedRangePowerUp.tile = { x: 9, y: 1 };
+speedRangePowerUp.type = "shield-up";
+speedRangePowerUp.revealed = true;
+speedRangePowerUp.collected = false;
+bot.maxBombs = 0;
+bot.speedLevel = 0;
+game.botCommittedDirection[bot.id] = "left";
+const baseSpeedDecision = game.getBotDecision(bot);
+bot.speedLevel = 2;
+const upgradedSpeedDecision = game.getBotDecision(bot);
+bot.speedLevel = 99;
+const cappedSpeedDecision = game.getBotDecision(bot);
+
+const adaptiveRadiusPass = baseSpeedDecision.direction !== "right"
+  && upgradedSpeedDecision.direction === "right"
+  && cappedSpeedDecision.direction === "right";
+const pass = closeTargetPass && adaptiveRadiusPass;
+
 console.log(JSON.stringify({
   decision,
+  baseSpeedDecision,
+  upgradedSpeedDecision,
+  cappedSpeedDecision,
+  adaptiveRadiusPass,
   defeatedP1: { alive: defeatedP1.alive, tile: defeatedP1.tile },
   liveTarget: { alive: liveTarget.alive, tile: liveTarget.tile },
   pass,
