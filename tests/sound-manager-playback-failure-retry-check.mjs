@@ -1,4 +1,5 @@
 const playedUrls = [];
+const playedRates = [];
 const playAttempts = [];
 let rejectPlayback = true;
 let mockNowMs = 0;
@@ -24,6 +25,7 @@ class MockAudio {
       return Promise.reject(new Error("audio output unavailable"));
     }
     playedUrls.push(this.url);
+    playedRates.push(this.playbackRate);
     return Promise.resolve();
   }
 }
@@ -68,17 +70,37 @@ await flushPlayback();
 const throttlesAfterSuccessfulRetryPass = playedUrls.length === 1
   && playAttempts.length === attemptsAfterRetry;
 
+rejectPlayback = true;
+mockNowMs = 200;
+manager.playOneShot("bombPlace");
+await flushPlayback();
+
+rejectPlayback = false;
+mockNowMs = 300;
+manager.playOneShot("bombPlace");
+await flushPlayback();
+
+mockNowMs = 400;
+manager.playOneShot("bombPlace");
+await flushPlayback();
+
+const bombPlaceAcceptedRatePass = playedRates.at(-2) === 0.98
+  && playedRates.at(-1) === 1.02;
+
 const pass = failedPlaybackPass
   && retryAfterFailurePass
-  && throttlesAfterSuccessfulRetryPass;
+  && throttlesAfterSuccessfulRetryPass
+  && bombPlaceAcceptedRatePass;
 
 console.log(JSON.stringify({
   failedAttemptCount,
   failedPlaybackPass,
   retryAfterFailurePass,
   throttlesAfterSuccessfulRetryPass,
+  bombPlaceAcceptedRatePass,
   playAttempts,
   playedUrls,
+  playedRates,
   pass,
 }, null, 2));
 

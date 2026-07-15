@@ -171,6 +171,9 @@ export class SoundManager {
       if (playedVariantIndex !== null && key === "bombExplode") {
         this.lastVariantIndexByKey.set(key, playedVariantIndex);
       }
+      if (playedVariantIndex === null && key === "bombPlace") {
+        this.rewindBombPlacePlaybackRate();
+      }
       if (playedVariantIndex === null && throttleMarkedAtMs !== null && this.lastPlayAtMs.get(key) === throttleMarkedAtMs) {
         this.lastPlayAtMs.delete(key);
       }
@@ -204,6 +207,11 @@ export class SoundManager {
     const rate = rates[this.bombPlacePlaybackRateIndex];
     this.bombPlacePlaybackRateIndex = (this.bombPlacePlaybackRateIndex + 1) % rates.length;
     return rate;
+  }
+
+  private rewindBombPlacePlaybackRate(): void {
+    const rateCount = 2;
+    this.bombPlacePlaybackRateIndex = (this.bombPlacePlaybackRateIndex + rateCount - 1) % rateCount;
   }
 
   private selectDeterministicPlaybackRate(key: SfxKey): number {
