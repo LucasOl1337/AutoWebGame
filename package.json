@@ -28,6 +28,7 @@
     "test:package-scripts-unique": "node tests/package-scripts-unique-check.mjs",
     "test:asset-loader-walk-cycle-warm": "npm run compile:esm && node tests/asset-loader-walk-cycle-warm-check.mjs",
     "test:bot": "npm run compile:esm && node tests/bot-intel-check.mjs",
+    "test:bot-short-fuse-safety": "npm run compile:esm && node tests/bot-short-fuse-bomb-safety-check.mjs",
     "test:character-menu": "npm run compile:esm && node tests/character-selection-menu-check.mjs",
     "test:character-surprise": "npm run compile:esm && node tests/character-surprise-check.mjs",
     "test:bot-own-blast": "npm run compile:esm && node tests/bot-own-blast-escape-check.mjs",
