@@ -3,6 +3,7 @@ Object.defineProperty(globalThis, "navigator", { value: { webdriver: true }, con
 const noop = () => {};
 
 const { GameApp } = await import("../output/esm/Engine/game-app.js");
+const { updateCrocodiloEmeraldSurgeChannel } = await import("../output/esm/Characters/CustomMechanics/crocodilo-skill.js");
 const { TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
 
 const CROCODILO_CHANNEL_MS = 1_600;
@@ -335,6 +336,57 @@ const usesReleaseCastTiming = releaseChoice?.frames?.length === 2
   && releaseChoice?.frameMs === Math.floor(CROCODILO_RELEASE_MS / 2)
   && releaseChoice?.playback === "hold";
 
+const nonPositiveDeltaGame = createServerMatch({ 1: 0, 2: 1, 3: 2, 4: 0 });
+const nonPositiveDeltaCrocodilo = nonPositiveDeltaGame.players[1];
+const nonPositiveDeltaContext = nonPositiveDeltaGame.createSkillContext();
+const temporalSnapshots = [];
+
+for (const scenario of [
+  { phase: "channeling", deltaMs: 0, channelRemainingMs: 1_000, castElapsedMs: 600 },
+  { phase: "channeling", deltaMs: -17, channelRemainingMs: 1_000, castElapsedMs: 600 },
+  { phase: "releasing", deltaMs: 0, channelRemainingMs: 160, castElapsedMs: 80 },
+  { phase: "releasing", deltaMs: -17, channelRemainingMs: 160, castElapsedMs: 80 },
+]) {
+  Object.assign(nonPositiveDeltaCrocodilo.skill, {
+    id: "crocodilo-emerald-surge",
+    phase: scenario.phase,
+    channelRemainingMs: scenario.channelRemainingMs,
+    cooldownRemainingMs: 0,
+    castElapsedMs: scenario.castElapsedMs,
+    projectedPosition: null,
+    projectedLastMoveDirection: "right",
+  });
+  nonPositiveDeltaCrocodilo.velocity = { x: Number.POSITIVE_INFINITY, y: Number.NaN };
+
+  const handled = updateCrocodiloEmeraldSurgeChannel(
+    nonPositiveDeltaCrocodilo,
+    "left",
+    false,
+    scenario.deltaMs,
+    nonPositiveDeltaContext,
+  );
+
+  temporalSnapshots.push({
+    scenario,
+    handled,
+    phase: nonPositiveDeltaCrocodilo.skill.phase,
+    channelRemainingMs: nonPositiveDeltaCrocodilo.skill.channelRemainingMs,
+    castElapsedMs: nonPositiveDeltaCrocodilo.skill.castElapsedMs,
+    velocity: { ...nonPositiveDeltaCrocodilo.velocity },
+  });
+}
+
+const nonPositiveDeltaNoop = temporalSnapshots.every(({ scenario, handled, phase, channelRemainingMs, castElapsedMs, velocity }) => (
+  handled === true
+    && phase === scenario.phase
+    && channelRemainingMs === scenario.channelRemainingMs
+    && castElapsedMs === scenario.castElapsedMs
+    && velocity.x === 0
+    && velocity.y === 0
+    && Number.isFinite(velocity.x)
+    && Number.isFinite(velocity.y)
+));
+
 const report = {
   channelElapsedMs,
   stayedFrozen,
@@ -354,6 +406,8 @@ const report = {
   largeArenaSurgeUsesRuntimeBounds,
   usesChannelCastTiming,
   usesReleaseCastTiming,
+  temporalSnapshots,
+  nonPositiveDeltaNoop,
   pass: stayedFrozen
     && channelingObserved
     && enteredReleaseOnFullHold
@@ -368,7 +422,8 @@ const report = {
     && canceledBeforeFire
     && largeArenaSurgeUsesRuntimeBounds
     && usesChannelCastTiming
-    && usesReleaseCastTiming,
+    && usesReleaseCastTiming
+    && nonPositiveDeltaNoop,
 };
 
 console.log(JSON.stringify(report, null, 2));
