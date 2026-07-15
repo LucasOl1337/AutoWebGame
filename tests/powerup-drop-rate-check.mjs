@@ -1,6 +1,15 @@
 Object.defineProperty(globalThis, "navigator", { value: { webdriver: false }, configurable: true });
 Object.defineProperty(globalThis, "HTMLElement", { value: class HTMLElement {}, configurable: true });
 
+const arenaSource = await (await import("node:fs/promises")).readFile(
+  new URL("../src/Arenas/arena.ts", import.meta.url),
+  "utf8",
+);
+const dropPoolSource = arenaSource.match(/const dropPool:[\s\S]*?= \[([\s\S]*?)\n  \];/)?.[1] ?? "";
+const speedUpPoolSlots = [...dropPoolSource.matchAll(/"speed-up"/g)].length;
+const expectedSpeedUpPoolSlots = 5;
+const hasExpectedSpeedUpPoolSlots = speedUpPoolSlots === expectedSpeedUpPoolSlots;
+
 const noop = () => {};
 const listeners = new Map();
 
@@ -141,6 +150,9 @@ const hasExpectedDeterministicDistribution = Object.entries(expectedDropTypeCoun
   .every(([type, count]) => actualDropTypeCounts[type] === count);
 
 const report = {
+  speedUpPoolSlots,
+  expectedSpeedUpPoolSlots,
+  hasExpectedSpeedUpPoolSlots,
   breakableCount,
   dropCount,
   expectedDropCount,
@@ -160,7 +172,8 @@ const report = {
   specialDropCount,
   hasDenseBreakables,
   pass: (
-    hasDenseBreakables
+    hasExpectedSpeedUpPoolSlots
+    && hasDenseBreakables
     && dropCount === expectedDropCount
     && roundedDropRatio === expectedDropRatio
     && hasExpectedDeterministicDistribution
