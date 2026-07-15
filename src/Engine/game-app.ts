@@ -150,6 +150,7 @@ import { SITE_COPY, type SiteLanguage } from "../UiLayouts/i18n";
 const KICK_SLIDE_MAX_TILES = 3;
 const KICK_FUSE_PENALTY_MS_PER_TILE = 250;
 const KICK_FUSE_MIN_MS = 450;
+const KICK_IMPACT_FEEDBACK_MS = 220;
 const DEMOLITION_COMBO_MIN_CRATES = 2;
 const DEMOLITION_COMBO_DROP_TYPES: readonly SkillPowerUpType[] = [
   "bomb-up",
@@ -365,6 +366,11 @@ interface CrateBreakAnimation {
   elapsedMs: number;
 }
 
+interface BombKickImpactFeedback {
+  bombId: number;
+  elapsedMs: number;
+}
+
 interface PowerUpPickupNotice {
   playerId: PlayerId;
   type: SkillPowerUpType;
@@ -482,6 +488,7 @@ export class GameApp {
   private botPendingReverseFrames: Record<PlayerId, number> = createNumberPlayerRecord(0);
   private animationClockMs = 0;
   private crateBreakAnimations: CrateBreakAnimation[] = [];
+  private bombKickImpactFeedback: BombKickImpactFeedback[] = [];
   private powerUpRevealStartedAtMs = new Map<PowerUpState, number>();
   private powerUpPickupNotices: PowerUpPickupNotice[] = [];
   private pickupChains: Record<PlayerId, PickupChainState> = createPlayerRecord(() => createPickupChainState());
@@ -2841,6 +2848,8 @@ export class GameApp {
       bomb.fuseMs = 0;
     }
     bomb.ownerCanPass = false;
+    this.bombKickImpactFeedback = this.bombKickImpactFeedback.filter((effect) => effect.bombId !== bomb.id);
+    this.bombKickImpactFeedback.push({ bombId: bomb.id, elapsedMs: 0 });
     if (impactBreakableKey) {
       this.breakCrateAtKey(impactBreakableKey);
     }
@@ -3240,6 +3249,16 @@ export class GameApp {
       }
       this.crateBreakAnimations = this.crateBreakAnimations.filter((effect) => (
         effect.elapsedMs < CRATE_BREAK_DURATION_MS
+      ));
+    }
+
+    if (this.bombKickImpactFeedback.length > 0) {
+      for (const effect of this.bombKickImpactFeedback) {
+        effect.elapsedMs += deltaMs;
+      }
+      this.bombKickImpactFeedback = this.bombKickImpactFeedback.filter((effect) => (
+        effect.elapsedMs < KICK_IMPACT_FEEDBACK_MS
+        && this.bombs.some((bomb) => bomb.id === effect.bombId)
       ));
     }
 
@@ -5027,6 +5046,23 @@ export class GameApp {
     const armedScale = 1 + (pulse - 0.6) * 0.1;
     const x = bomb.tile.x * TILE_SIZE;
     const y = bomb.tile.y * TILE_SIZE;
+    const kickImpact = this.bombKickImpactFeedback.find((effect) => effect.bombId === bomb.id);
+    if (kickImpact) {
+      const progress = Math.min(1, kickImpact.elapsedMs / KICK_IMPACT_FEEDBACK_MS);
+      this.ctx.save();
+      this.ctx.strokeStyle = `rgba(255, 232, 138, ${0.9 * (1 - progress)})`;
+      this.ctx.lineWidth = 3 - progress * 1.5;
+      this.ctx.beginPath();
+      this.ctx.arc(
+        x + TILE_SIZE / 2,
+        y + TILE_SIZE / 2,
+        14 + progress * 8,
+        0,
+        Math.PI * 2,
+      );
+      this.ctx.stroke();
+      this.ctx.restore();
+    }
     const isFinalFuse = bomb.fuseMs <= 450;
     if (isFinalFuse) {
       const urgency = 1 - Math.max(0, bomb.fuseMs) / 450;
