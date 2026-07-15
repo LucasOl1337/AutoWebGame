@@ -17,7 +17,7 @@ export function createPickupChainState(): PickupChainState {
 }
 
 export function advancePickupChain(state: PickupChainState, deltaMs: number): void {
-  if (deltaMs <= 0) {
+  if (!Number.isFinite(deltaMs) || deltaMs <= 0) {
     return;
   }
 

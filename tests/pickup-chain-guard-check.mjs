@@ -112,6 +112,16 @@ const zeroDeltaState = { ...nonPositiveDeltaState };
 advancePickupChain(nonPositiveDeltaState, -250);
 const negativeDeltaState = { ...nonPositiveDeltaState };
 
+const nonFiniteDeltaStates = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]
+  .map((deltaMs) => {
+    const state = { previousType: "flame-up", remainingMs: 2_000 };
+    advancePickupChain(state, deltaMs);
+    return { deltaMs: String(deltaMs), ...state };
+  });
+const nonFiniteDeltaNoop = nonFiniteDeltaStates.every((state) => (
+  state.previousType === "flame-up" && state.remainingMs === 2_000
+));
+
 const report = {
   constants: { PICKUP_CHAIN_WINDOW_MS, PICKUP_CHAIN_ROLLING_WINDOW_MS, PICKUP_CHAIN_GUARD_MS },
   armedState: {
@@ -141,11 +151,14 @@ const report = {
     flameGuardMs: expiredState.flameGuardMs,
   },
   negativeDeltaState,
+  nonFiniteDeltaStates,
+  nonFiniteDeltaNoop,
   nonPositiveDeltaNoop: zeroDeltaState.previousType === "bomb-up"
     && zeroDeltaState.remainingMs === 2_000
     && negativeDeltaState.previousType === "bomb-up"
     && negativeDeltaState.remainingMs === 2_000,
-  pass: zeroDeltaState.previousType === "bomb-up"
+  pass: nonFiniteDeltaNoop
+    && zeroDeltaState.previousType === "bomb-up"
     && zeroDeltaState.remainingMs === 2_000
     && negativeDeltaState.previousType === "bomb-up"
     && negativeDeltaState.remainingMs === 2_000
