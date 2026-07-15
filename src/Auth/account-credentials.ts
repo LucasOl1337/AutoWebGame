@@ -5,7 +5,9 @@ export type AccountRole = "user" | "admin";
 
 export const PASSWORD_MIN_LENGTH = 12;
 export const PASSWORD_MAX_LENGTH = 128;
-export const PASSWORD_HASH_ITERATIONS = 600_000;
+// Cloudflare Workers Web Crypto rejects PBKDF2 iteration counts above 100,000.
+// Rate limits and the 12-character password floor provide the surrounding defense.
+export const PASSWORD_HASH_ITERATIONS = 100_000;
 
 export interface PasswordCredential {
   algorithm: "PBKDF2-SHA256";

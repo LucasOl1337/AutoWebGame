@@ -98,7 +98,7 @@ Scope: real project files in the current working directory. Ignored for analysis
 - Como e acessada/usada: `/account` renderiza login/registro; o Worker expoe `/api/auth/session`, `/api/auth/register`, `/api/auth/login` e `/api/auth/logout`; contas com papel `admin` seguem para `/admin`.
 - Dependencias internas: `AccountAuth`, adaptador de storage do `GlobalLobby`, Web Crypto/PBKDF2, roteador frontend, `handleFeedbackIngest`.
 - Status: funcional
-- Observacoes tecnicas: Credenciais armazenadas usam PBKDF2-SHA256 com salt; sessoes, tentativas e contas ficam no storage do Durable Object. Operacoes de hash sao serializadas e protegidas por limites globais e por IP; registro tem quota propria. O bootstrap administrativo continua fail-closed, reserva o e-mail configurado e depende dos secrets `ADMIN_USERNAME` e `ADMIN_PASSWORD`.
+- Observacoes tecnicas: Credenciais armazenadas usam PBKDF2-SHA256 com salt e o limite de 100 mil iteracoes aceito pelo Web Crypto do Worker; sessoes, tentativas e contas ficam no storage do Durable Object. Operacoes de hash sao serializadas e protegidas por limites globais e por IP; registro tem quota propria. O bootstrap administrativo continua fail-closed, reserva o e-mail configurado e depende dos secrets `ADMIN_USERNAME` e `ADMIN_PASSWORD`.
 
 ## 2. Funcoes de estrutura e backend
 

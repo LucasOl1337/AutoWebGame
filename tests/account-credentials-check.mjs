@@ -43,6 +43,7 @@ assert.equal(weakPassword.code, "password-too-short");
 const credential = await createPasswordCredential("um-segredo-forte-2026");
 assert.equal(credential.algorithm, "PBKDF2-SHA256");
 assert.equal(credential.iterations, PASSWORD_HASH_ITERATIONS);
+assert.equal(PASSWORD_HASH_ITERATIONS, 100_000);
 assert.match(credential.salt, /^[A-Za-z0-9_-]+$/);
 assert.match(credential.hash, /^[A-Za-z0-9_-]+$/);
 assert.equal(await verifyPasswordCredential("um-segredo-forte-2026", credential), true);
