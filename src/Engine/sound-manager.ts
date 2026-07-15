@@ -167,8 +167,11 @@ export class SoundManager {
       : this.selectDeterministicPlaybackRate(key);
 
     const throttleMarkedAtMs = policy?.minIntervalMs !== undefined ? nowMs : null;
-    void this.playVariantWithFallback(variants, startIndex, gain, playbackRate).then((played) => {
-      if (!played && throttleMarkedAtMs !== null && this.lastPlayAtMs.get(key) === throttleMarkedAtMs) {
+    void this.playVariantWithFallback(variants, startIndex, gain, playbackRate).then((playedVariantIndex) => {
+      if (playedVariantIndex !== null && key === "bombExplode") {
+        this.lastVariantIndexByKey.set(key, playedVariantIndex);
+      }
+      if (playedVariantIndex === null && throttleMarkedAtMs !== null && this.lastPlayAtMs.get(key) === throttleMarkedAtMs) {
         this.lastPlayAtMs.delete(key);
       }
     });
@@ -182,7 +185,7 @@ export class SoundManager {
 
     const previousIndex = this.lastVariantIndexByKey.get(key);
     let nextIndex: number;
-    if (key === "powerCollect") {
+    if (key === "bombExplode" || key === "powerCollect") {
       nextIndex = previousIndex === undefined ? 0 : (previousIndex + 1) % variantCount;
     } else {
       nextIndex = Math.floor(Math.random() * variantCount);
@@ -190,7 +193,9 @@ export class SoundManager {
         nextIndex = (nextIndex + 1) % variantCount;
       }
     }
-    this.lastVariantIndexByKey.set(key, nextIndex);
+    if (key !== "bombExplode") {
+      this.lastVariantIndexByKey.set(key, nextIndex);
+    }
     return nextIndex;
   }
 
@@ -217,9 +222,10 @@ export class SoundManager {
     startIndex: number,
     gain: number,
     playbackRate: number,
-  ): Promise<boolean> {
+  ): Promise<number | null> {
     for (let attempt = 0; attempt < variants.length; attempt += 1) {
-      const base = variants[(startIndex + attempt) % variants.length];
+      const variantIndex = (startIndex + attempt) % variants.length;
+      const base = variants[variantIndex];
       const clone = base.cloneNode(true) as HTMLAudioElement;
       clone.volume = clampVolume(base.volume * gain * this.volume);
       clone.playbackRate = playbackRate;
@@ -227,12 +233,12 @@ export class SoundManager {
 
       try {
         await clone.play();
-        return true;
+        return variantIndex;
       } catch {
         // Try the next variation if the chosen one fails.
       }
     }
-    return false;
+    return null;
   }
 
   private unbindUnlock(): void {

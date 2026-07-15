@@ -37,6 +37,8 @@ Object.defineProperty(globalThis, "performance", {
   },
 });
 
+const flushPlayback = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 const { SoundManager, SFX_MANIFEST } = await import("../output/esm/Engine/sound-manager.js");
 
 Math.random = () => 0;
@@ -62,23 +64,29 @@ manager.unlocked = true;
 
 manager.playOneShot("bombExplode");
 manager.playOneShot("bombExplode");
-await Promise.resolve();
+await flushPlayback();
 const playbackPass = playedUrls.length === 1
   && playedUrls[0] === "/Assets/SoundEffects/bomb_explode_default.mp3";
 
 mockNowMs = 200;
 manager.playOneShot("bombExplode");
-await Promise.resolve();
-const antiSpamPass = playedUrls.length === 2;
-const variationPass = playedUrls[1] === "/Assets/SoundEffects/bomb_explode_main.mp3";
-
+await flushPlayback();
 mockNowMs = 400;
+manager.playOneShot("bombExplode");
+await flushPlayback();
+const explosionUrls = playedUrls.filter((url) => url.includes("bomb_explode"));
+const antiSpamPass = explosionUrls.length === 3;
+const variationPass = explosionUrls[0]?.endsWith("bomb_explode_default.mp3")
+  && explosionUrls[1]?.endsWith("bomb_explode_main.mp3")
+  && explosionUrls[2]?.endsWith("bomb_explode_default.mp3");
+
+mockNowMs = 600;
 manager.playOneShot("bombPlace");
 manager.playOneShot("bombPlace");
 await Promise.resolve();
 const bombPlaceSameFramePass = playedUrls.filter((url) => url.endsWith("bomb_place.mp3")).length === 1;
 
-mockNowMs = 446;
+mockNowMs = 646;
 manager.playOneShot("bombPlace");
 await Promise.resolve();
 const bombPlaceRecoveryPass = playedUrls.filter((url) => url.endsWith("bomb_place.mp3")).length === 2;
