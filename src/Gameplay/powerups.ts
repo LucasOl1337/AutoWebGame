@@ -75,7 +75,7 @@ const POWER_UP_DEFINITIONS: Readonly<Record<PowerUpType, PowerUpDefinition>> = {
   },
   "short-fuse-up": {
     type: "short-fuse-up",
-    label: "Short Fuse",
+    label: "Faster Fuse",
     shortLabel: "SF",
     tint: "#ff5eea",
     maxLevel: MAX_SHORT_FUSE_LEVEL,
