@@ -170,7 +170,8 @@ async function bootstrapGame(rootElement: HTMLDivElement, route: GameRoute): Pro
 
   if ((import.meta.env.DEV || livePlayerIds.length > 0) && autobotParam !== null) {
     const botFill = parseInt(autobotParam, 10);
-    game.startOfflineBotMatch(isNaN(botFill) ? 3 : botFill, "endless");
+    const { headlessAutomationConsumer } = await import("../BotLab/headless-automation-consumer");
+    headlessAutomationConsumer.startLegacyLocalEndless(game, isNaN(botFill) ? 3 : botFill);
   }
 }
 

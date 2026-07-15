@@ -29,6 +29,10 @@ import type {
   PlayerState,
   PowerUpState,
 } from "../Gameplay/types";
+import type {
+  BrowserSeriesEvent,
+  BrowserSeriesRequest,
+} from "../BotLab/headless-series-worker-controller";
 import type { BotDecision } from "./bot-ai";
 
 const LAB_API_BASE = "/api/lab";
@@ -878,8 +882,65 @@ export function mountDevPanel(container: HTMLElement): void {
   const startMatchBtn = _btn("🎮 Endless Match", "#003322", "#00ff99", () => {
     const g = (window as Window & { __autobot?: { startOfflineBotMatch: (n: number, mode: string) => void } }).__autobot;
     if (!g) { _showOutput("Game not ready. Navigate to the game page first."); return; }
-    g.startOfflineBotMatch(3, "endless");
-    _showOutput("♾️ Endless match started with 3 bots!\nAI agents will control players.\nWatch the decisions panel below for live moves.");
+    void import("../BotLab/headless-automation-consumer")
+      .then(({ headlessAutomationConsumer }) => {
+        headlessAutomationConsumer.startLegacyLocalEndless(g, 3);
+        _showOutput("♾️ Endless match started with 3 bots!\nAI agents will control players.\nWatch the decisions panel below for live moves.");
+      })
+      .catch(() => _showOutput("Could not load the local compatibility adapter."));
+  });
+
+  let headlessSeriesWorker: Worker | null = null;
+  const releaseHeadlessSeriesWorker = (): void => {
+    headlessSeriesWorker?.terminate();
+    headlessSeriesWorker = null;
+  };
+  const headlessSeriesBtn = _btn("🧪 Headless Series", "#122640", "#7dd3fc", () => {
+    if (headlessSeriesWorker) {
+      const cancelRequest: BrowserSeriesRequest = { type: "command", command: "cancel" };
+      headlessSeriesWorker.postMessage(cancelRequest);
+      _showOutput("Cancelling the headless series at the next round boundary…");
+      return;
+    }
+
+    _showOutput("Starting a two-round canonical headless series…");
+    const worker = new Worker(
+      new URL("../BotLab/headless-series-browser-worker.ts", import.meta.url),
+      { type: "module", name: "bomba-headless-series" },
+    );
+    headlessSeriesWorker = worker;
+    worker.onmessage = (event: MessageEvent<BrowserSeriesEvent>) => {
+      if (event.data.type === "snapshot") {
+        const snapshot = event.data.snapshot;
+        _showOutput(
+          `Headless series: ${snapshot.phase}\nRounds: ${snapshot.completedRounds}/${snapshot.totalRounds}\nTicks: ${snapshot.totalSteps}`,
+        );
+        return;
+      }
+      if (event.data.type === "result") {
+        const receipt = event.data.receipt;
+        const winner = receipt.rounds.at(-1)?.receipt.winner ?? "none";
+        _showOutput(
+          `Headless series: ${receipt.status}\nRounds: ${receipt.completedRounds}\nLast winner: ${winner}\nTicks: ${receipt.totalSteps}`,
+        );
+      } else {
+        _showOutput(`Headless series failed closed: ${event.data.error ?? "invalid worker response"}`);
+      }
+      releaseHeadlessSeriesWorker();
+    };
+    worker.onerror = () => {
+      _showOutput("Headless series worker failed before producing evidence.");
+      releaseHeadlessSeriesWorker();
+    };
+    const startRequest: BrowserSeriesRequest = {
+      type: "start",
+      plan: {
+        id: `dev-series-${Date.now()}`,
+        roundCount: 2,
+        botFill: 1,
+      },
+    };
+    worker.postMessage(startRequest);
   });
 
   const reportsBtn = _btn("📊 Reports", "#1a1a3a", "#aaaaff", () => {
@@ -912,7 +973,7 @@ export function mountDevPanel(container: HTMLElement): void {
 
   const gameRow = document.createElement("div");
   gameRow.style.cssText = "display:flex;gap:4px;flex-wrap:wrap;";
-  gameRow.append(startMatchBtn, reportsBtn);
+  gameRow.append(startMatchBtn, headlessSeriesBtn, reportsBtn);
 
   const btnsRow1 = document.createElement("div");
   btnsRow1.style.cssText = "display:flex;gap:4px;flex-wrap:wrap;";
