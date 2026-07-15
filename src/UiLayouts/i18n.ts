@@ -534,7 +534,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
     },
     canvas: {
       pausedTitle: "PAUSADO",
-      pausedSubtitle: "Pressione Esc para continuar.",
+      pausedSubtitle: "Esc: continuar",
       roundStartTitle: (round) => `RODADA ${round}`,
       roundStartSubtitle: "Objetivo: seja o ultimo bomber vivo. Partida classica: primeiro a 2 vitorias.",
       arenaRebooting: "Ponto garantido. Arena reiniciando...",
@@ -817,7 +817,7 @@ export const SITE_COPY: Record<SiteLanguage, SiteCopy> = {
     },
     canvas: {
       pausedTitle: "PAUSED",
-      pausedSubtitle: "Press Esc to resume.",
+      pausedSubtitle: "Esc: resume",
       roundStartTitle: (round) => `ROUND ${round}`,
       roundStartSubtitle: "Objective: be the last bomber alive. Classic match: first to 2 wins.",
       arenaRebooting: "Point secured. Arena rebooting...",
