@@ -8,6 +8,7 @@ const {
   PICKUP_CHAIN_ROLLING_WINDOW_MS,
   PICKUP_CHAIN_WINDOW_MS,
   advancePickupChain,
+  registerPickupForChain,
 } = await import("../output/esm/Gameplay/pickup-chain.js");
 
 const emptySprites = {
@@ -122,6 +123,18 @@ const nonFiniteDeltaNoop = nonFiniteDeltaStates.every((state) => (
   state.previousType === "flame-up" && state.remainingMs === 2_000
 ));
 
+const invalidRegistrationStates = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]
+  .map((remainingMs) => {
+    const state = { previousType: "bomb-up", remainingMs };
+    const completedChain = registerPickupForChain(state, "flame-up");
+    return { initialRemainingMs: String(remainingMs), completedChain, ...state };
+  });
+const invalidRegistrationRecovers = invalidRegistrationStates.every((state) => (
+  state.completedChain === false
+  && state.previousType === "flame-up"
+  && state.remainingMs === PICKUP_CHAIN_WINDOW_MS
+));
+
 const report = {
   constants: { PICKUP_CHAIN_WINDOW_MS, PICKUP_CHAIN_ROLLING_WINDOW_MS, PICKUP_CHAIN_GUARD_MS },
   armedState: {
@@ -153,11 +166,14 @@ const report = {
   negativeDeltaState,
   nonFiniteDeltaStates,
   nonFiniteDeltaNoop,
+  invalidRegistrationStates,
+  invalidRegistrationRecovers,
   nonPositiveDeltaNoop: zeroDeltaState.previousType === "bomb-up"
     && zeroDeltaState.remainingMs === 2_000
     && negativeDeltaState.previousType === "bomb-up"
     && negativeDeltaState.remainingMs === 2_000,
   pass: nonFiniteDeltaNoop
+    && invalidRegistrationRecovers
     && zeroDeltaState.previousType === "bomb-up"
     && zeroDeltaState.remainingMs === 2_000
     && negativeDeltaState.previousType === "bomb-up"

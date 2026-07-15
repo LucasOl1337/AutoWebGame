@@ -28,6 +28,11 @@ export function advancePickupChain(state: PickupChainState, deltaMs: number): vo
 }
 
 export function registerPickupForChain(state: PickupChainState, type: PowerUpType): boolean {
+  if (!Number.isFinite(state.remainingMs)) {
+    state.previousType = null;
+    state.remainingMs = 0;
+  }
+
   const completedChain = state.remainingMs > 0
     && state.previousType !== null
     && state.previousType !== type;
