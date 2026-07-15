@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-07-15T11:21:46-03:00",
+  "generatedAt": "2026-07-15T11:34:01-03:00",
   "repository": "C:\\Projetos\\AutoWebGame",
-  "source": "codegraph files --json from clean commit 1ebe465",
+  "source": "codegraph files --json from clean commit f415666",
   "files": [
     {
       "path": "GameRes/GameDev-Resources/.travis.yml",
@@ -187,7 +187,7 @@
       "path": "src/Auth/account-credentials.ts",
       "language": "typescript",
       "nodeCount": 25,
-      "size": 7351
+      "size": 7517
     },
     {
       "path": "src/Auth/account-page.ts",
@@ -571,7 +571,7 @@
       "path": "tests/account-credentials-check.mjs",
       "language": "javascript",
       "nodeCount": 8,
-      "size": 2355
+      "size": 2405
     },
     {
       "path": "tests/account-page-contract-check.mjs",

@@ -1,10 +1,10 @@
 # CodeGraph inventory - AutoWebGame
 
-Generated at: 2026-07-15T11:21:46-03:00
+Generated at: 2026-07-15T11:34:01-03:00
 
 Repository: `C:\Projetos\AutoWebGame`
 
-CodeGraph status: healthy, synchronized, 386 indexed files, 7,386 nodes, 14,258 edges.
+CodeGraph status: healthy, synchronized, 386 indexed files, 7,386 nodes, 14,230 edges.
 
 Scope: real project files in the current working directory. Ignored for analysis: `node_modules`, `.git`, build output and caches. CodeGraph was the primary structural source; direct reads were used only for repository metadata, package scripts and docs.
 

@@ -1,19 +1,19 @@
 CodeGraph inventory status
-Generated at: 2026-07-15T11:21:46-03:00
+Generated at: 2026-07-15T11:34:01-03:00
 Repository: C:\Projetos\AutoWebGame
 CodeGraph CLI version: 0.9.4
 
 Setup performed:
 - Read README.md from the repository.
 - Repository AGENTS.md instructions were applied before this run.
-- A clean clone at commit `1ebe465` was initialized and indexed so dirty shared-workspace files were excluded.
+- A clean clone at commit `f415666` was initialized and indexed so dirty shared-workspace files were excluded.
 - Sync result: clean committed state indexed and reported healthy.
 - MCP CodeGraph tools were available and used for structural context.
 
 Index status:
 - Files indexed: 386
 - Total nodes: 7,386
-- Total edges: 14,258
+- Total edges: 14,230
 - Database size: 11.93 MB
 - Backend: node:sqlite built-in, full WAL + FTS5
 - Journal mode: wal
