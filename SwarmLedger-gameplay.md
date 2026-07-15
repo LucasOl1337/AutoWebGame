@@ -1,3 +1,7 @@
+## 2026-07-15 — pickup-chain-armed-hud
+- Escopo: uma intervenção mínima em `src/Engine/game-app.ts`, `tests/pickup-chain-guard-check.mjs` e este ledger para exibir `CHAIN X.Xs` enquanto `pickupChains[playerId]` estiver armado; manter prioridade abaixo de DOWN/ICE/GUARD/perigo e acima de LIVE; preservar hunks concorrentes; staging seletivo e commit local; sem push/deploy.
+- Resultado: `getPlayerHudStatus` exibe `CHAIN X.Xs` quando há tipo anterior e tempo restante positivo, somente após DOWN/ICE/GUARD/perigo e antes de LIVE; o teste focal prova `CHAIN 4.2s` armado, `LIVE` após expiração e preserva a prioridade de `GUARD 1.4s`. `npm run test:pickup-chain`, `npm run build` (79 módulos) e `git diff --check -- src/Engine/game-app.ts tests/pickup-chain-guard-check.mjs SwarmLedger-gameplay.md` passaram; staging seletivo e commit local, sem push/deploy.
+
 ## 2026-07-15 — match-win-priority-over-round-end
 - Escopo: correção mínima em `src/Engine/sound-manager.ts`, novo teste focal e acréscimos isolados nos dois ledgers; preservar diffs concorrentes; commit local seletivo; sem push/deploy.
 - RED → GREEN: antes, chamadas consecutivas de `roundEnd` e `matchWin` no mesmo turno tocavam os dois cues (`1/1`, exit 1); agora `roundEnd` aguarda uma microtask e é invalidado por `matchWin`, resultando em `roundEnd=0`, `matchWin=1` e `pass=true`.

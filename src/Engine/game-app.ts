@@ -4313,6 +4313,16 @@ export class GameApp {
       };
     }
 
+    const pickupChain = this.pickupChains[playerId];
+    if (pickupChain.previousType !== null && pickupChain.remainingMs > 0) {
+      return {
+        label: `CHAIN ${(pickupChain.remainingMs / 1000).toFixed(1)}s`,
+        tone: "success",
+        critical: false,
+        dangerEtaMs: null,
+      };
+    }
+
     return { label: "LIVE", tone: "success", critical: false, dangerEtaMs: null };
   }
 

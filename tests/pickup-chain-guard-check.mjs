@@ -83,6 +83,9 @@ function getPlayerTextState(game) {
 const chainGame = createOpenMatch();
 collect(chainGame, "bomb-up");
 const armedState = getPlayerTextState(chainGame);
+chainGame.advanceServerSimulation(PICKUP_CHAIN_WINDOW_MS + 100);
+const expiredHudState = getPlayerTextState(chainGame);
+collect(chainGame, "bomb-up");
 chainGame.advanceServerSimulation(1_000);
 collect(chainGame, "flame-up");
 const firstGuardedState = getPlayerTextState(chainGame);
@@ -140,6 +143,11 @@ const report = {
   armedState: {
     pickupChain: armedState.pickupChain,
     flameGuardMs: armedState.flameGuardMs,
+    hudStatus: armedState.hudStatus,
+  },
+  expiredHudState: {
+    pickupChain: expiredHudState.pickupChain,
+    hudStatus: expiredHudState.hudStatus,
   },
   firstGuardedState: {
     pickupChain: firstGuardedState.pickupChain,
@@ -181,6 +189,10 @@ const report = {
     && armedState.pickupChain.previousType === "bomb-up"
     && armedState.pickupChain.remainingMs > 0
     && armedState.flameGuardMs === 0
+    && armedState.hudStatus.label === `CHAIN ${(armedState.pickupChain.remainingMs / 1000).toFixed(1)}s`
+    && expiredHudState.pickupChain.previousType === null
+    && expiredHudState.pickupChain.remainingMs === 0
+    && expiredHudState.hudStatus.label === "LIVE"
     && firstGuardedState.pickupChain.previousType === "flame-up"
     && firstGuardedState.pickupChain.remainingMs > 0
     && firstGuardedState.pickupChain.remainingMs <= PICKUP_CHAIN_ROLLING_WINDOW_MS
