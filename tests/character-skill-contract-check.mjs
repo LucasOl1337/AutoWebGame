@@ -8,6 +8,7 @@ const {
   NICO_SKILL_COOLDOWN_MS,
   RANNI_CHARACTER_ID,
   RANNI_SKILL_COOLDOWN_MS,
+  advancePlayerSkillTimers,
   getCharacterSkillDefinition,
   getCharacterSkillId,
 } = await import("../output/esm/ultimate/skill-system.js");
@@ -52,13 +53,56 @@ const definitionsMatchExpected = expected.every((entry) => {
     && getCharacterSkillId(entry.characterId) === entry.skillId;
 });
 
+const createCooldownPlayer = (cooldownRemainingMs = 1_000) => ({
+  skill: {
+    phase: "cooldown",
+    cooldownRemainingMs,
+    castElapsedMs: 275,
+  },
+});
+
+const zeroDeltaPlayer = createCooldownPlayer();
+advancePlayerSkillTimers(zeroDeltaPlayer, 0);
+const zeroDeltaIgnored = zeroDeltaPlayer.skill.phase === "cooldown"
+  && zeroDeltaPlayer.skill.cooldownRemainingMs === 1_000
+  && zeroDeltaPlayer.skill.castElapsedMs === 275;
+
+const negativeDeltaPlayer = createCooldownPlayer();
+advancePlayerSkillTimers(negativeDeltaPlayer, -250);
+const negativeDeltaIgnored = negativeDeltaPlayer.skill.phase === "cooldown"
+  && negativeDeltaPlayer.skill.cooldownRemainingMs === 1_000
+  && negativeDeltaPlayer.skill.castElapsedMs === 275;
+
+const positiveDeltaPlayer = createCooldownPlayer();
+advancePlayerSkillTimers(positiveDeltaPlayer, 250);
+const positiveDeltaAdvances = positiveDeltaPlayer.skill.phase === "cooldown"
+  && positiveDeltaPlayer.skill.cooldownRemainingMs === 750
+  && positiveDeltaPlayer.skill.castElapsedMs === 275;
+
+const exhaustedCooldownPlayer = createCooldownPlayer(250);
+advancePlayerSkillTimers(exhaustedCooldownPlayer, 250);
+const exhaustedCooldownReturnsIdle = exhaustedCooldownPlayer.skill.phase === "idle"
+  && exhaustedCooldownPlayer.skill.cooldownRemainingMs === 0
+  && exhaustedCooldownPlayer.skill.castElapsedMs === 0;
+
 const report = {
   definitions: CHARACTER_SKILL_DEFINITIONS,
   exportedCooldownsMatch,
   idsUnique,
   skillIdsUnique,
   definitionsMatchExpected,
-  pass: exportedCooldownsMatch && idsUnique && skillIdsUnique && definitionsMatchExpected,
+  zeroDeltaIgnored,
+  negativeDeltaIgnored,
+  positiveDeltaAdvances,
+  exhaustedCooldownReturnsIdle,
+  pass: exportedCooldownsMatch
+    && idsUnique
+    && skillIdsUnique
+    && definitionsMatchExpected
+    && zeroDeltaIgnored
+    && negativeDeltaIgnored
+    && positiveDeltaAdvances
+    && exhaustedCooldownReturnsIdle,
 };
 
 console.log(JSON.stringify(report, null, 2));
