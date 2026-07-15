@@ -6,6 +6,7 @@
     <title>Como jogar | BOMBA PvP</title>
     <meta name="description" content="Guia rapido de BOMBA PvP: objetivo, controles, leitura da arena, bombas, flames, powerups e primeiros passos para jogar melhor." />
     <link rel="icon" href="/Assets/UiLayouts/ICON.png" />
+    <link rel="stylesheet" href="/src/UiLayouts/how-to-play-powerup-compass.css" />
     <style>
       :root {
         --bg: #050608;
@@ -295,6 +296,125 @@
       .accent-purple { color: var(--purple); }
       .accent-green { color: var(--green); }
 
+      .blast-lesson {
+        display: grid;
+        grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr);
+        gap: 24px;
+        align-items: center;
+        margin-bottom: 24px;
+        padding: clamp(18px, 3vw, 30px);
+        border: 1px solid rgba(255, 95, 87, 0.28);
+        border-radius: 12px;
+        background:
+          radial-gradient(circle at 76% 50%, rgba(255, 95, 87, 0.13), transparent 34%),
+          linear-gradient(135deg, rgba(22, 29, 36, 0.96), rgba(9, 12, 16, 0.96));
+        overflow: hidden;
+      }
+
+      .blast-lesson__copy h3 {
+        margin: 6px 0 10px;
+        font-family: var(--serif);
+        font-size: clamp(1.7rem, 3vw, 2.5rem);
+        line-height: 1;
+      }
+
+      .blast-lesson__copy p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .blast-lesson__rule {
+        display: inline-flex;
+        margin-top: 16px;
+        padding: 7px 10px;
+        border-left: 3px solid var(--green);
+        background: rgba(0, 229, 160, 0.08);
+        color: var(--text);
+        font-size: 0.82rem;
+        font-weight: 800;
+      }
+
+      .blast-map {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(32px, 1fr));
+        gap: 5px;
+        width: min(100%, 470px);
+        margin-inline: auto;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: rgba(5, 6, 8, 0.7);
+        box-shadow: 0 22px 50px rgba(0, 0, 0, 0.28);
+      }
+
+      .blast-map-stack {
+        min-width: 0;
+      }
+
+      .blast-map__legend {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px 14px;
+        margin: 12px auto 0;
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .blast-map__legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .blast-map__legend i {
+        width: 9px;
+        height: 9px;
+        border-radius: 2px;
+        background: var(--legend-color);
+        box-shadow: 0 0 10px color-mix(in srgb, var(--legend-color) 48%, transparent);
+      }
+
+      .blast-map__cell {
+        display: grid;
+        place-items: center;
+        aspect-ratio: 1;
+        border: 1px solid rgba(223, 235, 242, 0.08);
+        border-radius: 5px;
+        background: rgba(94, 183, 255, 0.05);
+        color: var(--soft);
+        font-size: clamp(0.72rem, 1.7vw, 1rem);
+        font-weight: 900;
+      }
+
+      .blast-map__cell--wall {
+        background: repeating-linear-gradient(135deg, #303944 0 5px, #252c35 5px 10px);
+        box-shadow: inset 0 0 0 1px rgba(244, 247, 251, 0.07);
+      }
+
+      .blast-map__cell--flame {
+        border-color: rgba(255, 95, 87, 0.52);
+        background: radial-gradient(circle, rgba(244, 184, 74, 0.95) 0 18%, rgba(255, 95, 87, 0.72) 38%, rgba(255, 95, 87, 0.13) 72%);
+        color: #fff7de;
+        text-shadow: 0 1px 5px #7e0f0a;
+      }
+
+      .blast-map__cell--bomb {
+        border-color: rgba(244, 184, 74, 0.6);
+        background: radial-gradient(circle at 45% 56%, #1d2229 0 28%, #050608 30% 44%, rgba(244, 184, 74, 0.2) 47% 66%, transparent 68%);
+        color: var(--gold);
+      }
+
+      .blast-map__cell--safe {
+        border-color: rgba(0, 229, 160, 0.55);
+        background: rgba(0, 229, 160, 0.14);
+        color: #6dffd2;
+        box-shadow: inset 0 0 14px rgba(0, 229, 160, 0.08);
+      }
+
       .control-list {
         display: grid;
         gap: 10px;
@@ -440,6 +560,8 @@
         .steps {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
+
+        .blast-lesson { grid-template-columns: 1fr; }
       }
 
       @media (max-width: 640px) {
@@ -487,6 +609,38 @@
         h1 { font-size: 3.2rem; }
         h2 { font-size: 2.25rem; }
         .play-panel h2 { font-size: 2rem; }
+
+        .blast-lesson {
+          gap: 18px;
+          width: 100vw;
+          margin-left: calc(50% - 50vw);
+          padding-inline: max(16px, env(safe-area-inset-left));
+          border-inline: 0;
+          border-radius: 0;
+        }
+
+        .blast-lesson__rule {
+          display: block;
+          line-height: 1.45;
+        }
+
+        .blast-map {
+          grid-template-columns: repeat(7, minmax(0, 1fr));
+          gap: 3px;
+          width: min(100%, 390px);
+          padding: 7px;
+        }
+
+        .blast-map__cell {
+          min-width: 0;
+          border-radius: 4px;
+          font-size: clamp(0.7rem, 4vw, 0.95rem);
+        }
+
+        .blast-map__legend {
+          gap: 7px 10px;
+          font-size: 0.65rem;
+        }
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -594,6 +748,45 @@
           <span class="section-label">03 - Leitura da arena</span>
           <h2>O tabuleiro fala antes da explosao.</h2>
         </div>
+        <article class="blast-lesson" aria-labelledby="blast-lesson-title">
+          <div class="blast-lesson__copy">
+            <span class="section-label">Leitura em 1 segundo</span>
+            <h3 id="blast-lesson-title">A chama vira na bomba, nunca na parede.</h3>
+            <p>A primeira bomba acende a segunda e estende o perigo. Encontre uma casa fora das linhas horizontal e vertical antes de plantar.</p>
+            <span class="blast-lesson__rule">Bomba → linha de fogo → reação em cadeia → casa segura</span>
+          </div>
+          <div class="blast-map-stack">
+          <div class="blast-map" role="img" aria-label="Diagrama de duas bombas em reação em cadeia, paredes bloqueando as chamas e uma casa segura fora da linha da explosão">
+            <span class="blast-map__cell blast-map__cell--wall" aria-hidden="true"></span>
+            <span class="blast-map__cell" aria-hidden="true"></span>
+            <span class="blast-map__cell blast-map__cell--flame" aria-hidden="true">+</span>
+            <span class="blast-map__cell blast-map__cell--flame" aria-hidden="true">+</span>
+            <span class="blast-map__cell blast-map__cell--bomb" aria-hidden="true">●</span>
+            <span class="blast-map__cell blast-map__cell--flame" aria-hidden="true">+</span>
+            <span class="blast-map__cell blast-map__cell--wall" aria-hidden="true"></span>
+            <span class="blast-map__cell blast-map__cell--safe" aria-hidden="true">✓</span>
+            <span class="blast-map__cell blast-map__cell--wall" aria-hidden="true"></span>
+            <span class="blast-map__cell blast-map__cell--flame" aria-hidden="true">+</span>
+            <span class="blast-map__cell" aria-hidden="true"></span>
+            <span class="blast-map__cell blast-map__cell--flame" aria-hidden="true">+</span>
+            <span class="blast-map__cell" aria-hidden="true"></span>
+            <span class="blast-map__cell" aria-hidden="true"></span>
+            <span class="blast-map__cell" aria-hidden="true"></span>
+            <span class="blast-map__cell" aria-hidden="true"></span>
+            <span class="blast-map__cell blast-map__cell--bomb" aria-hidden="true">●</span>
+            <span class="blast-map__cell blast-map__cell--flame" aria-hidden="true">+</span>
+            <span class="blast-map__cell blast-map__cell--flame" aria-hidden="true">+</span>
+            <span class="blast-map__cell blast-map__cell--flame" aria-hidden="true">+</span>
+            <span class="blast-map__cell blast-map__cell--wall" aria-hidden="true"></span>
+          </div>
+          <div class="blast-map__legend" aria-hidden="true">
+            <span><i style="--legend-color: #f4b84a"></i>Bomba</span>
+            <span><i style="--legend-color: #ff5f57"></i>Explosão</span>
+            <span><i style="--legend-color: #00e5a0"></i>Casa segura</span>
+            <span><i style="--legend-color: #303944"></i>Parede</span>
+          </div>
+          </div>
+        </article>
         <div class="grid">
           <article class="tile">
             <h3 class="accent-blue">Paredes param flames</h3>
@@ -611,9 +804,40 @@
             <h3 class="accent-purple">Ultimates mudam leitura</h3>
             <p>Blink, dash, beam e surge quebram expectativas. Guarde habilidade para sair de prisao ou fechar abate.</p>
           </article>
-          <article class="tile">
-            <h3 class="accent-green">Powerups escalam</h3>
-            <p>Colete tipos diferentes em ate 4,2 s para ativar protecao curta contra flames. Escolha utilidade para a situacao: escudo absorve um golpe; atravessar bombas abre fuga, enquanto chuta-las reposiciona a ameaca e corta 250 ms do pavio por tile percorrido; detonacao remota prepara armadilhas e pavio curto acelera a pressao. Chutes longos exigem fuga imediata: pegue o que abre rota segura, nao apenas o item mais perto.</p>
+          <article class="tile powerup-compass" aria-labelledby="powerup-compass-title">
+            <div class="powerup-compass__intro">
+              <span class="section-label">Escolha pela necessidade</span>
+              <h3 id="powerup-compass-title" class="accent-green">Bússola de power-ups</h3>
+              <p>Não pegue só o item mais perto. Leia o ícone e escolha o efeito que resolve seu próximo movimento.</p>
+              <span class="powerup-compass__combo">3 tipos em 4,2 s <strong>→ GUARD 1.4s</strong></span>
+            </div>
+            <ul class="powerup-compass__grid" aria-label="Guia rápido dos power-ups">
+              <li class="powerup-chip powerup-chip--attack">
+                <img src="/Assets/UiLayouts/power-flame.png" alt="" width="48" height="48" />
+                <span><strong>Alcance</strong><small>Pressione corredores</small></span>
+              </li>
+              <li class="powerup-chip powerup-chip--tempo">
+                <img src="/Assets/UiLayouts/power-speed.png" alt="" width="48" height="48" />
+                <span><strong>Velocidade</strong><small>Crie uma rota de fuga</small></span>
+              </li>
+              <li class="powerup-chip powerup-chip--defense">
+                <img src="/Assets/UiLayouts/power-shield.png" alt="" width="48" height="48" />
+                <span><strong>Escudo</strong><small>Absorva um golpe</small></span>
+              </li>
+              <li class="powerup-chip powerup-chip--control">
+                <img src="/Assets/UiLayouts/power-kick.png" alt="" width="48" height="48" />
+                <span><strong>Chute</strong><small>Reposicione a ameaça</small></span>
+              </li>
+              <li class="powerup-chip powerup-chip--control">
+                <img src="/Assets/UiLayouts/power-remote.png" alt="" width="48" height="48" />
+                <span><strong>Remota</strong><small>Detone na hora certa</small></span>
+              </li>
+              <li class="powerup-chip powerup-chip--tempo">
+                <img src="/Assets/UiLayouts/power-short-fuse.png" alt="" width="48" height="48" />
+                <span><strong>Pavio curto</strong><small>Acelere a pressão</small></span>
+              </li>
+            </ul>
+            <p class="powerup-compass__field-note">Colete tipos diferentes em ate 4,2 s para ativar 1,4 s de protecao contra flames; o HUD confirma com GUARD 1.4s. O escudo absorve um golpe; atravessar bombas abre fuga, enquanto chuta-las reposiciona a ameaca e corta 250 ms do pavio por tile percorrido. Chutes longos exigem fuga imediata; detonacao remota prepara armadilhas e pavio curto acelera a pressao.</p>
           </article>
           <article class="tile">
             <h3 class="accent-blue">Som e pausa importam</h3>

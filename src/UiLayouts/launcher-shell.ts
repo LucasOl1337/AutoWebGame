@@ -1,4 +1,5 @@
 import "./launcher-shell.css";
+import "./launcher-mode-status-rail.css";
 import { ARENA_THEME_LIBRARY } from "../Arenas/arena-theme-library";
 import type { FrontendState, LauncherMode } from "./frontend-store";
 import { FrontendStore } from "./frontend-store";
@@ -125,6 +126,11 @@ export class LauncherShell {
           <main class="launcher-sheet">
             <header class="launcher-sheet__header">
               <p class="launcher-pulse">Modo selecionado / ${selected.kicker}</p>
+              <div class="launcher-mode-status" aria-label="Status do modo selecionado">
+                <span class="launcher-mode-status__signal"><i aria-hidden="true"></i>${selected.kicker}</span>
+                <span><small>Cadência</small><strong>${selected.id === "play" ? "60 tick" : selected.id === "training" ? "local" : "agente"}</strong></span>
+                <span><small>Sistema</small><strong>pronto</strong></span>
+              </div>
               <h2>${selected.title}</h2>
               <p class="launcher-lede">${selected.summary}</p>
             </header>

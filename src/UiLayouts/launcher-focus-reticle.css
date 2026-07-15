@@ -1,0 +1,85 @@
+/* Tactical keyboard focus: a crisp targeting frame without changing mouse states. */
+.launcher-shell :is(
+  .launcher-primary,
+  .launcher-mode,
+  .launcher-sheet-command,
+  .launcher-nav-link,
+  .lab-secondary
+):focus-visible {
+  --focus-reticle: #8effc1;
+  outline: 2px solid color-mix(in srgb, var(--focus-reticle) 88%, white);
+  outline-offset: 5px;
+  box-shadow:
+    0 0 0 1px #06100c,
+    0 0 0 7px color-mix(in srgb, var(--focus-reticle) 24%, transparent),
+    0 0 26px color-mix(in srgb, var(--focus-reticle) 28%, transparent);
+  isolation: isolate;
+  position: relative;
+  z-index: 6;
+}
+
+.launcher-shell :is(.launcher-primary, .launcher-sheet-command):focus-visible {
+  --focus-reticle: #ffe36d;
+}
+
+.launcher-shell .launcher-mode:focus-visible {
+  --focus-reticle: #77d9ff;
+}
+
+.launcher-shell :is(
+  .launcher-primary,
+  .launcher-mode,
+  .launcher-sheet-command,
+  .launcher-nav-link,
+  .lab-secondary
+):focus-visible::after {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--focus-reticle), var(--focus-reticle)) left top / 16px 2px no-repeat,
+    linear-gradient(var(--focus-reticle), var(--focus-reticle)) left top / 2px 16px no-repeat,
+    linear-gradient(var(--focus-reticle), var(--focus-reticle)) right top / 16px 2px no-repeat,
+    linear-gradient(var(--focus-reticle), var(--focus-reticle)) right top / 2px 16px no-repeat,
+    linear-gradient(var(--focus-reticle), var(--focus-reticle)) left bottom / 16px 2px no-repeat,
+    linear-gradient(var(--focus-reticle), var(--focus-reticle)) left bottom / 2px 16px no-repeat,
+    linear-gradient(var(--focus-reticle), var(--focus-reticle)) right bottom / 16px 2px no-repeat,
+    linear-gradient(var(--focus-reticle), var(--focus-reticle)) right bottom / 2px 16px no-repeat;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--focus-reticle) 62%, transparent));
+  animation: launcher-focus-lock 900ms ease-out both;
+}
+
+@keyframes launcher-focus-lock {
+  0% {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+  45% { opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+@media (forced-colors: active) {
+  .launcher-shell :is(
+    .launcher-primary,
+    .launcher-mode,
+    .launcher-sheet-command,
+    .launcher-nav-link,
+    .lab-secondary
+  ):focus-visible {
+    outline: 3px solid Highlight;
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launcher-shell :is(
+    .launcher-primary,
+    .launcher-mode,
+    .launcher-sheet-command,
+    .launcher-nav-link,
+    .lab-secondary
+  ):focus-visible::after {
+    animation: none;
+  }
+}

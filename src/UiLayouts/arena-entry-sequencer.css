@@ -1,0 +1,136 @@
+/* Oficina Criativa Visual: leitura de progresso durante a entrada na arena. */
+.experience-seat-strip:has(.experience-seat-pill--loading) {
+  --entry-sequencer-line: rgba(255, 255, 255, 0.12);
+  --entry-active-rgb: 244, 184, 74;
+  position: relative;
+  isolation: isolate;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(10px, 1.5vw, 22px);
+  padding: 10px 0 14px;
+  overflow: visible;
+}
+
+.experience-seat-strip:has(.experience-seat-pill--loading)::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  right: 8%;
+  left: 8%;
+  height: 2px;
+  background: linear-gradient(90deg,
+    rgba(var(--accent-rgb), 0.7),
+    rgba(var(--accent-rgb), 0.22) 55%,
+    var(--entry-sequencer-line) 55%);
+  box-shadow: 0 0 18px rgba(var(--accent-rgb), 0.14);
+}
+
+.experience-seat-strip:has(.experience-seat-pill--loading) .experience-seat-pill--loading {
+  position: relative;
+  min-height: 92px;
+  padding: 18px 18px 16px 54px;
+  border-color: rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.045), transparent 58%),
+    rgba(8, 9, 16, 0.94);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.2);
+  transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.experience-seat-strip:has(.experience-seat-pill--loading) .experience-seat-pill--loading::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 20px;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.24);
+  border-radius: 50%;
+  background: #090a12;
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.035);
+  transform: translateY(-50%);
+}
+
+.experience-seat-strip:has(.experience-seat-pill--loading) .experience-seat-pill--loading::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 24px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 4px 0 rgba(255, 255, 255, 0.1);
+}
+
+.experience-seat-strip:has(.experience-seat-pill--loading) .experience-seat-pill--loading[data-state="ready"] {
+  border-color: rgba(var(--accent-rgb), 0.34);
+  background:
+    linear-gradient(135deg, rgba(var(--accent-rgb), 0.13), transparent 58%),
+    rgba(8, 14, 15, 0.96);
+}
+
+.experience-seat-strip:has(.experience-seat-pill--loading) .experience-seat-pill--loading[data-state="ready"]::before {
+  border-color: rgb(var(--accent-rgb));
+  background: rgb(var(--accent-rgb));
+  box-shadow: 0 0 0 6px rgba(var(--accent-rgb), 0.09), 0 0 20px rgba(var(--accent-rgb), 0.38);
+}
+
+.experience-seat-strip:has(.experience-seat-pill--loading) .experience-seat-pill--loading[data-state="active"] {
+  border-color: rgba(var(--entry-active-rgb), 0.52);
+  background:
+    radial-gradient(circle at 14% 50%, rgba(var(--entry-active-rgb), 0.16), transparent 30%),
+    linear-gradient(135deg, rgba(var(--entry-active-rgb), 0.1), transparent 62%),
+    rgba(15, 12, 9, 0.97);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.26), 0 0 28px rgba(var(--entry-active-rgb), 0.1);
+  transform: translateY(-3px);
+}
+
+.experience-seat-strip:has(.experience-seat-pill--loading) .experience-seat-pill--loading[data-state="active"]::before {
+  border-color: rgb(var(--entry-active-rgb));
+  background: rgba(var(--entry-active-rgb), 0.26);
+  box-shadow: 0 0 0 7px rgba(var(--entry-active-rgb), 0.08), 0 0 22px rgba(var(--entry-active-rgb), 0.48);
+  animation: arena-entry-signal 1.35s ease-out infinite;
+}
+
+.experience-seat-strip:has(.experience-seat-pill--loading) .experience-seat-pill--loading[data-state="active"] .experience-seat-pill__label {
+  color: rgb(var(--entry-active-rgb));
+}
+
+.experience-seat-strip:has(.experience-seat-pill--loading) .experience-seat-pill--loading[data-state="pending"] {
+  opacity: 0.68;
+}
+
+@keyframes arena-entry-signal {
+  0% { box-shadow: 0 0 0 0 rgba(var(--entry-active-rgb), 0.34), 0 0 20px rgba(var(--entry-active-rgb), 0.42); }
+  70%, 100% { box-shadow: 0 0 0 12px rgba(var(--entry-active-rgb), 0), 0 0 24px rgba(var(--entry-active-rgb), 0.18); }
+}
+
+@media (max-width: 760px) {
+  .experience-seat-strip:has(.experience-seat-pill--loading) {
+    gap: 7px;
+    padding-block: 6px 10px;
+  }
+
+  .experience-seat-strip:has(.experience-seat-pill--loading)::before {
+    display: none;
+  }
+
+  .experience-seat-strip:has(.experience-seat-pill--loading) .experience-seat-pill--loading {
+    min-height: 72px;
+    padding: 12px 10px 11px 38px;
+  }
+
+  .experience-seat-strip:has(.experience-seat-pill--loading) .experience-seat-pill--loading::before {
+    left: 12px;
+    width: 12px;
+    height: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .experience-seat-strip:has(.experience-seat-pill--loading) .experience-seat-pill--loading,
+  .experience-seat-strip:has(.experience-seat-pill--loading) .experience-seat-pill--loading[data-state="active"]::before {
+    animation: none;
+    transition: none;
+  }
+}

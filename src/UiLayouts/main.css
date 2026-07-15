@@ -1573,6 +1573,7 @@ button {
 }
 
 .experience-character-option {
+  position: relative;
   display: grid;
   grid-template-columns: 64px minmax(0, 1fr);
   gap: 12px;
@@ -1603,6 +1604,59 @@ button {
   background:
     linear-gradient(180deg, rgba(var(--accent-rgb), 0.18), rgba(var(--accent-deep-rgb), 0.1)),
     rgba(10, 10, 18, 0.92);
+}
+
+.experience-character-option[data-selected="true"] .experience-character-option__portrait {
+  outline: 2px solid rgba(var(--accent-rgb), 0.88);
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 5px rgba(var(--accent-rgb), 0.1),
+    0 0 18px rgba(var(--accent-rgb), 0.3);
+}
+
+.experience-character-option__selection-sigil {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: calc(100% - 82px);
+  padding: 4px 7px;
+  border: 1px solid rgba(var(--accent-rgb), 0.42);
+  border-radius: 999px;
+  color: rgb(var(--accent-rgb));
+  background: rgba(8, 12, 12, 0.9);
+  box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.16);
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  text-transform: uppercase;
+  opacity: 0;
+  transform: translateY(-4px) scale(0.92);
+  pointer-events: none;
+}
+
+.experience-character-option__selection-sigil::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.experience-character-option[data-selected="true"] .experience-character-option__selection-sigil {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  animation: character-selection-sigil 1.8s ease-in-out infinite;
+}
+
+@keyframes character-selection-sigil {
+  0%, 100% { box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.12); }
+  50% { box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.34); }
 }
 
 .experience-character-option__portrait {
@@ -4142,10 +4196,26 @@ button {
   border-bottom-color: rgba(var(--accent-rgb), 0.28);
 }
 
+.experience-screen--setup .experience-character-option__selection-sigil {
+  top: 50%;
+  right: 2px;
+  transform: translateY(calc(-50% - 4px)) scale(0.92);
+}
+
+.experience-screen--setup .experience-character-option[data-selected="true"] .experience-character-option__selection-sigil {
+  transform: translateY(-50%) scale(1);
+}
+
 .experience-screen--setup .experience-character-option__portrait {
   width: 36px;
   height: 36px;
   border-radius: 11px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .experience-character-option[data-selected="true"] .experience-character-option__selection-sigil {
+    animation: none;
+  }
 }
 
 @media (max-width: 1240px) {

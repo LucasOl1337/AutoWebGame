@@ -1,0 +1,101 @@
+/* Material showcase: gives arena samples depth and a readable focus response. */
+.launcher-material-grid {
+  perspective: 900px;
+}
+
+.launcher-arena-emblem,
+.launcher-material-sample {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transition:
+    background-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.launcher-arena-emblem::before,
+.launcher-material-sample::before {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  content: "";
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.2), transparent 28%),
+    linear-gradient(0deg, rgba(var(--accent-rgb), 0.11), transparent 42%);
+  mix-blend-mode: screen;
+  opacity: 0.36;
+  transition: opacity 180ms ease;
+}
+
+.launcher-arena-emblem::after,
+.launcher-material-sample::after {
+  position: absolute;
+  inset: 7px;
+  z-index: 2;
+  border: 1px solid rgba(var(--accent-rgb), 0.24);
+  content: "";
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.96);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.launcher-arena-emblem > *,
+.launcher-material-sample > * {
+  position: relative;
+  z-index: 3;
+}
+
+.launcher-arena-emblem:hover,
+.launcher-material-sample:hover {
+  z-index: 4;
+  background-color: rgba(var(--accent-rgb), 0.08);
+  box-shadow:
+    0 0 0 1px rgba(var(--accent-rgb), 0.7),
+    0 16px 30px rgba(0, 0, 0, 0.2);
+  transform: translateY(-3px);
+}
+
+.launcher-arena-emblem:hover::before,
+.launcher-material-sample:hover::before,
+.launcher-arena-emblem:hover::after,
+.launcher-material-sample:hover::after {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.launcher-arena-emblem:hover span,
+.launcher-material-sample:hover span {
+  color: var(--control-ink);
+}
+
+@media (hover: none) {
+  .launcher-arena-emblem::after,
+  .launcher-material-sample::after {
+    opacity: 0.52;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launcher-arena-emblem,
+  .launcher-material-sample,
+  .launcher-arena-emblem::before,
+  .launcher-material-sample::before,
+  .launcher-arena-emblem::after,
+  .launcher-material-sample::after {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .launcher-arena-emblem:hover,
+  .launcher-material-sample:hover {
+    outline: 2px solid Highlight;
+    outline-offset: -4px;
+  }
+}

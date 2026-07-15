@@ -1,0 +1,73 @@
+/* Scanner de identificacao: conecta a miniatura ativa ao painel de comando. */
+.launcher-shell--control .launcher-mode__art {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid transparent;
+}
+
+.launcher-shell--control .launcher-mode__art::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(240, 28, 28, 0.1), transparent 24%, transparent 76%, rgba(240, 28, 28, 0.1)),
+    repeating-linear-gradient(0deg, transparent 0 5px, rgba(255, 255, 255, 0.08) 5px 6px);
+  opacity: 0;
+  transition: opacity 160ms ease-out;
+}
+
+.launcher-shell--control .launcher-mode__art::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  top: -30%;
+  right: 0;
+  left: 0;
+  height: 30%;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(255, 72, 55, 0.82), transparent);
+  filter: drop-shadow(0 0 5px rgba(240, 28, 28, 0.65));
+  opacity: 0;
+}
+
+.launcher-shell--control .launcher-mode.is-selected .launcher-mode__art {
+  border-color: rgba(240, 28, 28, 0.56);
+  background: linear-gradient(135deg, rgba(240, 28, 28, 0.08), rgba(255, 255, 255, 0.74));
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55), 0 0 14px rgba(240, 28, 28, 0.14);
+}
+
+.launcher-shell--control .launcher-mode.is-selected .launcher-mode__art::before {
+  opacity: 1;
+}
+
+.launcher-shell--control .launcher-mode.is-selected .launcher-mode__art::after {
+  opacity: 1;
+  animation: launcher-mode-scan 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+@keyframes launcher-mode-scan {
+  0%, 14% { transform: translateY(0); }
+  72%, 100% { transform: translateY(186%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launcher-shell--control .launcher-mode.is-selected .launcher-mode__art::after {
+    top: 46%;
+    animation: none;
+    opacity: 0.55;
+  }
+}
+
+@media (forced-colors: active) {
+  .launcher-shell--control .launcher-mode.is-selected .launcher-mode__art {
+    border: 2px solid Highlight;
+  }
+
+  .launcher-shell--control .launcher-mode__art::before,
+  .launcher-shell--control .launcher-mode__art::after {
+    display: none;
+  }
+}

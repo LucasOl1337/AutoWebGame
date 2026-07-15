@@ -408,6 +408,8 @@
 }
 
 .launcher-shell--control .launcher-mode {
+  position: relative;
+  overflow: hidden;
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) auto;
   align-items: center;
@@ -425,6 +427,32 @@
   transition: background-color 120ms linear, color 120ms linear;
 }
 
+.launcher-shell--control .launcher-mode::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: var(--control-signal);
+  box-shadow: 6px 0 18px rgba(240, 28, 28, 0.22);
+  transform: scaleY(0);
+  transform-origin: center;
+  transition: transform 140ms ease-out;
+}
+
+.launcher-shell--control .launcher-mode::after {
+  content: "";
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--control-ink);
+  border-radius: 50%;
+  background: var(--control-signal);
+  box-shadow: 0 0 0 3px rgba(240, 28, 28, 0.12), 0 0 12px rgba(240, 28, 28, 0.7);
+  opacity: 0;
+}
+
 .launcher-shell--control .launcher-mode:hover,
 .launcher-shell--control .launcher-mode:focus-visible,
 .launcher-shell--control .launcher-mode.is-selected {
@@ -437,6 +465,25 @@
 .launcher-shell--control .launcher-mode:focus-visible {
   outline: 3px solid var(--control-signal);
   outline-offset: -5px;
+}
+
+.launcher-shell--control .launcher-mode.is-selected::before {
+  transform: scaleY(1);
+}
+
+.launcher-shell--control .launcher-mode.is-selected::after {
+  opacity: 1;
+  animation: launcher-beacon-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes launcher-beacon-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px rgba(240, 28, 28, 0.12), 0 0 9px rgba(240, 28, 28, 0.58);
+  }
+
+  50% {
+    box-shadow: 0 0 0 5px rgba(240, 28, 28, 0.05), 0 0 16px rgba(240, 28, 28, 0.82);
+  }
 }
 
 .launcher-mode__number {
@@ -829,6 +876,14 @@
 @media (prefers-reduced-motion: reduce) {
   .launcher-shell--control .launcher-mode {
     transition: none;
+  }
+
+  .launcher-shell--control .launcher-mode::before {
+    transition: none;
+  }
+
+  .launcher-shell--control .launcher-mode.is-selected::after {
+    animation: none;
   }
 }
 

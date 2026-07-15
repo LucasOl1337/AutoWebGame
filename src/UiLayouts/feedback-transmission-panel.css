@@ -1,0 +1,162 @@
+/* Oficina Criativa Visual: transforma o feedback em um painel de transmissao legivel. */
+.experience-feedback {
+  --feedback-signal: #65f5d2;
+  --feedback-signal-soft: rgba(101, 245, 210, 0.16);
+  --feedback-violet: #9d83ff;
+  background:
+    radial-gradient(circle at 50% 22%, rgba(72, 100, 184, 0.28), transparent 38%),
+    rgba(3, 7, 18, 0.84);
+}
+
+.experience-feedback__card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: clamp(24px, 4vw, 38px);
+  border: 1px solid rgba(145, 169, 255, 0.32);
+  border-radius: 26px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.055), transparent 42%),
+    linear-gradient(160deg, rgba(15, 25, 55, 0.98), rgba(7, 12, 30, 0.98));
+  box-shadow:
+    0 34px 90px rgba(0, 0, 0, 0.58),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 0 1px rgba(35, 52, 102, 0.2);
+  animation: feedback-panel-arrive 180ms ease-out both;
+}
+
+.experience-feedback__card::before {
+  content: "CANAL ABERTO  •  FEEDBACK DO PILOTO";
+  display: flex;
+  align-items: center;
+  width: max-content;
+  min-height: 25px;
+  padding: 0 11px 0 28px;
+  border: 1px solid rgba(101, 245, 210, 0.32);
+  border-radius: 999px;
+  color: var(--feedback-signal);
+  background:
+    radial-gradient(circle at 15px 50%, var(--feedback-signal) 0 3px, transparent 4px),
+    var(--feedback-signal-soft);
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  line-height: 1;
+}
+
+.experience-feedback__card::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -88px;
+  right: -54px;
+  width: 240px;
+  aspect-ratio: 1;
+  border: 1px solid rgba(157, 131, 255, 0.2);
+  border-radius: 50%;
+  background: repeating-radial-gradient(circle, transparent 0 26px, rgba(157, 131, 255, 0.07) 27px 28px);
+  mask-image: linear-gradient(to bottom left, #000 24%, transparent 72%);
+}
+
+.experience-feedback__title {
+  max-width: 18ch;
+  color: #f7f9ff;
+  font-size: clamp(1.45rem, 3.5vw, 2rem);
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+
+.experience-feedback__prompt {
+  max-width: 58ch;
+  color: rgba(220, 228, 255, 0.74);
+}
+
+.experience-feedback__textarea {
+  min-height: 190px;
+  resize: vertical;
+  border: 1px solid rgba(148, 169, 242, 0.27);
+  border-radius: 18px;
+  color: #f4f7ff;
+  background:
+    linear-gradient(rgba(10, 17, 39, 0.9), rgba(10, 17, 39, 0.9)) padding-box,
+    linear-gradient(120deg, rgba(101, 245, 210, 0.5), rgba(157, 131, 255, 0.35)) border-box;
+  box-shadow: inset 0 1px 14px rgba(0, 0, 0, 0.24);
+  caret-color: var(--feedback-signal);
+  transition: box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.experience-feedback__textarea:focus {
+  border-color: transparent;
+  box-shadow:
+    0 0 0 3px rgba(101, 245, 210, 0.14),
+    inset 0 1px 14px rgba(0, 0, 0, 0.2);
+}
+
+.experience-feedback__counter {
+  justify-self: end;
+  margin-top: -9px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  color: rgba(214, 224, 255, 0.66);
+  background: rgba(121, 142, 218, 0.1);
+  font-variant-numeric: tabular-nums;
+}
+
+.experience-feedback__counter--invalid {
+  color: #ff9fa9;
+  background: rgba(255, 80, 104, 0.13);
+}
+
+.experience-feedback__status:not(:empty) {
+  padding: 10px 13px;
+  border-left: 3px solid var(--feedback-signal);
+  border-radius: 7px 12px 12px 7px;
+  color: #dffcf5;
+  background: var(--feedback-signal-soft);
+}
+
+.experience-feedback__actions {
+  padding-top: 4px;
+  border-top: 1px solid rgba(144, 163, 225, 0.13);
+}
+
+.experience-feedback__actions .experience-button--primary {
+  min-width: 168px;
+  box-shadow: 0 10px 30px rgba(92, 95, 231, 0.24);
+}
+
+@keyframes feedback-panel-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+}
+
+@media (max-width: 560px) {
+  .experience-feedback {
+    align-items: flex-end;
+    padding: 12px 10px max(12px, env(safe-area-inset-bottom));
+  }
+
+  .experience-feedback__card {
+    gap: 12px;
+    max-height: calc(100dvh - 24px);
+    padding: 22px 18px 18px;
+    border-radius: 24px 24px 18px 18px;
+    overflow-y: auto;
+  }
+
+  .experience-feedback__card::before {
+    font-size: 0.6rem;
+  }
+
+  .experience-feedback__textarea {
+    min-height: 142px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .experience-feedback__card {
+    animation: none;
+  }
+}

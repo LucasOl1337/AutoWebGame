@@ -1,0 +1,87 @@
+.launcher-mode-status {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: stretch;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid var(--control-ink);
+  background: color-mix(in srgb, var(--control-paper-raised) 92%, transparent);
+  box-shadow: 6px 6px 0 rgba(5, 5, 5, 0.08);
+  font-family: Inter, Arial, Helvetica, sans-serif;
+  text-transform: uppercase;
+}
+
+.launcher-mode-status > span {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  min-height: 46px;
+  padding: 8px 14px;
+  border-right: 1px solid var(--control-ink);
+}
+
+.launcher-mode-status > span:last-child {
+  border-right: 0;
+}
+
+.launcher-mode-status small {
+  color: var(--control-muted);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.launcher-mode-status strong {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.launcher-mode-status__signal {
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 9px !important;
+  min-width: 112px;
+  background: var(--control-ink);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.launcher-mode-status__signal i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--control-signal);
+  box-shadow: 0 0 0 4px rgba(230, 25, 25, 0.18);
+  animation: launcher-mode-status-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes launcher-mode-status-pulse {
+  50% {
+    box-shadow: 0 0 0 7px rgba(230, 25, 25, 0.05);
+    filter: brightness(1.25);
+  }
+}
+
+@media (max-width: 480px) {
+  .launcher-mode-status {
+    width: 100%;
+  }
+
+  .launcher-mode-status > span {
+    flex: 1;
+    min-width: 0;
+    padding-inline: 9px;
+  }
+
+  .launcher-mode-status__signal {
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launcher-mode-status__signal i {
+    animation: none;
+  }
+}

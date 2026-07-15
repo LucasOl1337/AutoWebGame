@@ -1,0 +1,131 @@
+/* Room code reactor: turns the lobby join form into a readable ignition console. */
+.experience-shell[data-screen="lobbies"] .experience-room-code {
+  position: relative;
+  isolation: isolate;
+  padding: clamp(16px, 2vw, 22px);
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
+  border-radius: 20px;
+  overflow: hidden;
+  background:
+    linear-gradient(115deg, rgba(var(--accent-rgb), 0.09), transparent 42%),
+    rgba(6, 10, 18, 0.72);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.05), 0 18px 48px rgba(0, 0, 0, 0.18);
+}
+
+.experience-shell[data-screen="lobbies"] .experience-room-code::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, transparent, rgb(var(--accent-rgb)), transparent);
+  opacity: 0.58;
+  box-shadow: 0 0 18px rgba(var(--accent-rgb), 0.55);
+}
+
+.experience-shell[data-screen="lobbies"] .experience-room-code::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0 30px, rgba(var(--accent-rgb), 0.08) 30px 32px);
+  mask: linear-gradient(90deg, transparent 45%, #000);
+  opacity: 0.35;
+}
+
+.experience-shell[data-screen="lobbies"] .experience-room-code__label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  letter-spacing: 0.04em;
+}
+
+.experience-shell[data-screen="lobbies"] .experience-room-code__label::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border: 2px solid rgba(var(--accent-rgb), 0.6);
+  border-radius: 50%;
+  background: rgba(var(--accent-rgb), 0.16);
+  box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.06);
+}
+
+.experience-shell[data-screen="lobbies"] .experience-room-code__actions {
+  position: relative;
+  padding: 5px;
+  border: 1px solid rgba(var(--accent-rgb), 0.16);
+  border-radius: 17px;
+  background: rgba(0, 0, 0, 0.2);
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.experience-shell[data-screen="lobbies"] .experience-room-code__actions:focus-within {
+  border-color: rgba(var(--accent-rgb), 0.68);
+  background: rgba(var(--accent-rgb), 0.06);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.09), 0 0 28px rgba(var(--accent-rgb), 0.16);
+}
+
+.experience-shell[data-screen="lobbies"] .experience-room-code__input {
+  min-height: 48px;
+  padding-inline: 16px;
+  border-color: transparent;
+  border-radius: 12px;
+  background:
+    linear-gradient(rgba(8, 14, 24, 0.92), rgba(8, 14, 24, 0.92)) padding-box,
+    repeating-linear-gradient(90deg, rgba(var(--accent-rgb), 0.28) 0 1px, transparent 1px 36px) border-box;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 850;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  caret-color: rgb(var(--accent-rgb));
+  transition: color 180ms ease, text-shadow 180ms ease;
+}
+
+.experience-shell[data-screen="lobbies"] .experience-room-code__input:focus-visible {
+  outline: none;
+  color: #fff;
+  text-shadow: 0 0 13px rgba(var(--accent-rgb), 0.68);
+}
+
+.experience-shell[data-screen="lobbies"] .experience-room-code__input::placeholder {
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: none;
+  text-shadow: none;
+}
+
+.experience-shell[data-screen="lobbies"] .experience-room-code__actions .experience-button {
+  min-width: 112px;
+  border-radius: 12px;
+}
+
+.experience-shell[data-screen="lobbies"] .experience-room-code__actions:focus-within .experience-button:not(:disabled) {
+  border-color: rgba(var(--accent-rgb), 0.72);
+  box-shadow: inset 0 0 18px rgba(var(--accent-rgb), 0.08);
+}
+
+@media (max-width: 760px) {
+  .experience-shell[data-screen="lobbies"] .experience-room-code {
+    padding: 15px;
+  }
+
+  .experience-shell[data-screen="lobbies"] .experience-room-code__actions {
+    gap: 7px;
+  }
+
+  .experience-shell[data-screen="lobbies"] .experience-room-code__actions .experience-button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .experience-shell[data-screen="lobbies"] .experience-room-code__actions,
+  .experience-shell[data-screen="lobbies"] .experience-room-code__input {
+    transition: none;
+  }
+}

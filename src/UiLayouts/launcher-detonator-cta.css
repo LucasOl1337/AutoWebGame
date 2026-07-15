@@ -1,0 +1,72 @@
+/* Primary launcher action: a compact, bomb-fuse inspired armed signal. */
+.launcher-shell--control .launcher-primary {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+    0 10px 0 rgba(5, 5, 5, 0.18);
+}
+
+.launcher-shell--control .launcher-primary::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background:
+    linear-gradient(105deg, transparent 0 42%, rgba(255, 226, 124, 0.34) 48%, rgba(255, 255, 255, 0.68) 50%, rgba(255, 226, 124, 0.24) 52%, transparent 58%),
+    repeating-linear-gradient(135deg, rgba(5, 5, 5, 0.11) 0 8px, transparent 8px 20px);
+  background-size: 240% 100%, auto;
+  background-position: 125% 0, 0 0;
+  animation: launcher-detonator-sweep 2.8s cubic-bezier(0.3, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+.launcher-shell--control .launcher-primary::after {
+  content: "";
+  position: absolute;
+  top: 13px;
+  right: 13px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #ffd15c;
+  box-shadow:
+    0 0 0 4px rgba(255, 209, 92, 0.2),
+    0 0 18px rgba(255, 231, 154, 0.95);
+  animation: launcher-detonator-pulse 900ms steps(2, end) infinite;
+  pointer-events: none;
+}
+
+.launcher-shell--control .launcher-primary:hover::before,
+.launcher-shell--control .launcher-primary:focus-visible::before {
+  background-position: -25% 0, 0 0;
+}
+
+.launcher-shell--control .launcher-primary:disabled::before,
+.launcher-shell--control .launcher-primary:disabled::after {
+  animation: none;
+  opacity: 0.18;
+}
+
+@keyframes launcher-detonator-sweep {
+  0%, 55% { background-position: 125% 0, 0 0; }
+  100% { background-position: -25% 0, 0 0; }
+}
+
+@keyframes launcher-detonator-pulse {
+  50% {
+    background: #fff2b0;
+    box-shadow:
+      0 0 0 6px rgba(255, 209, 92, 0.1),
+      0 0 24px rgba(255, 241, 186, 1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launcher-shell--control .launcher-primary::before,
+  .launcher-shell--control .launcher-primary::after {
+    animation: none;
+  }
+}

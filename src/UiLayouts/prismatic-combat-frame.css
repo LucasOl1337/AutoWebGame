@@ -1,0 +1,80 @@
+/* A lightweight broadcast frame that keeps attention on the live arena. */
+.experience-shell[data-screen="match"] .experience-match__viewport:has(canvas[data-game-canvas="true"]) {
+  isolation: isolate;
+}
+
+.experience-shell[data-screen="match"] .experience-match__viewport:has(canvas[data-game-canvas="true"])::before,
+.experience-shell[data-screen="match"] .experience-match__viewport:has(canvas[data-game-canvas="true"])::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  inset: clamp(10px, 2.2vw, 28px);
+  pointer-events: none;
+  border-radius: clamp(16px, 2vw, 28px);
+}
+
+.experience-shell[data-screen="match"] .experience-match__viewport:has(canvas[data-game-canvas="true"])::before {
+  background:
+    linear-gradient(90deg, rgba(112, 229, 255, 0.88) 0 42px, transparent 42px) left top / 96px 2px no-repeat,
+    linear-gradient(180deg, rgba(112, 229, 255, 0.88) 0 42px, transparent 42px) left top / 2px 96px no-repeat,
+    linear-gradient(270deg, rgba(255, 174, 70, 0.88) 0 42px, transparent 42px) right top / 96px 2px no-repeat,
+    linear-gradient(180deg, rgba(255, 174, 70, 0.88) 0 42px, transparent 42px) right top / 2px 96px no-repeat,
+    linear-gradient(90deg, rgba(255, 174, 70, 0.72) 0 34px, transparent 34px) left bottom / 82px 2px no-repeat,
+    linear-gradient(0deg, rgba(255, 174, 70, 0.72) 0 34px, transparent 34px) left bottom / 2px 82px no-repeat,
+    linear-gradient(270deg, rgba(112, 229, 255, 0.72) 0 34px, transparent 34px) right bottom / 82px 2px no-repeat,
+    linear-gradient(0deg, rgba(112, 229, 255, 0.72) 0 34px, transparent 34px) right bottom / 2px 82px no-repeat;
+  filter: drop-shadow(0 0 7px rgba(112, 229, 255, 0.2));
+  opacity: 0.72;
+  animation: prismatic-combat-frame-breathe 3.8s ease-in-out infinite alternate;
+}
+
+.experience-shell[data-screen="match"] .experience-match__viewport:has(canvas[data-game-canvas="true"])::after {
+  inset: clamp(15px, 2.7vw, 34px);
+  border: 1px solid rgba(255, 255, 255, 0.035);
+  box-shadow:
+    inset 0 0 42px rgba(112, 229, 255, 0.025),
+    0 0 0 1px rgba(255, 174, 70, 0.025);
+}
+
+.experience-shell[data-screen="match"] canvas[data-game-canvas="true"] {
+  border-radius: clamp(10px, 1.4vw, 16px);
+  box-shadow:
+    0 0 0 1px rgba(112, 229, 255, 0.16),
+    0 0 0 4px rgba(4, 8, 14, 0.76),
+    0 18px 54px rgba(0, 0, 0, 0.46),
+    0 0 42px rgba(255, 139, 42, 0.055);
+}
+
+@keyframes prismatic-combat-frame-breathe {
+  to {
+    opacity: 1;
+    filter: drop-shadow(0 0 11px rgba(255, 174, 70, 0.28));
+  }
+}
+
+@media (max-width: 760px) {
+  .experience-shell[data-screen="match"] .experience-match__viewport:has(canvas[data-game-canvas="true"])::before,
+  .experience-shell[data-screen="match"] .experience-match__viewport:has(canvas[data-game-canvas="true"])::after {
+    inset: 7px;
+    border-radius: 14px;
+  }
+
+  .experience-shell[data-screen="match"] .experience-match__viewport:has(canvas[data-game-canvas="true"])::before {
+    background-size: 54px 2px, 2px 54px, 54px 2px, 2px 54px, 46px 2px, 2px 46px, 46px 2px, 2px 46px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .experience-shell[data-screen="match"] .experience-match__viewport:has(canvas[data-game-canvas="true"])::before {
+    animation: none;
+    opacity: 0.88;
+  }
+}
+
+@media (forced-colors: active) {
+  .experience-shell[data-screen="match"] .experience-match__viewport:has(canvas[data-game-canvas="true"])::before {
+    border: 2px solid CanvasText;
+    background: none;
+    filter: none;
+  }
+}

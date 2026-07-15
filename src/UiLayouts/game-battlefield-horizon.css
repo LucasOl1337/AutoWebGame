@@ -1,0 +1,115 @@
+/* Ambient arena horizon shown while the match route boots or recovers from an error. */
+body:has(.bootstrap-state) {
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255, 126, 35, 0.12), transparent 32rem),
+    linear-gradient(180deg, #0b1118 0%, #070a0f 100%);
+}
+
+#app:has(.bootstrap-state)::before,
+#app:has(.bootstrap-state)::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+#app:has(.bootstrap-state)::before {
+  background:
+    linear-gradient(rgba(255, 164, 67, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 164, 67, 0.07) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(to bottom, transparent 8%, #000 38%, #000 72%, transparent 100%);
+  transform: perspective(440px) rotateX(58deg) scale(1.45) translateY(22%);
+  transform-origin: center 70%;
+  opacity: 0.78;
+}
+
+#app:has(.bootstrap-state)::after {
+  background:
+    radial-gradient(circle at 12% 66%, #ff9c36 0 2px, rgba(255, 90, 22, 0.32) 3px, transparent 22px),
+    radial-gradient(circle at 86% 30%, #70e5ff 0 2px, rgba(54, 185, 255, 0.25) 3px, transparent 20px),
+    radial-gradient(circle at 77% 80%, #ffcf5b 0 1px, rgba(255, 124, 32, 0.22) 3px, transparent 18px),
+    radial-gradient(ellipse at center, transparent 38%, rgba(2, 4, 8, 0.7) 100%);
+  opacity: 0.9;
+  animation: battlefield-horizon-pulse 3.2s ease-in-out infinite alternate;
+}
+
+.bootstrap-state {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+}
+
+/* Readiness radar: a restrained targeting ring keeps the boot drone legible at its real size. */
+.bootstrap-state:not([data-state="error"]) .bootstrap-state__indicator {
+  outline: 1px solid rgba(112, 229, 255, 0.42);
+  outline-offset: 10px;
+  box-shadow:
+    0 0 0 15px rgba(18, 47, 59, 0.2),
+    0 0 0 16px rgba(112, 229, 255, 0.1),
+    0 0 34px 20px rgba(36, 176, 214, 0.09);
+}
+
+.bootstrap-state:not([data-state="error"]) .bootstrap-state__eyebrow::before,
+.bootstrap-state:not([data-state="error"]) .bootstrap-state__eyebrow::after {
+  content: "◆";
+  display: inline-block;
+  margin: 0 0.8em;
+  color: #70e5ff;
+  font-size: 0.62em;
+  text-shadow: 0 0 10px rgba(112, 229, 255, 0.9);
+  animation: readiness-radar-beacon 1.4s steps(2, jump-none) infinite alternate;
+}
+
+.bootstrap-state[data-state="error"] .bootstrap-state__indicator {
+  outline: 1px dashed rgba(255, 116, 116, 0.56);
+  outline-offset: 10px;
+  box-shadow:
+    0 0 0 15px rgba(68, 7, 12, 0.2),
+    0 0 0 16px rgba(255, 116, 116, 0.12);
+}
+
+.bootstrap-state::before {
+  content: "ARENA // SINCRONIZANDO";
+  position: absolute;
+  left: 50%;
+  bottom: clamp(1.25rem, 5vh, 3.5rem);
+  transform: translateX(-50%);
+  color: rgba(255, 190, 110, 0.62);
+  font: 700 0.625rem/1 "JetBrains Mono", monospace;
+  letter-spacing: 0.22em;
+  white-space: nowrap;
+}
+
+.bootstrap-state[data-state="error"]::before {
+  content: "ARENA // CONEXAO INTERROMPIDA";
+  color: rgba(255, 116, 116, 0.72);
+}
+
+@keyframes battlefield-horizon-pulse {
+  to { opacity: 0.62; }
+}
+
+@keyframes readiness-radar-beacon {
+  to {
+    opacity: 0.32;
+    transform: scale(0.74);
+  }
+}
+
+@media (max-width: 480px) {
+  #app:has(.bootstrap-state)::before {
+    background-size: 32px 32px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #app:has(.bootstrap-state)::after {
+    animation: none;
+  }
+
+  .bootstrap-state:not([data-state="error"]) .bootstrap-state__eyebrow::before,
+  .bootstrap-state:not([data-state="error"]) .bootstrap-state__eyebrow::after {
+    animation: none;
+  }
+}

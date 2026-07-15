@@ -32,8 +32,9 @@ assert.doesNotMatch(pageHtml, /<div><kbd>E<\/kbd><\/div>\s*<p>Detonar bomba remo
 assert.match(pageHtml, /id="objetivo"/);
 assert.match(pageHtml, /id="controles"/);
 assert.match(pageHtml, /id="arena"/);
-assert.match(pageHtml, /<h3 class="accent-green">Powerups escalam<\/h3>/);
-assert.match(pageHtml, /Colete tipos diferentes em ate 4,2 s para ativar protecao curta contra flames\./);
+assert.match(pageHtml, /id="powerup-compass-title" class="accent-green">Bússola de power-ups<\/h3>/);
+assert.match(pageHtml, /Colete tipos diferentes em ate 4,2 s para ativar 1,4 s de protecao contra flames; o HUD confirma com GUARD 1.4s\./);
+assert.doesNotMatch(pageHtml, /ativar protecao curta contra flames/);
 assert.match(pageHtml, /escudo absorve um golpe/);
 assert.match(pageHtml, /atravessar bombas abre fuga, enquanto chuta-las reposiciona a ameaca e corta 250 ms do pavio por tile percorrido/);
 assert.match(pageHtml, /Chutes longos exigem fuga imediata/);

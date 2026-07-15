@@ -1,0 +1,84 @@
+/* Execution runway: connects the selected mode briefing to its active command. */
+.launcher-shell--control .launcher-sheet-command {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 72px;
+  padding-left: 22px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.24),
+    8px 8px 0 rgba(14, 14, 14, 0.14);
+}
+
+.launcher-shell--control .launcher-sheet-command::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.16), transparent 28%),
+    repeating-linear-gradient(120deg, transparent 0 18px, rgba(255, 255, 255, 0.14) 18px 20px, transparent 20px 38px);
+  background-position: 0 0, 0 0;
+  transition: background-position 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: none;
+}
+
+.launcher-shell--control .launcher-sheet-command::after {
+  content: "EXEC";
+  position: absolute;
+  top: 0;
+  right: 46px;
+  padding: 5px 8px;
+  background: #fff;
+  color: var(--control-ink);
+  font: 900 8px/1 "JetBrains Mono", ui-monospace, Consolas, monospace;
+  letter-spacing: 0.16em;
+  box-shadow: 0 0 0 1px var(--control-ink);
+  pointer-events: none;
+}
+
+.launcher-shell--control .launcher-sheet-command > span:last-child {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  font-size: 19px;
+  transition: transform 220ms ease, background-color 220ms ease, color 220ms ease;
+}
+
+.launcher-shell--control .launcher-sheet-command:hover::before,
+.launcher-shell--control .launcher-sheet-command:focus-visible::before {
+  background-position: 0 0, 54px 0;
+}
+
+.launcher-shell--control .launcher-sheet-command:hover > span:last-child,
+.launcher-shell--control .launcher-sheet-command:focus-visible > span:last-child {
+  transform: translateX(4px);
+  background: #fff;
+  color: var(--control-ink);
+}
+
+.launcher-shell--control .launcher-sheet-command:active {
+  transform: translate(3px, 3px);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.24),
+    3px 3px 0 rgba(14, 14, 14, 0.14);
+}
+
+@media (max-width: 480px) {
+  .launcher-shell--control .launcher-sheet-command::after {
+    right: 40px;
+  }
+
+  .launcher-shell--control .launcher-sheet-command strong {
+    font-size: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launcher-shell--control .launcher-sheet-command::before,
+  .launcher-shell--control .launcher-sheet-command > span:last-child {
+    transition: none;
+  }
+}

@@ -1,4 +1,5 @@
 .bootstrap-state__indicator {
+  position: relative;
   width: clamp(88px, 16vw, 112px);
   height: clamp(88px, 16vw, 112px);
   border: 0;
@@ -8,6 +9,37 @@
   image-rendering: pixelated;
   box-shadow: none;
   animation: bootstrap-drone-hover 1.25s ease-in-out infinite alternate;
+}
+
+.bootstrap-state__indicator::before,
+.bootstrap-state__indicator::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.bootstrap-state__indicator::before {
+  top: 2%;
+  left: 50%;
+  width: 34%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 244, 154, 0.95) 0 5%, rgba(255, 137, 34, 0.46) 18%, rgba(255, 74, 20, 0.16) 42%, transparent 70%);
+  filter: blur(2px);
+  transform: translate(-50%, -50%) scale(0.74);
+  animation: bootstrap-fuse-glow 540ms steps(2, jump-none) infinite alternate;
+}
+
+.bootstrap-state__indicator::after {
+  top: -3%;
+  left: 64%;
+  width: 5px;
+  height: 5px;
+  border-radius: 1px;
+  background: #fff6ac;
+  box-shadow: -9px 5px 0 -1px #ff9b25, 7px 9px 0 -1px #ff641f, 2px -7px 0 -1px #ffe15c;
+  animation: bootstrap-fuse-spark 720ms steps(3, jump-none) infinite;
 }
 
 .bootstrap-state[data-state="error"] .bootstrap-state__indicator {
@@ -36,8 +68,36 @@
   }
 }
 
+@keyframes bootstrap-fuse-glow {
+  to {
+    opacity: 0.62;
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+}
+
+@keyframes bootstrap-fuse-spark {
+  0% {
+    opacity: 0;
+    transform: translate(0, 4px) rotate(0deg) scale(0.5);
+  }
+
+  35% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(11px, -13px) rotate(120deg) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .bootstrap-state__indicator {
+    animation: none;
+  }
+
+  .bootstrap-state__indicator::before,
+  .bootstrap-state__indicator::after {
     animation: none;
   }
 }
