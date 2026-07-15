@@ -1,3 +1,8 @@
+## 2026-07-15 — match-win-priority-over-round-end
+- Escopo: correção mínima em `src/Engine/sound-manager.ts`, novo teste focal e acréscimos isolados nos dois ledgers; preservar diffs concorrentes; commit local seletivo; sem push/deploy.
+- RED → GREEN: antes, chamadas consecutivas de `roundEnd` e `matchWin` no mesmo turno tocavam os dois cues (`1/1`, exit 1); agora `roundEnd` aguarda uma microtask e é invalidado por `matchWin`, resultando em `roundEnd=0`, `matchWin=1` e `pass=true`.
+- Implementação: token monotônico privado adia apenas `roundEnd`; qualquer `matchWin` imediato invalida o pedido pendente, sem alterar call sites nem os demais sons.
+
 ## 2026-07-14 — crate-break-deterministic-timbre-variation
 - Claim/escopo: investigar se `crateBreak` repete timbre idêntico e, somente com RED comprobatório, adicionar variação determinística mínima reutilizando áudio existente; alterar apenas `src/Engine/sound-manager.ts`, `tests/sound-manager-variation-check.mjs` e os dois ledgers; sem dependência, push ou deploy; preservar diffs alheios.
 - RED → GREEN: RED comprovou `crateBreakVariationPass: false` com taxas `[1, 1]`; GREEN comprovou `crateBreakVariationPass: true` com taxas `[0.98, 1.02]`.

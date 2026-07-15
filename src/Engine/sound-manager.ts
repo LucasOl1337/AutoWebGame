@@ -66,6 +66,7 @@ export class SoundManager {
   private readonly lastVariantIndexByKey = new Map<SfxKey, number>();
   private readonly playbackRateIndexByKey = new Map<SfxKey, number>();
   private bombPlacePlaybackRateIndex = 0;
+  private roundEndRequestId = 0;
   private unlocked = false;
   private unlockTarget: EventTarget | null = null;
   private unlockListener: EventListener | null = null;
@@ -128,6 +129,23 @@ export class SoundManager {
   }
 
   public playOneShot(key: SfxKey, gain = 1): void {
+    if (key === "roundEnd") {
+      const requestId = ++this.roundEndRequestId;
+      queueMicrotask(() => {
+        if (requestId === this.roundEndRequestId) {
+          this.playOneShotNow(key, gain);
+        }
+      });
+      return;
+    }
+    if (key === "matchWin") {
+      this.roundEndRequestId += 1;
+    }
+
+    this.playOneShotNow(key, gain);
+  }
+
+  private playOneShotNow(key: SfxKey, gain: number): void {
     const variants = this.sounds.get(key);
     if (!variants || variants.length === 0 || !this.unlocked || this.muted || this.volume <= 0) {
       return;
