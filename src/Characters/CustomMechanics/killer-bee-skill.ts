@@ -68,6 +68,11 @@ export function updateKillerBeeDash(
   if (player.skill.id !== "killer-bee-wing-dash") {
     return false;
   }
+  if (deltaMs <= 0) {
+    player.velocity.x = 0;
+    player.velocity.y = 0;
+    return true;
+  }
   const dashDirection = player.skill.projectedLastMoveDirection ?? player.lastMoveDirection ?? player.direction;
   const target = player.skill.projectedPosition ?? player.position;
   const start = { ...player.position };

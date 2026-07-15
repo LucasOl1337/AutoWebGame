@@ -3,6 +3,7 @@ Object.defineProperty(globalThis, "navigator", { value: { webdriver: true }, con
 const noop = () => {};
 
 const { GameApp } = await import("../output/esm/Engine/game-app.js");
+const { updateKillerBeeDash } = await import("../output/esm/Characters/CustomMechanics/killer-bee-skill.js");
 const { TILE_SIZE } = await import("../output/esm/PersonalConfig/config.js");
 
 const KILLER_BEE_DASH_DISTANCE_PX = TILE_SIZE * 3;
@@ -68,6 +69,33 @@ game.setServerPlayerInput(1, {
   skillPressed: true,
 });
 game.advanceServerSimulation(17);
+
+const nonPositiveDeltaPosition = { ...bee.position };
+const nonPositiveDeltaTimers = {
+  channelRemainingMs: bee.skill.channelRemainingMs,
+  cooldownRemainingMs: bee.skill.cooldownRemainingMs,
+  castElapsedMs: bee.skill.castElapsedMs,
+};
+bee.velocity = { x: 123, y: -456 };
+const nonPositiveDeltaHandled = updateKillerBeeDash(bee, 0, {
+  arena: game.arena,
+  canOccupyPosition: () => true,
+  getTileFromPosition: (position) => ({
+    x: Math.floor(position.x / TILE_SIZE),
+    y: Math.floor(position.y / TILE_SIZE),
+  }),
+  getWrappedDelta: (target, origin) => target - origin,
+  normalizeArenaPosition: (position) => position,
+});
+const nonPositiveDeltaPreservesPosition = bee.position.x === nonPositiveDeltaPosition.x
+  && bee.position.y === nonPositiveDeltaPosition.y;
+const nonPositiveDeltaPreservesTimers = bee.skill.channelRemainingMs === nonPositiveDeltaTimers.channelRemainingMs
+  && bee.skill.cooldownRemainingMs === nonPositiveDeltaTimers.cooldownRemainingMs
+  && bee.skill.castElapsedMs === nonPositiveDeltaTimers.castElapsedMs;
+const nonPositiveDeltaZeroesFiniteVelocity = bee.velocity.x === 0
+  && bee.velocity.y === 0
+  && Number.isFinite(bee.velocity.x)
+  && Number.isFinite(bee.velocity.y);
 
 const firstStepX = bee.position.x;
 const firstSkill = {
@@ -238,8 +266,16 @@ const report = {
   trappedDashUsesShortCooldown,
   trappedDashKeepsPosition,
   trappedDashClearsProjection,
+  nonPositiveDeltaHandled,
+  nonPositiveDeltaPreservesPosition,
+  nonPositiveDeltaPreservesTimers,
+  nonPositiveDeltaZeroesFiniteVelocity,
   usesCustomDashAnimation,
-  pass: dashStarted
+  pass: nonPositiveDeltaHandled
+    && nonPositiveDeltaPreservesPosition
+    && nonPositiveDeltaPreservesTimers
+    && nonPositiveDeltaZeroesFiniteVelocity
+    && dashStarted
     && dashMovedOnFirstFrame
     && dashReachedFullDistance
     && dashEndedInCooldown
