@@ -17,7 +17,7 @@ export class FrontendStore {
   constructor(initialRoute: FrontendRoute) {
     this.state = Object.freeze({
       route: initialRoute,
-      selectedMode: initialRoute === "launcher" ? "play" : (initialRoute as LauncherMode),
+      selectedMode: isLauncherMode(initialRoute) ? initialRoute : "play",
       bootingGame: false,
     });
   }
@@ -36,7 +36,7 @@ export class FrontendStore {
   setRoute(route: FrontendRoute): void {
     this.update({
       route,
-      selectedMode: route === "launcher" ? this.state.selectedMode : (route as LauncherMode),
+      selectedMode: isLauncherMode(route) ? route : this.state.selectedMode,
     });
   }
 
@@ -56,4 +56,8 @@ export class FrontendStore {
     this.state = next;
     this.listeners.forEach((listener) => listener(this.state));
   }
+}
+
+function isLauncherMode(route: FrontendRoute): route is LauncherMode {
+  return route === "play" || route === "training" || route === "lab";
 }

@@ -24,6 +24,8 @@ const [
   workerSource,
   telemetrySource,
   cssSource,
+  accountPageSource,
+  accountPageCssSource,
 ] = await Promise.all([
   readFile(new URL("../index.html", import.meta.url), "utf8"),
   readFile(new URL("../game.html", import.meta.url), "utf8"),
@@ -34,6 +36,8 @@ const [
   readFile(new URL("../worker/index.js", import.meta.url), "utf8"),
   readFile(new URL("../src/NetCode/growth-telemetry.ts", import.meta.url), "utf8"),
   readFile(new URL("../src/UiLayouts/main.css", import.meta.url), "utf8"),
+  readFile(new URL("../src/Auth/account-page.ts", import.meta.url), "utf8"),
+  readFile(new URL("../src/Auth/account-page.css", import.meta.url), "utf8"),
 ]);
 
 function includesAll(source, snippets) {
@@ -111,31 +115,34 @@ const checks = {
     ]),
   },
   accountAndAccess: {
-    accountValidationSupportsQuickSignup: USERNAME_MIN_LENGTH === 3
+    accountValidationSupportsRegistration: USERNAME_MIN_LENGTH === 3
       && USERNAME_MAX_LENGTH === 16
       && USERNAME_ALLOWED_PATTERN_SOURCE === "[A-Za-z0-9_]+"
       && validCommercialUsername.ok
       && validCommercialUsername.username === "Founder_1"
       && !invalidCommercialUsername.ok,
     workerExposesAccountSessionRoutes: includesAll(workerSource, [
-      '["/api/me", { methods: new Set(["GET"]), targetPath: "/internal/account/me" }]',
-      '["/api/account/quick-create", { methods: new Set(["POST"]), targetPath: "/internal/account/quick-create" }]',
-      '["/api/logout", { methods: new Set(["POST"]), targetPath: "/internal/account/logout" }]',
-      'url.pathname === "/internal/account/me"',
-      'url.pathname === "/internal/account/quick-create"',
-      'url.pathname === "/internal/account/logout"',
-      "handleQuickAccountCreate",
-      "buildAccountSessionKey",
+      '["/api/auth/session", { methods: new Set(["GET"]), targetPath: "/internal/auth/session" }]',
+      '["/api/auth/register", { methods: new Set(["POST"]), targetPath: "/internal/auth/register" }]',
+      '["/api/auth/login", { methods: new Set(["POST"]), targetPath: "/internal/auth/login" }]',
+      '["/api/auth/logout", { methods: new Set(["POST"]), targetPath: "/internal/auth/logout" }]',
+      'url.pathname === "/internal/auth/register"',
+      'url.pathname === "/internal/auth/login"',
+      'code: "quick-account-retired"',
     ]),
     clientRendersAndWiresAccountPanel: includesAll(sessionSource, [
       'landingAccountCard.className = "experience-account-card"',
       'landingAccountPrimaryButton.addEventListener("click"',
-      "void this.createQuickAccount();",
-      'fetch("/api/account/quick-create"',
-      'fetch("/api/logout"',
-    ]) && includesAll(cssSource, [
-      ".experience-account-card",
-      ".experience-account__input",
+      'window.location.assign("/account?mode=register")',
+      'fetch("/api/auth/logout"',
+    ]) && includesAll(accountPageSource, [
+      'fetch("/api/auth/session"',
+      '"/api/auth/register"',
+      '"/api/auth/login"',
+      'fetch("/api/auth/logout"',
+    ]) && includesAll(accountPageCssSource, [
+      ".account-auth-panel",
+      ".account-form",
     ]),
     billingModelKeepsVisitorFreePendingPaidSeparate: visitorBilling.accessLevel === "visitor"
       && visitorBilling.checkoutState === "ready"
@@ -164,7 +171,7 @@ const checks = {
       'fetch("/api/billing/checkout"',
       "window.location.href = payload.checkoutUrl;",
     ]) && includesAll(workerSource, [
-      "Crie uma conta rapida antes de abrir o checkout.",
+      "Crie uma conta com e-mail antes de abrir o checkout.",
       "buildBillingCheckoutUrl",
       "client_reference_id",
     ]),
@@ -190,12 +197,12 @@ const checks = {
   localizedCopy: {
     portugueseExplainsBuyPath: includesAll(JSON.stringify(SITE_COPY.pt.landing), [
       "Criar conta para comprar",
-      "Crie uma conta rapida antes de abrir o checkout.",
+      "Crie uma conta com e-mail antes de abrir o checkout.",
       "Configure BILLING_CHECKOUT_URL",
     ]),
     englishExplainsBuyPath: includesAll(JSON.stringify(SITE_COPY.en.landing), [
       "Create account to buy",
-      "Create a quick account before opening checkout.",
+      "Create an email account before opening checkout.",
       "Set BILLING_CHECKOUT_URL",
     ]),
     paidAndUnavailableStatesAreDistinct: SITE_COPY.pt.landing.billingCtaPaid !== SITE_COPY.pt.landing.billingCtaUnavailable
@@ -211,7 +218,7 @@ const failedChecks = Object.entries(checks).flatMap(([sectionName, sectionChecks
 const flow = [
   "visitor reads the public promise",
   "visitor opens the game route",
-  "visitor can create a quick account",
+  "visitor creates a secure email account",
   "free account can start external checkout",
   "webhook-confirmed billing status becomes paid access",
   "trust and legal pages remain published with the build",

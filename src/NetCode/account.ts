@@ -1,8 +1,12 @@
 export type AccountAuthLevel = "username" | "email";
+export type AccountRole = "user" | "admin";
 
 export interface PlayerAccount {
   id: string;
   username: string;
+  displayName: string;
+  email: string | null;
+  role: AccountRole;
   authLevel: AccountAuthLevel;
   createdAt: number;
 }

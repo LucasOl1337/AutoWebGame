@@ -4,7 +4,7 @@ Generated at: 2026-06-25T22:16:45-03:00
 
 Repository: `C:\Projetos\AutoWebGame`
 
-CodeGraph status: healthy, synchronized, 124 indexed files, 3,157 nodes, 7,226 edges.
+CodeGraph status: healthy, synchronized, 270 indexed files, 5,787 nodes, 11,653 edges.
 
 Scope: real project files in the current working directory. Ignored for analysis: `node_modules`, `.git`, build output and caches. CodeGraph was the primary structural source; direct reads were used only for repository metadata, package scripts and docs.
 
@@ -90,22 +90,22 @@ Scope: real project files in the current working directory. Ignored for analysis
 - Status: funcional
 - Observacoes tecnicas: O tema e runtime TS sao indexados; assets visuais e CSS ficam fora do grafo.
 
-### 1.9 Feedback, contas rapidas e idioma
+### 1.9 Contas, autenticacao, feedback e idioma
 
-- Nome: Feedback, conta rapida e troca de idioma
-- Descricao: Cliente permite username/conta rapida, envio de feedback e alternancia PT/EN.
-- Arquivos relacionados: `src/NetCode/session-client.ts`, `src/NetCode/account.ts`, `src/UiLayouts/i18n.ts`, `worker/index.js`
-- Como e acessada/usada: Elementos DOM no landing; worker expoe endpoints de account e feedback.
-- Dependencias internas: `GlobalLobby.handleQuickAccountCreate`, `handleAccountMe`, `handleAccountLogout`, `handleFeedbackIngest`.
+- Nome: Conta autenticada, feedback e troca de idioma
+- Descricao: Cliente oferece registro/login por e-mail em `/account`, sessao persistente, migracao de conta rapida legada, envio de feedback e alternancia PT/EN.
+- Arquivos relacionados: `src/Auth/account-auth.ts`, `src/Auth/account-credentials.ts`, `src/Auth/account-page.ts`, `src/NetCode/session-client.ts`, `src/NetCode/account.ts`, `src/UiLayouts/i18n.ts`, `worker/index.js`
+- Como e acessada/usada: `/account` renderiza login/registro; o Worker expoe `/api/auth/session`, `/api/auth/register`, `/api/auth/login` e `/api/auth/logout`; contas com papel `admin` seguem para `/admin`.
+- Dependencias internas: `AccountAuth`, adaptador de storage do `GlobalLobby`, Web Crypto/PBKDF2, roteador frontend, `handleFeedbackIngest`.
 - Status: funcional
-- Observacoes tecnicas: A seguranca real depende da configuracao do Worker/env; inventario nao validou segredos ou deploy.
+- Observacoes tecnicas: Credenciais armazenadas usam PBKDF2-SHA256 com salt; sessoes, tentativas e contas ficam no storage do Durable Object. O bootstrap administrativo continua fail-closed e depende dos secrets `ADMIN_USERNAME` e `ADMIN_PASSWORD`.
 
 ## 2. Funcoes de estrutura e backend
 
 ### 2.1 Cloudflare Worker / Durable Object GlobalLobby
 
 - Nome: Worker backend autoritativo
-- Descricao: Backend central para websocket, salas, quick match, endless, partidas headless, admin, telemetry e feedback.
+- Descricao: Backend central para autenticacao, websocket, salas, quick match, endless, partidas headless, admin, telemetry e feedback.
 - Arquivos relacionados: `worker/index.js`, `wrangler.jsonc`, `src/NetCode/protocol.ts`, `src/NetCode/server-tick.ts`
 - Como e acessada/usada: `npm run serve:online`, `npm run dev`, `npm run deploy:cloudflare`; requests/websockets roteiam para `GlobalLobby`.
 - Dependencias internas: `GameApp` headless, arena helpers, protocol contracts, fixed tick pump, storage do Durable Object/KV conforme bindings.
@@ -145,10 +145,10 @@ Scope: real project files in the current working directory. Ignored for analysis
 ### 2.5 Telemetry, analytics, feedback e admin
 
 - Nome: Telemetry/feedback/admin do Worker
-- Descricao: Coleta eventos, feedback, sumarizacao diaria, login admin e CRUD/validacao/ativacao de arena.
-- Arquivos relacionados: `worker/index.js`, `src/NetCode/growth-telemetry.ts`, `src/Arenas/arena.ts`
-- Como e acessada/usada: Endpoints HTTP tratados por `GlobalLobby.handleTelemetryIngest`, `handleFeedbackIngest`, `handleAdmin*`.
-- Dependencias internas: Storage do Worker, validacao de arena, auth/config env.
+- Descricao: Coleta eventos, feedback, sumarizacao diaria, autorizacao administrativa unificada e CRUD/validacao/ativacao de arena.
+- Arquivos relacionados: `worker/index.js`, `src/Auth/account-auth.ts`, `src/NetCode/growth-telemetry.ts`, `src/Arenas/arena.ts`
+- Como e acessada/usada: O login administrativo passa pelo mesmo `/api/auth/login` das contas comuns; endpoints `handleAdmin*` exigem sessao com papel `admin`.
+- Dependencias internas: `AccountAuth`, storage do Worker, validacao de arena, auth/config env.
 - Status: parcial
 - Observacoes tecnicas: O codigo existe, mas o inventario nao confirmou configuracao de ambiente, credenciais, KV/storage ou despacho real de relatorios.
 
@@ -254,8 +254,8 @@ Scope: real project files in the current working directory. Ignored for analysis
 6. Online gameplay:
    input cliente -> input latch/seq -> worker match input -> `GameApp` headless -> snapshot -> `pushOnlineRenderSample` -> `projectNetworkPlayerPosition` -> render suavizado.
 
-7. Admin arena:
-   admin login -> arena list/create/get/update/validate/activate -> active arena definition -> novas partidas usam arena ativa.
+7. Conta e admin:
+   `/account` -> registro/login -> `AccountAuth` -> conta/sessao no Durable Object -> papel `user` mantem a conta no jogo; papel `admin` redireciona para `/admin` -> arena list/create/get/update/validate/activate -> active arena definition -> novas partidas usam arena ativa.
 
 8. Asset pipeline:
    Pixellab/spec -> gerar/promover/importar assets -> manifesto/arquivos publicos -> asset loader -> personagens no jogo.
@@ -292,7 +292,7 @@ Scope: real project files in the current working directory. Ignored for analysis
 ## Proximos passos recomendados
 
 1. Separar gradualmente `GameApp` em modulos de simulacao, render/HUD, online reconciliation e menu/local setup.
-2. Separar `worker/index.js` em dominios: routing HTTP, websocket lobby, match pump, admin arena, telemetry/feedback.
+2. Separar `worker/index.js` em dominios: routing HTTP, websocket lobby, match pump, admin arena, telemetry/feedback; manter autenticacao no modulo profundo `src/Auth/account-auth.ts`.
 3. Confirmar se `scripts/online_server.mjs` ainda e necessario; se sim, documentar suporte legacy; se nao, remover ou arquivar.
 4. Remover ou ignorar `scripts/.temp-static-server.cjs` se for artefato temporario.
 5. Atualizar links absolutos do README para caminhos relativos.

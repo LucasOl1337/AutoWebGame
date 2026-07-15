@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { resolveAdminAuthConfig } from './admin-auth.js';
+import { AccountAuth } from "../src/Auth/account-auth";
 import { GameApp } from "../src/Engine/game-app";
 import {
   buildArenaRuntimeConfig,
@@ -23,7 +24,6 @@ import {
   getLobbySeatSnapshot,
   isPlayableLobbySeat,
 } from "../src/NetCode/lobby-rules";
-import { validateUsername } from "../src/NetCode/account";
 import {
   billingRecordToStatus,
   createConfirmedBillingRecord,
@@ -50,7 +50,6 @@ const ENDLESS_ROOM_CODE = "ENDLS1";
 const ENDLESS_ROOM_TITLE = "Partida infinita";
 const PLAYER_IDS = [1, 2, 3, 4];
 const ACCOUNT_SESSION_COOKIE = "bomba_session";
-const ACCOUNT_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 180;
 const ADMIN_SESSION_COOKIE = "bomba_admin_session";
 const ADMIN_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 const ADMIN_SESSION_STORAGE_VERSION = 2;
@@ -81,7 +80,7 @@ const TELEMETRY_EVENT_NAMES = new Set([
   "lobby_left",
 ]);
 const LEGACY_ASSET_PREFIX = "/assets/";
-const GAME_DOCUMENT_ROUTES = new Set(["/game/play", "/game/training", "/game/lab"]);
+const GAME_DOCUMENT_ROUTES = new Set(["/account", "/game/play", "/game/training", "/game/lab"]);
 const ACTIVE_ARENA_ID_KEY = "arena:active-id";
 const ARENA_KEY_PREFIX = "arena:def:";
 const HASHED_VITE_ASSET_RE = /^\/Assets\/[^/?#]+-[A-Za-z0-9_-]{8,}\.(?:js|css)$/;
@@ -114,10 +113,14 @@ const PUBLIC_API_ROUTES = new Map([
   ["/api/admin/arenas", { methods: new Set(["GET", "POST"]), targetPath: "/internal/admin/arenas" }],
   ["/api/admin/login", { methods: new Set(["POST"]), targetPath: "/internal/admin/login" }],
   ["/api/admin/logout", { methods: new Set(["POST"]), targetPath: "/internal/admin/logout" }],
+  ["/api/auth/session", { methods: new Set(["GET"]), targetPath: "/internal/auth/session" }],
+  ["/api/auth/register", { methods: new Set(["POST"]), targetPath: "/internal/auth/register" }],
+  ["/api/auth/login", { methods: new Set(["POST"]), targetPath: "/internal/auth/login" }],
+  ["/api/auth/logout", { methods: new Set(["POST"]), targetPath: "/internal/auth/logout" }],
   ["/api/feedback", { methods: new Set(["POST"]), targetPath: "/internal/feedback" }],
-  ["/api/me", { methods: new Set(["GET"]), targetPath: "/internal/account/me" }],
+  ["/api/me", { methods: new Set(["GET"]), targetPath: "/internal/auth/session" }],
   ["/api/account/quick-create", { methods: new Set(["POST"]), targetPath: "/internal/account/quick-create" }],
-  ["/api/logout", { methods: new Set(["POST"]), targetPath: "/internal/account/logout" }],
+  ["/api/logout", { methods: new Set(["POST"]), targetPath: "/internal/auth/logout" }],
   ["/api/billing/status", { methods: new Set(["GET"]), targetPath: "/internal/billing/status" }],
   ["/api/billing/checkout", { methods: new Set(["POST"]), targetPath: "/internal/billing/checkout" }],
   ["/api/billing/webhook", { methods: new Set(["POST"]), targetPath: "/internal/billing/webhook" }],
@@ -486,6 +489,8 @@ export class GlobalLobby extends DurableObject {
   activeArenaDefinition = createDefaultArenaDefinition();
   /** @type {Promise<void>} */
   ready;
+  /** @type {AccountAuth} */
+  accountAuth;
 
   /**
    * @param {DurableObjectState} ctx
@@ -494,6 +499,12 @@ export class GlobalLobby extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
     this.env = env;
+    const configuredAdmin = resolveAdminAuthConfig(env).login;
+    this.accountAuth = new AccountAuth(this.ctx.storage, {
+      bootstrapAdmin: configuredAdmin
+        ? { email: configuredAdmin.username, password: configuredAdmin.password }
+        : null,
+    });
     this.ready = this.ctx.blockConcurrencyWhile(async () => {
       const stored = await this.ctx.storage.get("state");
       const persistedRooms = stored
@@ -633,15 +644,23 @@ export class GlobalLobby extends DurableObject {
       return new Response("Method not allowed", { status: 405 });
     }
 
-    if (url.pathname === "/internal/account/me") {
-      return this.handleAccountMe(request);
+    if (url.pathname === "/internal/auth/session" || url.pathname === "/internal/account/me") {
+      return this.handleAccountSession(request);
+    }
+
+    if (url.pathname === "/internal/auth/register") {
+      return this.handleAccountRegister(request);
+    }
+
+    if (url.pathname === "/internal/auth/login") {
+      return this.handleAccountLogin(request);
     }
 
     if (url.pathname === "/internal/account/quick-create") {
       return this.handleQuickAccountCreate(request);
     }
 
-    if (url.pathname === "/internal/account/logout") {
+    if (url.pathname === "/internal/auth/logout" || url.pathname === "/internal/account/logout") {
       return this.handleAccountLogout(request);
     }
 
@@ -804,7 +823,7 @@ export class GlobalLobby extends DurableObject {
    * @param {Request} request
    * @returns {Promise<Response>}
    */
-  async handleAccountMe(request) {
+  async handleAccountSession(request) {
     const account = await this.readCurrentAccountFromRequest(request);
     return Response.json(
       { account },
@@ -820,89 +839,56 @@ export class GlobalLobby extends DurableObject {
    * @param {Request} request
    * @returns {Promise<Response>}
    */
+  async handleAccountRegister(request) {
+    const payload = await readJsonObject(request);
+    if (!payload) {
+      return createAuthErrorResponse(400, "invalid-payload", "Nao foi possivel ler os dados da conta.");
+    }
+    const currentSessionId = readCookieValue(request.headers.get("cookie"), ACCOUNT_SESSION_COOKIE);
+    const result = await this.accountAuth.register({
+      username: typeof payload.username === "string" ? payload.username : "",
+      email: typeof payload.email === "string" ? payload.email : "",
+      password: typeof payload.password === "string" ? payload.password : "",
+    }, currentSessionId);
+    return createAccountAuthResponse(result, request.url);
+  }
+
+  /**
+   * @param {Request} request
+   * @returns {Promise<Response>}
+   */
+  async handleAccountLogin(request) {
+    const payload = await readJsonObject(request);
+    if (!payload) {
+      return createAuthErrorResponse(400, "invalid-payload", "Nao foi possivel ler os dados de acesso.");
+    }
+    const result = await this.accountAuth.login({
+      email: typeof payload.email === "string"
+        ? payload.email
+        : typeof payload.username === "string"
+          ? payload.username
+          : "",
+      password: typeof payload.password === "string" ? payload.password : "",
+      clientAddress: readRequestIpAddress(request),
+    });
+    return createAccountAuthResponse(result, request.url);
+  }
+
+  /**
+   * @param {Request} request
+   * @returns {Promise<Response>}
+   */
   async handleQuickAccountCreate(request) {
-    const existingAccount = await this.readCurrentAccountFromRequest(request);
-    if (existingAccount) {
-      return Response.json(
-        { account: existingAccount },
-        {
-          headers: {
-            "cache-control": "no-store",
-          },
-        },
-      );
-    }
-
-    let payload;
-    try {
-      payload = await request.json();
-    } catch {
-      return Response.json(
-        { error: "Nao foi possivel ler os dados da conta." },
-        {
-          status: 400,
-          headers: {
-            "cache-control": "no-store",
-          },
-        },
-      );
-    }
-
-    const validation = validateUsername(String(payload?.username ?? ""));
-    if (!validation.ok || !validation.username || !validation.normalizedUsername) {
-      return Response.json(
-        { error: validation.message ?? "Username invalido." },
-        {
-          status: 400,
-          headers: {
-            "cache-control": "no-store",
-          },
-        },
-      );
-    }
-
-    const usernameLookupKey = buildAccountUsernameLookupKey(validation.normalizedUsername);
-    const existingAccountId = await this.ctx.storage.get(usernameLookupKey);
-    if (typeof existingAccountId === "string" && existingAccountId) {
-      return Response.json(
-        { error: "Esse username ja foi escolhido." },
-        {
-          status: 409,
-          headers: {
-            "cache-control": "no-store",
-          },
-        },
-      );
-    }
-
-    const now = Date.now();
-    const account = {
-      id: createId("acct"),
-      username: validation.username,
-      authLevel: "username",
-      createdAt: now,
-    };
-    const session = {
-      id: createId("sess"),
-      accountId: account.id,
-      createdAt: now,
-      expiresAt: now + (ACCOUNT_SESSION_MAX_AGE_SECONDS * 1000),
-    };
-
-    await Promise.all([
-      this.ctx.storage.put(buildAccountKey(account.id), account),
-      this.ctx.storage.put(usernameLookupKey, account.id),
-      this.ctx.storage.put(buildAccountSessionKey(session.id), session),
-    ]);
-
     return Response.json(
-      { account },
       {
-        status: 201,
-        headers: {
-          "cache-control": "no-store",
-          "set-cookie": buildSessionCookieHeader(session.id, request.url),
-        },
+        ok: false,
+        code: "quick-account-retired",
+        error: "Contas rapidas foram substituidas por cadastro com e-mail e senha.",
+        registerUrl: "/account?mode=register",
+      },
+      {
+        status: 410,
+        headers: { "cache-control": "no-store" },
       },
     );
   }
@@ -913,9 +899,7 @@ export class GlobalLobby extends DurableObject {
    */
   async handleAccountLogout(request) {
     const sessionId = readCookieValue(request.headers.get("cookie"), ACCOUNT_SESSION_COOKIE);
-    if (sessionId) {
-      await this.ctx.storage.delete(buildAccountSessionKey(sessionId));
-    }
+    await this.accountAuth.logout(sessionId);
     return Response.json(
       { account: null },
       {
@@ -952,7 +936,7 @@ export class GlobalLobby extends DurableObject {
     const account = await this.readCurrentAccountFromRequest(request);
     if (!account) {
       return Response.json(
-        { error: "Crie uma conta rapida antes de abrir o checkout." },
+        { error: "Crie uma conta com e-mail antes de abrir o checkout." },
         {
           status: 401,
           headers: {
@@ -1133,22 +1117,7 @@ export class GlobalLobby extends DurableObject {
    */
   async readCurrentAccountFromRequest(request) {
     const sessionId = readCookieValue(request.headers.get("cookie"), ACCOUNT_SESSION_COOKIE);
-    if (!sessionId) {
-      return null;
-    }
-
-    const storedSession = await this.ctx.storage.get(buildAccountSessionKey(sessionId));
-    const session = normalizeStoredSession(storedSession);
-    if (!session) {
-      return null;
-    }
-    if (session.expiresAt <= Date.now()) {
-      await this.ctx.storage.delete(buildAccountSessionKey(sessionId));
-      return null;
-    }
-
-    const storedAccount = await this.ctx.storage.get(buildAccountKey(session.accountId));
-    return normalizeStoredAccount(storedAccount);
+    return this.accountAuth.current(sessionId);
   }
 
   /**
@@ -1961,50 +1930,35 @@ export class GlobalLobby extends DurableObject {
       return createAdminUnavailableResponse();
     }
 
-    /** @type {unknown} */
-    let payload;
-    try {
-      payload = await request.json();
-    } catch {
+    const payload = await readJsonObject(request);
+    if (!payload) {
       return Response.json({ ok: false, error: "Invalid JSON body." }, { status: 400 });
     }
 
-    const username = typeof payload?.username === "string" ? payload.username.trim() : "";
-    const password = typeof payload?.password === "string" ? payload.password.trim() : "";
-    const expectedUsername = authConfig.login.username;
-    const expectedPassword = authConfig.login.password;
+    const email = typeof payload.email === "string"
+      ? payload.email
+      : typeof payload.username === "string"
+        ? payload.username
+        : "";
+    const password = typeof payload.password === "string" ? payload.password : "";
 
-    if (!username || !password) {
-      return Response.json({ ok: false, error: "Username and password are required." }, { status: 400 });
+    if (!email || !password) {
+      return Response.json({ ok: false, error: "E-mail and password are required." }, { status: 400 });
     }
 
-    if (!timingSafeEqual(username, expectedUsername) || !timingSafeEqual(password, expectedPassword)) {
-      return Response.json({ ok: false, error: "Invalid credentials." }, {
-        status: 401,
-        headers: {
-          "cache-control": "no-store",
-        },
-      });
+    const result = await this.accountAuth.login({
+      email,
+      password,
+      clientAddress: readRequestIpAddress(request),
+    });
+    if (!result.ok) {
+      return createAuthErrorResponse(result.status, result.code, result.error);
     }
-
-    const session = {
-      id: createId("admin"),
-      username,
-      createdAt: Date.now(),
-      expiresAt: Date.now() + ADMIN_SESSION_MAX_AGE_SECONDS * 1000,
-    };
-
-    await this.ctx.storage.put(buildAdminSessionKey(session.id), session);
-
-    return Response.json(
-      { ok: true, username: session.username },
-      {
-        headers: {
-          "cache-control": "no-store",
-          "set-cookie": buildAdminSessionCookieHeader(session.id, request.url),
-        },
-      },
-    );
+    if (result.account.role !== "admin") {
+      await this.accountAuth.logout(result.session.id);
+      return createAuthErrorResponse(403, "admin-required", "Esta conta nao possui acesso administrativo.");
+    }
+    return createAccountAuthResponse(result, request.url);
   }
 
   /**
@@ -2012,20 +1966,20 @@ export class GlobalLobby extends DurableObject {
    * @returns {Promise<Response>}
    */
   async handleAdminLogout(request) {
-    const sessionId = readCookieValue(request.headers.get("cookie"), ADMIN_SESSION_COOKIE);
-    if (sessionId) {
-      await this.ctx.storage.delete(buildAdminSessionKey(sessionId));
-    }
+    const cookieHeader = request.headers.get("cookie");
+    const legacyAdminSessionId = readCookieValue(cookieHeader, ADMIN_SESSION_COOKIE);
+    const accountSessionId = readCookieValue(cookieHeader, ACCOUNT_SESSION_COOKIE);
+    await Promise.all([
+      legacyAdminSessionId
+        ? this.ctx.storage.delete(buildAdminSessionKey(legacyAdminSessionId))
+        : Promise.resolve(),
+      this.accountAuth.logout(accountSessionId),
+    ]);
 
-    return Response.json(
-      { ok: true },
-      {
-        headers: {
-          "cache-control": "no-store",
-          "set-cookie": buildClearedAdminSessionCookieHeader(),
-        },
-      },
-    );
+    const headers = new Headers({ "cache-control": "no-store" });
+    headers.append("set-cookie", buildClearedAdminSessionCookieHeader());
+    headers.append("set-cookie", buildClearedSessionCookieHeader());
+    return Response.json({ ok: true }, { headers });
   }
 
   /**
@@ -3688,7 +3642,12 @@ function normalizeStoredAccount(account) {
   return {
     id: account.id,
     username: account.username,
-    authLevel: account.authLevel === "email" ? "email" : "username",
+    displayName: typeof account.displayName === "string" && account.displayName.trim()
+      ? account.displayName.trim()
+      : account.username,
+    email: typeof account.email === "string" && account.email.trim() ? account.email.trim() : null,
+    role: account.role === "admin" ? "admin" : "user",
+    authLevel: account.authLevel === "email" && typeof account.email === "string" ? "email" : "username",
     createdAt: Number.isFinite(account.createdAt) ? account.createdAt : 0,
   };
 }
@@ -3697,35 +3656,8 @@ function normalizeStoredAttachmentAccount(account) {
   return normalizeStoredAccount(account);
 }
 
-function normalizeStoredSession(session) {
-  if (!session || typeof session !== "object") {
-    return null;
-  }
-  if (typeof session.id !== "string" || typeof session.accountId !== "string") {
-    return null;
-  }
-  const expiresAt = Number(session.expiresAt);
-  if (!Number.isFinite(expiresAt)) {
-    return null;
-  }
-  return {
-    id: session.id,
-    accountId: session.accountId,
-    createdAt: Number.isFinite(session.createdAt) ? session.createdAt : 0,
-    expiresAt,
-  };
-}
-
 function buildAccountKey(accountId) {
   return `account:${accountId}`;
-}
-
-function buildAccountUsernameLookupKey(normalizedUsername) {
-  return `account-username:${normalizedUsername}`;
-}
-
-function buildAccountSessionKey(sessionId) {
-  return `account-session:${sessionId}`;
 }
 
 function buildBillingKey(accountId) {
@@ -3790,6 +3722,45 @@ function readBillingWebhookProviderSessionId(payload) {
   return typeof value === "string" && value.trim() ? value.trim().slice(0, 160) : null;
 }
 
+async function readJsonObject(request) {
+  try {
+    const payload = await request.json();
+    return payload && typeof payload === "object" ? payload : null;
+  } catch {
+    return null;
+  }
+}
+
+function createAuthErrorResponse(status, code, error) {
+  return Response.json(
+    { ok: false, code, error },
+    {
+      status,
+      headers: { "cache-control": "no-store" },
+    },
+  );
+}
+
+function createAccountAuthResponse(result, requestUrl) {
+  if (!result.ok) {
+    return createAuthErrorResponse(result.status, result.code, result.error);
+  }
+  const remainingSeconds = Math.max(
+    0,
+    Math.floor((result.session.expiresAt - Date.now()) / 1000),
+  );
+  return Response.json(
+    { ok: true, account: result.account },
+    {
+      status: result.status,
+      headers: {
+        "cache-control": "no-store",
+        "set-cookie": buildSessionCookieHeader(result.session.id, requestUrl, remainingSeconds),
+      },
+    },
+  );
+}
+
 function readCookieValue(cookieHeader, name) {
   if (!cookieHeader) {
     return null;
@@ -3810,12 +3781,12 @@ function readCookieValue(cookieHeader, name) {
   return null;
 }
 
-function buildSessionCookieHeader(sessionId, requestUrl) {
+function buildSessionCookieHeader(sessionId, requestUrl, maxAgeSeconds) {
   const url = new URL(requestUrl);
   const parts = [
     `${ACCOUNT_SESSION_COOKIE}=${sessionId}`,
     "Path=/",
-    `Max-Age=${ACCOUNT_SESSION_MAX_AGE_SECONDS}`,
+    `Max-Age=${Math.max(0, Math.floor(maxAgeSeconds))}`,
     "HttpOnly",
     "SameSite=Lax",
   ];
@@ -3899,6 +3870,17 @@ async function authorizeAdminRequest(request, env, storage) {
   const authConfig = resolveAdminAuthConfig(env);
   if (!authConfig.enabled) {
     return { ok: false, response: createAdminUnavailableResponse() };
+  }
+
+  const accountSessionId = readCookieValue(
+    request.headers.get("cookie"),
+    ACCOUNT_SESSION_COOKIE,
+  );
+  const account = storage
+    ? await new AccountAuth(storage).current(accountSessionId)
+    : null;
+  if (account?.role === "admin") {
+    return { ok: true, account };
   }
 
   const session = authConfig.login
@@ -4614,9 +4596,9 @@ function renderAdminHtml(env) {
         <section class="panel" id="login-panel">
           <small>Admin access</small>
           <h2>Login</h2>
-          <p class="muted">Use the username/password pair configured for this Worker.</p>
+          <p class="muted">Use the administrator e-mail and password configured for this Worker.</p>
           <div class="auth-form" style="margin-top:12px;">
-            <input id="username-input" class="field" type="text" value="${safeUsername}" autocomplete="username" />
+            <input id="username-input" class="field" type="email" value="${safeUsername}" autocomplete="email" placeholder="admin@email.com" />
             <input id="password-input" class="field" type="password" placeholder="Password" autocomplete="current-password" />
             <button id="login-button" class="experience-button experience-button--primary" type="button">Entrar</button>
           </div>

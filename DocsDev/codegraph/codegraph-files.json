@@ -1,131 +1,1627 @@
 {
-  "generatedAt": "2026-06-25T22:16:45-03:00",
+  "generatedAt": "2026-07-15T10:42:57-03:00",
   "repository": "C:\\Projetos\\AutoWebGame",
   "source": "codegraph files --json",
   "files": [
-    { "path": "GameRes/GameDev-Resources/.travis.yml", "language": "yaml", "nodeCount": 0, "size": 337 },
-    { "path": "auto-improvements/bot_manager.py", "language": "python", "nodeCount": 41, "size": 10502 },
-    { "path": "auto-improvements/bot_menu.py", "language": "python", "nodeCount": 76, "size": 42791 },
-    { "path": "auto-improvements/game_broker.py", "language": "python", "nodeCount": 59, "size": 16358 },
-    { "path": "auto-improvements/insights_module.py", "language": "python", "nodeCount": 24, "size": 6742 },
-    { "path": "auto-improvements/live_agent.py", "language": "python", "nodeCount": 71, "size": 30725 },
-    { "path": "auto-improvements/mainbot.py", "language": "python", "nodeCount": 44, "size": 16767 },
-    { "path": "auto-improvements/manager_agent.py", "language": "python", "nodeCount": 28, "size": 8940 },
-    { "path": "auto-improvements/memory.py", "language": "python", "nodeCount": 33, "size": 6243 },
-    { "path": "auto-improvements/model_manager.py", "language": "python", "nodeCount": 40, "size": 19526 },
-    { "path": "auto-improvements/report_console.py", "language": "python", "nodeCount": 27, "size": 5790 },
-    { "path": "auto-improvements/worker_agent.py", "language": "python", "nodeCount": 29, "size": 10408 },
-    { "path": "scripts/.temp-static-server.cjs", "language": "javascript", "nodeCount": 6, "size": 986 },
-    { "path": "scripts/generate_sfx_v3.py", "language": "python", "nodeCount": 12, "size": 3344 },
-    { "path": "scripts/import_pixellab_characters.mjs", "language": "javascript", "nodeCount": 59, "size": 22834 },
-    { "path": "scripts/online_server.mjs", "language": "javascript", "nodeCount": 46, "size": 14445 },
-    { "path": "scripts/pixellab_generate_v2_pro_custom_animations.mjs", "language": "javascript", "nodeCount": 16, "size": 6850 },
-    { "path": "scripts/pixellab_generate_v3_custom_animations.mjs", "language": "javascript", "nodeCount": 18, "size": 7420 },
-    { "path": "scripts/pixellab_orchestrator.mjs", "language": "javascript", "nodeCount": 54, "size": 18160 },
-    { "path": "scripts/run_local_dev.mjs", "language": "javascript", "nodeCount": 18, "size": 3109 },
-    { "path": "scripts/run_oracle_local_server.mjs", "language": "javascript", "nodeCount": 11, "size": 885 },
-    { "path": "src/Arenas/arena-theme-library.ts", "language": "typescript", "nodeCount": 11, "size": 20506 },
-    { "path": "src/Arenas/arena.ts", "language": "typescript", "nodeCount": 43, "size": 20349 },
-    { "path": "src/Characters/Animations/character-roster-manifest.ts", "language": "typescript", "nodeCount": 4, "size": 706 },
-    { "path": "src/Characters/CustomMechanics/crocodilo-skill.ts", "language": "typescript", "nodeCount": 18, "size": 6334 },
-    { "path": "src/Characters/CustomMechanics/killer-bee-skill.ts", "language": "typescript", "nodeCount": 14, "size": 5063 },
-    { "path": "src/Characters/CustomMechanics/nico-skill.ts", "language": "typescript", "nodeCount": 20, "size": 6483 },
-    { "path": "src/Characters/CustomMechanics/ranni-skill.ts", "language": "typescript", "nodeCount": 10, "size": 3038 },
-    { "path": "src/Engine/animation-frame.ts", "language": "typescript", "nodeCount": 3, "size": 609 },
-    { "path": "src/Engine/asset-url.ts", "language": "typescript", "nodeCount": 2, "size": 147 },
-    { "path": "src/Engine/assets.ts", "language": "typescript", "nodeCount": 23, "size": 13914 },
-    { "path": "src/Engine/auto-improvement-bridge.ts", "language": "typescript", "nodeCount": 55, "size": 31082 },
-    { "path": "src/Engine/bot-ai.ts", "language": "typescript", "nodeCount": 44, "size": 31681 },
-    { "path": "src/Engine/game-app.ts", "language": "typescript", "nodeCount": 372, "size": 182947 },
-    { "path": "src/Engine/input.ts", "language": "typescript", "nodeCount": 25, "size": 4881 },
-    { "path": "src/Engine/sound-manager.ts", "language": "typescript", "nodeCount": 20, "size": 4712 },
-    { "path": "src/Engine/sprite-trim-cache.ts", "language": "typescript", "nodeCount": 8, "size": 2594 },
-    { "path": "src/Gameplay/powerups.ts", "language": "typescript", "nodeCount": 15, "size": 3744 },
-    { "path": "src/Gameplay/types.ts", "language": "typescript", "nodeCount": 28, "size": 3474 },
-    { "path": "src/NetCode/account.ts", "language": "typescript", "nodeCount": 10, "size": 1609 },
-    { "path": "src/NetCode/growth-telemetry.ts", "language": "typescript", "nodeCount": 31, "size": 6944 },
-    { "path": "src/NetCode/input-latch.ts", "language": "typescript", "nodeCount": 4, "size": 959 },
-    { "path": "src/NetCode/lobby-rules.ts", "language": "typescript", "nodeCount": 6, "size": 1207 },
-    { "path": "src/NetCode/matchmaking.ts", "language": "typescript", "nodeCount": 15, "size": 3698 },
-    { "path": "src/NetCode/online-sync.ts", "language": "typescript", "nodeCount": 31, "size": 12384 },
-    { "path": "src/NetCode/protocol.ts", "language": "typescript", "nodeCount": 46, "size": 7944 },
-    { "path": "src/NetCode/server-tick.ts", "language": "typescript", "nodeCount": 6, "size": 1405 },
-    { "path": "src/NetCode/session-client.ts", "language": "typescript", "nodeCount": 132, "size": 96693 },
-    { "path": "src/PersonalConfig/config.ts", "language": "typescript", "nodeCount": 33, "size": 2511 },
-    { "path": "src/UiLayouts/i18n.ts", "language": "typescript", "nodeCount": 14, "size": 22745 },
-    { "path": "src/UiLayouts/main.ts", "language": "typescript", "nodeCount": 15, "size": 1339 },
-    { "path": "src/ultimate/shared.ts", "language": "typescript", "nodeCount": 11, "size": 4015 },
-    { "path": "src/ultimate/skill-registry.ts", "language": "typescript", "nodeCount": 15, "size": 1782 },
-    { "path": "src/ultimate/skill-system.ts", "language": "typescript", "nodeCount": 13, "size": 5277 },
-    { "path": "src/vite-env.d.ts", "language": "typescript", "nodeCount": 1, "size": 39 },
-    { "path": "tests/arena-runtime-contract-check.mjs", "language": "javascript", "nodeCount": 15, "size": 2022 },
-    { "path": "tests/arena-theme-library-check.mjs", "language": "javascript", "nodeCount": 13, "size": 1309 },
-    { "path": "tests/autobot-codex-e2e.mjs", "language": "javascript", "nodeCount": 38, "size": 5328 },
-    { "path": "tests/bomb-chain-reaction-check.mjs", "language": "javascript", "nodeCount": 17, "size": 3060 },
-    { "path": "tests/bomb-hit-window-check.mjs", "language": "javascript", "nodeCount": 15, "size": 2795 },
-    { "path": "tests/bomb-preview-toggle-check.mjs", "language": "javascript", "nodeCount": 22, "size": 3712 },
-    { "path": "tests/bomb-push-check.mjs", "language": "javascript", "nodeCount": 22, "size": 4455 },
-    { "path": "tests/bomb-range-snapshot-check.mjs", "language": "javascript", "nodeCount": 18, "size": 3370 },
-    { "path": "tests/bot-direction-stability-check.mjs", "language": "javascript", "nodeCount": 13, "size": 2795 },
-    { "path": "tests/bot-intel-check-src.cjs", "language": "javascript", "nodeCount": 25, "size": 3828 },
-    { "path": "tests/bot-intel-check-src.mjs", "language": "javascript", "nodeCount": 25, "size": 4219 },
-    { "path": "tests/bot-intel-check.mjs", "language": "javascript", "nodeCount": 43, "size": 7742 },
-    { "path": "tests/bot-opening-discipline-check.mjs", "language": "javascript", "nodeCount": 14, "size": 2378 },
-    { "path": "tests/bot-own-blast-escape-check.mjs", "language": "javascript", "nodeCount": 16, "size": 3121 },
-    { "path": "tests/bot-powerup-priority-check.mjs", "language": "javascript", "nodeCount": 15, "size": 3294 },
-    { "path": "tests/bot-remote-detonation-check.mjs", "language": "javascript", "nodeCount": 19, "size": 3693 },
-    { "path": "tests/bot-spawn-protection-check.mjs", "language": "javascript", "nodeCount": 15, "size": 2711 },
-    { "path": "tests/bot-survival-10s-check.mjs", "language": "javascript", "nodeCount": 14, "size": 2099 },
-    { "path": "tests/character-roster-manifest-sync-check.mjs", "language": "javascript", "nodeCount": 7, "size": 1146 },
-    { "path": "tests/character-selection-menu-check.mjs", "language": "javascript", "nodeCount": 15, "size": 3141 },
-    { "path": "tests/character-skill-contract-check.mjs", "language": "javascript", "nodeCount": 7, "size": 2013 },
-    { "path": "tests/crocodilo-ult-emerald-surge-check.mjs", "language": "javascript", "nodeCount": 54, "size": 10743 },
-    { "path": "tests/danger-overlay-check.mjs", "language": "javascript", "nodeCount": 22, "size": 3682 },
-    { "path": "tests/endless-bot-roster-check.mjs", "language": "javascript", "nodeCount": 10, "size": 2960 },
-    { "path": "tests/endless-mode-check.mjs", "language": "javascript", "nodeCount": 13, "size": 3365 },
-    { "path": "tests/endless-room-lifecycle-check.mjs", "language": "javascript", "nodeCount": 10, "size": 1621 },
-    { "path": "tests/input-transition-check.mjs", "language": "javascript", "nodeCount": 17, "size": 2772 },
-    { "path": "tests/killer-bee-ult-dash-check.mjs", "language": "javascript", "nodeCount": 36, "size": 6249 },
-    { "path": "tests/lobby-rules-check.mjs", "language": "javascript", "nodeCount": 7, "size": 1393 },
-    { "path": "tests/local-input-alias-check.mjs", "language": "javascript", "nodeCount": 10, "size": 1305 },
-    { "path": "tests/match-auto-restart-check.mjs", "language": "javascript", "nodeCount": 14, "size": 3273 },
-    { "path": "tests/matchmaking-session-state-check.mjs", "language": "javascript", "nodeCount": 12, "size": 1883 },
-    { "path": "tests/menu-bot-fill-check.mjs", "language": "javascript", "nodeCount": 14, "size": 2499 },
-    { "path": "tests/nico-ult-arcane-beam-check.mjs", "language": "javascript", "nodeCount": 53, "size": 9747 },
-    { "path": "tests/online-audio-bridge-check.mjs", "language": "javascript", "nodeCount": 19, "size": 10509 },
-    { "path": "tests/online-character-selection-index-check.mjs", "language": "javascript", "nodeCount": 11, "size": 3483 },
-    { "path": "tests/online-four-player-check.mjs", "language": "javascript", "nodeCount": 12, "size": 2695 },
-    { "path": "tests/online-input-latching-check.mjs", "language": "javascript", "nodeCount": 6, "size": 1897 },
-    { "path": "tests/online-skill-reconcile-check.mjs", "language": "javascript", "nodeCount": 31, "size": 8638 },
-    { "path": "tests/patch-esm-imports.mjs", "language": "javascript", "nodeCount": 7, "size": 1275 },
-    { "path": "tests/pixellab-orchestrator-check.mjs", "language": "javascript", "nodeCount": 11, "size": 1291 },
-    { "path": "tests/pixellab-pack-spec-check.mjs", "language": "javascript", "nodeCount": 11, "size": 1507 },
-    { "path": "tests/pixellab-roster-check.mjs", "language": "javascript", "nodeCount": 8, "size": 1190 },
-    { "path": "tests/player-sprite-render-check.mjs", "language": "javascript", "nodeCount": 23, "size": 3483 },
-    { "path": "tests/powerup-drop-rate-check.mjs", "language": "javascript", "nodeCount": 17, "size": 2815 },
-    { "path": "tests/powerup-hud-slots-check.mjs", "language": "javascript", "nodeCount": 19, "size": 3559 },
-    { "path": "tests/ranni-ult-animation-hold-check.mjs", "language": "javascript", "nodeCount": 4, "size": 730 },
-    { "path": "tests/ranni-ult-ice-blink-check.mjs", "language": "javascript", "nodeCount": 44, "size": 7426 },
-    { "path": "tests/remote-detonation-check.mjs", "language": "javascript", "nodeCount": 21, "size": 3677 },
-    { "path": "tests/round-outcome-pause-check.mjs", "language": "javascript", "nodeCount": 17, "size": 3345 },
-    { "path": "tests/server-character-skill-mapping-check.mjs", "language": "javascript", "nodeCount": 20, "size": 5015 },
-    { "path": "tests/server-player-removal-check.mjs", "language": "javascript", "nodeCount": 14, "size": 3704 },
-    { "path": "tests/server-tick-catchup-check.mjs", "language": "javascript", "nodeCount": 7, "size": 868 },
-    { "path": "tests/shield-powerup-check.mjs", "language": "javascript", "nodeCount": 20, "size": 3657 },
-    { "path": "tests/sound-manager-variation-check.mjs", "language": "javascript", "nodeCount": 14, "size": 1604 },
-    { "path": "tests/spawn-escape-check.mjs", "language": "javascript", "nodeCount": 11, "size": 1936 },
-    { "path": "tests/sprite-trim-cache-check.mjs", "language": "javascript", "nodeCount": 12, "size": 1403 },
-    { "path": "tests/sudden-death-check.cjs", "language": "javascript", "nodeCount": 19, "size": 2727 },
-    { "path": "tests/sudden-death-check.mjs", "language": "javascript", "nodeCount": 29, "size": 4661 },
-    { "path": "tools/airtest-assets/agent_cli.py", "language": "python", "nodeCount": 22, "size": 12206 },
-    { "path": "tools/airtest-assets/src/autowebgame_airtest/__init__.py", "language": "python", "nodeCount": 6, "size": 601 },
-    { "path": "tools/airtest-assets/src/autowebgame_airtest/confidence.py", "language": "python", "nodeCount": 6, "size": 1541 },
-    { "path": "tools/airtest-assets/src/autowebgame_airtest/errors.py", "language": "python", "nodeCount": 4, "size": 339 },
-    { "path": "tools/airtest-assets/src/autowebgame_airtest/image_ops.py", "language": "python", "nodeCount": 12, "size": 2347 },
-    { "path": "tools/airtest-assets/src/autowebgame_airtest/logging_utils.py", "language": "python", "nodeCount": 4, "size": 636 },
-    { "path": "tools/airtest-assets/src/autowebgame_airtest/multiscale.py", "language": "python", "nodeCount": 10, "size": 5229 },
-    { "path": "tools/airtest-assets/src/autowebgame_airtest/template.py", "language": "python", "nodeCount": 15, "size": 5285 },
-    { "path": "vite.config.ts", "language": "typescript", "nodeCount": 2, "size": 559 },
-    { "path": "worker/index.js", "language": "javascript", "nodeCount": 199, "size": 160273 }
+    {
+      "path": "GameRes/GameDev-Resources/.travis.yml",
+      "language": "yaml",
+      "nodeCount": 0,
+      "size": 337
+    },
+    {
+      "path": "auto-improvements/action_outcomes.py",
+      "language": "python",
+      "nodeCount": 11,
+      "size": 2962
+    },
+    {
+      "path": "auto-improvements/bot_manager.py",
+      "language": "python",
+      "nodeCount": 44,
+      "size": 12646
+    },
+    {
+      "path": "auto-improvements/bot_menu.py",
+      "language": "python",
+      "nodeCount": 82,
+      "size": 45335
+    },
+    {
+      "path": "auto-improvements/bot_route_status.py",
+      "language": "python",
+      "nodeCount": 18,
+      "size": 7041
+    },
+    {
+      "path": "auto-improvements/game_broker.py",
+      "language": "python",
+      "nodeCount": 104,
+      "size": 39218
+    },
+    {
+      "path": "auto-improvements/insights_module.py",
+      "language": "python",
+      "nodeCount": 24,
+      "size": 6742
+    },
+    {
+      "path": "auto-improvements/live_agent.py",
+      "language": "python",
+      "nodeCount": 115,
+      "size": 78539
+    },
+    {
+      "path": "auto-improvements/mainbot.py",
+      "language": "python",
+      "nodeCount": 51,
+      "size": 21369
+    },
+    {
+      "path": "auto-improvements/manager_agent.py",
+      "language": "python",
+      "nodeCount": 28,
+      "size": 8940
+    },
+    {
+      "path": "auto-improvements/memory.py",
+      "language": "python",
+      "nodeCount": 33,
+      "size": 6243
+    },
+    {
+      "path": "auto-improvements/model_manager.py",
+      "language": "python",
+      "nodeCount": 44,
+      "size": 22859
+    },
+    {
+      "path": "auto-improvements/model_validation.py",
+      "language": "python",
+      "nodeCount": 6,
+      "size": 1947
+    },
+    {
+      "path": "auto-improvements/report_console.py",
+      "language": "python",
+      "nodeCount": 30,
+      "size": 17541
+    },
+    {
+      "path": "auto-improvements/worker_agent.py",
+      "language": "python",
+      "nodeCount": 29,
+      "size": 10408
+    },
+    {
+      "path": "scripts/.temp-static-server.cjs",
+      "language": "javascript",
+      "nodeCount": 6,
+      "size": 986
+    },
+    {
+      "path": "scripts/bot-remote-control-gameapp-scenario.mjs",
+      "language": "javascript",
+      "nodeCount": 10,
+      "size": 4794
+    },
+    {
+      "path": "scripts/bot-remote-control-lab.mjs",
+      "language": "javascript",
+      "nodeCount": 7,
+      "size": 2315
+    },
+    {
+      "path": "scripts/generate_sfx_v3.py",
+      "language": "python",
+      "nodeCount": 12,
+      "size": 3344
+    },
+    {
+      "path": "scripts/import_pixellab_characters.mjs",
+      "language": "javascript",
+      "nodeCount": 59,
+      "size": 22834
+    },
+    {
+      "path": "scripts/online_server.mjs",
+      "language": "javascript",
+      "nodeCount": 46,
+      "size": 14445
+    },
+    {
+      "path": "scripts/pixellab_generate_v2_pro_custom_animations.mjs",
+      "language": "javascript",
+      "nodeCount": 16,
+      "size": 6850
+    },
+    {
+      "path": "scripts/pixellab_generate_v3_custom_animations.mjs",
+      "language": "javascript",
+      "nodeCount": 18,
+      "size": 7420
+    },
+    {
+      "path": "scripts/pixellab_orchestrator.mjs",
+      "language": "javascript",
+      "nodeCount": 54,
+      "size": 18160
+    },
+    {
+      "path": "scripts/run_local_dev.mjs",
+      "language": "javascript",
+      "nodeCount": 18,
+      "size": 3109
+    },
+    {
+      "path": "scripts/run_oracle_local_server.mjs",
+      "language": "javascript",
+      "nodeCount": 11,
+      "size": 885
+    },
+    {
+      "path": "src/Arenas/arena-theme-library.ts",
+      "language": "typescript",
+      "nodeCount": 11,
+      "size": 28935
+    },
+    {
+      "path": "src/Arenas/arena-theme-selection.ts",
+      "language": "typescript",
+      "nodeCount": 10,
+      "size": 1652
+    },
+    {
+      "path": "src/Arenas/arena.ts",
+      "language": "typescript",
+      "nodeCount": 43,
+      "size": 20894
+    },
+    {
+      "path": "src/Characters/Animations/character-roster-manifest.ts",
+      "language": "typescript",
+      "nodeCount": 4,
+      "size": 706
+    },
+    {
+      "path": "src/Characters/CustomMechanics/crocodilo-skill.ts",
+      "language": "typescript",
+      "nodeCount": 17,
+      "size": 6287
+    },
+    {
+      "path": "src/Characters/CustomMechanics/killer-bee-skill.ts",
+      "language": "typescript",
+      "nodeCount": 15,
+      "size": 6040
+    },
+    {
+      "path": "src/Characters/CustomMechanics/nico-skill.ts",
+      "language": "typescript",
+      "nodeCount": 21,
+      "size": 6605
+    },
+    {
+      "path": "src/Characters/CustomMechanics/ranni-skill.ts",
+      "language": "typescript",
+      "nodeCount": 11,
+      "size": 3448
+    },
+    {
+      "path": "src/Engine/airi-bridge.ts",
+      "language": "typescript",
+      "nodeCount": 19,
+      "size": 4706
+    },
+    {
+      "path": "src/Engine/animation-frame.ts",
+      "language": "typescript",
+      "nodeCount": 3,
+      "size": 609
+    },
+    {
+      "path": "src/Engine/asset-url.ts",
+      "language": "typescript",
+      "nodeCount": 2,
+      "size": 147
+    },
+    {
+      "path": "src/Engine/assets.ts",
+      "language": "typescript",
+      "nodeCount": 31,
+      "size": 17952
+    },
+    {
+      "path": "src/Engine/auto-improvement-bridge.ts",
+      "language": "typescript",
+      "nodeCount": 90,
+      "size": 51861
+    },
+    {
+      "path": "src/Engine/bot-ai.ts",
+      "language": "typescript",
+      "nodeCount": 63,
+      "size": 43467
+    },
+    {
+      "path": "src/Engine/bot-bomb-escape-budget.ts",
+      "language": "typescript",
+      "nodeCount": 7,
+      "size": 914
+    },
+    {
+      "path": "src/Engine/bot-direction-stability.ts",
+      "language": "typescript",
+      "nodeCount": 11,
+      "size": 2779
+    },
+    {
+      "path": "src/Engine/bot-powerup-danger-lab-scenario.ts",
+      "language": "typescript",
+      "nodeCount": 12,
+      "size": 5277
+    },
+    {
+      "path": "src/Engine/bot-powerup-pursuit.ts",
+      "language": "typescript",
+      "nodeCount": 7,
+      "size": 2275
+    },
+    {
+      "path": "src/Engine/bot-remote-control-lab-scenario.ts",
+      "language": "typescript",
+      "nodeCount": 9,
+      "size": 3218
+    },
+    {
+      "path": "src/Engine/bot-short-fuse-lab-scenario.ts",
+      "language": "typescript",
+      "nodeCount": 11,
+      "size": 3541
+    },
+    {
+      "path": "src/Engine/bot-sudden-death-pressure.ts",
+      "language": "typescript",
+      "nodeCount": 7,
+      "size": 2075
+    },
+    {
+      "path": "src/Engine/bot-target-lab-scenario.ts",
+      "language": "typescript",
+      "nodeCount": 12,
+      "size": 5235
+    },
+    {
+      "path": "src/Engine/bot-target-selection.ts",
+      "language": "typescript",
+      "nodeCount": 13,
+      "size": 3245
+    },
+    {
+      "path": "src/Engine/danger-map.ts",
+      "language": "typescript",
+      "nodeCount": 17,
+      "size": 6253
+    },
+    {
+      "path": "src/Engine/game-app.ts",
+      "language": "typescript",
+      "nodeCount": 456,
+      "size": 226922
+    },
+    {
+      "path": "src/Engine/input.ts",
+      "language": "typescript",
+      "nodeCount": 28,
+      "size": 6033
+    },
+    {
+      "path": "src/Engine/sound-manager.ts",
+      "language": "typescript",
+      "nodeCount": 39,
+      "size": 9430
+    },
+    {
+      "path": "src/Engine/sprite-trim-cache.ts",
+      "language": "typescript",
+      "nodeCount": 8,
+      "size": 2557
+    },
+    {
+      "path": "src/Gameplay/pickup-chain.ts",
+      "language": "typescript",
+      "nodeCount": 9,
+      "size": 1270
+    },
+    {
+      "path": "src/Gameplay/powerups.ts",
+      "language": "typescript",
+      "nodeCount": 20,
+      "size": 7100
+    },
+    {
+      "path": "src/Gameplay/types.ts",
+      "language": "typescript",
+      "nodeCount": 28,
+      "size": 3671
+    },
+    {
+      "path": "src/NetCode/account.ts",
+      "language": "typescript",
+      "nodeCount": 13,
+      "size": 2057
+    },
+    {
+      "path": "src/NetCode/billing.ts",
+      "language": "typescript",
+      "nodeCount": 11,
+      "size": 3783
+    },
+    {
+      "path": "src/NetCode/growth-telemetry.ts",
+      "language": "typescript",
+      "nodeCount": 36,
+      "size": 9838
+    },
+    {
+      "path": "src/NetCode/input-latch.ts",
+      "language": "typescript",
+      "nodeCount": 7,
+      "size": 1349
+    },
+    {
+      "path": "src/NetCode/lobby-rules.ts",
+      "language": "typescript",
+      "nodeCount": 8,
+      "size": 1465
+    },
+    {
+      "path": "src/NetCode/matchmaking.ts",
+      "language": "typescript",
+      "nodeCount": 16,
+      "size": 3899
+    },
+    {
+      "path": "src/NetCode/online-sync.ts",
+      "language": "typescript",
+      "nodeCount": 33,
+      "size": 13571
+    },
+    {
+      "path": "src/NetCode/protocol.ts",
+      "language": "typescript",
+      "nodeCount": 46,
+      "size": 7944
+    },
+    {
+      "path": "src/NetCode/server-tick.ts",
+      "language": "typescript",
+      "nodeCount": 7,
+      "size": 2244
+    },
+    {
+      "path": "src/NetCode/session-client.ts",
+      "language": "typescript",
+      "nodeCount": 210,
+      "size": 143732
+    },
+    {
+      "path": "src/PersonalConfig/config.ts",
+      "language": "typescript",
+      "nodeCount": 33,
+      "size": 2511
+    },
+    {
+      "path": "src/UiLayouts/bot-powerup-danger-lab.ts",
+      "language": "typescript",
+      "nodeCount": 7,
+      "size": 5188
+    },
+    {
+      "path": "src/UiLayouts/bot-short-fuse-lab.ts",
+      "language": "typescript",
+      "nodeCount": 8,
+      "size": 7388
+    },
+    {
+      "path": "src/UiLayouts/bot-stability-lab.ts",
+      "language": "typescript",
+      "nodeCount": 25,
+      "size": 8673
+    },
+    {
+      "path": "src/UiLayouts/bot-target-lab.ts",
+      "language": "typescript",
+      "nodeCount": 9,
+      "size": 6690
+    },
+    {
+      "path": "src/UiLayouts/browser-storage.ts",
+      "language": "typescript",
+      "nodeCount": 5,
+      "size": 1029
+    },
+    {
+      "path": "src/UiLayouts/danger-chain-lab.ts",
+      "language": "typescript",
+      "nodeCount": 14,
+      "size": 9434
+    },
+    {
+      "path": "src/UiLayouts/frontend-router.ts",
+      "language": "typescript",
+      "nodeCount": 8,
+      "size": 1164
+    },
+    {
+      "path": "src/UiLayouts/frontend-store.ts",
+      "language": "typescript",
+      "nodeCount": 16,
+      "size": 1667
+    },
+    {
+      "path": "src/UiLayouts/i18n.ts",
+      "language": "typescript",
+      "nodeCount": 15,
+      "size": 41395
+    },
+    {
+      "path": "src/UiLayouts/lab-session.ts",
+      "language": "typescript",
+      "nodeCount": 21,
+      "size": 7204
+    },
+    {
+      "path": "src/UiLayouts/launcher-shell.ts",
+      "language": "typescript",
+      "nodeCount": 34,
+      "size": 16732
+    },
+    {
+      "path": "src/UiLayouts/main.ts",
+      "language": "typescript",
+      "nodeCount": 37,
+      "size": 8658
+    },
+    {
+      "path": "src/UiLayouts/sudden-death-lab-evidence.ts",
+      "language": "typescript",
+      "nodeCount": 2,
+      "size": 637
+    },
+    {
+      "path": "src/UiLayouts/sudden-death-lab.ts",
+      "language": "typescript",
+      "nodeCount": 7,
+      "size": 4908
+    },
+    {
+      "path": "src/ultimate/shared.ts",
+      "language": "typescript",
+      "nodeCount": 11,
+      "size": 4015
+    },
+    {
+      "path": "src/ultimate/skill-registry.ts",
+      "language": "typescript",
+      "nodeCount": 15,
+      "size": 1782
+    },
+    {
+      "path": "src/ultimate/skill-system.ts",
+      "language": "typescript",
+      "nodeCount": 13,
+      "size": 5293
+    },
+    {
+      "path": "src/vite-env.d.ts",
+      "language": "typescript",
+      "nodeCount": 1,
+      "size": 39
+    },
+    {
+      "path": "tests/account-auth-flow-check.mjs",
+      "language": "javascript",
+      "nodeCount": 23,
+      "size": 4118
+    },
+    {
+      "path": "tests/account-credentials-check.mjs",
+      "language": "javascript",
+      "nodeCount": 8,
+      "size": 2280
+    },
+    {
+      "path": "tests/account-page-contract-check.mjs",
+      "language": "javascript",
+      "nodeCount": 5,
+      "size": 803
+    },
+    {
+      "path": "tests/account-username-validation-check.mjs",
+      "language": "javascript",
+      "nodeCount": 12,
+      "size": 2789
+    },
+    {
+      "path": "tests/admin-auth-fail-closed-check.mjs",
+      "language": "javascript",
+      "nodeCount": 17,
+      "size": 3353
+    },
+    {
+      "path": "tests/arena-entry-sequencer-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 3,
+      "size": 1277
+    },
+    {
+      "path": "tests/arena-ignition-portal-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 4,
+      "size": 1461
+    },
+    {
+      "path": "tests/arena-runtime-contract-check.mjs",
+      "language": "javascript",
+      "nodeCount": 15,
+      "size": 2022
+    },
+    {
+      "path": "tests/arena-stalemate-emblem-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 4,
+      "size": 1419
+    },
+    {
+      "path": "tests/arena-theme-library-check.mjs",
+      "language": "javascript",
+      "nodeCount": 13,
+      "size": 1309
+    },
+    {
+      "path": "tests/arena-theme-moonlit-lotus-check.mjs",
+      "language": "javascript",
+      "nodeCount": 4,
+      "size": 834
+    },
+    {
+      "path": "tests/arena-theme-runtime-paths-check.mjs",
+      "language": "javascript",
+      "nodeCount": 11,
+      "size": 2295
+    },
+    {
+      "path": "tests/arena-theme-selection-check.mjs",
+      "language": "javascript",
+      "nodeCount": 14,
+      "size": 3326
+    },
+    {
+      "path": "tests/asset-loader-walk-cycle-warm-check.mjs",
+      "language": "javascript",
+      "nodeCount": 21,
+      "size": 2250
+    },
+    {
+      "path": "tests/audio-asset-decode-check.mjs",
+      "language": "javascript",
+      "nodeCount": 13,
+      "size": 2454
+    },
+    {
+      "path": "tests/autobot-codex-e2e.mjs",
+      "language": "javascript",
+      "nodeCount": 38,
+      "size": 5328
+    },
+    {
+      "path": "tests/billing-commercial-flow-check.mjs",
+      "language": "javascript",
+      "nodeCount": 21,
+      "size": 4656
+    },
+    {
+      "path": "tests/bomb-chain-reaction-check.mjs",
+      "language": "javascript",
+      "nodeCount": 17,
+      "size": 3060
+    },
+    {
+      "path": "tests/bomb-final-fuse-halo-check.mjs",
+      "language": "javascript",
+      "nodeCount": 14,
+      "size": 2264
+    },
+    {
+      "path": "tests/bomb-hit-window-check.mjs",
+      "language": "javascript",
+      "nodeCount": 15,
+      "size": 2795
+    },
+    {
+      "path": "tests/bomb-kick-hud-label-check.mjs",
+      "language": "javascript",
+      "nodeCount": 3,
+      "size": 404
+    },
+    {
+      "path": "tests/bomb-preview-toggle-check.mjs",
+      "language": "javascript",
+      "nodeCount": 22,
+      "size": 3712
+    },
+    {
+      "path": "tests/bomb-push-check.mjs",
+      "language": "javascript",
+      "nodeCount": 34,
+      "size": 7049
+    },
+    {
+      "path": "tests/bomb-range-snapshot-check.mjs",
+      "language": "javascript",
+      "nodeCount": 18,
+      "size": 3370
+    },
+    {
+      "path": "tests/bootstrap-drone-fuse-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 5,
+      "size": 1062
+    },
+    {
+      "path": "tests/bot-adaptive-target-selection-check.mjs",
+      "language": "javascript",
+      "nodeCount": 24,
+      "size": 5790
+    },
+    {
+      "path": "tests/bot-direction-stability-check.mjs",
+      "language": "javascript",
+      "nodeCount": 13,
+      "size": 2795
+    },
+    {
+      "path": "tests/bot-intel-check-src.cjs",
+      "language": "javascript",
+      "nodeCount": 25,
+      "size": 3828
+    },
+    {
+      "path": "tests/bot-intel-check-src.mjs",
+      "language": "javascript",
+      "nodeCount": 25,
+      "size": 4219
+    },
+    {
+      "path": "tests/bot-intel-check.mjs",
+      "language": "javascript",
+      "nodeCount": 43,
+      "size": 7742
+    },
+    {
+      "path": "tests/bot-opening-discipline-check.mjs",
+      "language": "javascript",
+      "nodeCount": 14,
+      "size": 2378
+    },
+    {
+      "path": "tests/bot-own-blast-escape-check.mjs",
+      "language": "javascript",
+      "nodeCount": 16,
+      "size": 3121
+    },
+    {
+      "path": "tests/bot-powerup-danger-lab-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 11,
+      "size": 3048
+    },
+    {
+      "path": "tests/bot-powerup-danger-pursuit-check.mjs",
+      "language": "javascript",
+      "nodeCount": 33,
+      "size": 5755
+    },
+    {
+      "path": "tests/bot-powerup-priority-check.mjs",
+      "language": "javascript",
+      "nodeCount": 48,
+      "size": 11293
+    },
+    {
+      "path": "tests/bot-remote-control-lab-cli-check.mjs",
+      "language": "javascript",
+      "nodeCount": 7,
+      "size": 1058
+    },
+    {
+      "path": "tests/bot-remote-control-priority-check.mjs",
+      "language": "javascript",
+      "nodeCount": 3,
+      "size": 241
+    },
+    {
+      "path": "tests/bot-remote-detonation-check.mjs",
+      "language": "javascript",
+      "nodeCount": 24,
+      "size": 4770
+    },
+    {
+      "path": "tests/bot-reversal-center-gate-check.mjs",
+      "language": "javascript",
+      "nodeCount": 26,
+      "size": 5851
+    },
+    {
+      "path": "tests/bot-short-fuse-bomb-safety-check.mjs",
+      "language": "javascript",
+      "nodeCount": 7,
+      "size": 1748
+    },
+    {
+      "path": "tests/bot-short-fuse-lab-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 4,
+      "size": 1654
+    },
+    {
+      "path": "tests/bot-spawn-protection-check.mjs",
+      "language": "javascript",
+      "nodeCount": 15,
+      "size": 2711
+    },
+    {
+      "path": "tests/bot-stability-lab-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 4,
+      "size": 1398
+    },
+    {
+      "path": "tests/bot-state-safety-check.mjs",
+      "language": "javascript",
+      "nodeCount": 19,
+      "size": 3464
+    },
+    {
+      "path": "tests/bot-sudden-death-center-priority-check.mjs",
+      "language": "javascript",
+      "nodeCount": 32,
+      "size": 7298
+    },
+    {
+      "path": "tests/bot-sudden-death-escape-route-check.mjs",
+      "language": "javascript",
+      "nodeCount": 14,
+      "size": 5977
+    },
+    {
+      "path": "tests/bot-sudden-death-tick-alignment-check.mjs",
+      "language": "javascript",
+      "nodeCount": 10,
+      "size": 1241
+    },
+    {
+      "path": "tests/bot-survival-10s-check.mjs",
+      "language": "javascript",
+      "nodeCount": 14,
+      "size": 2099
+    },
+    {
+      "path": "tests/bot-target-lab-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 11,
+      "size": 2832
+    },
+    {
+      "path": "tests/canvas-double-ko-copy-check.mjs",
+      "language": "javascript",
+      "nodeCount": 4,
+      "size": 712
+    },
+    {
+      "path": "tests/character-lock-scanner-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 8,
+      "size": 1431
+    },
+    {
+      "path": "tests/character-roster-invalid-public-manifest-check.mjs",
+      "language": "javascript",
+      "nodeCount": 23,
+      "size": 2499
+    },
+    {
+      "path": "tests/character-roster-manifest-sync-check.mjs",
+      "language": "javascript",
+      "nodeCount": 7,
+      "size": 1146
+    },
+    {
+      "path": "tests/character-selection-menu-check.mjs",
+      "language": "javascript",
+      "nodeCount": 15,
+      "size": 3141
+    },
+    {
+      "path": "tests/character-selection-sigil-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 3,
+      "size": 1607
+    },
+    {
+      "path": "tests/character-skill-contract-check.mjs",
+      "language": "javascript",
+      "nodeCount": 16,
+      "size": 3652
+    },
+    {
+      "path": "tests/commercial-release-flow-check.mjs",
+      "language": "javascript",
+      "nodeCount": 17,
+      "size": 9498
+    },
+    {
+      "path": "tests/crocodilo-ult-emerald-surge-check.mjs",
+      "language": "javascript",
+      "nodeCount": 61,
+      "size": 12542
+    },
+    {
+      "path": "tests/danger-adrenaline-step-check.mjs",
+      "language": "javascript",
+      "nodeCount": 16,
+      "size": 3566
+    },
+    {
+      "path": "tests/danger-chain-lab-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 12,
+      "size": 3463
+    },
+    {
+      "path": "tests/danger-map-chain-performance-check.mjs",
+      "language": "javascript",
+      "nodeCount": 28,
+      "size": 6106
+    },
+    {
+      "path": "tests/danger-overlay-check.mjs",
+      "language": "javascript",
+      "nodeCount": 22,
+      "size": 3682
+    },
+    {
+      "path": "tests/demolition-combo-drop-check.mjs",
+      "language": "javascript",
+      "nodeCount": 21,
+      "size": 4311
+    },
+    {
+      "path": "tests/endless-bot-roster-check.mjs",
+      "language": "javascript",
+      "nodeCount": 10,
+      "size": 2960
+    },
+    {
+      "path": "tests/endless-mode-check.mjs",
+      "language": "javascript",
+      "nodeCount": 13,
+      "size": 3365
+    },
+    {
+      "path": "tests/endless-room-lifecycle-check.mjs",
+      "language": "javascript",
+      "nodeCount": 12,
+      "size": 2029
+    },
+    {
+      "path": "tests/favicon-bomba-prisma-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 5,
+      "size": 1103
+    },
+    {
+      "path": "tests/feedback-dialog-live-counter-check.mjs",
+      "language": "javascript",
+      "nodeCount": 10,
+      "size": 2914
+    },
+    {
+      "path": "tests/feedback-length-guard-check.mjs",
+      "language": "javascript",
+      "nodeCount": 9,
+      "size": 1657
+    },
+    {
+      "path": "tests/feedback-transmission-panel-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 5,
+      "size": 1322
+    },
+    {
+      "path": "tests/frontend-architecture-spa-check.mjs",
+      "language": "javascript",
+      "nodeCount": 9,
+      "size": 1946
+    },
+    {
+      "path": "tests/game-battlefield-horizon-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 3,
+      "size": 1035
+    },
+    {
+      "path": "tests/game-landing-audio-dev-lab-check.mjs",
+      "language": "javascript",
+      "nodeCount": 8,
+      "size": 1722
+    },
+    {
+      "path": "tests/game-readiness-radar-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 3,
+      "size": 1131
+    },
+    {
+      "path": "tests/game-visibility-auto-pause-check.mjs",
+      "language": "javascript",
+      "nodeCount": 29,
+      "size": 5715
+    },
+    {
+      "path": "tests/growth-telemetry-event-retry-check.mjs",
+      "language": "javascript",
+      "nodeCount": 16,
+      "size": 3984
+    },
+    {
+      "path": "tests/growth-telemetry-uuid-fallback-check.mjs",
+      "language": "javascript",
+      "nodeCount": 15,
+      "size": 2915
+    },
+    {
+      "path": "tests/how-to-play-chain-reaction-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 5,
+      "size": 1313
+    },
+    {
+      "path": "tests/how-to-play-page-check.mjs",
+      "language": "javascript",
+      "nodeCount": 13,
+      "size": 4480
+    },
+    {
+      "path": "tests/how-to-play-powerup-compass-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 6,
+      "size": 1301
+    },
+    {
+      "path": "tests/i18n-storage-guard-check.mjs",
+      "language": "javascript",
+      "nodeCount": 15,
+      "size": 3314
+    },
+    {
+      "path": "tests/input-page-scroll-check.mjs",
+      "language": "javascript",
+      "nodeCount": 32,
+      "size": 3477
+    },
+    {
+      "path": "tests/input-transition-check.mjs",
+      "language": "javascript",
+      "nodeCount": 17,
+      "size": 2772
+    },
+    {
+      "path": "tests/killer-bee-ult-dash-check.mjs",
+      "language": "javascript",
+      "nodeCount": 57,
+      "size": 10670
+    },
+    {
+      "path": "tests/lab-action-outcome-feedback-check.py",
+      "language": "python",
+      "nodeCount": 25,
+      "size": 10619
+    },
+    {
+      "path": "tests/lab-agent-restart-backoff-check.py",
+      "language": "python",
+      "nodeCount": 29,
+      "size": 8118
+    },
+    {
+      "path": "tests/lab-blocked-plan-replan-check.py",
+      "language": "python",
+      "nodeCount": 27,
+      "size": 12749
+    },
+    {
+      "path": "tests/lab-codex-account-routing-check.py",
+      "language": "python",
+      "nodeCount": 32,
+      "size": 13415
+    },
+    {
+      "path": "tests/lab-live-hud-telemetry-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 4,
+      "size": 1269
+    },
+    {
+      "path": "tests/lab-model-autonomy-check.mjs",
+      "language": "javascript",
+      "nodeCount": 11,
+      "size": 14809
+    },
+    {
+      "path": "tests/lab-model-bomb-escape-contract-check.py",
+      "language": "python",
+      "nodeCount": 7,
+      "size": 2295
+    },
+    {
+      "path": "tests/lab-model-bomb-escape-hud-check.mjs",
+      "language": "javascript",
+      "nodeCount": 19,
+      "size": 3986
+    },
+    {
+      "path": "tests/lab-model-catalog-verification-check.mjs",
+      "language": "javascript",
+      "nodeCount": 39,
+      "size": 7861
+    },
+    {
+      "path": "tests/lab-model-probe-health-check.mjs",
+      "language": "javascript",
+      "nodeCount": 9,
+      "size": 3757
+    },
+    {
+      "path": "tests/lab-plan-expiry-check.mjs",
+      "language": "javascript",
+      "nodeCount": 16,
+      "size": 4490
+    },
+    {
+      "path": "tests/lab-plan-oscillation-guard-check.py",
+      "language": "python",
+      "nodeCount": 32,
+      "size": 10743
+    },
+    {
+      "path": "tests/lab-plan-repair-observability-check.py",
+      "language": "python",
+      "nodeCount": 43,
+      "size": 21838
+    },
+    {
+      "path": "tests/lab-proxy-rate-limit-check.mjs",
+      "language": "javascript",
+      "nodeCount": 59,
+      "size": 9258
+    },
+    {
+      "path": "tests/lab-session-contract-check.mjs",
+      "language": "javascript",
+      "nodeCount": 29,
+      "size": 8360
+    },
+    {
+      "path": "tests/lab-stale-turn-drain-check.py",
+      "language": "python",
+      "nodeCount": 16,
+      "size": 3337
+    },
+    {
+      "path": "tests/landing-arena-launcher-check.mjs",
+      "language": "javascript",
+      "nodeCount": 12,
+      "size": 2549
+    },
+    {
+      "path": "tests/landing-social-preview-check.mjs",
+      "language": "javascript",
+      "nodeCount": 9,
+      "size": 1586
+    },
+    {
+      "path": "tests/language-switcher-pressed-state-check.mjs",
+      "language": "javascript",
+      "nodeCount": 10,
+      "size": 1310
+    },
+    {
+      "path": "tests/launcher-detonator-cta-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 3,
+      "size": 1190
+    },
+    {
+      "path": "tests/launcher-execution-runway-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 3,
+      "size": 1375
+    },
+    {
+      "path": "tests/launcher-farol-partida-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 3,
+      "size": 1285
+    },
+    {
+      "path": "tests/launcher-focus-reticle-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 3,
+      "size": 1058
+    },
+    {
+      "path": "tests/launcher-material-vitrine-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 3,
+      "size": 1142
+    },
+    {
+      "path": "tests/launcher-mode-scanner-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 3,
+      "size": 1131
+    },
+    {
+      "path": "tests/launcher-mode-status-rail-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 5,
+      "size": 753
+    },
+    {
+      "path": "tests/lobby-entry-error-localization-check.mjs",
+      "language": "javascript",
+      "nodeCount": 4,
+      "size": 1113
+    },
+    {
+      "path": "tests/lobby-ready-beacon-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 3,
+      "size": 1202
+    },
+    {
+      "path": "tests/lobby-rules-check.mjs",
+      "language": "javascript",
+      "nodeCount": 8,
+      "size": 1830
+    },
+    {
+      "path": "tests/local-input-alias-check.mjs",
+      "language": "javascript",
+      "nodeCount": 10,
+      "size": 1305
+    },
+    {
+      "path": "tests/local-match-chrome-check.mjs",
+      "language": "javascript",
+      "nodeCount": 35,
+      "size": 6874
+    },
+    {
+      "path": "tests/local-player-two-skill-check.mjs",
+      "language": "javascript",
+      "nodeCount": 24,
+      "size": 6554
+    },
+    {
+      "path": "tests/match-auto-restart-check.mjs",
+      "language": "javascript",
+      "nodeCount": 15,
+      "size": 3174
+    },
+    {
+      "path": "tests/match-result-headless-fallback-check.mjs",
+      "language": "javascript",
+      "nodeCount": 11,
+      "size": 1874
+    },
+    {
+      "path": "tests/match-result-shortcuts-check.mjs",
+      "language": "javascript",
+      "nodeCount": 21,
+      "size": 5446
+    },
+    {
+      "path": "tests/matchmaking-session-state-check.mjs",
+      "language": "javascript",
+      "nodeCount": 14,
+      "size": 2471
+    },
+    {
+      "path": "tests/menu-bot-fill-check.mjs",
+      "language": "javascript",
+      "nodeCount": 14,
+      "size": 2499
+    },
+    {
+      "path": "tests/nico-ult-arcane-beam-check.mjs",
+      "language": "javascript",
+      "nodeCount": 68,
+      "size": 12964
+    },
+    {
+      "path": "tests/online-audio-bridge-check.mjs",
+      "language": "javascript",
+      "nodeCount": 24,
+      "size": 13172
+    },
+    {
+      "path": "tests/online-character-selection-index-check.mjs",
+      "language": "javascript",
+      "nodeCount": 11,
+      "size": 3483
+    },
+    {
+      "path": "tests/online-four-player-check.mjs",
+      "language": "javascript",
+      "nodeCount": 12,
+      "size": 2750
+    },
+    {
+      "path": "tests/online-input-latching-check.mjs",
+      "language": "javascript",
+      "nodeCount": 7,
+      "size": 2334
+    },
+    {
+      "path": "tests/online-interpolation-jitter-check.mjs",
+      "language": "javascript",
+      "nodeCount": 13,
+      "size": 1718
+    },
+    {
+      "path": "tests/online-late-join-check.mjs",
+      "language": "javascript",
+      "nodeCount": 49,
+      "size": 10720
+    },
+    {
+      "path": "tests/online-skill-reconcile-check.mjs",
+      "language": "javascript",
+      "nodeCount": 31,
+      "size": 8638
+    },
+    {
+      "path": "tests/online-wrap-interpolation-check.mjs",
+      "language": "javascript",
+      "nodeCount": 20,
+      "size": 3348
+    },
+    {
+      "path": "tests/patch-esm-imports.mjs",
+      "language": "javascript",
+      "nodeCount": 7,
+      "size": 1275
+    },
+    {
+      "path": "tests/perfect-start-burst-check.mjs",
+      "language": "javascript",
+      "nodeCount": 21,
+      "size": 3233
+    },
+    {
+      "path": "tests/pickup-chain-guard-check.mjs",
+      "language": "javascript",
+      "nodeCount": 26,
+      "size": 7267
+    },
+    {
+      "path": "tests/pixellab-orchestrator-check.mjs",
+      "language": "javascript",
+      "nodeCount": 11,
+      "size": 1291
+    },
+    {
+      "path": "tests/pixellab-pack-spec-check.mjs",
+      "language": "javascript",
+      "nodeCount": 11,
+      "size": 1507
+    },
+    {
+      "path": "tests/pixellab-roster-check.mjs",
+      "language": "javascript",
+      "nodeCount": 8,
+      "size": 1190
+    },
+    {
+      "path": "tests/player-sprite-render-check.mjs",
+      "language": "javascript",
+      "nodeCount": 23,
+      "size": 3483
+    },
+    {
+      "path": "tests/power-remote-high-readability-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 5,
+      "size": 1114
+    },
+    {
+      "path": "tests/powerup-drop-rate-check.mjs",
+      "language": "javascript",
+      "nodeCount": 38,
+      "size": 5678
+    },
+    {
+      "path": "tests/powerup-hud-slots-check.mjs",
+      "language": "javascript",
+      "nodeCount": 23,
+      "size": 5124
+    },
+    {
+      "path": "tests/prismatic-combat-frame-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 3,
+      "size": 1323
+    },
+    {
+      "path": "tests/privacy-shield-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 4,
+      "size": 755
+    },
+    {
+      "path": "tests/ranni-ult-animation-hold-check.mjs",
+      "language": "javascript",
+      "nodeCount": 4,
+      "size": 730
+    },
+    {
+      "path": "tests/ranni-ult-ice-blink-check.mjs",
+      "language": "javascript",
+      "nodeCount": 44,
+      "size": 7426
+    },
+    {
+      "path": "tests/reduced-motion-css-check.mjs",
+      "language": "javascript",
+      "nodeCount": 7,
+      "size": 1454
+    },
+    {
+      "path": "tests/release-visibility-check.mjs",
+      "language": "javascript",
+      "nodeCount": 4,
+      "size": 1162
+    },
+    {
+      "path": "tests/remote-detonation-check.mjs",
+      "language": "javascript",
+      "nodeCount": 21,
+      "size": 3697
+    },
+    {
+      "path": "tests/room-code-enter-submit-check.mjs",
+      "language": "javascript",
+      "nodeCount": 9,
+      "size": 1725
+    },
+    {
+      "path": "tests/room-code-reactor-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 3,
+      "size": 1124
+    },
+    {
+      "path": "tests/round-outcome-localization-check.mjs",
+      "language": "javascript",
+      "nodeCount": 5,
+      "size": 1739
+    },
+    {
+      "path": "tests/round-outcome-pause-check.mjs",
+      "language": "javascript",
+      "nodeCount": 22,
+      "size": 4064
+    },
+    {
+      "path": "tests/round-winner-halo-check.mjs",
+      "language": "javascript",
+      "nodeCount": 9,
+      "size": 1289
+    },
+    {
+      "path": "tests/server-character-skill-mapping-check.mjs",
+      "language": "javascript",
+      "nodeCount": 20,
+      "size": 5015
+    },
+    {
+      "path": "tests/server-player-removal-check.mjs",
+      "language": "javascript",
+      "nodeCount": 14,
+      "size": 3704
+    },
+    {
+      "path": "tests/server-tick-catchup-check.mjs",
+      "language": "javascript",
+      "nodeCount": 12,
+      "size": 2242
+    },
+    {
+      "path": "tests/session-websocket-lifecycle-check.mjs",
+      "language": "javascript",
+      "nodeCount": 23,
+      "size": 5511
+    },
+    {
+      "path": "tests/setup-loading-brief-check.mjs",
+      "language": "javascript",
+      "nodeCount": 10,
+      "size": 2355
+    },
+    {
+      "path": "tests/shield-block-sfx-check.mjs",
+      "language": "javascript",
+      "nodeCount": 21,
+      "size": 4115
+    },
+    {
+      "path": "tests/shield-breakaway-burst-check.mjs",
+      "language": "javascript",
+      "nodeCount": 24,
+      "size": 3989
+    },
+    {
+      "path": "tests/shield-powerup-check.mjs",
+      "language": "javascript",
+      "nodeCount": 21,
+      "size": 4035
+    },
+    {
+      "path": "tests/short-fuse-powerup-check.mjs",
+      "language": "javascript",
+      "nodeCount": 19,
+      "size": 3752
+    },
+    {
+      "path": "tests/sound-manager-lifecycle-check.mjs",
+      "language": "javascript",
+      "nodeCount": 12,
+      "size": 1755
+    },
+    {
+      "path": "tests/sound-manager-playback-failure-retry-check.mjs",
+      "language": "javascript",
+      "nodeCount": 19,
+      "size": 2501
+    },
+    {
+      "path": "tests/sound-manager-unlock-listeners-check.mjs",
+      "language": "javascript",
+      "nodeCount": 18,
+      "size": 2832
+    },
+    {
+      "path": "tests/sound-manager-variation-check.mjs",
+      "language": "javascript",
+      "nodeCount": 34,
+      "size": 5979
+    },
+    {
+      "path": "tests/spawn-escape-check.mjs",
+      "language": "javascript",
+      "nodeCount": 11,
+      "size": 1936
+    },
+    {
+      "path": "tests/sprite-trim-cache-check.mjs",
+      "language": "javascript",
+      "nodeCount": 16,
+      "size": 2021
+    },
+    {
+      "path": "tests/sudden-death-check.cjs",
+      "language": "javascript",
+      "nodeCount": 19,
+      "size": 2727
+    },
+    {
+      "path": "tests/sudden-death-check.mjs",
+      "language": "javascript",
+      "nodeCount": 29,
+      "size": 4661
+    },
+    {
+      "path": "tests/sudden-death-lab-visual-check.mjs",
+      "language": "javascript",
+      "nodeCount": 11,
+      "size": 2864
+    },
+    {
+      "path": "tests/touch-focus-css-check.mjs",
+      "language": "javascript",
+      "nodeCount": 12,
+      "size": 2372
+    },
+    {
+      "path": "tests/ui-storage-fallback-check.mjs",
+      "language": "javascript",
+      "nodeCount": 16,
+      "size": 3868
+    },
+    {
+      "path": "tests/worker-api-route-dispatch-check.mjs",
+      "language": "javascript",
+      "nodeCount": 10,
+      "size": 3526
+    },
+    {
+      "path": "tests/worker-game-document-route-check.mjs",
+      "language": "javascript",
+      "nodeCount": 9,
+      "size": 1773
+    },
+    {
+      "path": "tools/airtest-assets/agent_cli.py",
+      "language": "python",
+      "nodeCount": 22,
+      "size": 12206
+    },
+    {
+      "path": "tools/airtest-assets/src/autowebgame_airtest/__init__.py",
+      "language": "python",
+      "nodeCount": 6,
+      "size": 601
+    },
+    {
+      "path": "tools/airtest-assets/src/autowebgame_airtest/confidence.py",
+      "language": "python",
+      "nodeCount": 6,
+      "size": 1541
+    },
+    {
+      "path": "tools/airtest-assets/src/autowebgame_airtest/errors.py",
+      "language": "python",
+      "nodeCount": 4,
+      "size": 339
+    },
+    {
+      "path": "tools/airtest-assets/src/autowebgame_airtest/image_ops.py",
+      "language": "python",
+      "nodeCount": 12,
+      "size": 2347
+    },
+    {
+      "path": "tools/airtest-assets/src/autowebgame_airtest/logging_utils.py",
+      "language": "python",
+      "nodeCount": 4,
+      "size": 636
+    },
+    {
+      "path": "tools/airtest-assets/src/autowebgame_airtest/multiscale.py",
+      "language": "python",
+      "nodeCount": 10,
+      "size": 5229
+    },
+    {
+      "path": "tools/airtest-assets/src/autowebgame_airtest/template.py",
+      "language": "python",
+      "nodeCount": 15,
+      "size": 5285
+    },
+    {
+      "path": "vite.config.ts",
+      "language": "typescript",
+      "nodeCount": 2,
+      "size": 666
+    },
+    {
+      "path": "worker/index.js",
+      "language": "javascript",
+      "nodeCount": 254,
+      "size": 185374
+    }
   ]
 }

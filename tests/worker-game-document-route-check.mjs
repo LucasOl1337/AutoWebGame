@@ -17,11 +17,14 @@ const resolveGameDocumentRequest = Function(`
 `)();
 
 const cases = [
+  ["GET", "/account", "/game"],
+  ["HEAD", "/account", "/game"],
   ["GET", "/game/play", "/game"],
   ["GET", "/game/training", "/game"],
   ["GET", "/game/lab", "/game"],
   ["HEAD", "/game/play", "/game"],
   ["POST", "/game/play", null],
+  ["POST", "/account", null],
   ["GET", "/api/me", null],
   ["GET", "/online", null],
   ["GET", "/Assets/main-12345678.js", null],

@@ -27,7 +27,6 @@ import {
   USERNAME_ALLOWED_PATTERN_SOURCE,
   USERNAME_MAX_LENGTH,
   USERNAME_MIN_LENGTH,
-  validateUsername,
 } from "./account";
 import type { PlayerBillingStatus } from "./billing";
 import { pickSurpriseCharacterIndex } from "./character-surprise";
@@ -988,19 +987,13 @@ export class OnlineSessionClient implements OnlineSessionBridge {
       }
     });
     this.elements.landingAccountPrimaryButton.addEventListener("click", () => {
-      void this.createQuickAccount();
+      this.openAccountRegistration();
     });
     this.elements.landingAccountSecondaryButton.addEventListener("click", () => {
       void this.logoutAccount();
     });
     this.elements.landingBillingButton.addEventListener("click", () => {
       void this.startBillingCheckout();
-    });
-    this.elements.landingAccountUsernameInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        void this.createQuickAccount();
-      }
     });
     this.elements.feedbackCancelButton.addEventListener("click", () => {
       this.closeFeedbackDialog();
@@ -1555,7 +1548,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     const landingAccountKicker = document.createElement("p");
     landingAccountKicker.className = "experience-kicker";
-    landingAccountKicker.textContent = this.translate("Conta opcional", "Optional account");
+    landingAccountKicker.textContent = this.translate("Identidade segura", "Secure identity");
 
     const landingAccountTitle = document.createElement("p");
     landingAccountTitle.className = "experience-account__title";
@@ -2598,47 +2591,32 @@ export class OnlineSessionClient implements OnlineSessionBridge {
   private renderAccountPanel(): void {
     const account = this.currentAccount;
     const loggedIn = Boolean(account);
-    const onlineActionsAvailable = this.realtimeReady;
     this.elements.landingAccountValue.hidden = !loggedIn;
-    this.elements.landingAccountUsernameInput.hidden = loggedIn;
+    this.elements.landingAccountUsernameInput.hidden = true;
     this.elements.landingAccountPrimaryButton.hidden = loggedIn;
     this.elements.landingAccountSecondaryButton.hidden = !loggedIn;
-    this.elements.landingAccountUsernameInput.disabled = this.accountRequestPending || !onlineActionsAvailable;
-    this.elements.landingAccountPrimaryButton.disabled = this.accountRequestPending || loggedIn || !onlineActionsAvailable;
-    this.elements.landingAccountSecondaryButton.disabled = this.accountRequestPending || !onlineActionsAvailable;
-    this.elements.landingAccountUsernameInput.placeholder = this.translate("Seu username", "Your username");
-    applyUsernameInputConstraints(this.elements.landingAccountUsernameInput, this.language);
+    this.elements.landingAccountUsernameInput.disabled = true;
+    this.elements.landingAccountPrimaryButton.disabled = this.accountRequestPending || loggedIn;
+    this.elements.landingAccountSecondaryButton.disabled = this.accountRequestPending;
 
     if (loggedIn && account) {
       this.elements.landingAccountTitle.textContent = this.translate("Conta ativa", "Active account");
       this.elements.landingAccountValue.textContent = account.username;
       this.elements.landingAccountPrimaryButton.textContent = this.translate("Conta salva", "Account saved");
       this.elements.landingAccountHint.textContent = this.translate(
-        "Seu perfil ja fica reservado para progresso, personagens e skins quando essas partes entrarem no jogo.",
-        "Your profile is already reserved for progression, characters, and skins when those systems ship.",
+        "Sua sessao protege o mesmo perfil usado em partidas, progresso e compras.",
+        "Your session protects the same profile used for matches, progression, and purchases.",
       );
       return;
     }
 
-    this.elements.landingAccountTitle.textContent = this.translate("Reserve seu nome em um clique", "Reserve your name in one click");
+    this.elements.landingAccountTitle.textContent = this.translate("Entre ou crie sua conta", "Sign in or create your account");
     this.elements.landingAccountValue.textContent = "";
-    this.elements.landingAccountPrimaryButton.textContent = this.accountRequestPending
-      ? this.translate("Criando...", "Creating...")
-      : this.translate("Criar conta", "Create account");
-    this.elements.landingAccountHint.textContent = onlineActionsAvailable
-      ? this.translate(
-        "Continuar como convidado ainda funciona. A conta so adiciona um perfil pessoal para progresso futuro.",
-        "Continuing as guest still works. The account only adds a personal profile for future progression.",
-      )
-      : this.isLocalFrontendOnlyHost()
-        ? this.translate(
-          "Seu perfil libera assim que o backend local terminar de conectar.",
-          "Your profile becomes available as soon as the local backend finishes connecting.",
-        )
-        : this.translate(
-          "Conta e progresso online ficam disponiveis quando o backend local estiver ativo.",
-          "Account and online progression become available when the local backend is active.",
-        );
+    this.elements.landingAccountPrimaryButton.textContent = this.translate("Acessar conta", "Access account");
+    this.elements.landingAccountHint.textContent = this.translate(
+      "Cadastro com e-mail e senha. Partidas locais continuam disponiveis sem login.",
+      "Register with email and password. Local matches remain available without signing in.",
+    );
   }
 
   private renderBillingPanel(): void {
@@ -3382,7 +3360,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
 
     if (!this.currentAccount) {
       this.setStatus(this.copy.landing.billingRequiresAccount);
-      this.elements.landingAccountUsernameInput.focus();
+      this.elements.landingAccountPrimaryButton.focus();
       return;
     }
 
@@ -3429,44 +3407,8 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     }
   }
 
-  private async createQuickAccount(): Promise<void> {
-    if (this.accountRequestPending || this.currentAccount) {
-      return;
-    }
-    const validation = validateUsername(this.elements.landingAccountUsernameInput.value);
-    if (!validation.ok) {
-      this.setStatus(formatUsernameValidationMessage(validation, this.language));
-      return;
-    }
-
-    this.accountRequestPending = true;
-    this.renderAll();
-    try {
-      const response = await fetch("/api/account/quick-create", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ username: validation.username }),
-      });
-      const payload = await response.json() as { account?: PlayerAccount | null; error?: string };
-      if (!response.ok) {
-        this.setStatus(payload.error ?? this.translate("Nao foi possivel criar sua conta agora.", "Could not create your account right now."));
-        return;
-      }
-      this.currentAccount = payload.account ?? null;
-      this.elements.landingAccountUsernameInput.value = "";
-      if (this.currentAccount) {
-        this.setStatus(this.translate(`Conta ${this.currentAccount.username} criada.`, `Account ${this.currentAccount.username} created.`));
-      }
-      void this.refreshBillingStatus();
-      this.refreshConnectionForAccountChange();
-    } catch {
-      this.setStatus(this.translate("Erro ao criar a conta.", "Error creating account."));
-    } finally {
-      this.accountRequestPending = false;
-      this.renderAll();
-    }
+  private openAccountRegistration(): void {
+    window.location.assign("/account?mode=register");
   }
 
   private async logoutAccount(): Promise<void> {
@@ -3476,7 +3418,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     this.accountRequestPending = true;
     this.renderAll();
     try {
-      const response = await fetch("/api/logout", {
+      const response = await fetch("/api/auth/logout", {
         method: "POST",
       });
       if (!response.ok) {

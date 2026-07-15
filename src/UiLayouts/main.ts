@@ -15,7 +15,7 @@ import "./feedback-transmission-panel.css";
 import { fetchActiveArenaDefinition } from "../Arenas/arena";
 import { applyArenaThemeSelection } from "../Arenas/arena-theme-selection";
 import { LauncherShell, LabShell } from "./launcher-shell";
-import { resolveFrontendRoute, type FrontendRoute } from "./frontend-router";
+import { isGameRoute, resolveFrontendRoute, type GameRoute } from "./frontend-router";
 import { FrontendStore } from "./frontend-store";
 
 const rootElement = document.querySelector<HTMLDivElement>("#app");
@@ -107,7 +107,7 @@ function renderBootstrapFailure(rootElement: HTMLDivElement): void {
   rootElement.replaceChildren(createBootstrapPanel("error", () => window.location.reload()));
 }
 
-async function bootstrapGame(rootElement: HTMLDivElement, route: FrontendRoute): Promise<void> {
+async function bootstrapGame(rootElement: HTMLDivElement, route: GameRoute): Promise<void> {
   rootElement.setAttribute("aria-busy", "true");
   rootElement.innerHTML = '<p role="status" aria-live="polite">Carregando arena…</p>';
 
@@ -176,7 +176,7 @@ async function bootstrapGame(rootElement: HTMLDivElement, route: FrontendRoute):
 
 let gameBootPromise: Promise<void> | null = null;
 
-function bootGameOnce(rootElement: HTMLDivElement, route: FrontendRoute): Promise<void> {
+function bootGameOnce(rootElement: HTMLDivElement, route: GameRoute): Promise<void> {
   gameBootPromise ??= bootstrapGame(rootElement, route);
   return gameBootPromise;
 }
@@ -185,17 +185,31 @@ const initialRoute = resolveFrontendRoute(window.location.pathname);
 const frontendStore = new FrontendStore(initialRoute);
 let launcherShell: LauncherShell | null = null;
 let labShell: LabShell | null = null;
+let accountPage: { mount(): void; destroy(): void } | null = null;
 
 function destroyShells(): void {
   launcherShell?.destroy();
   launcherShell = null;
   labShell?.destroy();
   labShell = null;
+  accountPage?.destroy();
+  accountPage = null;
 }
 
 async function renderRoute(): Promise<void> {
   const route = resolveFrontendRoute(window.location.pathname);
   frontendStore.setRoute(route);
+  if (route === "account") {
+    if (gameBootPromise !== null) {
+      window.location.reload();
+      return;
+    }
+    destroyShells();
+    const { AccountPage } = await import("../Auth/account-page");
+    accountPage = new AccountPage(root);
+    accountPage.mount();
+    return;
+  }
   if (route === "launcher") {
     if (gameBootPromise !== null) {
       window.location.reload();
@@ -219,6 +233,9 @@ async function renderRoute(): Promise<void> {
   }
 
   destroyShells();
+  if (!isGameRoute(route)) {
+    return;
+  }
   frontendStore.setBootingGame(true);
   try {
     await bootGameOnce(root, route);

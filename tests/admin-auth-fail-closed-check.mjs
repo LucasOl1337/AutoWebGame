@@ -48,7 +48,7 @@ const report = {
     && passwordOnly?.enabled === false
     && passwordOnly.login === null,
   loginFailsBeforeParsing: login.indexOf('resolveAdminAuthConfig(env)') >= 0
-    && login.indexOf('resolveAdminAuthConfig(env)') < login.indexOf('request.json()')
+    && login.indexOf('resolveAdminAuthConfig(env)') < login.indexOf('readJsonObject(request)')
     && login.includes('if (!authConfig.login)')
     && login.includes('createAdminUnavailableResponse()'),
   staleSessionsFailClosed: authorize.includes('if (!authConfig.enabled)')
