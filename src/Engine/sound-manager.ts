@@ -48,7 +48,7 @@ export const SFX_MANIFEST: Partial<Record<SfxKey, SoundManifestEntry>> = {
   ],
   crateBreak: { url: assetUrl("/Assets/SoundEffects/shield_block_deflect.mp3"), volume: 0.5 * MASTER_VOLUME },
   flames: { url: assetUrl("/Assets/SoundEffects/flames.mp3"), volume: 0.74 * MASTER_VOLUME },
-  matchStart: { url: assetUrl("/Assets/SoundEffects/match_start.mp3"), volume: 0.84 * 0.2 * MASTER_VOLUME },
+  matchStart: { url: assetUrl("/Assets/SoundEffects/match_start.mp3"), volume: 0.84 * 0.45 * MASTER_VOLUME },
   roundEnd: { url: assetUrl("/Assets/SoundEffects/round_end.wav"), volume: 0.76 * MASTER_VOLUME },
   matchWin: { url: assetUrl("/Assets/SoundEffects/match_win.mp3"), volume: 0.9 * MASTER_VOLUME },
   powerCollect: [
