@@ -31,6 +31,9 @@ export function updateRanniIceBlinkChannel(
   deltaMs: number,
   context: SkillContext,
 ): boolean {
+  if (player.skill.id !== "ranni-ice-blink") {
+    return false;
+  }
   player.velocity.x = 0;
   player.velocity.y = 0;
   if (!Number.isFinite(deltaMs) || deltaMs <= 0) {

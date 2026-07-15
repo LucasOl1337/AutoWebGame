@@ -294,6 +294,19 @@ const invalidDeltaNoop = invalidDeltaSnapshots.every((snapshot) => snapshot.hand
   && snapshot.skill.projectedPosition.y === 208
   && snapshot.skill.projectedLastMoveDirection === "right");
 
+const wrongSkillPlayer = invalidDeltaGame.players[2];
+wrongSkillPlayer.velocity = { x: 80, y: -40 };
+const wrongSkillBefore = JSON.stringify(wrongSkillPlayer);
+const wrongSkillHandled = updateRanniIceBlinkChannel(
+  wrongSkillPlayer,
+  "right",
+  true,
+  17,
+  invalidDeltaContext,
+);
+const wrongSkillRejectedWithoutMutation = wrongSkillHandled === false
+  && JSON.stringify(wrongSkillPlayer) === wrongSkillBefore;
+
 const report = {
   beforeX,
   midX,
@@ -326,6 +339,8 @@ const report = {
   invalidatedDestinationFullCooldown,
   invalidDeltaSnapshots,
   invalidDeltaNoop,
+  wrongSkillHandled,
+  wrongSkillRejectedWithoutMutation,
   pass: frozenInPlace
     && projectedMovedDuringChannel
     && teleportedAfterChannel
@@ -340,6 +355,7 @@ const report = {
     && invalidatedDestinationRejected
     && invalidatedDestinationFullCooldown
     && invalidDeltaNoop
+    && wrongSkillRejectedWithoutMutation
 };
 
 console.log(JSON.stringify(report, null, 2));
