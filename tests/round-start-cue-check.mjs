@@ -133,15 +133,15 @@ const report = {
     && firstRound.match.round === 1
     && firstCue.active === true
     && firstCue.title === "RODADA 1"
-    && firstCue.subtitle === "Objetivo: seja o ultimo bomber vivo. Partida classica: primeiro a 2 vitorias."
+    && firstCue.subtitle === "Objetivo: elimine os rivais com bombas e seja o ultimo bomber vivo. Primeiro a 2 vitorias."
     && firstOverlay?.footer === "Placar: P1 0 - P2 0"
     && secondRound.mode === "match"
     && secondRound.match.round === 2
     && secondCue.active === true
     && secondCue.title === "RODADA 2"
-    && secondCue.subtitle === "Objetivo: seja o ultimo bomber vivo. Partida classica: primeiro a 2 vitorias."
+    && secondCue.subtitle === "Objetivo: elimine os rivais com bombas e seja o ultimo bomber vivo. Primeiro a 2 vitorias."
     && secondOverlay?.footer === "Placar: P1 1 - P2 0"
-    && SITE_COPY.en.canvas.roundStartSubtitle === "Objective: be the last bomber alive. Classic match: first to 2 wins."
+    && SITE_COPY.en.canvas.roundStartSubtitle === "Objective: eliminate rivals with bombs and be the last bomber alive. First to 2 wins."
     && expiredCue.mode === "match"
     && expired.active === false
     && expired.remainingMs === 0,
