@@ -23,7 +23,7 @@ const report = {
   shortenedByMs: fuseBeforePickup - fuseAfterPickup,
   pass: (
     definition.type === "short-fuse-up"
-    && definition.label === "Faster Fuse"
+    && definition.label === "Short Fuse"
     && definition.shortLabel === "SF"
     && fuseBeforePickup === BOMB_FUSE_MS
     && fuseAfterPickup === BOMB_FUSE_MS - 400
