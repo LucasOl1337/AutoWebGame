@@ -2,6 +2,8 @@
 
 `BOMBA PvP` is a browser-first Bomberman-style arena game with a TypeScript/Vite client and a Cloudflare Worker backend for online sessions.
 
+Open routes with bombs, collect power-ups, eliminate rivals, and, in classic mode, win rounds until you reach the target score.
+
 Official public deployment: https://bombapvp.com/
 
 This repository is the central release line for the deployed game. Keep `main` as the trustworthy source of truth that consolidates parallel agent work before publishing.
