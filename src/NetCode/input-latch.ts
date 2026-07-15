@@ -21,7 +21,7 @@ export function mergeSequencedOnlineInputState(
 ): SequencedOnlineInputState {
   const currentSeq = Math.max(0, Number(current.inputSeq) || 0);
   const incomingSeq = Math.max(0, Number(incoming.inputSeq) || 0);
-  if (incomingSeq < currentSeq) {
+  if (incomingSeq <= currentSeq) {
     return current;
   }
 
