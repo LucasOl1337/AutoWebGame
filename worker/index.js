@@ -96,8 +96,15 @@ const LAB_PROXY_ROUTES = new Map([
 ]);
 const LAB_PROXY_TIMEOUT_MS = 8000;
 const LAB_RATE_WINDOW_MS = 60_000;
-const LAB_RATE_LIMIT = 360;
+const LAB_RATE_BUDGET = 3_600;
+const LAB_CONTROL_REQUEST_COST = 10;
+const LAB_SESSION_REQUEST_COST = 1;
+const LAB_SESSION_CAPABILITY_RE = /^[A-Za-z0-9_-]{32,128}$/;
+const LAB_SESSION_DECISION_PATH_RE = /^\/decision\/[1-4]$/;
+const LAB_SESSION_READ_PATHS = new Set(["/report", "/lab/session"]);
+const LAB_SESSION_CAPABILITY_TTL_MS = 10 * 60_000;
 const labRateBuckets = new Map();
+let activeLabSessionCapability = null;
 const SHORT_STATIC_CACHE_CONTROL = "public, max-age=86400, stale-while-revalidate=604800";
 const IMMUTABLE_STATIC_CACHE_CONTROL = "public, max-age=31536000, immutable";
 const PUBLIC_API_ROUTES = new Map([
@@ -195,26 +202,90 @@ function getLabClientKey(request) {
   return request.headers.get("CF-Connecting-IP") || "unknown";
 }
 
-function consumeLabRateLimit(request) {
+function isCapabilityProtectedLabRoute(request, route) {
+  return (request.method === "POST" && route.targetPath === "/telemetry")
+    || (request.method === "GET" && (
+      LAB_SESSION_DECISION_PATH_RE.test(route.targetPath)
+      || LAB_SESSION_READ_PATHS.has(route.targetPath)
+    ));
+}
+
+function getLabSessionCapability(request) {
+  const capability = request.headers.get("x-bomba-lab-session") || "";
+  return LAB_SESSION_CAPABILITY_RE.test(capability) ? capability : "";
+}
+
+function rememberLabSessionCapability(request, now = Date.now()) {
+  const capability = getLabSessionCapability(request);
+  if (capability) {
+    activeLabSessionCapability = {
+      value: capability,
+      expiresAt: now + LAB_SESSION_CAPABILITY_TTL_MS,
+    };
+  }
+}
+
+function forgetLabSessionCapability(request) {
+  const capability = getLabSessionCapability(request);
+  if (capability && activeLabSessionCapability?.value === capability) {
+    activeLabSessionCapability = null;
+  }
+}
+
+function isLabSessionTraffic(request, route, now = Date.now()) {
+  if (!isCapabilityProtectedLabRoute(request, route)) return false;
+  const capability = getLabSessionCapability(request);
+  if (
+    !capability
+    || activeLabSessionCapability?.value !== capability
+    || activeLabSessionCapability.expiresAt <= now
+  ) {
+    if (activeLabSessionCapability?.expiresAt <= now) activeLabSessionCapability = null;
+    return false;
+  }
+  return true;
+}
+
+function consumeLabRateLimit(request, route) {
   const now = Date.now();
   const key = getLabClientKey(request);
-  const bucket = labRateBuckets.get(key);
+  const sessionTraffic = isLabSessionTraffic(request, route, now);
+  const scope = sessionTraffic ? "session" : "control";
+  const cost = sessionTraffic ? LAB_SESSION_REQUEST_COST : LAB_CONTROL_REQUEST_COST;
+  let bucket = labRateBuckets.get(key);
   if (!bucket || now - bucket.startedAt >= LAB_RATE_WINDOW_MS) {
-    labRateBuckets.set(key, { startedAt: now, count: 1 });
-    return true;
+    bucket = { startedAt: now, used: 0 };
+    labRateBuckets.set(key, bucket);
   }
-  bucket.count += 1;
-  return bucket.count <= LAB_RATE_LIMIT;
+  bucket.used += cost;
+  const remainingBudget = Math.max(0, LAB_RATE_BUDGET - bucket.used);
+  return {
+    allowed: bucket.used <= LAB_RATE_BUDGET,
+    scope,
+    remainingRequests: Math.floor(remainingBudget / cost),
+    retryAfterSeconds: Math.max(1, Math.ceil((bucket.startedAt + LAB_RATE_WINDOW_MS - now) / 1000)),
+  };
 }
 
 async function proxyLabRequest(request, env, route) {
   if (!env.LAB_BROKER_URL || !env.LAB_BROKER_SECRET) {
     return Response.json({ ok: false, error: "lab_backend_not_configured" }, { status: 503 });
   }
-  if (!consumeLabRateLimit(request)) {
-    return Response.json({ ok: false, error: "rate_limited" }, {
+  const rateLimit = consumeLabRateLimit(request, route);
+  if (!rateLimit.allowed) {
+    return Response.json({
+      ok: false,
+      error: "rate_limited",
+      scope: rateLimit.scope,
+      retryAfterSeconds: rateLimit.retryAfterSeconds,
+    }, {
       status: 429,
-      headers: { "cache-control": "no-store", "retry-after": "60" },
+      headers: {
+        "cache-control": "no-store",
+        "retry-after": String(rateLimit.retryAfterSeconds),
+        "x-bomba-lab-rate-scope": rateLimit.scope,
+        "x-bomba-lab-rate-remaining": "0",
+      },
     });
   }
 
@@ -227,7 +298,7 @@ async function proxyLabRequest(request, env, route) {
   headers.set("x-bomba-lab-secret", env.LAB_BROKER_SECRET);
   headers.set("x-bomba-lab-proxy", "1");
   const sessionCapability = request.headers.get("x-bomba-lab-session") || "";
-  if (/^[A-Za-z0-9_-]{32,128}$/.test(sessionCapability)) {
+  if (LAB_SESSION_CAPABILITY_RE.test(sessionCapability)) {
     headers.set("x-bomba-lab-session", sessionCapability);
   }
 
@@ -239,6 +310,10 @@ async function proxyLabRequest(request, env, route) {
       signal: AbortSignal.timeout(LAB_PROXY_TIMEOUT_MS),
       redirect: "manual",
     });
+    if (isCapabilityProtectedLabRoute(request, route)) {
+      if (response.ok) rememberLabSessionCapability(request);
+      else if (response.status === 401) forgetLabSessionCapability(request);
+    }
     if (response.status >= 300 && response.status < 400) {
       return Response.json({ ok: false, error: "lab_backend_redirect_rejected" }, {
         status: 502,
@@ -248,6 +323,8 @@ async function proxyLabRequest(request, env, route) {
     const responseHeaders = new Headers({
       "cache-control": "no-store",
       "content-type": response.headers.get("content-type") || "application/json; charset=utf-8",
+      "x-bomba-lab-rate-scope": rateLimit.scope,
+      "x-bomba-lab-rate-remaining": String(rateLimit.remainingRequests),
     });
     return new Response(response.body, {
       status: response.status,

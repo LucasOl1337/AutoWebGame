@@ -171,6 +171,7 @@ interface CenterOverlayState {
   subtitle: string;
   footer: string | null;
   victoryEmblem: boolean;
+  stalemateEmblem: boolean;
 }
 
 const directionDelta: Record<Direction, TileCoord> = {
@@ -5019,13 +5020,30 @@ export class GameApp {
     const isFinalFuse = bomb.fuseMs <= 450;
     if (isFinalFuse) {
       const urgency = 1 - Math.max(0, bomb.fuseMs) / 450;
-      const ringRadius = 12 + urgency * 5;
+      const centerX = x + TILE_SIZE / 2;
+      const centerY = y + TILE_SIZE / 2;
+      const ringRadius = 13 + urgency * 4;
+      const orbitAngle = -Math.PI / 2 + urgency * Math.PI * 2;
       this.ctx.save();
-      this.ctx.strokeStyle = `rgba(255, 74, 42, ${0.68 + urgency * 0.32})`;
-      this.ctx.lineWidth = 2 + urgency * 2;
+      this.ctx.lineCap = "round";
+      this.ctx.lineWidth = 1.5 + urgency * 1.5;
+      for (let segment = 0; segment < 8; segment += 1) {
+        const segmentStart = orbitAngle + segment * (Math.PI / 4);
+        this.ctx.strokeStyle = segment % 2 === 0
+          ? `rgba(255, 72, 38, ${0.58 + urgency * 0.42})`
+          : `rgba(255, 198, 78, ${0.4 + urgency * 0.5})`;
+        this.ctx.beginPath();
+        this.ctx.arc(centerX, centerY, ringRadius, segmentStart, segmentStart + Math.PI / 7);
+        this.ctx.stroke();
+      }
+      const sparkX = centerX + Math.cos(orbitAngle) * ringRadius;
+      const sparkY = centerY + Math.sin(orbitAngle) * ringRadius;
+      this.ctx.fillStyle = `rgba(255, 244, 184, ${0.78 + urgency * 0.22})`;
+      this.ctx.shadowColor = "rgba(255, 82, 32, 0.92)";
+      this.ctx.shadowBlur = 4 + urgency * 5;
       this.ctx.beginPath();
-      this.ctx.arc(x + 16, y + 16, ringRadius, 0, Math.PI * 2);
-      this.ctx.stroke();
+      this.ctx.arc(sparkX, sparkY, 1.8 + urgency * 1.4, 0, Math.PI * 2);
+      this.ctx.fill();
       this.ctx.restore();
     }
     if (this.assets.props.bomb) {
@@ -5672,7 +5690,7 @@ export class GameApp {
   private renderMatchOverlay(): void {
     const overlay = this.getCenterOverlayState();
     if (overlay) {
-      this.drawCenterOverlay(overlay.title, overlay.subtitle, overlay.footer, overlay.victoryEmblem);
+      this.drawCenterOverlay(overlay.title, overlay.subtitle, overlay.footer, overlay.victoryEmblem, overlay.stalemateEmblem);
     }
   }
 
@@ -5788,7 +5806,7 @@ export class GameApp {
   private renderMatchResult(): void {
     const overlay = this.getCenterOverlayState();
     if (overlay) {
-      this.drawCenterOverlay(overlay.title, overlay.subtitle, overlay.footer, overlay.victoryEmblem);
+      this.drawCenterOverlay(overlay.title, overlay.subtitle, overlay.footer, overlay.victoryEmblem, overlay.stalemateEmblem);
     }
   }
 
@@ -5800,6 +5818,7 @@ export class GameApp {
         subtitle: copy.pausedSubtitle,
         footer: null,
         victoryEmblem: false,
+        stalemateEmblem: false,
       };
     }
 
@@ -5823,6 +5842,7 @@ export class GameApp {
         subtitle,
         footer: `${copy.scoreSummary(this.formatActiveScore())} | ${nextAction}`,
         victoryEmblem: this.roundOutcome.winner !== null,
+        stalemateEmblem: this.roundOutcome.winner === null,
       };
     }
 
@@ -5832,6 +5852,7 @@ export class GameApp {
         subtitle: copy.roundStartSubtitle,
         footer: copy.scoreSummary(this.formatActiveScore()),
         victoryEmblem: false,
+        stalemateEmblem: false,
       };
     }
 
@@ -5842,6 +5863,7 @@ export class GameApp {
         subtitle: this.onlineSession ? copy.rematchSummary : copy.localResultActions,
         footer: scoreSummary,
         victoryEmblem: this.matchWinner !== null,
+        stalemateEmblem: this.matchWinner === null,
       };
     }
 
@@ -5853,15 +5875,20 @@ export class GameApp {
     subtitle: string,
     footer: string | null = null,
     showVictoryEmblem = false,
+    showStalemateEmblem = false,
   ): void {
     const victoryEmblem = showVictoryEmblem ? this.assets.ui?.victoryEmblem : null;
-    const textCenterX = victoryEmblem ? CANVAS_WIDTH / 2 + 48 : CANVAS_WIDTH / 2;
+    const stalemateEmblem = showStalemateEmblem ? this.assets.ui?.stalemateEmblem : null;
+    const overlayEmblem = victoryEmblem ?? stalemateEmblem;
+    const textCenterX = overlayEmblem ? CANVAS_WIDTH / 2 + 48 : CANVAS_WIDTH / 2;
     this.ctx.fillStyle = CANVAS_UI_PANEL_BG_STRONG;
     this.ctx.fillRect(40, 164, CANVAS_WIDTH - 80, 120);
     this.ctx.strokeStyle = CANVAS_UI_BORDER_STRONG;
     this.ctx.strokeRect(40, 164, CANVAS_WIDTH - 80, 120);
     if (victoryEmblem) {
       this.ctx.drawImage(victoryEmblem, 67, 176, 55, 78);
+    } else if (stalemateEmblem) {
+      this.ctx.drawImage(stalemateEmblem, 67, 176, 55, 78);
     }
     this.ctx.textAlign = "center";
     this.ctx.fillStyle = CANVAS_UI_TEXT;

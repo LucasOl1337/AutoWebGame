@@ -3103,7 +3103,9 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const option = document.createElement("button");
     option.type = "button";
     option.className = "experience-character-option";
-    if (index === this.preferredCharacterIndex) {
+    const selected = index === this.preferredCharacterIndex;
+    option.setAttribute("aria-pressed", selected ? "true" : "false");
+    if (selected) {
       option.dataset.selected = "true";
     }
 
@@ -3119,8 +3121,13 @@ export class OnlineSessionClient implements OnlineSessionBridge {
     const hint = document.createElement("span");
     hint.textContent = hintText;
 
+    const selectionSigil = document.createElement("span");
+    selectionSigil.className = "experience-character-option__selection-sigil";
+    selectionSigil.setAttribute("aria-hidden", "true");
+    selectionSigil.textContent = this.translate("Selecionado", "Selected");
+
     copy.append(name, hint);
-    option.append(portrait, copy);
+    option.append(portrait, copy, selectionSigil);
     option.addEventListener("click", () => {
       this.updatePreferredCharacter(index);
     });
