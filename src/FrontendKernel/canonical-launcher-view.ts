@@ -5,6 +5,11 @@ import type {
   FrontendSnapshot,
   IdentitySnapshot,
 } from "./frontend-kernel";
+import {
+  characterSelectionClickIntent,
+  characterSelectionInputIntent,
+  renderCanonicalCharacterSelection,
+} from "./CharacterSelection/canonical-character-selection-view";
 import "./canonical-launcher.css";
 import "./canonical-launcher-signal-grid.css";
 
@@ -21,6 +26,8 @@ const UTILITY_LINKS: readonly Readonly<{
 export class CanonicalLauncherView {
   private unsubscribe: (() => void) | null = null;
   private renderedRoute: string | null = null;
+  private pendingCharacterFocus: string | null = null;
+  private pendingConfirmationKey: string | null = null;
 
   constructor(
     private readonly root: HTMLElement,
@@ -34,6 +41,8 @@ export class CanonicalLauncherView {
     this.root.classList.add("canonical-launcher-root");
     this.root.addEventListener("click", this.handleClick);
     this.root.addEventListener("input", this.handleInput);
+    this.root.addEventListener("keydown", this.handleKeydown);
+    this.root.addEventListener("keyup", this.handleKeyup);
     this.unsubscribe = this.kernel.subscribe((snapshot) => this.render(snapshot));
     this.render(this.kernel.getSnapshot());
   }
@@ -43,6 +52,8 @@ export class CanonicalLauncherView {
     this.unsubscribe = null;
     this.root.removeEventListener("click", this.handleClick);
     this.root.removeEventListener("input", this.handleInput);
+    this.root.removeEventListener("keydown", this.handleKeydown);
+    this.root.removeEventListener("keyup", this.handleKeyup);
     this.root.classList.remove("canonical-launcher-root");
     this.root.replaceChildren();
     this.renderedRoute = null;
@@ -52,6 +63,16 @@ export class CanonicalLauncherView {
   private readonly handleClick = (event: Event): void => {
     const button = (event.target as Element | null)?.closest<HTMLButtonElement>("button");
     if (!button || button.disabled) return;
+    if (button.hasAttribute("data-selection-cancel-focus") && this.pendingConfirmationKey !== null) {
+      event.preventDefault();
+      return;
+    }
+
+    const selectionIntent = characterSelectionClickIntent(button);
+    if (selectionIntent) {
+      this.kernel.dispatch(selectionIntent);
+      return;
+    }
 
     if (button.dataset.intent === "navigate-back") {
       this.kernel.dispatch({ type: "navigate-back" });
@@ -86,27 +107,117 @@ export class CanonicalLauncherView {
   };
 
   private readonly handleInput = (event: Event): void => {
-    const input = (event.target as Element | null)?.closest<HTMLInputElement>(
-      "[data-temporary-nick]",
-    );
+    const input = (event.target as Element | null)?.closest<HTMLInputElement>("input");
     if (!input) return;
+    const selectionIntent = characterSelectionInputIntent(input);
+    if (selectionIntent) {
+      this.kernel.dispatch(selectionIntent);
+      return;
+    }
+    if (!input.hasAttribute("data-temporary-nick")) return;
     this.kernel.dispatch({ type: "edit-temporary-nick", value: input.value });
+  };
+
+  private readonly handleKeydown = (event: KeyboardEvent): void => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const confirmation = (event.target as Element | null)?.closest<HTMLButtonElement>(
+      "button[data-selection-confirm]",
+    );
+    if (confirmation && (event.key === "Enter" || event.key === " ")) {
+      this.pendingConfirmationKey = event.key;
+    }
+    const radio = (event.target as Element | null)?.closest<HTMLButtonElement>(
+      "button[data-selection-character][role='radio']",
+    );
+    if (!radio || radio.disabled || !this.root.contains(radio)) return;
+    const radios = [...this.root.querySelectorAll<HTMLButtonElement>(
+      "button[data-selection-character][role='radio']:not(:disabled)",
+    )];
+    const currentIndex = radios.indexOf(radio);
+    if (currentIndex < 0) return;
+
+    let nextIndex: number | null = null;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      nextIndex = (currentIndex + 1) % radios.length;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      nextIndex = (currentIndex - 1 + radios.length) % radios.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = radios.length - 1;
+    }
+    if (nextIndex === null) return;
+
+    event.preventDefault();
+    const nextRadio = radios[nextIndex];
+    const characterId = nextRadio?.dataset.selectionCharacter;
+    if (!characterId) return;
+    this.pendingCharacterFocus = characterId;
+    this.kernel.dispatch({ type: "choose-character", characterId });
+    this.root.querySelector<HTMLElement>(
+      `[data-selection-character='${CSS.escape(characterId)}']`,
+    )?.focus();
+  };
+
+  private readonly handleKeyup = (event: KeyboardEvent): void => {
+    if (event.key === this.pendingConfirmationKey) this.pendingConfirmationKey = null;
   };
 
   private render(snapshot: FrontendSnapshot): void {
     if (snapshot.screen === "delegated") return;
     const previousRoute = this.renderedRoute;
-    const nickWasFocused = document.activeElement?.hasAttribute("data-temporary-nick") ?? false;
+    const activeElement = document.activeElement;
+    const focusedInput = activeElement instanceof HTMLInputElement && this.root.contains(activeElement)
+      && (activeElement.hasAttribute("data-temporary-nick") || activeElement.hasAttribute("data-selection-nick"))
+      ? {
+          selector: activeElement.hasAttribute("data-selection-nick")
+            ? "[data-selection-nick]"
+            : "[data-temporary-nick]",
+          start: activeElement.selectionStart,
+          end: activeElement.selectionEnd,
+          direction: activeElement.selectionDirection,
+        }
+      : null;
+    const focusedCharacterId = activeElement instanceof HTMLElement && this.root.contains(activeElement)
+      ? activeElement.dataset.selectionCharacter ?? null
+      : null;
+    const pendingCharacterFocus = this.pendingCharacterFocus;
+    const selectionConfirmWasFocused = activeElement instanceof HTMLElement
+      && activeElement.hasAttribute("data-selection-confirm");
+    this.pendingCharacterFocus = null;
 
     this.root.innerHTML = snapshot.screen === "launcher"
       ? this.renderLauncher(snapshot)
-      : this.renderSecondary(snapshot);
+      : snapshot.screen === "character-selection"
+        ? renderCanonicalCharacterSelection(snapshot)
+        : this.renderSecondary(snapshot);
     this.renderedRoute = snapshot.route;
 
-    if (nickWasFocused) {
-      const input = this.root.querySelector<HTMLInputElement>("[data-temporary-nick]");
+    if (focusedInput) {
+      const input = this.root.querySelector<HTMLInputElement>(focusedInput.selector);
       input?.focus();
-      input?.setSelectionRange(input.value.length, input.value.length);
+      if (input && focusedInput.start !== null && focusedInput.end !== null) {
+        input.setSelectionRange(
+          Math.min(focusedInput.start, input.value.length),
+          Math.min(focusedInput.end, input.value.length),
+          focusedInput.direction ?? undefined,
+        );
+      }
+    } else if (pendingCharacterFocus ?? focusedCharacterId) {
+      const characterId = pendingCharacterFocus ?? focusedCharacterId;
+      this.root.querySelector<HTMLElement>(
+        `[data-selection-character='${CSS.escape(characterId ?? "")}']`,
+      )?.focus();
+    } else if (
+      snapshot.screen === "character-selection"
+      && snapshot.status === "pending"
+      && selectionConfirmWasFocused
+    ) {
+      this.root.querySelector<HTMLElement>("[data-selection-cancel-focus]")?.focus();
+    } else if (snapshot.screen === "character-selection" && snapshot.focusTarget === "error") {
+      this.root.querySelector<HTMLElement>("[data-selection-error]")?.focus();
+    } else if (snapshot.screen === "character-selection" && snapshot.focusTarget === "confirm") {
+      this.root.querySelector<HTMLElement>("[data-selection-confirm]")?.focus();
     } else if (snapshot.screen === "launcher" && snapshot.focusTarget === "status") {
       this.root.querySelector<HTMLElement>("[data-launcher-status]")?.focus();
     } else if (snapshot.screen === "launcher" && snapshot.focusTarget !== null) {

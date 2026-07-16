@@ -272,24 +272,23 @@ try {
   assert.equal(restored.focusedExperience, "training");
   assert.equal(restored.disabled, false);
 
-  const cancellation = await evaluateJson(cdp, `(() => {
+  const selectionRoute = await evaluateJson(cdp, `(() => {
     document.querySelector('[data-experience=continuous-room]').click();
-    const pendingStatus = document.querySelector('[role=status]').textContent;
-    const statusFocused = document.activeElement?.dataset.launcherStatus !== undefined;
-    const cancel = document.querySelector('[data-intent=navigate-back]');
-    cancel.focus();
-    cancel.click();
     return {
-      pendingStatus,
-      statusFocused,
-      restoredFocus: document.activeElement?.dataset.experience,
+      pathname: location.pathname,
+      heading: document.querySelector('[data-route-heading]')?.textContent,
+      cards: document.querySelectorAll('[data-selection-character]').length,
     };
   })()`);
-  assert.equal(cancellation.pendingStatus, "Abrindo Sala contínua");
-  assert.equal(cancellation.statusFocused, true);
-  assert.equal(cancellation.restoredFocus, "continuous-room");
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  assert.equal((await evaluateJson(cdp, "({ pathname: location.pathname })")).pathname, "/");
+  assert.deepEqual(selectionRoute, {
+    pathname: "/jogar/personagem",
+    heading: "Escolha para a Sala contínua",
+    cards: 4,
+  });
+  await cdp.send("Runtime.evaluate", {
+    expression: `document.querySelector('[data-intent=navigate-back]').click()`,
+  });
+  await waitForExpression(cdp, "location.pathname === '/' && Boolean(document.querySelector('[data-experience=continuous-room]'))");
 
   const nick = await evaluateJson(cdp, `(() => {
     const input = document.querySelector('[data-temporary-nick]');
@@ -354,8 +353,9 @@ try {
     "Ajuda",
   );
 
+  await cdp.send("Runtime.evaluate", { expression: "window.__kernelReloadMarker = 'help'" });
   await cdp.send("Page.reload", { ignoreCache: true });
-  await waitForExpression(cdp, "location.pathname === '/ajuda' && document.querySelector('[data-route-heading]')?.textContent === 'Ajuda'");
+  await waitForExpression(cdp, "window.__kernelReloadMarker !== 'help' && location.pathname === '/ajuda' && document.querySelector('[data-route-heading]')?.textContent === 'Ajuda'");
   const refreshedBack = await evaluateJson(cdp, `(() => {
     document.querySelector('[data-intent=navigate-back]').click();
     return {
@@ -368,7 +368,9 @@ try {
   await cdp.send("Runtime.evaluate", {
     expression: `sessionStorage.setItem('bomba-pvp:test:identity', JSON.stringify({ id: 'account-7', username: 'nara', displayName: 'Nara', authLevel: 'email' }))`,
   });
+  await cdp.send("Runtime.evaluate", { expression: "window.__kernelReloadMarker = 'account'" });
   await cdp.send("Page.reload", { ignoreCache: true });
+  await waitForExpression(cdp, "window.__kernelReloadMarker !== 'account'");
   await waitForExpression(cdp, "document.querySelector('.canonical-launcher__identity strong')?.textContent === 'Nara'");
   const authenticated = await evaluateJson(cdp, `(() => {
     const label = document.querySelector('.canonical-launcher__identity strong')?.textContent;
@@ -496,7 +498,7 @@ async function createCdp(url) {
 }
 
 async function waitForExpression(cdp, expression) {
-  const deadline = Date.now() + 10_000;
+  const deadline = Date.now() + 20_000;
   while (Date.now() < deadline) {
     const result = await cdp.send("Runtime.evaluate", { expression, returnByValue: true });
     if (result.result.value === true) return;

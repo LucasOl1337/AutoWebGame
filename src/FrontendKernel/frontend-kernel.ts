@@ -2,6 +2,24 @@ import {
   InMemoryIdentityAdapter,
   type IdentityAdapter,
 } from "./identity-adapter";
+import {
+  BrowserLegacySelectionEntryAdapter,
+  BrowserSelectionPreferenceStore,
+  InMemorySelectionEntryAdapter,
+  InMemorySelectionPreferenceStore,
+} from "./CharacterSelection/selection-adapters";
+import { ContinuousRoomSelectionMachine } from "./CharacterSelection/continuous-room-selection-machine";
+import { TrainingSelectionMachine } from "./CharacterSelection/training-selection-machine";
+import type {
+  CharacterSelectionIntent,
+  CharacterSelectionMachineInterface,
+  CharacterSelectionSnapshot,
+  SelectionEntryAdapter,
+  SelectionJourney,
+  SelectionPreferenceStore,
+  SelectionRoute,
+} from "./CharacterSelection/selection-contract";
+import { normalizeSelectionNick } from "./CharacterSelection/selection-contract";
 
 export type CanonicalExperience = "continuous-room" | "training" | "lab";
 
@@ -16,7 +34,8 @@ export type FrontendIntent =
   | { readonly type: "save-temporary-nick" }
   | { readonly type: "retry-identity" }
   | { readonly type: "open-account-access"; readonly returnTo?: string }
-  | { readonly type: "navigate-back" };
+  | { readonly type: "navigate-back" }
+  | CharacterSelectionIntent;
 
 export type FrontendOperation = Readonly<{
   experience: CanonicalExperience;
@@ -26,7 +45,7 @@ export type FrontendOperation = Readonly<{
 
 export type LauncherExperience = Readonly<{
   experience: CanonicalExperience;
-  href: DelegatedRoute;
+  href: DelegatedRoute | SelectionRoute;
   label: string;
   sequence: string;
   description: string;
@@ -95,6 +114,7 @@ export type FrontendSnapshot = Readonly<
       experience: CanonicalExperience;
       operation: null;
     }
+  | CharacterSelectionSnapshot
 >;
 
 export interface FrontendKernelInterface {
@@ -105,6 +125,11 @@ export interface FrontendKernelInterface {
 }
 
 type DelegatedRoute = "/game/play" | "/game/training" | "/game/lab";
+
+export type CharacterSelectionDependencies = Readonly<{
+  preferences: SelectionPreferenceStore;
+  entry: SelectionEntryAdapter;
+}>;
 
 type NavigationRequest = Readonly<{
   experience: CanonicalExperience;
@@ -121,7 +146,7 @@ interface NavigationAdapter {
   currentPath(): string;
   request(request: NavigationRequest): NavigationHandle;
   back(): void;
-  visit(pathname: AuxiliaryRoute | "/laboratorio"): void;
+  visit(pathname: AuxiliaryRoute | SelectionRoute | "/laboratorio"): void;
   replace(pathname: "/"): void;
   openAccount(returnTo: "/" | "/laboratorio"): void;
   subscribe(listener: (pathname: string) => void): () => void;
@@ -165,7 +190,7 @@ const AUXILIARY_BY_ROUTE = new Map(
 const EXPERIENCE_CATALOG: readonly LauncherExperience[] = Object.freeze([
   Object.freeze({
     experience: "continuous-room",
-    href: "/game/play",
+    href: "/jogar/personagem",
     label: "Sala contínua",
     sequence: "01 / Principal",
     description: "Jogar agora com quatro Vagas e Rodadas em sequência.",
@@ -174,7 +199,7 @@ const EXPERIENCE_CATALOG: readonly LauncherExperience[] = Object.freeze([
   }),
   Object.freeze({
     experience: "training",
-    href: "/game/training",
+    href: "/treino/personagem",
     label: "Treino contra bots",
     sequence: "02 / Local",
     description: "Pratique o combate no seu ritmo, sem Fila da sala ou conta.",
@@ -203,21 +228,28 @@ export class FrontendKernel implements FrontendKernelInterface {
   private pendingNavigation: NavigationHandle | null = null;
   private identityRequest: AbortController | null = null;
   private identityRevision = 0;
+  private currentIdentity: IdentitySnapshot;
+  private selectionMachine: CharacterSelectionMachineInterface | null = null;
+  private unsubscribeSelection: (() => void) | null = null;
+  private selectionStartedWithoutPreference = false;
+  private selectionNickEditedByUser = false;
   private disposed = false;
 
   constructor(
     private readonly navigation: NavigationAdapter,
     private readonly identity: IdentityAdapter = new InMemoryIdentityAdapter(),
+    private readonly selection: CharacterSelectionDependencies = defaultSelectionDependencies(),
   ) {
     const temporaryNick = identity.readTemporaryNick();
-    this.snapshot = snapshotForPath(
+    this.currentIdentity = loadingIdentity(temporaryNick);
+    this.snapshot = this.snapshotForPath(
       navigation.currentPath(),
-      loadingIdentity(temporaryNick),
+      this.currentIdentity,
     );
     this.unsubscribeNavigation = navigation.subscribe((pathname) => {
       if (!this.disposed) {
         this.pendingNavigation = null;
-        this.update(snapshotForPath(pathname, identityForSnapshot(this.snapshot)));
+        this.update(this.snapshotForPath(pathname, this.currentIdentity));
       }
     });
     this.loadIdentity();
@@ -249,6 +281,15 @@ export class FrontendKernel implements FrontendKernelInterface {
         break;
     }
 
+    if (this.snapshot.screen === "character-selection") {
+      if (isCharacterSelectionIntent(intent)) {
+        if (intent.type === "edit-selection-nick") this.selectionNickEditedByUser = true;
+        this.selectionMachine?.dispatch(intent);
+      }
+      return;
+    }
+    if (intent.type !== "activate-experience") return;
+
     if (this.snapshot.screen === "lab-access") {
       this.activateLabFromAccess(intent);
       return;
@@ -275,16 +316,20 @@ export class FrontendKernel implements FrontendKernelInterface {
       return;
     }
 
-    this.update(
-      launcherSnapshot(this.snapshot.route, {
-        experience: intent.experience,
-        label: `Abrindo ${destination.label}`,
-        status: "leaving",
-      }, "status", this.snapshot.identity),
-    );
+    if (intent.experience === "continuous-room" || intent.experience === "training") {
+      this.persistJourneyNick(intent.experience, this.snapshot.identity);
+      this.navigation.visit(destination.href as SelectionRoute);
+      return;
+    }
+
+    this.update(launcherSnapshot(this.snapshot.route, {
+      experience: intent.experience,
+      label: `Abrindo ${destination.label}`,
+      status: "leaving",
+    }, "status", this.snapshot.identity));
     this.pendingNavigation = this.navigation.request({
       experience: destination.experience,
-      href: destination.href,
+      href: destination.href as DelegatedRoute,
       label: destination.label,
     });
   }
@@ -306,6 +351,7 @@ export class FrontendKernel implements FrontendKernelInterface {
     this.pendingNavigation = null;
     this.identityRequest?.abort();
     this.identityRequest = null;
+    this.disposeSelectionMachine();
     this.unsubscribeNavigation();
     this.listeners.clear();
   }
@@ -313,6 +359,15 @@ export class FrontendKernel implements FrontendKernelInterface {
   private navigateBack(): void {
     if (this.snapshot.screen === "delegated") {
       this.navigation.back();
+      return;
+    }
+
+    if (this.snapshot.screen === "character-selection") {
+      if (this.snapshot.status === "pending") {
+        this.selectionMachine?.dispatch({ type: "cancel-selection" });
+      } else {
+        this.navigation.replace("/");
+      }
       return;
     }
 
@@ -362,7 +417,7 @@ export class FrontendKernel implements FrontendKernelInterface {
     }));
     this.pendingNavigation = this.navigation.request({
       experience: destination.experience,
-      href: destination.href,
+      href: destination.href as DelegatedRoute,
       label: destination.label,
     });
   }
@@ -375,11 +430,13 @@ export class FrontendKernel implements FrontendKernelInterface {
   private editTemporaryNick(value: string): void {
     const current = identityForSnapshot(this.snapshot);
     if (current.status === "authenticated" || current.status === "loading") return;
-    this.update(withIdentity(this.snapshot, Object.freeze({
+    const nextIdentity = Object.freeze({
       ...current,
       draftNick: value.slice(0, 32),
       validationMessage: null,
-    })));
+    });
+    this.currentIdentity = nextIdentity;
+    this.update(withIdentity(this.snapshot, nextIdentity));
   }
 
   private saveTemporaryNick(): void {
@@ -387,20 +444,24 @@ export class FrontendKernel implements FrontendKernelInterface {
     if (current.status === "authenticated" || current.status === "loading") return;
     const validation = validateTemporaryNick(current.draftNick);
     if (!validation.ok) {
-      this.update(withIdentity(this.snapshot, Object.freeze({
+      const nextIdentity = Object.freeze({
         ...current,
         validationMessage: validation.message,
-      })));
+      });
+      this.currentIdentity = nextIdentity;
+      this.update(withIdentity(this.snapshot, nextIdentity));
       return;
     }
 
     this.identity.writeTemporaryNick(validation.value);
-    this.update(withIdentity(this.snapshot, Object.freeze({
+    const nextIdentity = Object.freeze({
       ...current,
       temporaryNick: validation.value,
       draftNick: validation.value,
       validationMessage: null,
-    })));
+    });
+    this.currentIdentity = nextIdentity;
+    this.update(withIdentity(this.snapshot, nextIdentity));
   }
 
   private openAccountAccess(returnTo = "/"): void {
@@ -418,7 +479,8 @@ export class FrontendKernel implements FrontendKernelInterface {
     const temporaryNick = current.status === "authenticated"
       ? this.identity.readTemporaryNick()
       : current.temporaryNick;
-    this.update(withIdentity(this.snapshot, loadingIdentity(temporaryNick)));
+    this.currentIdentity = loadingIdentity(temporaryNick);
+    this.update(withIdentity(this.snapshot, this.currentIdentity));
 
     void this.identity.load(controller.signal).then((account) => {
       if (this.disposed || controller.signal.aborted || revision !== this.identityRevision) return;
@@ -431,17 +493,21 @@ export class FrontendKernel implements FrontendKernelInterface {
             displayName: account.displayName,
           })
         : visitorIdentity(temporaryNick);
+      this.currentIdentity = nextIdentity;
+      this.reconcileDirectSelectionIdentity(nextIdentity);
       this.update(withIdentity(this.snapshot, nextIdentity));
     }).catch((error: unknown) => {
       if (this.disposed || controller.signal.aborted || revision !== this.identityRevision) return;
       this.identityRequest = null;
-      this.update(withIdentity(this.snapshot, Object.freeze({
+      const nextIdentity: IdentitySnapshot = Object.freeze({
         status: "error",
         temporaryNick,
         draftNick: temporaryNick,
         validationMessage: null,
         message: "Não foi possível confirmar sua sessão. Sala contínua e Treino contra bots continuam disponíveis.",
-      })));
+      });
+      this.currentIdentity = nextIdentity;
+      this.update(withIdentity(this.snapshot, nextIdentity));
       if (isAbortError(error)) return;
     });
   }
@@ -450,6 +516,80 @@ export class FrontendKernel implements FrontendKernelInterface {
     if (snapshotsEqual(this.snapshot, next)) return;
     this.snapshot = next;
     this.listeners.forEach((listener) => listener(next));
+  }
+
+  private snapshotForPath(pathname: string, identity: IdentitySnapshot): FrontendSnapshot {
+    const normalized = normalizePath(pathname);
+    if (normalized === "/jogar/personagem") {
+      return this.activateSelectionMachine("continuous-room", identity);
+    }
+    if (normalized === "/treino/personagem") {
+      return this.activateSelectionMachine("training", identity);
+    }
+    this.disposeSelectionMachine();
+    return snapshotForPath(normalized, identity);
+  }
+
+  private activateSelectionMachine(
+    journey: SelectionJourney,
+    identity: IdentitySnapshot,
+  ): CharacterSelectionSnapshot {
+    if (this.selectionMachine?.getSnapshot().journey === journey) {
+      return this.selectionMachine.getSnapshot();
+    }
+    this.disposeSelectionMachine();
+    this.selectionStartedWithoutPreference = !this.selection.preferences.has(journey);
+    this.selectionNickEditedByUser = false;
+    if (this.selectionStartedWithoutPreference) this.persistJourneyNick(journey, identity);
+    this.selectionMachine = journey === "continuous-room"
+      ? new ContinuousRoomSelectionMachine(this.selection.preferences, this.selection.entry)
+      : new TrainingSelectionMachine(this.selection.preferences, this.selection.entry);
+    this.unsubscribeSelection = this.selectionMachine.subscribe((snapshot) => {
+      if (!this.disposed) {
+        this.syncTemporaryNickFromSelection(snapshot);
+        this.update(snapshot);
+      }
+    });
+    return this.selectionMachine.getSnapshot();
+  }
+
+  private disposeSelectionMachine(): void {
+    this.unsubscribeSelection?.();
+    this.unsubscribeSelection = null;
+    this.selectionMachine?.dispose();
+    this.selectionMachine = null;
+    this.selectionStartedWithoutPreference = false;
+    this.selectionNickEditedByUser = false;
+  }
+
+  private persistJourneyNick(journey: SelectionJourney, identity: IdentitySnapshot): void {
+    const existing = this.selection.preferences.read(journey);
+    const nick = identity.status === "authenticated"
+      ? identity.displayName
+      : identity.status === "loading"
+        ? identity.temporaryNick
+        : identity.temporaryNick;
+    this.selection.preferences.write(journey, { ...existing, nick });
+  }
+
+  private syncTemporaryNickFromSelection(snapshot: CharacterSelectionSnapshot): void {
+    if (this.currentIdentity.status === "authenticated") return;
+    const nick = normalizeSelectionNick(snapshot.nick);
+    if (!nick.ok) return;
+    this.identity.writeTemporaryNick(nick.value);
+    this.currentIdentity = visitorIdentity(nick.value);
+  }
+
+  private reconcileDirectSelectionIdentity(identity: IdentitySnapshot): void {
+    if (
+      this.snapshot.screen !== "character-selection"
+      || !this.selectionStartedWithoutPreference
+      || this.selectionNickEditedByUser
+    ) return;
+    const nick = identity.status === "authenticated"
+      ? identity.displayName
+      : identity.temporaryNick;
+    this.selectionMachine?.dispatch({ type: "edit-selection-nick", value: nick });
   }
 }
 
@@ -494,7 +634,7 @@ export class BrowserNavigationAdapter implements NavigationAdapter {
     window.history.back();
   }
 
-  visit(pathname: AuxiliaryRoute | "/laboratorio"): void {
+  visit(pathname: AuxiliaryRoute | SelectionRoute | "/laboratorio"): void {
     window.history.pushState({ canonicalRoute: pathname }, "", pathname);
     this.emit(pathname);
   }
@@ -570,7 +710,7 @@ export class InMemoryNavigationAdapter implements NavigationAdapter {
     this.backRequests += 1;
   }
 
-  visit(pathname: AuxiliaryRoute | "/laboratorio"): void {
+  visit(pathname: AuxiliaryRoute | SelectionRoute | "/laboratorio"): void {
     this.visits.push(pathname);
     this.pathname = pathname;
     this.listeners.forEach((listener) => listener(pathname));
@@ -653,13 +793,13 @@ function snapshotsEqual(left: FrontendSnapshot, right: FrontendSnapshot): boolea
 }
 
 function identityForSnapshot(snapshot: FrontendSnapshot): IdentitySnapshot {
-  return snapshot.screen === "delegated"
-    ? loadingIdentity("Visitante")
-    : snapshot.identity;
+  if (snapshot.screen === "delegated") return loadingIdentity("Visitante");
+  if (snapshot.screen === "character-selection") return loadingIdentity(snapshot.nick);
+  return snapshot.identity;
 }
 
 function withIdentity(snapshot: FrontendSnapshot, identity: IdentitySnapshot): FrontendSnapshot {
-  if (snapshot.screen === "delegated") return snapshot;
+  if (snapshot.screen === "delegated" || snapshot.screen === "character-selection") return snapshot;
   if (snapshot.screen === "launcher") {
     return launcherSnapshot(snapshot.route, snapshot.operation, snapshot.focusTarget, identity);
   }
@@ -714,4 +854,25 @@ function validateTemporaryNick(value: string):
 function isAbortError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "name" in error
     && (error as { name?: unknown }).name === "AbortError";
+}
+
+function isCharacterSelectionIntent(intent: FrontendIntent): intent is CharacterSelectionIntent {
+  return intent.type === "choose-character"
+    || intent.type === "edit-selection-nick"
+    || intent.type === "confirm-selection"
+    || intent.type === "retry-selection"
+    || intent.type === "cancel-selection";
+}
+
+function defaultSelectionDependencies(): CharacterSelectionDependencies {
+  if (typeof window !== "undefined") {
+    return Object.freeze({
+      preferences: new BrowserSelectionPreferenceStore(),
+      entry: new BrowserLegacySelectionEntryAdapter(),
+    });
+  }
+  return Object.freeze({
+    preferences: new InMemorySelectionPreferenceStore(),
+    entry: new InMemorySelectionEntryAdapter(),
+  });
 }

@@ -5,6 +5,8 @@ const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
 const canonicalLauncherRoutes = new Set([
   "/",
   "/game",
+  "/jogar/personagem",
+  "/treino/personagem",
   "/como-jogar",
   "/conta",
   "/ajuda",

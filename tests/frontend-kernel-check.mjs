@@ -15,12 +15,6 @@ assert.equal(resolvePublicRoutePointer(undefined), "legacy");
 assert.equal(resolvePublicRoutePointer("unexpected"), "legacy");
 assert.equal(PUBLIC_ROUTE_POINTER, "legacy", "an implicit build stays on the rollback surface");
 
-const continuousRoom = {
-  experience: "continuous-room",
-  href: "/game/play",
-  label: "Sala contínua",
-};
-
 {
   const navigation = new InMemoryNavigationAdapter("/");
   const kernel = new FrontendKernel(navigation);
@@ -42,18 +36,15 @@ const continuousRoom = {
   kernel.dispatch({ type: "activate-experience", experience: "continuous-room" });
   kernel.dispatch({ type: "activate-experience", experience: "continuous-room" });
 
-  assert.deepEqual(navigation.requests, [continuousRoom]);
-  assert.deepEqual(kernel.getSnapshot().operation, {
-    experience: "continuous-room",
-    label: "Abrindo Sala contínua",
-    status: "leaving",
-  });
-  assert.equal(snapshots.length, 1, "double activation emits one visible operation");
+  assert.deepEqual(navigation.visits, ["/jogar/personagem"]);
+  assert.equal(kernel.getSnapshot().screen, "character-selection");
+  assert.equal(kernel.getSnapshot().journey, "continuous-room");
+  assert.equal(snapshots.length, 1, "double activation enters one stable Selection route");
 
   kernel.dispatch({ type: "navigate-back" });
-  assert.equal(kernel.getSnapshot().operation, null);
-  assert.equal(navigation.cancelRequests, 1, "cancel restores the Launcher before commit");
-  assert.equal(navigation.backRequests, 0, "pending state is not browser history");
+  assert.equal(kernel.getSnapshot().screen, "launcher");
+  assert.deepEqual(navigation.replacements, ["/"], "Back restores the Launcher from stable Selection");
+  assert.equal(navigation.backRequests, 0, "Selection return is deterministic on a direct deep link");
 }
 
 {
