@@ -18,8 +18,12 @@ assert.match(pointer, /export const PUBLIC_ROUTE_POINTER/);
 assert.match(pointer, /"canonical" \| "legacy"/);
 assert.match(pointer, /VITE_PUBLIC_ROUTE_POINTER=legacy npm run deploy:cloudflare/);
 assert.match(main, /PUBLIC_ROUTE_POINTER === "canonical"/);
-assert.match(main, /pathname === "\/" \|\| pathname === "\/game"/);
+for (const route of ["/", "/game", "/como-jogar", "/conta", "/ajuda", "/configuracoes", "/laboratorio"]) {
+  assert.ok(main.includes(`"${route}"`), `canonical route pointer must include ${route}`);
+}
+assert.match(main, /canonicalLauncherRoutes\.has\(pathname\)/);
 assert.match(main, /import\("\.\.\/FrontendKernel\/frontend-kernel"\)/);
+assert.match(main, /import\("\.\.\/FrontendKernel\/identity-adapter"\)/);
 assert.match(main, /await import\("\.\/legacy-bootstrap"\)/);
 assert.doesNotMatch(main, /from "\.\/launcher-shell"|from "\.\/frontend-store"|new FrontendStore/);
 

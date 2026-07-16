@@ -1,0 +1,180 @@
+/* Visual signal layer for the canonical entry matrix. It adds orientation without
+   changing the launcher markup or the interaction contract. */
+.canonical-launcher {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.canonical-launcher::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 12% -8% 18%;
+  pointer-events: none;
+  opacity: 0.44;
+  background:
+    linear-gradient(90deg, transparent 49.92%, rgba(255, 177, 46, 0.16) 50%, transparent 50.08%) 0 0 / 180px 100%,
+    linear-gradient(0deg, transparent 49.92%, rgba(255, 177, 46, 0.12) 50%, transparent 50.08%) 0 0 / 100% 120px,
+    radial-gradient(ellipse at 72% 42%, rgba(255, 177, 46, 0.17), transparent 36%);
+  mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+}
+
+.canonical-launcher::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  right: 12%;
+  width: 1px;
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(255, 177, 46, 0.42) 44%, transparent 76%);
+  opacity: 0.7;
+  animation: canonical-launcher-signal-sweep 9s ease-in-out infinite;
+}
+
+.canonical-launcher__command {
+  position: relative;
+  z-index: 1;
+}
+
+.canonical-launcher__grid {
+  position: relative;
+  padding-top: 26px;
+}
+
+.canonical-launcher__grid::before {
+  content: "EXPERIENCE MATRIX / SELECT ENTRY";
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: rgba(246, 242, 233, 0.48);
+  font: 700 0.62rem/1.2 "JetBrains Mono", monospace;
+  letter-spacing: 0.15em;
+  pointer-events: none;
+}
+
+.canonical-launcher__grid::after {
+  content: "";
+  position: absolute;
+  top: 7px;
+  right: 0;
+  left: 0;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, var(--launcher-accent) 0 16%, rgba(246, 242, 233, 0.13) 16% 100%);
+}
+
+.canonical-launcher__experience {
+  position: relative;
+  overflow: hidden;
+  background-image:
+    linear-gradient(135deg, rgba(255, 177, 46, 0.07), transparent 42%),
+    linear-gradient(90deg, rgba(246, 242, 233, 0.035) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(246, 242, 233, 0.028) 1px, transparent 1px);
+  background-size: auto, 42px 100%, 100% 42px;
+}
+
+.canonical-launcher__experience::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 20px;
+  left: 20px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(246, 242, 233, 0.24), transparent);
+  opacity: 0.7;
+}
+
+.canonical-launcher__experience::after {
+  content: "";
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 7px;
+  height: 7px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  color: rgba(246, 242, 233, 0.42);
+  box-shadow: 0 0 0 3px rgba(246, 242, 233, 0.04), 0 0 14px currentColor;
+}
+
+.canonical-launcher__experience--primary {
+  box-shadow: inset 0 2px 0 var(--launcher-accent), inset 0 0 42px rgba(255, 177, 46, 0.055);
+}
+
+.canonical-launcher__experience--primary::after {
+  color: var(--launcher-accent);
+  animation: canonical-launcher-signal-pulse 2.4s ease-in-out infinite;
+}
+
+.canonical-launcher__experience:hover:not(:disabled)::before,
+.canonical-launcher__experience:focus-visible::before {
+  background: linear-gradient(90deg, transparent, var(--launcher-accent), transparent);
+  opacity: 1;
+}
+
+@keyframes canonical-launcher-signal-sweep {
+  0%,
+  100% {
+    transform: translateY(-16%);
+    opacity: 0.25;
+  }
+
+  50% {
+    transform: translateY(16%);
+    opacity: 0.78;
+  }
+}
+
+@keyframes canonical-launcher-signal-pulse {
+  0%,
+  100% {
+    opacity: 0.52;
+    transform: scale(0.86);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+}
+
+@media (max-width: 720px) {
+  .canonical-launcher::before {
+    inset: 24% -34% 8%;
+    opacity: 0.3;
+  }
+
+  .canonical-launcher::after {
+    right: 8%;
+  }
+
+  .canonical-launcher__grid {
+    padding-top: 24px;
+  }
+
+  .canonical-launcher__grid::before {
+    font-size: 0.55rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canonical-launcher::after,
+  .canonical-launcher__experience--primary::after {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .canonical-launcher::before,
+  .canonical-launcher::after {
+    display: none;
+  }
+
+  .canonical-launcher__grid::after,
+  .canonical-launcher__experience::before {
+    background: CanvasText;
+  }
+}

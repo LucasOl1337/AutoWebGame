@@ -2,21 +2,32 @@ import type { CanonicalExperience } from "../FrontendKernel/frontend-kernel";
 import { PUBLIC_ROUTE_POINTER } from "../FrontendKernel/public-route-pointer";
 
 const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
-const isCanonicalLauncherRoute = pathname === "/" || pathname === "/game";
+const canonicalLauncherRoutes = new Set([
+  "/",
+  "/game",
+  "/como-jogar",
+  "/conta",
+  "/ajuda",
+  "/configuracoes",
+  "/laboratorio",
+]);
+const isCanonicalLauncherRoute = canonicalLauncherRoutes.has(pathname);
 
 if (PUBLIC_ROUTE_POINTER === "canonical" && isCanonicalLauncherRoute) {
   const root = document.querySelector<HTMLDivElement>("#app");
   if (!root) throw new Error("#app root not found");
 
-  const [kernelModule, viewModule] = await Promise.all([
+  const [kernelModule, identityModule, viewModule] = await Promise.all([
     import("../FrontendKernel/frontend-kernel"),
+    import("../FrontendKernel/identity-adapter"),
     import("../FrontendKernel/canonical-launcher-view"),
   ]);
   const unavailable = parseUnavailableExperiences(
     document.documentElement.dataset.unavailableExperiences,
   );
   const navigation = new kernelModule.BrowserNavigationAdapter(unavailable);
-  const kernel = new kernelModule.FrontendKernel(navigation);
+  const identity = new identityModule.BrowserIdentityAdapter();
+  const kernel = new kernelModule.FrontendKernel(navigation, identity);
   const view = new viewModule.CanonicalLauncherView(root, kernel);
   view.mount();
   window.addEventListener("pagehide", () => {

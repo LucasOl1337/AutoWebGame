@@ -8,7 +8,8 @@ assert.equal(resolveFrontendRoute("/account/"), "account");
 assert.equal(routeHref("account"), "/account");
 
 const pageSource = await readFile(new URL("../src/Auth/account-page.ts", import.meta.url), "utf8");
-const mainSource = await readFile(new URL("../src/UiLayouts/main.ts", import.meta.url), "utf8");
+const viewSource = await readFile(new URL("../src/FrontendKernel/canonical-launcher-view.ts", import.meta.url), "utf8");
+const kernelSource = await readFile(new URL("../src/FrontendKernel/frontend-kernel.ts", import.meta.url), "utf8");
 for (const contract of [
   'fetch("/api/auth/session"',
   '"/api/auth/register"',
@@ -16,9 +17,13 @@ for (const contract of [
   'fetch("/api/auth/logout"',
   'account.role === "admin"',
   'window.location.assign("/admin")',
+  "resolveAccountReturnPath(window.location.search)",
+  "window.location.assign(returnPath)",
 ]) {
   assert.ok(pageSource.includes(contract), `missing account-page contract: ${contract}`);
 }
-assert.ok(mainSource.includes('accountEntry.href = "/account"'), "launcher must expose the account route");
+assert.ok(viewSource.includes('auxiliary: "account"'), "Launcher must expose Conta as a secondary Intent");
+assert.ok(viewSource.includes('data-intent="open-account-access"'), "Conta must expose the existing auth surface");
+assert.ok(kernelSource.includes('window.location.assign(`/account?return='), "account access must delegate to the existing auth route");
 
 console.log("account page and route contract: ok");

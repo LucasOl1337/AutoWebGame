@@ -56,6 +56,64 @@ body.canonical-launcher-active #app {
   gap: 20px;
 }
 
+.canonical-launcher__identity {
+  min-width: min(330px, 100%);
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+  color: var(--launcher-muted);
+  font-size: 0.78rem;
+}
+
+.canonical-launcher__identity > span,
+.canonical-launcher__identity > label {
+  font: 700 0.66rem/1.2 "JetBrains Mono", monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.canonical-launcher__identity > div {
+  width: 100%;
+  display: flex;
+  gap: 8px;
+}
+
+.canonical-launcher__identity input,
+.canonical-launcher__identity button,
+.canonical-launcher__secondary-primary,
+.canonical-launcher__utilities button {
+  min-height: 44px;
+  border: 1px solid rgba(246, 242, 233, 0.2);
+  border-radius: 4px;
+  color: var(--launcher-text);
+  background: rgba(255, 255, 255, 0.04);
+  font: inherit;
+}
+
+.canonical-launcher__identity input {
+  min-width: 0;
+  flex: 1;
+  padding: 0 12px;
+}
+
+.canonical-launcher__identity button,
+.canonical-launcher__utilities button {
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.canonical-launcher__identity-error {
+  max-width: 38rem;
+  margin: 0;
+  color: #ffbe70;
+  line-height: 1.45;
+}
+
+.canonical-launcher__identity-error button {
+  min-height: 44px;
+  margin-left: 8px;
+}
+
 .canonical-launcher__brand {
   display: inline-flex;
   align-items: center;
@@ -161,6 +219,19 @@ body.canonical-launcher-active #app {
   font-weight: 800;
 }
 
+.canonical-launcher__access {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  padding: 0 9px;
+  border: 1px solid rgba(246, 242, 233, 0.18);
+  border-radius: 999px;
+  color: var(--launcher-muted);
+  font: 700 0.64rem/1 "JetBrains Mono", monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .canonical-launcher__experience:hover:not(:disabled) {
   transform: translateY(-3px);
   border-color: var(--launcher-accent);
@@ -184,6 +255,67 @@ body.canonical-launcher-active #app {
   font-size: 0.9rem;
 }
 
+.canonical-launcher__utilities {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.canonical-launcher__utilities button {
+  min-height: 44px;
+  color: var(--launcher-muted);
+  background: transparent;
+}
+
+.canonical-launcher--secondary {
+  grid-template-rows: auto 1fr auto;
+}
+
+.canonical-launcher__secondary-panel {
+  width: min(820px, 100%);
+  align-self: center;
+  margin: 0 auto;
+  padding: clamp(24px, 5vw, 64px);
+  border: 1px solid rgba(246, 242, 233, 0.16);
+  border-top-color: var(--launcher-accent);
+  border-radius: 6px;
+  background: rgba(15, 18, 24, 0.92);
+}
+
+.canonical-launcher__secondary-panel h1 {
+  margin: 12px 0 18px;
+  font-family: "Archivo Black", Inter, sans-serif;
+  font-size: clamp(2.4rem, 7vw, 5.6rem);
+  line-height: 0.96;
+  text-transform: uppercase;
+}
+
+.canonical-launcher__secondary-panel p,
+.canonical-launcher__secondary-panel li {
+  color: var(--launcher-muted);
+  font-size: clamp(1rem, 1.6vw, 1.18rem);
+  line-height: 1.65;
+}
+
+.canonical-launcher__secondary-detail {
+  padding-top: 24px;
+  border-top: 1px solid rgba(246, 242, 233, 0.12);
+}
+
+.canonical-launcher__secondary-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 24px;
+  padding: 0 18px;
+  border-color: var(--launcher-accent);
+  color: #07090d;
+  background: var(--launcher-accent);
+  font-weight: 900;
+  cursor: pointer;
+}
+
 @media (max-width: 720px) {
   .canonical-launcher {
     gap: 28px;
@@ -192,6 +324,12 @@ body.canonical-launcher-active #app {
   .canonical-launcher__header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .canonical-launcher__identity {
+    min-width: 0;
+    width: 100%;
+    justify-items: stretch;
   }
 
   .canonical-launcher__brand span {
@@ -205,6 +343,19 @@ body.canonical-launcher-active #app {
 
   .canonical-launcher__experience {
     min-height: 180px;
+  }
+
+  .canonical-launcher__status {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .canonical-launcher__utilities {
+    justify-content: stretch;
+  }
+
+  .canonical-launcher__utilities button {
+    flex: 1 1 calc(50% - 6px);
   }
 }
 
@@ -227,6 +378,17 @@ body.canonical-launcher-active #app {
     padding: 16px;
     gap: 8px;
   }
+
+  .canonical-launcher__identity {
+    grid-template-columns: auto minmax(220px, 360px);
+    align-items: center;
+  }
+
+  .canonical-launcher__identity > small,
+  .canonical-launcher__identity-error {
+    grid-column: 1 / -1;
+  }
+
 }
 
 @media (prefers-reduced-motion: reduce) {

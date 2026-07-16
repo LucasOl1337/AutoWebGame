@@ -1,6 +1,7 @@
 import "./account-page.css";
 import type { PlayerAccount } from "../NetCode/account";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "./account-credentials";
+import { resolveAccountReturnPath } from "./account-return";
 
 type AccountPageMode = "login" | "register";
 
@@ -302,6 +303,11 @@ export class AccountPage {
   private activateAccount(account: PlayerAccount): void {
     if (account.role === "admin") {
       window.location.assign("/admin");
+      return;
+    }
+    const returnPath = resolveAccountReturnPath(window.location.search);
+    if (returnPath !== null) {
+      window.location.assign(returnPath);
       return;
     }
     const nodes = this.requireNodes();

@@ -8,6 +8,10 @@ Vocabulário canônico da experiência competitiva do Bomba PvP. Ele existe para
 Tela inicial em cena cheia que oferece Entrada imediata, Treino contra bots, Laboratório Bot vs Bot e Como jogar em um único painel focal.
 _Avoid_: home, landing page, menu inicial
 
+**Nick temporário**:
+Nome editável e restrito ao dispositivo que identifica um visitante sem criar uma Conta; não representa identidade autenticada nem progressão global.
+_Avoid_: username de visitante, conta temporária, perfil global
+
 **Sala contínua**:
 Sessão de jogo persistente formada por uma sequência de rodadas, na qual jogadores podem entrar ou sair sem encerrar a sala; rodadas só acontecem enquanto houver ao menos um jogador humano.
 _Avoid_: Endless, Arena PvP, Partida rápida, partida contínua, lobby infinito, servidor
