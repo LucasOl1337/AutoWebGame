@@ -210,7 +210,21 @@ async function inspectScenario(cdp, scenario, viewport) {
           const nick = document.querySelector("[data-temporary-nick]");
           nick.value = "BlobGate" + iteration;
           nick.dispatchEvent(new Event("input", {bubbles:true}));
-          const currentImage = document.querySelector("[data-canonical-arena-preview] img");
+          const deadline = performance.now() + 2_000;
+          let currentImage = document.querySelector("[data-canonical-arena-preview] img");
+          while (currentImage?.src === previous && performance.now() < deadline) {
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+            currentImage = document.querySelector("[data-canonical-arena-preview] img");
+          }
+          if (!currentImage || currentImage.src === previous) {
+            throw new Error(JSON.stringify({
+              reason: "canonical preview did not publish a replacement Blob URL",
+              iteration,
+              previous,
+              current: currentImage?.src ?? null,
+              fallbackUsed: document.querySelector("[data-canonical-arena-preview]")?.dataset.fallbackUsed ?? null,
+            }));
+          }
           await currentImage.decode();
           const current = currentImage.src;
           const previousReachable = await fetch(previous).then(() => true, () => false);
