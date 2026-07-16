@@ -11,6 +11,8 @@ import {
 } from "../src/Arenas/arena";
 import { ARENA_THEME_LIBRARY } from "../src/Arenas/arena-theme-library";
 import { createCanonicalArenaCatalogResponse } from "../src/Arenas/canonical-arena-worker";
+import { ContinuousRoomCanaryAuthority } from "../src/ContinuousRoom/continuous-room-canary-authority";
+import { createContinuousRoomCanaryCommandResponse } from "../src/ContinuousRoom/continuous-room-canary-worker";
 import { CHARACTER_ROSTER_MANIFEST } from "../src/Characters/Animations/character-roster-manifest";
 import {
   canReuseCurrentRoomForQuickMatch,
@@ -118,6 +120,7 @@ const PUBLIC_API_ROUTES = new Map([
   ["/api/auth/register", { methods: new Set(["POST"]), targetPath: "/internal/auth/register" }],
   ["/api/auth/login", { methods: new Set(["POST"]), targetPath: "/internal/auth/login" }],
   ["/api/auth/logout", { methods: new Set(["POST"]), targetPath: "/internal/auth/logout" }],
+  ["/api/canonical/continuous-room/canary/commands", { methods: new Set(["POST"]), targetPath: "/internal/canonical/continuous-room/canary/commands" }],
   ["/api/feedback", { methods: new Set(["POST"]), targetPath: "/internal/feedback" }],
   ["/api/me", { methods: new Set(["GET"]), targetPath: "/internal/auth/session" }],
   ["/api/account/quick-create", { methods: new Set(["POST"]), targetPath: "/internal/account/quick-create" }],
@@ -579,6 +582,13 @@ export class GlobalLobby extends DurableObject {
     await this.ready;
     const url = new URL(request.url);
 
+    if (url.pathname === "/internal/canonical/continuous-room/canary/commands") {
+      return createContinuousRoomCanaryCommandResponse(
+        request,
+        new ContinuousRoomCanaryAuthority(this.ctx.storage),
+      );
+    }
+
     if (url.pathname === "/internal/telemetry") {
       return this.handleTelemetryIngest(request);
     }
@@ -849,6 +859,11 @@ export class GlobalLobby extends DurableObject {
         },
       },
     );
+  }
+
+  async alarm() {
+    await this.ready;
+    await new ContinuousRoomCanaryAuthority(this.ctx.storage).advanceDueSessions();
   }
 
   /**

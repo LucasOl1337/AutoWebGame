@@ -121,13 +121,26 @@ export class SelectionMachineLifecycle implements CharacterSelectionMachineInter
       status: "pending",
       operation: Object.freeze({ requestId, label: this.definition.pendingLabel }),
     }));
-    void this.entry.enter({
+    const entryRequest = {
       journey: this.definition.journey,
       destination: this.definition.destination,
       requestId,
       characterId: this.snapshot.selectedCharacterId,
       nick: nick.value,
-    }, controller.signal).then(() => {
+    };
+    Object.defineProperty(entryRequest, "onProgress", {
+      enumerable: false,
+      value: (label: string) => {
+        if (!this.isCurrentEpoch(epoch)) return;
+        this.update(this.createSnapshot({
+          selectedCharacterId: this.snapshot.selectedCharacterId,
+          nick: this.snapshot.nick,
+          status: "pending",
+          operation: Object.freeze({ requestId, label }),
+        }));
+      },
+    });
+    void this.entry.enter(entryRequest, controller.signal).then(() => {
       if (!this.isCurrent(epoch, controller)) return;
       this.activeRequest = null;
       this.update(this.createSnapshot({
@@ -136,8 +149,16 @@ export class SelectionMachineLifecycle implements CharacterSelectionMachineInter
         status: "completed",
       }));
     }).catch((error: unknown) => {
-      if (!this.isCurrent(epoch, controller) || isAbortError(error)) return;
+      if (!this.isCurrentEpoch(epoch)) return;
       this.activeRequest = null;
+      if (isAbortError(error)) {
+        this.update(this.createSnapshot({
+          selectedCharacterId: this.snapshot.selectedCharacterId,
+          nick: this.snapshot.nick,
+          focusTarget: "confirm",
+        }));
+        return;
+      }
       this.update(this.createSnapshot({
         selectedCharacterId: this.snapshot.selectedCharacterId,
         nick: this.snapshot.nick,
@@ -150,18 +171,35 @@ export class SelectionMachineLifecycle implements CharacterSelectionMachineInter
 
   private cancel(): void {
     if (this.snapshot.status !== "pending") return;
-    this.requestEpoch += 1;
+    if (this.activeRequest?.signal.aborted) return;
+    if (!this.entry.waitForCancellation?.(this.definition.journey)) {
+      this.requestEpoch += 1;
+      this.activeRequest?.abort();
+      this.activeRequest = null;
+      this.update(this.createSnapshot({
+        selectedCharacterId: this.snapshot.selectedCharacterId,
+        nick: this.snapshot.nick,
+        focusTarget: "confirm",
+      }));
+      return;
+    }
     this.activeRequest?.abort();
-    this.activeRequest = null;
     this.update(this.createSnapshot({
       selectedCharacterId: this.snapshot.selectedCharacterId,
       nick: this.snapshot.nick,
-      focusTarget: "confirm",
+      status: "pending",
+      operation: this.snapshot.operation
+        ? Object.freeze({ ...this.snapshot.operation, label: "Cancelando busca…" })
+        : null,
     }));
   }
 
   private isCurrent(epoch: number, controller: AbortController): boolean {
     return !this.disposed && !controller.signal.aborted && epoch === this.requestEpoch;
+  }
+
+  private isCurrentEpoch(epoch: number): boolean {
+    return !this.disposed && epoch === this.requestEpoch;
   }
 
   private persistRecoverableChoice(snapshot: CharacterSelectionSnapshot): void {

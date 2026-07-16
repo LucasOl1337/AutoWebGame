@@ -16,7 +16,7 @@ import { sha256Canonical } from "../Shared/canonical-json";
 
 export type HeadlessRoundStatus = "complete" | "timeout" | "error";
 export type HeadlessPolicyMode = "built-in" | "external" | "registered";
-export type HeadlessRegisteredPolicyScript = "neutral-v1" | "waypoint-v1";
+export type HeadlessRegisteredPolicyScript = "neutral-v1" | "waypoint-v1" | "input-sequence-v1";
 
 export interface HeadlessPolicyContext {
   playerId: PlayerId;
@@ -31,7 +31,11 @@ export interface HeadlessRoundPolicy {
   mode: HeadlessPolicyMode;
   decide?: (context: HeadlessPolicyContext) => OnlineInputState;
   scriptId?: HeadlessRegisteredPolicyScript;
-  scriptConfig?: Readonly<{ route?: readonly TileCoord[]; variant?: number }>;
+  scriptConfig?: Readonly<{
+    route?: readonly TileCoord[];
+    variant?: number;
+    segments?: readonly Readonly<{ untilStep: number; input: OnlineInputState }>[];
+  }>;
   configHash?: `sha256:${string}`;
 }
 
@@ -174,7 +178,7 @@ export interface HeadlessSnapshotTraceEntry {
 
 interface ExecutablePolicy extends HeadlessPolicyReceipt {
   decide?: (context: HeadlessPolicyContext) => OnlineInputState;
-  scriptConfig?: Readonly<{ route?: readonly TileCoord[]; variant?: number }>;
+  scriptConfig?: HeadlessRoundPolicy["scriptConfig"];
 }
 
 const REGISTERED_POLICY_ARTIFACTS = deepFreeze({
@@ -192,11 +196,20 @@ const REGISTERED_POLICY_ARTIFACTS = deepFreeze({
     portals: "outward-edge-direction-derived-from-snapshot-arena-grid",
     bombing: "after-step-600-every-120-steps-when-unowned",
   },
+  "input-sequence-v1": {
+    artifact: "headless-registered-policy.v1",
+    scriptId: "input-sequence-v1",
+    input: "bounded-step-segments-of-online-input-state",
+    sequencing: "first-segment-whose-exclusive-until-step-is-greater-than-current-step",
+    fallback: "last-segment",
+    limits: { minimumSegments: 1, maximumSegments: 120, maximumUntilStep: 30000 },
+  },
 } as const);
 
 const REGISTERED_POLICY_HASHES = deepFreeze({
   "neutral-v1": "sha256:5d24b6f22e92ddd0621913e18b53af58f23a15180534ebaca6f0a1a277b80b4f",
   "waypoint-v1": "sha256:7701a427660306ff94bb561cb3e416c19bc878715baa722b11cb76ed8fc817c4",
+  "input-sequence-v1": "sha256:01c33d600c422aa5127e9c47011b86179a96fe426995d61df60d434960e65d83",
 } as const);
 
 const SNAPSHOT_TRACE_ARTIFACT = deepFreeze({
@@ -452,6 +465,21 @@ function createRegisteredPolicy(
     });
   }
   const config = asRecord(value, "scriptConfig");
+  if (scriptId === "input-sequence-v1") {
+    if (!Array.isArray(config.segments) || config.segments.length < 1 || config.segments.length > 120) {
+      throw new Error("input-sequence-v1 requires 1-120 segments");
+    }
+    let previousUntilStep = 0;
+    const segments = config.segments.map((value, index) => {
+      const segment = asRecord(value, `scriptConfig.segments[${index}]`);
+      if (!Number.isInteger(segment.untilStep) || (segment.untilStep as number) <= previousUntilStep || (segment.untilStep as number) > 30_000) {
+        throw new Error(`scriptConfig.segments[${index}].untilStep must increase within 1..30000`);
+      }
+      previousUntilStep = segment.untilStep as number;
+      return { untilStep: previousUntilStep, input: parseOnlineInput(segment.input, `scriptConfig.segments[${index}].input`) };
+    });
+    return ({ step }) => segments.find((segment) => step < segment.untilStep)?.input ?? segments.at(-1)!.input;
+  }
   if (!Array.isArray(config.route) || config.route.length === 0) throw new Error("waypoint-v1 requires a non-empty route");
   const route = config.route.map((value, index) => {
     const tile = asRecord(value, `scriptConfig.route[${index}]`);
@@ -480,6 +508,23 @@ function createRegisteredPolicy(
       skillHeld: false,
     };
   };
+}
+
+function parseOnlineInput(value: unknown, label: string): OnlineInputState {
+  const input = asRecord(value, label);
+  if (input.direction !== null && input.direction !== "up" && input.direction !== "down"
+    && input.direction !== "left" && input.direction !== "right") throw new Error(`${label}.direction is invalid`);
+  if (typeof input.bombPressed !== "boolean" || typeof input.detonatePressed !== "boolean"
+    || typeof input.skillPressed !== "boolean" || typeof input.skillHeld !== "boolean") {
+    throw new Error(`${label} action flags must be boolean`);
+  }
+  return deepFreeze({
+    direction: input.direction,
+    bombPressed: input.bombPressed,
+    detonatePressed: input.detonatePressed,
+    skillPressed: input.skillPressed,
+    skillHeld: input.skillHeld,
+  } as OnlineInputState);
 }
 
 function registeredPortalExitDirection(
@@ -539,7 +584,7 @@ function parsePolicies(value: unknown, activePlayerIds: readonly PlayerId[]): re
     let registered: Pick<ExecutablePolicy, "decide" | "scriptId" | "scriptHash" | "scriptConfig" | "configHash"> | null = null;
     if (mode === "registered") {
       const scriptId = policy.scriptId;
-      if (scriptId !== "neutral-v1" && scriptId !== "waypoint-v1") {
+      if (scriptId !== "neutral-v1" && scriptId !== "waypoint-v1" && scriptId !== "input-sequence-v1") {
         throw new Error(`registered policy ${id} has an unknown scriptId`);
       }
       registered = {

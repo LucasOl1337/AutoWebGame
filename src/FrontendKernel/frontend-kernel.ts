@@ -20,6 +20,20 @@ import type {
   SelectionRoute,
 } from "./CharacterSelection/selection-contract";
 import { normalizeSelectionNick } from "./CharacterSelection/selection-contract";
+import { BrowserRolloutSelectionEntryAdapter } from "../ContinuousRoom/continuous-room-selection-entry";
+import { CONTINUOUS_ROOM_ROLLOUT } from "../ContinuousRoom/continuous-room-rollout";
+import {
+  BrowserContinuousRoomCredentialStore,
+  ContinuousRoomCanaryClient,
+  FetchContinuousRoomCommandTransport,
+} from "../ContinuousRoom/continuous-room-canary-client";
+import {
+  ContinuousRoomSessionMachine,
+  parseContinuousRoomRoute,
+  type ContinuousRoomSessionClient,
+  type ContinuousRoomSessionIntent,
+  type ContinuousRoomSessionSnapshot,
+} from "../ContinuousRoom/continuous-room-session-machine";
 
 export type CanonicalExperience = "continuous-room" | "training" | "lab";
 
@@ -35,7 +49,8 @@ export type FrontendIntent =
   | { readonly type: "retry-identity" }
   | { readonly type: "open-account-access"; readonly returnTo?: string }
   | { readonly type: "navigate-back" }
-  | CharacterSelectionIntent;
+  | CharacterSelectionIntent
+  | ContinuousRoomSessionIntent;
 
 export type FrontendOperation = Readonly<{
   experience: CanonicalExperience;
@@ -115,6 +130,7 @@ export type FrontendSnapshot = Readonly<
       operation: null;
     }
   | CharacterSelectionSnapshot
+  | ContinuousRoomSessionSnapshot
 >;
 
 export interface FrontendKernelInterface {
@@ -129,6 +145,10 @@ type DelegatedRoute = "/game/play" | "/game/training" | "/game/lab";
 export type CharacterSelectionDependencies = Readonly<{
   preferences: SelectionPreferenceStore;
   entry: SelectionEntryAdapter;
+}>;
+
+export type ContinuousRoomDependencies = Readonly<{
+  createClient(): ContinuousRoomSessionClient;
 }>;
 
 type NavigationRequest = Readonly<{
@@ -231,6 +251,8 @@ export class FrontendKernel implements FrontendKernelInterface {
   private currentIdentity: IdentitySnapshot;
   private selectionMachine: CharacterSelectionMachineInterface | null = null;
   private unsubscribeSelection: (() => void) | null = null;
+  private continuousRoomMachine: ContinuousRoomSessionMachine | null = null;
+  private unsubscribeContinuousRoom: (() => void) | null = null;
   private selectionStartedWithoutPreference = false;
   private selectionNickEditedByUser = false;
   private disposed = false;
@@ -239,6 +261,7 @@ export class FrontendKernel implements FrontendKernelInterface {
     private readonly navigation: NavigationAdapter,
     private readonly identity: IdentityAdapter = new InMemoryIdentityAdapter(),
     private readonly selection: CharacterSelectionDependencies = defaultSelectionDependencies(),
+    private readonly continuousRoom: ContinuousRoomDependencies = defaultContinuousRoomDependencies(),
   ) {
     const temporaryNick = identity.readTemporaryNick();
     this.currentIdentity = loadingIdentity(temporaryNick);
@@ -286,6 +309,10 @@ export class FrontendKernel implements FrontendKernelInterface {
         if (intent.type === "edit-selection-nick") this.selectionNickEditedByUser = true;
         this.selectionMachine?.dispatch(intent);
       }
+      return;
+    }
+    if (this.snapshot.screen === "continuous-room") {
+      if (isContinuousRoomIntent(intent)) this.continuousRoomMachine?.dispatch(intent);
       return;
     }
     if (intent.type !== "activate-experience") return;
@@ -352,6 +379,7 @@ export class FrontendKernel implements FrontendKernelInterface {
     this.identityRequest?.abort();
     this.identityRequest = null;
     this.disposeSelectionMachine();
+    this.disposeContinuousRoomMachine();
     this.unsubscribeNavigation();
     this.listeners.clear();
   }
@@ -368,6 +396,11 @@ export class FrontendKernel implements FrontendKernelInterface {
       } else {
         this.navigation.replace("/");
       }
+      return;
+    }
+
+    if (this.snapshot.screen === "continuous-room") {
+      this.continuousRoomMachine?.dispatch({ type: "continuous-room-leave" });
       return;
     }
 
@@ -520,6 +553,12 @@ export class FrontendKernel implements FrontendKernelInterface {
 
   private snapshotForPath(pathname: string, identity: IdentitySnapshot): FrontendSnapshot {
     const normalized = normalizePath(pathname);
+    const continuousRoomId = parseContinuousRoomRoute(normalized);
+    if (continuousRoomId) {
+      this.disposeSelectionMachine();
+      return this.activateContinuousRoomMachine(continuousRoomId);
+    }
+    this.disposeContinuousRoomMachine();
     if (normalized === "/jogar/personagem") {
       return this.activateSelectionMachine("continuous-room", identity);
     }
@@ -560,6 +599,23 @@ export class FrontendKernel implements FrontendKernelInterface {
     this.selectionMachine = null;
     this.selectionStartedWithoutPreference = false;
     this.selectionNickEditedByUser = false;
+  }
+
+  private activateContinuousRoomMachine(roomId: string): ContinuousRoomSessionSnapshot {
+    if (this.continuousRoomMachine?.getSnapshot().roomId === roomId) return this.continuousRoomMachine.getSnapshot();
+    this.disposeContinuousRoomMachine();
+    this.continuousRoomMachine = new ContinuousRoomSessionMachine(roomId, this.continuousRoom.createClient());
+    this.unsubscribeContinuousRoom = this.continuousRoomMachine.subscribe((snapshot) => {
+      if (!this.disposed) this.update(snapshot);
+    });
+    return this.continuousRoomMachine.getSnapshot();
+  }
+
+  private disposeContinuousRoomMachine(): void {
+    this.unsubscribeContinuousRoom?.();
+    this.unsubscribeContinuousRoom = null;
+    this.continuousRoomMachine?.dispose();
+    this.continuousRoomMachine = null;
   }
 
   private persistJourneyNick(journey: SelectionJourney, identity: IdentitySnapshot): void {
@@ -793,13 +849,13 @@ function snapshotsEqual(left: FrontendSnapshot, right: FrontendSnapshot): boolea
 }
 
 function identityForSnapshot(snapshot: FrontendSnapshot): IdentitySnapshot {
-  if (snapshot.screen === "delegated") return loadingIdentity("Visitante");
+  if (snapshot.screen === "delegated" || snapshot.screen === "continuous-room") return loadingIdentity("Visitante");
   if (snapshot.screen === "character-selection") return loadingIdentity(snapshot.nick);
   return snapshot.identity;
 }
 
 function withIdentity(snapshot: FrontendSnapshot, identity: IdentitySnapshot): FrontendSnapshot {
-  if (snapshot.screen === "delegated" || snapshot.screen === "character-selection") return snapshot;
+  if (snapshot.screen === "delegated" || snapshot.screen === "character-selection" || snapshot.screen === "continuous-room") return snapshot;
   if (snapshot.screen === "launcher") {
     return launcherSnapshot(snapshot.route, snapshot.operation, snapshot.focusTarget, identity);
   }
@@ -864,15 +920,31 @@ function isCharacterSelectionIntent(intent: FrontendIntent): intent is Character
     || intent.type === "cancel-selection";
 }
 
+function isContinuousRoomIntent(intent: FrontendIntent): intent is ContinuousRoomSessionIntent {
+  return intent.type === "continuous-room-retry"
+    || intent.type === "continuous-room-leave"
+    || intent.type === "continuous-room-input";
+}
+
 function defaultSelectionDependencies(): CharacterSelectionDependencies {
   if (typeof window !== "undefined") {
+    const legacyEntry = new BrowserLegacySelectionEntryAdapter();
     return Object.freeze({
       preferences: new BrowserSelectionPreferenceStore(),
-      entry: new BrowserLegacySelectionEntryAdapter(),
+      entry: new BrowserRolloutSelectionEntryAdapter(CONTINUOUS_ROOM_ROLLOUT, legacyEntry),
     });
   }
   return Object.freeze({
     preferences: new InMemorySelectionPreferenceStore(),
     entry: new InMemorySelectionEntryAdapter(),
+  });
+}
+
+function defaultContinuousRoomDependencies(): ContinuousRoomDependencies {
+  return Object.freeze({
+    createClient: () => new ContinuousRoomCanaryClient(
+      new FetchContinuousRoomCommandTransport(),
+      new BrowserContinuousRoomCredentialStore(),
+    ),
   });
 }

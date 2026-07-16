@@ -15,6 +15,11 @@ import {
   characterSelectionInputIntent,
   renderCanonicalCharacterSelection,
 } from "./CharacterSelection/canonical-character-selection-view";
+import {
+  continuousRoomClickIntent,
+  renderContinuousRoomSession,
+} from "../ContinuousRoom/continuous-room-session-view";
+import "../ContinuousRoom/continuous-room-session.css";
 import "./canonical-arena-preview.css";
 import "./canonical-launcher.css";
 import "./canonical-launcher-signal-grid.css";
@@ -95,6 +100,11 @@ export class CanonicalLauncherView {
     const selectionIntent = characterSelectionClickIntent(button);
     if (selectionIntent) {
       this.kernel.dispatch(selectionIntent);
+      return;
+    }
+    const roomIntent = continuousRoomClickIntent(button);
+    if (roomIntent) {
+      this.kernel.dispatch(roomIntent);
       return;
     }
 
@@ -214,7 +224,9 @@ export class CanonicalLauncherView {
       ? this.renderLauncher(snapshot)
       : snapshot.screen === "character-selection"
         ? renderCanonicalCharacterSelection(snapshot)
-        : this.renderSecondary(snapshot);
+        : snapshot.screen === "continuous-room"
+          ? renderContinuousRoomSession(snapshot)
+          : this.renderSecondary(snapshot);
     this.renderArenaPreview();
     this.renderedRoute = snapshot.route;
 

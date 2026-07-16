@@ -63,10 +63,12 @@ export type SelectionEntryRequest = Readonly<{
   requestId: string;
   characterId: string;
   nick: string;
+  onProgress?: (label: string) => void;
 }>;
 
 export interface SelectionEntryAdapter {
   enter(request: SelectionEntryRequest, signal: AbortSignal): Promise<void>;
+  waitForCancellation?(journey: SelectionJourney): boolean;
 }
 
 export function normalizeSelectionNick(value: string):

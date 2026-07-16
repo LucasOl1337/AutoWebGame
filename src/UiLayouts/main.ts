@@ -13,7 +13,8 @@ const canonicalLauncherRoutes = new Set([
   "/configuracoes",
   "/laboratorio",
 ]);
-const isCanonicalLauncherRoute = canonicalLauncherRoutes.has(pathname);
+const isCanonicalLauncherRoute = canonicalLauncherRoutes.has(pathname)
+  || /^\/sala\/[A-Za-z0-9_-]{8,128}$/.test(pathname);
 
 if (PUBLIC_ROUTE_POINTER === "canonical" && isCanonicalLauncherRoute) {
   const root = document.querySelector<HTMLDivElement>("#app");

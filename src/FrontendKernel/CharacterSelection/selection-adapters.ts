@@ -122,6 +122,7 @@ export class InMemorySelectionEntryAdapter implements SelectionEntryAdapter {
   enter(request: SelectionEntryRequest, signal: AbortSignal): Promise<void> {
     return new Promise((resolve, reject) => {
       this.requests.push({ request, signal, resolve, reject });
+      signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
     });
   }
 
