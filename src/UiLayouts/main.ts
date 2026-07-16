@@ -1,3 +1,4 @@
+import "./match-roster-signals.css";
 import type { CanonicalExperience } from "../FrontendKernel/frontend-kernel";
 import { PUBLIC_ROUTE_POINTER } from "../FrontendKernel/public-route-pointer";
 

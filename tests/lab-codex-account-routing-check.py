@@ -24,6 +24,8 @@ def load_module(name: str, path: Path) -> Any:
 
 bot_manager = load_module("lab_routing_bot_manager", AUTO_DIR / "bot_manager.py")
 sys.modules.setdefault("bot_manager", bot_manager)
+model_validation = load_module("lab_routing_model_validation", AUTO_DIR / "model_validation.py")
+sys.modules.setdefault("model_validation", model_validation)
 
 
 def make_manager(accounts: list[dict[str, Any]]) -> Any:

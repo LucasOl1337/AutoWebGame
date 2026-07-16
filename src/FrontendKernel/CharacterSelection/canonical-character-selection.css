@@ -184,6 +184,79 @@
   box-shadow: inset 0 -4px var(--selection-accent);
 }
 
+.canonical-selection__selection-sigil {
+  position: absolute;
+  z-index: 1;
+  right: 10px;
+  bottom: 10px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(98, 217, 238, 0.16);
+  border-radius: 50%;
+  opacity: 0.22;
+  transform: rotate(-18deg) scale(0.76);
+  transition: opacity 180ms ease, transform 180ms ease, border-color 180ms ease;
+}
+
+.canonical-selection__selection-sigil::before,
+.canonical-selection__selection-sigil::after,
+.canonical-selection__selection-sigil > span {
+  content: "";
+  position: absolute;
+  display: block;
+  border: 1px solid currentColor;
+  color: var(--selection-accent);
+}
+
+.canonical-selection__selection-sigil::before {
+  inset: 4px;
+  border-radius: 50%;
+  border-style: dashed;
+}
+
+.canonical-selection__selection-sigil::after {
+  width: 11px;
+  height: 11px;
+  transform: rotate(45deg);
+}
+
+.canonical-selection__selection-sigil > span {
+  width: 4px;
+  height: 4px;
+  border: 0;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.canonical-selection__character--selected .canonical-selection__selection-sigil {
+  border-color: var(--selection-accent);
+  opacity: 1;
+  transform: rotate(0) scale(1);
+  box-shadow: 0 0 0 4px rgba(98, 217, 238, 0.08), 0 0 22px rgba(98, 217, 238, 0.42);
+  animation: character-selection-sigil 2.8s ease-in-out infinite;
+}
+
+.canonical-selection__character:hover:not(:disabled) .canonical-selection__selection-sigil,
+.canonical-selection__character:focus-visible .canonical-selection__selection-sigil {
+  border-color: rgba(98, 217, 238, 0.72);
+  opacity: 0.82;
+  transform: rotate(0) scale(0.92);
+}
+
+@keyframes character-selection-sigil {
+  0%,
+  100% {
+    box-shadow: 0 0 0 4px rgba(98, 217, 238, 0.08), 0 0 16px rgba(98, 217, 238, 0.28);
+  }
+
+  50% {
+    box-shadow: 0 0 0 7px rgba(98, 217, 238, 0.03), 0 0 28px rgba(98, 217, 238, 0.56);
+  }
+}
+
 .canonical-selection__portrait {
   position: relative;
   min-height: 100px;
@@ -429,6 +502,10 @@
     animation: none !important;
     transition: none !important;
   }
+
+  .canonical-selection__character--selected .canonical-selection__selection-sigil {
+    animation: none;
+  }
 }
 
 @media (forced-colors: active) {
@@ -446,5 +523,14 @@
   .canonical-selection__character--selected {
     outline: 4px solid Highlight;
     outline-offset: -5px;
+  }
+
+  .canonical-selection__selection-sigil,
+  .canonical-selection__selection-sigil::before,
+  .canonical-selection__selection-sigil::after,
+  .canonical-selection__selection-sigil > span {
+    color: CanvasText;
+    border-color: CanvasText;
+    box-shadow: none;
   }
 }

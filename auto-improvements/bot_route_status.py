@@ -5,10 +5,11 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from bot_manager import BotManager, compact_line
+from model_validation import assess_model_validation
 
 
 STATUS_LABELS = {
@@ -18,7 +19,6 @@ STATUS_LABELS = {
 }
 
 CONTROL_TEXT_RE = re.compile(r"[\x00-\x1f\x7f-\x9f]")
-MODEL_VALIDATION_MAX_AGE_SECONDS = 15 * 60
 
 
 def _safe_text(value: Any, fallback: str) -> str:
@@ -37,18 +37,6 @@ def _controller_for_next_start(profile: dict[str, Any]) -> tuple[str, str, str]:
     return provider, model or "padrão do provedor", reasoning or "padrão do provedor"
 
 
-def _parse_validation_time(value: Any) -> datetime | None:
-    if not value:
-        return None
-    try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
-
-
 def _model_validation_label(
     profile: dict[str, Any],
     provider: str,
@@ -56,24 +44,20 @@ def _model_validation_label(
     *,
     now: datetime | None = None,
 ) -> tuple[str, str]:
-    validation = profile.get("modelValidation")
-    status = ""
-    if isinstance(validation, dict):
-        status = compact_line(str(validation.get("status", "") or "")).lower()
-    if status == "ready" and isinstance(validation, dict):
-        validated_provider = compact_line(str(validation.get("provider", "") or ""))
-        validated_model = compact_line(str(validation.get("requestedModel", "") or ""))
-        validated_at = _parse_validation_time(validation.get("validatedAt"))
-        now_utc = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
-        age_seconds = max(0.0, (now_utc - validated_at).total_seconds()) if validated_at else None
-        if validated_provider != provider or validated_model != configured_model:
-            return "DESATUALIZADO · configuração mudou", "stale"
-        if age_seconds is None:
-            return "DESATUALIZADO · sem timestamp", "stale"
-        if age_seconds > MODEL_VALIDATION_MAX_AGE_SECONDS:
-            return "DESATUALIZADO · mais de 15 min", "stale"
+    assessment = assess_model_validation(profile, provider, configured_model, now=now)
+    status = str(assessment["status"])
+    reason = str(assessment["reason"])
+    age_seconds = assessment["ageSeconds"]
+    if status == "ready":
         age_minutes = max(0, int(age_seconds // 60))
         return f"VALIDADO · há {age_minutes} min", "ready"
+    if status == "stale":
+        labels = {
+            "configuration_changed": "DESATUALIZADO · configuração mudou",
+            "missing_timestamp": "DESATUALIZADO · sem timestamp",
+            "expired": "DESATUALIZADO · mais de 15 min",
+        }
+        return labels.get(reason, "DESATUALIZADO"), "stale"
     if status == "error":
         return "ERRO NA ÚLTIMA VALIDAÇÃO", "error"
     return "NÃO VALIDADO", "unvalidated"

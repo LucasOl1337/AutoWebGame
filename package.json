@@ -1,7 +1,7 @@
 {
   "name": "autowebgame",
   "private": true,
-  "version": "0.4.3",
+  "version": "0.4.4",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -24,6 +24,10 @@
     "pixellab:status": "node scripts/pixellab_orchestrator.mjs status --spec configs/pixellab-pack.v1.json",
     "sync:pixellab": "node scripts/import_pixellab_characters.mjs",
     "compile:esm": "node node_modules/typescript/bin/tsc -p tsconfig.runtime.json && node tests/patch-esm-imports.mjs",
+    "test:bot-evolution-action-registry": "node node_modules/typescript/bin/tsc -p tsconfig.runtime.json && node tests/patch-esm-imports.mjs && node tests/bot-evolution-action-registry-check.mjs",
+    "test:bot-evolution-runner": "node node_modules/typescript/bin/tsc -p tsconfig.runtime.json && node tests/patch-esm-imports.mjs && node tests/bot-evolution-headless-round-runner-check.mjs",
+    "test:bot-evolution-evidence": "node node_modules/typescript/bin/tsc -p tsconfig.runtime.json && node tests/patch-esm-imports.mjs && node tests/bot-evolution-round-evidence-check.mjs",
+    "test:bot-evolution-core": "node node_modules/typescript/bin/tsc -p tsconfig.runtime.json && node tests/patch-esm-imports.mjs && node tests/bot-evolution-core-check.mjs",
     "lab:bot-remote-control": "npm run compile:esm && node scripts/bot-remote-control-lab.mjs",
     "test:package-scripts-unique": "node tests/package-scripts-unique-check.mjs",
     "test:asset-loader-walk-cycle-warm": "npm run compile:esm && node tests/asset-loader-walk-cycle-warm-check.mjs",

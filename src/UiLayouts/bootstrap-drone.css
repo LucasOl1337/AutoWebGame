@@ -58,6 +58,20 @@
   content: none;
 }
 
+/* Readiness radar: the loading drone now reads as a live arena lock-on, not a
+   generic spinner. The error state above intentionally keeps this treatment off. */
+.bootstrap-state:not([data-state="error"]) .bootstrap-state__indicator {
+  outline: 1px dashed rgba(112, 229, 255, 0.62);
+  outline-offset: clamp(8px, 1.6vw, 13px);
+  box-shadow:
+    0 0 0 4px rgba(112, 229, 255, 0.05),
+    0 0 0 8px rgba(112, 229, 255, 0.1),
+    0 0 30px 10px rgba(36, 176, 214, 0.08);
+  animation:
+    bootstrap-drone-hover 1.25s ease-in-out infinite alternate,
+    bootstrap-readiness-pulse 2.2s ease-in-out infinite;
+}
+
 @keyframes bootstrap-drone-hover {
   from {
     transform: translateY(3px) rotate(-1deg);
@@ -91,8 +105,31 @@
   }
 }
 
+@keyframes bootstrap-readiness-pulse {
+  0%,
+  100% {
+    outline-color: rgba(112, 229, 255, 0.34);
+    box-shadow:
+      0 0 0 4px rgba(112, 229, 255, 0.03),
+      0 0 0 8px rgba(112, 229, 255, 0.06),
+      0 0 24px 8px rgba(36, 176, 214, 0.05);
+  }
+
+  50% {
+    outline-color: rgba(112, 229, 255, 0.82);
+    box-shadow:
+      0 0 0 4px rgba(112, 229, 255, 0.08),
+      0 0 0 10px rgba(112, 229, 255, 0.14),
+      0 0 38px 12px rgba(36, 176, 214, 0.12);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .bootstrap-state__indicator {
+    animation: none;
+  }
+
+  .bootstrap-state:not([data-state="error"]) .bootstrap-state__indicator {
     animation: none;
   }
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## [2026-07-16] — v0.4.4
+
+- A apresentação das partidas ganhou feedback de perigo, coleta, explosão, resultado de rodada e estado das equipes sem alterar as regras canônicas.
+- Launcher, seleção de personagem, conta, guia, HUD e labs receberam camadas visuais modulares e responsivas.
+- A arena `aurora-switchyard` entrou na rotação, elevando a biblioteca pública para dez temas.
+- O Bot Evolution Arena v0.1 foi incluído como módulo privado, com registro de ações, evidências de rodada e gates explícitos de confirmação.
+- A automação de melhorias corrige o bloqueio do `RLock` e centraliza a validação de frescor de modelos.
+- Protótipos antigos, ledgers de auditoria incompletos e artefatos dependentes de localhost foram excluídos da linha canônica.
+
+Relatório: `DocsDev/releases/release-v0.4.4.md`.
+
+---
+
 ## [2026-07-14] — v0.4.3
 
 - Bots passaram a avaliar melhor saturação, retorno e segurança de powerups, chutes e detonação remota.

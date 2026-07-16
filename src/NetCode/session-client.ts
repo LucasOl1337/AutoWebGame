@@ -466,6 +466,22 @@ export function formatSetupLoadingBrief(copy: SiteCopy, options: SetupLoadingBri
   };
 }
 
+export function formatLobbyEntryError(message: string, language: SiteLanguage): string {
+  const localizedMessages: Record<string, readonly [portuguese: string, english: string]> = {
+    "Lobby not found.": ["Lobby nao encontrado.", "Lobby not found."],
+    "Match already in progress. Pick another open room.": [
+      "Partida ja em andamento. Escolha outra sala aberta.",
+      "Match already in progress. Pick another open room.",
+    ],
+    "Lobby full. Pick another room or wait for a slot.": [
+      "Lobby lotado. Escolha outra sala ou aguarde uma vaga.",
+      "Lobby full. Pick another room or wait for a slot.",
+    ],
+  };
+  const localized = localizedMessages[message];
+  return localized ? localized[language === "pt" ? 0 : 1] : message;
+}
+
 export function formatUsernameInputTitle(language: SiteLanguage): string {
   return language === "pt"
     ? `Use ${USERNAME_MIN_LENGTH} a ${USERNAME_MAX_LENGTH} caracteres: letras, numeros e underscore.`
@@ -1375,7 +1391,7 @@ export class OnlineSessionClient implements OnlineSessionBridge {
           this.updateLocation(null);
         }
         this.renderAll();
-        this.setStatus(message.message);
+        this.setStatus(formatLobbyEntryError(message.message, this.language));
         break;
       default:
         break;

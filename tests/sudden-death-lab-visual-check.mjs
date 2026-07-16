@@ -43,6 +43,15 @@ const signals = {
   sharedEvidence: source.includes('from "./sudden-death-lab-evidence"'),
   destinationSignal: source.includes("candidateTile: scenario.destinationTile")
     && renderedMarkup.includes("destino pontuado: (2,3)"),
+  pressureLabel: css.includes('content: "FECHAMENTO DE BORDA  //  ROTA SEGURA"')
+    && css.includes(".sd-board::before"),
+  routeTrace: css.includes(".sd-lane::before")
+    && css.includes("linear-gradient(90deg, #ff7667 0 22%, #edb65a 22% 48%, #67d9c6 48% 100%)"),
+  pressureRunner: css.includes(".sd-lane::after")
+    && css.includes("@keyframes sd-pressure-runner")
+    && css.includes("left: calc(100% - 14px)"),
+  motionFallback: css.includes(".sd-board::before,")
+    && css.includes(".sd-lane::after { animation: none; }"),
 };
 
 assert.ok(Object.values(signals).every(Boolean), `contrato visual incompleto: ${JSON.stringify(signals)}`);

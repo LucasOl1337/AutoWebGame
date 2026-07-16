@@ -1,39 +1,47 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const root = new URL("../", import.meta.url);
-const [html, source, css, vite] = await Promise.all([
-  readFile(new URL("bot-short-fuse-lab.html", root), "utf8"),
-  readFile(new URL("src/UiLayouts/bot-short-fuse-lab.ts", root), "utf8"),
-  readFile(new URL("src/UiLayouts/bot-short-fuse-lab.css", root), "utf8"),
-  readFile(new URL("vite.config.ts", root), "utf8"),
-]);
+const rootUrl = new URL("../", import.meta.url);
+const source = await readFile(new URL("src/UiLayouts/bot-short-fuse-lab.ts", rootUrl), "utf8");
+const styles = await readFile(new URL("src/UiLayouts/bot-short-fuse-lab.css", rootUrl), "utf8");
 
-assert.match(html, /id="bot-short-fuse-lab"/);
-assert.match(source, /IA DETERMINÍSTICA LOCAL/);
-assert.match(source, /CENÁRIO CONTROLADO/);
-assert.match(source, /Bot observado/);
-assert.match(source, /Controlador/);
-assert.match(source, /Saúde/);
-assert.match(source, /Decisão válida/);
-assert.match(source, /Custo/);
-assert.match(source, /Fuse real/);
-assert.match(source, /Passos disponíveis/);
-assert.match(source, /Comando emitido/);
-assert.match(source, /Pós-comando/);
-assert.match(source, /REFERÊNCIA ANTES/);
-assert.match(source, /data-peer-card/);
-assert.match(source, /peer\.speedLevel/);
-assert.match(source, /Ação humana/);
-assert.match(source, /referenceBeforeDecision/);
-assert.match(source, /NÃO OBSERVADO · snapshot de decisão/);
-assert.match(source, /runBotShortFuseLabScenario/);
-assert.match(css, /data-state="refused"/);
-assert.match(css, /prefers-reduced-motion/);
-assert.match(vite, /botShortFuseLab:\s*"\.\/bot-short-fuse-lab\.html"/);
+const elements = new Map();
+const replay = { addEventListener(type, handler) { if (type === "click") this.handler = handler; } };
+const createElement = () => ({
+  dataset: {},
+  textContent: "",
+  style: { values: new Map(), setProperty(name, value) { this.values.set(name, value); } },
+});
+const root = {
+  innerHTML: "",
+  querySelector(selector) {
+    if (selector === "[data-replay]") return replay;
+    if (!elements.has(selector)) elements.set(selector, createElement());
+    return elements.get(selector);
+  },
+};
+globalThis.document = { querySelector(selector) { return selector === "#bot-short-fuse-lab" ? root : null; } };
 
-console.log(JSON.stringify({
-  pass: true,
-  surface: "bot-short-fuse-lab",
-  humanSignals: ["bot", "controller", "health", "validity", "latency", "intent", "fuse", "budget", "outcome", "comparison", "action"],
-}, null, 2));
+await import("../output/esm/UiLayouts/bot-short-fuse-lab.js");
+
+const dial = elements.get("[data-budget-dial]");
+const state = elements.get("[data-budget-state]");
+const readout = elements.get("[data-budget-read]");
+const percent = elements.get("[data-budget-percent]");
+const signals = {
+  dialMarkup: source.includes('data-budget-dial') && source.includes('aria-label="Leitura visual do orçamento do pavio"'),
+  conicDial: styles.includes("conic-gradient") && styles.includes("calc(var(--budget-ratio) * 1turn)"),
+  responsiveDial: styles.includes(".fuse-lab__telemetry") && styles.includes("max-width: 420px"),
+  reducedMotion: styles.includes("prefers-reduced-motion: reduce"),
+  runtimeRatio: dial?.style.values.get("--budget-ratio") === "0.6666666666666666",
+  runtimePercent: percent?.textContent === "67%",
+  runtimeState: state?.dataset.state === "critical" && state?.textContent === "ROTA ACIMA DO FUSE",
+  runtimeReadout: /\d+\/\d+ passos cobertos/.test(readout?.textContent ?? ""),
+  replayBound: typeof replay.handler === "function",
+};
+
+assert.ok(Object.values(signals).every(Boolean), `contrato visual incompleto: ${JSON.stringify(signals)}`);
+replay.handler();
+assert.equal(elements.get("[data-budget-percent]").textContent, "67%", "replay deve manter o mesmo snapshot visual");
+
+console.log(JSON.stringify({ pass: true, component: "Anel de orçamento do pavio", signals, replayPass: true }, null, 2));

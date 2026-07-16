@@ -129,7 +129,7 @@ export class LauncherShell {
               <div class="launcher-mode-status" aria-label="Status do modo selecionado">
                 <span class="launcher-mode-status__signal"><i aria-hidden="true"></i>${selected.kicker}</span>
                 <span><small>Cadência</small><strong>${selected.id === "play" ? "60 tick" : selected.id === "training" ? "local" : "agente"}</strong></span>
-                <span><small>Sistema</small><strong>pronto</strong></span>
+                <span><small>Sistema</small><strong>${selected.id === "lab" ? "verifique o agente" : "disponível"}</strong></span>
               </div>
               <h2>${selected.title}</h2>
               <p class="launcher-lede">${selected.summary}</p>
@@ -180,7 +180,7 @@ export class LauncherShell {
             </div>
 
             <footer class="launcher-sheet__footer">
-              <span>Build 0.4.3</span>
+            <span>Build 0.4.4</span>
               <span>Teclado · Touch · Web</span>
               <span>Shell invariável / mapa variável</span>
             </footer>

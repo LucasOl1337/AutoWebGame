@@ -7,8 +7,8 @@ const [i18n, sessionClient, css] = await Promise.all([
 ]);
 
 const checks = {
-  hasPortugueseBadge: i18n.includes('releaseBadge: "v0.4.3 no ar"'),
-  hasEnglishBadge: i18n.includes('releaseBadge: "v0.4.3 live"'),
+  hasPortugueseBadge: i18n.includes('releaseBadge: "v0.4.4 no ar"'),
+  hasEnglishBadge: i18n.includes('releaseBadge: "v0.4.4 live"'),
   hasPortuguesePatchTitle: i18n.includes('releaseTitle: "Novidades do patch"'),
   hasEnglishPatchTitle: i18n.includes('releaseTitle: "Patch highlights"'),
   rendersReleaseBadge: sessionClient.includes('landingReleaseBadge.className = "experience-release-badge"'),

@@ -9,8 +9,10 @@
   position: absolute;
   z-index: 2;
   inset: clamp(10px, 2.2vw, 28px);
+  width: auto;
   pointer-events: none;
   border-radius: clamp(16px, 2vw, 28px);
+  box-sizing: border-box;
 }
 
 .experience-shell[data-screen="match"] .experience-match__viewport:has(canvas[data-game-canvas="true"])::before {
@@ -30,6 +32,8 @@
 
 .experience-shell[data-screen="match"] .experience-match__viewport:has(canvas[data-game-canvas="true"])::after {
   inset: clamp(15px, 2.7vw, 34px);
+  background: none;
+  animation: none;
   border: 1px solid rgba(255, 255, 255, 0.035);
   box-shadow:
     inset 0 0 42px rgba(112, 229, 255, 0.025),

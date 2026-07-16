@@ -272,6 +272,7 @@ const _sessionModels = new Map<string, string>();
 interface LivePlayerPanelElements {
   model: HTMLElement;
   status: HTMLElement;
+  signal: HTMLElement;
   heartbeat: HTMLElement;
   decisionAge: HTMLElement;
   movement: HTMLElement;
@@ -584,6 +585,20 @@ function _renderLivePlayerPanel(
         : `Sem controlador · ${configuredModel} pendente`;
   panel.status.textContent = presentation.status;
   panel.status.dataset.tone = presentation.tone;
+  const signalState = !Number.isFinite(heartbeatAgeMs)
+    ? "lost"
+    : heartbeatAgeMs < 2_500
+      ? "live"
+      : heartbeatAgeMs < 10_000
+        ? "aging"
+        : "lost";
+  const signalLabel = signalState === "live"
+    ? "forte"
+    : signalState === "aging"
+      ? "envelhecendo"
+      : "indisponível";
+  panel.signal.dataset.state = signalState;
+  panel.signal.setAttribute("aria-label", `Sinal do heartbeat: ${signalLabel}`);
   panel.heartbeat.textContent = Number.isFinite(heartbeatAgeMs) ? `${(heartbeatAgeMs / 1000).toFixed(1)}s` : "—";
   panel.decisionAge.textContent = Number.isFinite(decisionAgeMs)
     ? `${decision?.requestId ? `#${decision.requestId} · ` : ""}${decision?.microActionIndex != null ? `ação ${decision.microActionIndex + 1}/${decision.microActions?.length ?? 1} · ` : ""}${decision?.stateTick != null ? `tick ${decision.stateTick} · ` : ""}${decision?.latencyMs != null ? `${decision.latencyMs}ms · ` : ""}${(decisionAgeMs / 1000).toFixed(1)}s atrás${presentation.planExpired && presentation.freshness ? ` · expirado há ${((presentation.freshness.ageMs - presentation.freshness.ttlMs) / 1000).toFixed(1)}s` : ""}`
@@ -1075,6 +1090,9 @@ function mountLiveLabHud(container: HTMLElement): void {
               <small>CONTROLADOR ATUAL</small>
               <strong data-model>Modelo aguardando</strong>
             </div>
+            <span class="lab-live-player__signal" data-signal data-state="lost" aria-label="Sinal do heartbeat: indisponível">
+              <i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i>
+            </span>
             <span class="lab-live-player__status" data-status data-tone="idle">SEM HEARTBEAT</span>
           </header>
           <dl class="lab-live-player__metrics">
@@ -1110,6 +1128,7 @@ function mountLiveLabHud(container: HTMLElement): void {
     _livePlayerPanels.set(pid, {
       model: required("[data-model]"),
       status: required("[data-status]"),
+      signal: required("[data-signal]"),
       heartbeat: required("[data-heartbeat]"),
       decisionAge: required("[data-decision-age]"),
       movement: required("[data-movement]"),

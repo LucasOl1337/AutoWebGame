@@ -825,7 +825,7 @@
   }
 
   .experience-screen--landing .experience-hero__copy h1 {
-    font-size: clamp(3rem, 15.5vw, 4.4rem);
+    font-size: clamp(2.6rem, 13vw, 4rem);
     line-height: 0.86;
     white-space: normal;
   }
@@ -866,7 +866,11 @@
 
   .experience-screen--landing .experience-actions__group--secondary .experience-button {
     min-height: 50px;
+    padding-inline: 8px;
     font-size: 0.62rem;
+    line-height: 1.25;
+    text-align: center;
+    white-space: normal;
   }
 
   .experience-screen--landing .experience-landing-advanced__summary {

@@ -1,40 +1,39 @@
 CodeGraph inventory status
-Generated at: 2026-07-15T11:34:01-03:00
+Generated at: 2026-07-16T10:24:08-03:00
 Repository: C:\Projetos\AutoWebGame
 CodeGraph CLI version: 0.9.4
 
 Setup performed:
-- Read README.md from the repository.
-- Repository AGENTS.md instructions were applied before this run.
-- A clean clone at commit `f415666` was initialized and indexed so dirty shared-workspace files were excluded.
-- Sync result: clean committed state indexed and reported healthy.
-- MCP CodeGraph tools were available and used for structural context.
+- Repository AGENTS.md instructions and DocsDev/codegraph/inventory.md were applied.
+- The production-matched commit 88d4aa3 was confirmed as the canonical baseline.
+- The consolidated v0.4.4 working tree was synced after all architecture changes.
+- CodeGraph context and impact queries were used before shared gameplay changes were accepted.
 
 Index status:
-- Files indexed: 386
-- Total nodes: 7,386
-- Total edges: 14,230
-- Database size: 11.93 MB
+- Files indexed: 303
+- Total nodes: 6,318
+- Total edges: 12,590
+- Database size: 12.05 MB
 - Backend: node:sqlite built-in, full WAL + FTS5
 - Journal mode: wal
 - Status: OK, index is up to date
 
 Nodes by kind:
-- constant: 3,358
-- function: 1,163
-- method: 1,035
-- import: 825
-- variable: 341
-- file: 384
-- interface: 156
-- type_alias: 66
-- class: 58
+- constant: 2,549
+- function: 1,080
+- method: 1,006
+- import: 720
+- variable: 337
+- file: 302
+- interface: 191
+- type_alias: 81
+- class: 52
 
 Files by language:
-- javascript: 286
-- typescript: 68
-- python: 30
-- yaml: 2
+- javascript: 202
+- typescript: 69
+- python: 31
+- yaml: 1
 
 Notes:
 - Unsupported/static assets such as CSS, HTML, images, JSON manifests and binary assets are not represented as CodeGraph source files unless imported through supported code.

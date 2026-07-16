@@ -217,6 +217,23 @@
         "warm timber crate family for breakability contrast"
       ],
       "pixellabDescription": "1). dark charcoal kiln brick floor tile with calm center and subtle mortar 2). ember-lit route lane tile with thin orange edge glow only 3). protected spawn tile with restrained circular forge mark and open center 4). heavy blackened furnace wall block with crisp top lip and strong silhouette 5). warm breakable charcoal wood crate with iron bands and clear crack seams"
+    },
+    {
+      "id": "aurora-switchyard",
+      "name": "Aurora Switchyard",
+      "status": "active",
+      "renderMode": "procedural",
+      "layoutTargets": [
+        "deep floor value keeps bombs, flames, and pickups above the ambient atmosphere",
+        "cyan route cuts form a quick visual network without filling tile centers",
+        "amber spawn diamonds orient players while blockers stay silhouette-first"
+      ],
+      "visualTargets": [
+        "indigo night stone and cool steel create a transit-yard identity",
+        "signal amber is reserved for spawn and portal landmarks",
+        "coral cargo crates preserve a warm breakable category against the cool board"
+      ],
+      "pixellabDescription": "clean aurora switchyard arena, deep indigo rail stone, cyan route inlays, restrained amber signal spawn diamonds, cool steel walls, coral cargo crates, crisp low top-down readability, minimal texture noise"
     }
   ]
 }

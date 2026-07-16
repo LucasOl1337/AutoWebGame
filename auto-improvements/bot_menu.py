@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 import webbrowser
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.request import urlopen
@@ -34,6 +34,7 @@ try:
     from insights_module import run_insights
     from manager_agent import run_manager, show_tasks
     from worker_agent import run_all as worker_run_all
+    from model_validation import assess_model_validation
 except ModuleNotFoundError:
     from auto_improvements.bot_manager import BotManager, PLAYSTYLE_PRESETS, AGGRESSION_PRESETS
     from auto_improvements.model_manager import (
@@ -46,6 +47,7 @@ except ModuleNotFoundError:
     from auto_improvements.insights_module import run_insights
     from auto_improvements.manager_agent import run_manager, show_tasks
     from auto_improvements.worker_agent import run_all as worker_run_all
+    from auto_improvements.model_validation import assess_model_validation
 
 
 ROOT = Path(__file__).resolve().parent
@@ -60,7 +62,6 @@ BROKER_BASE = f"http://127.0.0.1:{BROKER_PORT}"
 # npm command (Windows needs npm.cmd)
 NPM = "npm.cmd" if os.name == "nt" else "npm"
 _SPAWNED_CONSOLE_PROCS: list[subprocess.Popen[Any]] = []
-MODEL_VALIDATION_MAX_AGE_SECONDS = 15 * 60
 
 
 # ---------------------------------------------------------------------------
@@ -584,51 +585,27 @@ def _validation_age_label(age_seconds: float) -> str:
     return f"{int(age_seconds // 3600)}h"
 
 
-def _parse_validation_time(value: Any) -> datetime | None:
-    if not value:
-        return None
-    try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
-
-
 def model_validation_summary(
     profile: dict[str, Any],
     *,
     now: datetime | None = None,
 ) -> dict[str, str]:
     v = profile.get("modelValidation", {}) if isinstance(profile.get("modelValidation"), dict) else {}
-    status = str(v.get("status", "unvalidated") or "unvalidated").lower()
     current_provider = compact_line(str(profile.get("provider", "") or ""))
     current_model = compact_line(str(profile.get("model", "") or ""))
-    validated_provider = compact_line(str(v.get("provider", "") or ""))
-    validated_model = compact_line(str(v.get("requestedModel", "") or ""))
-    validated_at = _parse_validation_time(v.get("validatedAt"))
-    now_utc = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
-    age_seconds = max(0.0, (now_utc - validated_at).total_seconds()) if validated_at else None
+    assessment = assess_model_validation(profile, current_provider, current_model, now=now)
+    status = str(assessment["status"])
+    reason = str(assessment["reason"])
+    age_seconds = assessment["ageSeconds"]
     latency = v.get("latencyMs")
     latency_label = f"{max(0, int(latency))}ms" if isinstance(latency, (int, float)) else ""
     age_label = _validation_age_label(age_seconds) if age_seconds is not None else ""
 
-    configuration_changed = status == "ready" and (
-        validated_provider != current_provider
-        or validated_model != current_model
-    )
-    expired = status == "ready" and age_seconds is not None and age_seconds > MODEL_VALIDATION_MAX_AGE_SECONDS
-    missing_timestamp = status == "ready" and validated_at is None
-
-    if configuration_changed:
-        status = "stale"
+    if reason == "configuration_changed":
         detail = "Model configuration changed after validation. Validate model now."
-    elif expired:
-        status = "stale"
+    elif reason == "expired":
         detail = "Last model validation is older than 15 minutes. Validate model now."
-    elif missing_timestamp:
-        status = "stale"
+    elif reason == "missing_timestamp":
         detail = "Legacy validation has no timestamp. Validate model now."
     elif status == "ready":
         detail = "Model validated for the current configuration."

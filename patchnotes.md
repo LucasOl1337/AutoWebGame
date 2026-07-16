@@ -1,3 +1,29 @@
+# Patch Notes — 2026-07-16 v0.4.4
+
+**Projeto:** AutoWebGame / BOMBA PvP
+
+**Baseline público:** produção canônica em `88d4aa3`
+
+**Estado:** consolidado para publicação no GitHub e em produção
+
+## Para quem joga
+
+- Explosões, zonas de perigo, powerups, auras e resultados de rodada ficaram mais fáceis de ler.
+- Launcher, seleção, conta, roster e tela de partida comunicam melhor o estado atual sem alterar o fluxo principal.
+- A nova arena `Aurora Switchyard` amplia a rotação para dez atmosferas.
+- Erros do lobby e coleta remota agora têm feedback localizado e coerente com o estado real.
+
+## Invisível, mas importante
+
+- O Bot Evolution Arena entra apenas como módulo privado, protegido por gates de confirmação e segurança.
+- A automação de melhorias evita deadlock e compartilha um único contrato de validação de modelos.
+- Build canônico, checks focados, testes Python e auditoria de dependências formam o gate desta release.
+- Nenhuma migração, alteração de DNS, dado remoto ou segredo faz parte do patch.
+
+Relatório: `DocsDev/releases/release-v0.4.4.md` e `DocsDev/releases/release-v0.4.4.json`.
+
+---
+
 # Patch Notes — 2026-07-14 v0.4.3
 
 **Projeto:** AutoWebGame / BOMBA PvP

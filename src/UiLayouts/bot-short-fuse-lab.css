@@ -38,6 +38,18 @@ button { font: inherit; }
 .fuse-lab__route > p { margin: 10px 0 0; color: #8f849c; font-size: 12px; }
 
 .fuse-lab__decision { min-width: 0; padding: 34px; background: linear-gradient(135deg, rgba(111, 78, 145, .12), transparent 60%); }
+.fuse-lab__telemetry { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; padding: 12px; background: rgba(5, 4, 9, .34); border: 1px solid #342d40; border-radius: 12px; }
+.fuse-lab__dial { --budget-ratio: 0; position: relative; display: grid; width: 78px; height: 78px; flex: 0 0 auto; place-items: center; align-content: center; background: conic-gradient(#ffb14a calc(var(--budget-ratio) * 1turn), #342b3d 0); border-radius: 50%; box-shadow: 0 0 26px rgba(255, 146, 67, .13); }
+.fuse-lab__dial::before { position: absolute; inset: 7px; content: ""; background: #100e17; border: 1px solid #45364b; border-radius: 50%; }
+.fuse-lab__dial strong, .fuse-lab__dial small { position: relative; z-index: 1; }
+.fuse-lab__dial strong { color: #fff3dc; font-size: 18px; line-height: 1; }
+.fuse-lab__dial small { margin-top: 5px; color: #a995a7; font-size: 8px; font-weight: 900; letter-spacing: .14em; }
+.fuse-lab__telemetry-copy { min-width: 0; }
+.fuse-lab__telemetry-copy span { display: block; color: #ffbf6a; font-size: 9px; font-weight: 950; letter-spacing: .12em; }
+.fuse-lab__telemetry-copy span[data-state="critical"] { color: #ff9878; }
+.fuse-lab__telemetry-copy span[data-state="viable"] { color: #6df0bb; }
+.fuse-lab__telemetry-copy strong { display: block; margin-top: 5px; color: #fff8ef; font-size: 16px; overflow-wrap: anywhere; }
+.fuse-lab__telemetry-copy p { margin: 5px 0 0; color: #9d91aa; font-size: 11px; line-height: 1.35; }
 .fuse-lab__decision > span { display: inline-flex; padding: 6px 8px; color: #b9afc6; border: 1px solid #4c425a; border-radius: 6px; font-size: 10px; font-weight: 950; letter-spacing: .1em; }
 .fuse-lab__decision > span[data-state="refused"] { color: #ffd08a; background: rgba(255, 162, 65, .08); border-color: #8a5729; }
 .fuse-lab__decision h2 { margin: 18px 0 8px; overflow-wrap: anywhere; color: #fffaf3; font-size: 31px; }
@@ -70,6 +82,7 @@ button { font: inherit; }
   .fuse-lab__identity { grid-template-columns: repeat(2, 1fr); }
   .fuse-lab__stage, .fuse-lab__comparison { grid-template-columns: 1fr; }
   .fuse-lab__route, .fuse-lab__decision { padding: 24px; }
+  .fuse-lab__telemetry { max-width: 420px; }
   .fuse-lab__footer button { width: 100%; }
 }
 

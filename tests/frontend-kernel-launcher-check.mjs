@@ -5,6 +5,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 const css = read("src/FrontendKernel/canonical-launcher.css");
 const pointer = read("src/FrontendKernel/public-route-pointer.ts");
 const main = read("src/UiLayouts/main.ts");
+const view = read("src/FrontendKernel/canonical-launcher-view.ts");
 const landing = read("index.html");
 
 assert.match(css, /:focus-visible/);
@@ -18,6 +19,9 @@ assert.match(pointer, /export const PUBLIC_ROUTE_POINTER/);
 assert.match(pointer, /"canonical" \| "legacy"/);
 assert.match(pointer, /VITE_PUBLIC_ROUTE_POINTER=legacy npm run deploy:cloudflare/);
 assert.match(main, /PUBLIC_ROUTE_POINTER === "canonical"/);
+assert.match(view, /data-canonical-arena-preview/);
+assert.match(view, /previewSource/);
+assert.match(view, /fallbackUsed/);
 for (const route of ["/", "/game", "/como-jogar", "/conta", "/ajuda", "/configuracoes", "/laboratorio"]) {
   assert.ok(main.includes(`"${route}"`), `canonical route pointer must include ${route}`);
 }

@@ -328,7 +328,9 @@ class ConcurrentTurnCoordinator:
     """Bounded model concurrency with newest-completed response ordering."""
 
     def __init__(self, max_in_flight: int = MAX_IN_FLIGHT_MODEL_CALLS) -> None:
-        self._lock = threading.Lock()
+        # Callbacks such as heartbeat publication may need a consistent snapshot
+        # of this coordinator while the transition is being serialized.
+        self._lock = threading.RLock()
         self._max_in_flight = max(1, int(max_in_flight))
         self._next_request_id = 1
         self._in_flight: dict[int, dict[str, int]] = {}

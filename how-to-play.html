@@ -7,6 +7,7 @@
     <meta name="description" content="Guia rapido de BOMBA PvP: objetivo, controles, leitura da arena, bombas, flames, powerups e primeiros passos para jogar melhor." />
     <link rel="icon" href="/Assets/UiLayouts/ICON.png" />
     <link rel="stylesheet" href="/src/UiLayouts/how-to-play-powerup-compass.css" />
+    <link rel="stylesheet" href="/src/UiLayouts/how-to-play-fuse-lens.css" />
     <style>
       :root {
         --bg: #050608;
@@ -803,6 +804,44 @@
           <article class="tile">
             <h3 class="accent-purple">Ultimates mudam leitura</h3>
             <p>Blink, dash, beam e surge quebram expectativas. Guarde habilidade para sair de prisao ou fechar abate.</p>
+          </article>
+          <article id="fuse-lens" class="tile fuse-lens" aria-labelledby="fuse-lens-title">
+            <div class="fuse-lens__intro">
+              <span class="section-label">Tempo vira espaço</span>
+              <h3 id="fuse-lens-title" class="accent-red">Lente do pavio</h3>
+              <p>Plante a bomba, confira a linha de explosão e saia antes do vermelho fechar o corredor. O pavio não é contagem regressiva: é o tempo que você comprou para reposicionar a rodada.</p>
+              <div class="fuse-lens__rule"><span aria-hidden="true">↳</span><strong>Regra de ouro</strong><span>nunca termine no mesmo eixo da bomba.</span></div>
+            </div>
+            <div class="fuse-lens__visual" aria-label="Ciclo visual do pavio: armar, ler e sair">
+              <div class="fuse-lens__scene" aria-hidden="true">
+                <span class="fuse-lens__lane fuse-lens__lane--safe"></span>
+                <span class="fuse-lens__lane fuse-lens__lane--danger"></span>
+                <span class="fuse-lens__bomb"></span>
+                <span class="fuse-lens__player">P1</span>
+                <span class="fuse-lens__flame"></span>
+              </div>
+              <ol class="fuse-lens__stages">
+                <li class="fuse-lens__stage fuse-lens__stage--armed">
+                  <span class="fuse-lens__step">01</span>
+                  <strong>ARMAR</strong>
+                  <small>plante e abra a rota</small>
+                </li>
+                <li class="fuse-lens__stage fuse-lens__stage--read">
+                  <span class="fuse-lens__step">02</span>
+                  <strong>LER</strong>
+                  <small>veja linha e alcance</small>
+                </li>
+                <li class="fuse-lens__stage fuse-lens__stage--escape">
+                  <span class="fuse-lens__step">03</span>
+                  <strong>SAIR</strong>
+                  <small>quebre o eixo vermelho</small>
+                </li>
+              </ol>
+              <div class="fuse-lens__meter" aria-label="Janela segura antes da explosão">
+                <span class="fuse-lens__meter-fill"></span>
+                <span class="fuse-lens__meter-label">janela segura <strong>→</strong> alcance das flames</span>
+              </div>
+            </div>
           </article>
           <article class="tile powerup-compass" aria-labelledby="powerup-compass-title">
             <div class="powerup-compass__intro">

@@ -1,0 +1,44 @@
+{
+  "brand": { "name": "AutoWebGame", "vendor": "BOMBA PvP" },
+  "version": "v0.4.4",
+  "date": "2026-07-16",
+  "title": "Consolidação canônica e feedback de arena",
+  "baseline": {
+    "commit": "88d4aa3069c631a136c2b1cd5cb9ea05f3040995",
+    "source": "production-artifact-match"
+  },
+  "semverDecision": "patch-additive-non-breaking",
+  "integrated": [
+    "presentation-only gameplay feedback",
+    "responsive frontend state layers",
+    "aurora-switchyard arena theme",
+    "private Bot Evolution Arena v0.1 modules",
+    "auto-improvement concurrency and model validation fixes",
+    "localized lobby errors and observable remote pickup audio"
+  ],
+  "removed": [
+    "legacy launcher visual experiment",
+    "localhost-dependent CDP preview check",
+    "temporary coordination reports and incomplete ledgers",
+    "obsolete release branch and archive/backup tags"
+  ],
+  "constraints": {
+    "remoteDataChanged": false,
+    "migrationsChanged": false,
+    "dnsChanged": false,
+    "secretsChanged": false
+  },
+  "validation": {
+    "canonicalBuild": "required",
+    "esmCompile": "required",
+    "focusedNodeChecks": 51,
+    "pythonTests": 13,
+    "dependencyAudit": "0 vulnerabilities",
+    "productionSmoke": "required-after-deploy"
+  },
+  "publication": {
+    "tag": "v0.4.4",
+    "worker": "autowebgame-online",
+    "domains": ["bombapvp.com", "bombpvp.com"]
+  }
+}

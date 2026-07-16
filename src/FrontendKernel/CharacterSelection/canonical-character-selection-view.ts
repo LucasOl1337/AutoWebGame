@@ -20,6 +20,7 @@ export function renderCanonicalCharacterSelection(snapshot: CharacterSelectionSn
       >
         <span class="canonical-selection__portrait" aria-hidden="true">
           <span class="canonical-selection__index">0${index + 1}</span>
+          <span class="canonical-selection__selection-sigil"><span></span></span>
           <img src="/Assets/Characters/Animations/${encodeURIComponent(character.id)}/idle-south-0.png" alt="" draggable="false">
         </span>
         <strong>${escapeHtml(character.name)}</strong>

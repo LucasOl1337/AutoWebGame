@@ -1,0 +1,123 @@
+.account-session__beacon {
+  position: relative;
+  margin: 0 0 26px;
+  padding: 15px 14px 13px;
+  border: 1px solid rgba(139, 233, 168, 0.24);
+  background:
+    linear-gradient(135deg, rgba(139, 233, 168, 0.08), transparent 54%),
+    rgba(139, 233, 168, 0.025);
+  overflow: hidden;
+}
+
+.account-session__beacon::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(139, 233, 168, 0.11), transparent);
+  transform: translateX(-100%);
+  animation: account-beacon-scan 3.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.account-session__beacon-head,
+.account-session__beacon-item {
+  position: relative;
+  z-index: 1;
+}
+
+.account-session__beacon-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--account-muted);
+  font: 700 9px/1.2 ui-monospace, monospace;
+  letter-spacing: 0.14em;
+}
+
+.account-session__beacon-head strong {
+  color: var(--account-green);
+  font-weight: 800;
+  text-shadow: 0 0 12px rgba(139, 233, 168, 0.46);
+}
+
+.account-session__beacon-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.account-session__beacon-item {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(203, 227, 211, 0.12);
+}
+
+.account-session__beacon-mark {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--account-green);
+  border-radius: 50%;
+  color: var(--account-green);
+  font: 800 11px/1 ui-monospace, monospace;
+  box-shadow: 0 0 0 3px rgba(139, 233, 168, 0.06), 0 0 13px rgba(139, 233, 168, 0.24);
+}
+
+.account-session__beacon-item > span:last-child {
+  min-width: 0;
+}
+
+.account-session__beacon-item strong,
+.account-session__beacon-item small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-session__beacon-item strong {
+  color: var(--account-ink);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.account-session__beacon-item small {
+  margin-top: 4px;
+  color: var(--account-green);
+  font: 700 8px/1 ui-monospace, monospace;
+  letter-spacing: 0.08em;
+}
+
+.account-session__beacon-item.is-live .account-session__beacon-mark {
+  animation: account-beacon-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes account-beacon-scan {
+  0%, 18% { transform: translateX(-100%); }
+  48%, 100% { transform: translateX(100%); }
+}
+
+@keyframes account-beacon-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(139, 233, 168, 0.06), 0 0 13px rgba(139, 233, 168, 0.24); }
+  50% { box-shadow: 0 0 0 5px rgba(139, 233, 168, 0.1), 0 0 22px rgba(139, 233, 168, 0.46); }
+}
+
+@media (max-width: 560px) {
+  .account-session__beacon { margin-bottom: 22px; padding-inline: 11px; }
+  .account-session__beacon-head { align-items: flex-start; flex-direction: column; gap: 7px; }
+  .account-session__beacon-grid { grid-template-columns: 1fr; gap: 0; }
+  .account-session__beacon-item { padding: 9px 0 0; }
+  .account-session__beacon-item + .account-session__beacon-item { margin-top: 9px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-session__beacon::before,
+  .account-session__beacon-item.is-live .account-session__beacon-mark { animation: none; }
+}

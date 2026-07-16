@@ -243,6 +243,155 @@ body.canonical-launcher-active #app {
   cursor: wait;
 }
 
+/* Route compass: give each destination a quiet tactical frame so the three
+   entry cards read as deliberate launch coordinates instead of plain panels. */
+.canonical-launcher__experience {
+  --route-accent: var(--launcher-accent);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  border-left-color: color-mix(in srgb, var(--route-accent) 72%, transparent);
+}
+
+.canonical-launcher__experience[data-experience="continuous-room"] {
+  --route-accent: #ffb12e;
+}
+
+.canonical-launcher__experience[data-experience="training"] {
+  --route-accent: #6ed8ff;
+}
+
+.canonical-launcher__experience[data-experience="lab"] {
+  --route-accent: #b8ff7a;
+}
+
+.canonical-launcher__experience::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 11px;
+  border: 1px solid color-mix(in srgb, var(--route-accent) 36%, transparent);
+  border-top-color: color-mix(in srgb, var(--route-accent) 78%, transparent);
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--route-accent) 15%, transparent) 1px, transparent 1px) 0 0 / 18px 18px,
+    linear-gradient(color-mix(in srgb, var(--route-accent) 15%, transparent) 1px, transparent 1px) 0 0 / 18px 18px;
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%);
+  opacity: 0.5;
+  transition: opacity 160ms ease, border-color 160ms ease;
+}
+
+.canonical-launcher__experience::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: 18px;
+  right: 18px;
+  width: 17px;
+  height: 17px;
+  border-top: 2px solid var(--route-accent);
+  border-right: 2px solid var(--route-accent);
+  box-shadow: 5px -5px 0 -4px var(--route-accent);
+  opacity: 0.82;
+  pointer-events: none;
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+
+.canonical-launcher__experience > * {
+  position: relative;
+  z-index: 2;
+}
+
+.canonical-launcher__experience:hover:not(:disabled)::before,
+.canonical-launcher__experience:focus-visible::before {
+  opacity: 0.92;
+  border-top-color: var(--route-accent);
+}
+
+.canonical-launcher__experience:hover:not(:disabled)::after,
+.canonical-launcher__experience:focus-visible::after {
+  transform: translate(3px, -3px);
+  opacity: 1;
+}
+
+/* Handoff feedback: the launcher already exposes aria-busy while an
+   experience is opening, so the visual can make that short transition feel
+   intentional without adding another DOM node or changing navigation. */
+.canonical-launcher[aria-busy="true"] .canonical-launcher__command {
+  position: relative;
+}
+
+.canonical-launcher[aria-busy="true"] .canonical-launcher__command::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: -14px;
+  left: 0;
+  width: min(42%, 360px);
+  height: 2px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--launcher-accent) 22%, #fff4d0 76%, transparent);
+  box-shadow: 0 0 16px rgba(255, 177, 46, 0.72);
+  animation: canonical-launcher-handoff-scan 1.35s ease-in-out infinite;
+}
+
+.canonical-launcher[aria-busy="true"] .canonical-launcher__grid {
+  filter: saturate(0.78);
+}
+
+.canonical-launcher[aria-busy="true"] .canonical-launcher__experience--primary {
+  border-color: var(--launcher-accent);
+  box-shadow: inset 0 2px 0 var(--launcher-accent), 0 0 0 1px rgba(255, 177, 46, 0.22), inset 0 0 42px rgba(255, 177, 46, 0.1);
+}
+
+.canonical-launcher[aria-busy="true"] .canonical-launcher__status {
+  border-top-color: rgba(255, 177, 46, 0.62);
+}
+
+.canonical-launcher[aria-busy="true"] .canonical-launcher__status > p[role="status"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.canonical-launcher[aria-busy="true"] .canonical-launcher__status > p[role="status"]::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #fff4d0;
+  box-shadow: 0 0 0 4px rgba(255, 177, 46, 0.16), 0 0 16px rgba(255, 177, 46, 0.92);
+  animation: canonical-launcher-handoff-pulse 760ms steps(2, end) infinite;
+}
+
+@keyframes canonical-launcher-handoff-scan {
+  0% {
+    transform: translateX(0) scaleX(0.45);
+    transform-origin: left center;
+    opacity: 0.18;
+  }
+
+  52% {
+    transform: translateX(115%) scaleX(1);
+    transform-origin: left center;
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateX(230%) scaleX(0.45);
+    transform-origin: right center;
+    opacity: 0.18;
+  }
+}
+
+@keyframes canonical-launcher-handoff-pulse {
+  50% {
+    background: var(--launcher-accent);
+    box-shadow: 0 0 0 6px rgba(255, 177, 46, 0.1), 0 0 22px rgba(255, 177, 46, 1);
+  }
+}
+
 .canonical-launcher :focus-visible {
   outline: 3px solid var(--launcher-accent);
   outline-offset: 4px;
@@ -392,7 +541,18 @@ body.canonical-launcher-active #app {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .canonical-launcher__experience {
+  .canonical-launcher__experience,
+  .canonical-launcher[aria-busy="true"] .canonical-launcher__command::after,
+  .canonical-launcher[aria-busy="true"] .canonical-launcher__status > p[role="status"]::before {
     transition: none;
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .canonical-launcher[aria-busy="true"] .canonical-launcher__command::after,
+  .canonical-launcher[aria-busy="true"] .canonical-launcher__status > p[role="status"]::before {
+    background: CanvasText;
+    box-shadow: none;
   }
 }

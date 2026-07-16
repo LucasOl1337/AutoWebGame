@@ -498,6 +498,39 @@
   gap: 3px;
 }
 
+.launcher-shell--control .launcher-mode__name::after {
+  display: block;
+  width: min(100%, 112px);
+  height: 3px;
+  margin-top: 5px;
+  background: repeating-linear-gradient(
+    90deg,
+    currentColor 0 14px,
+    transparent 14px 19px
+  );
+  content: "";
+  opacity: 0.18;
+  transform: scaleX(0.42);
+  transform-origin: left center;
+  transition: opacity 140ms ease, transform 180ms ease;
+}
+
+.launcher-shell--control .launcher-mode.is-selected .launcher-mode__name::after {
+  width: 112px;
+  height: 12px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--control-signal) 0 14px,
+    transparent 14px 19px
+  ) center bottom / 100% 3px no-repeat;
+  content: "READY";
+  color: var(--control-signal);
+  font: 900 8px/1 Inter, Arial, sans-serif;
+  letter-spacing: 0.12em;
+  opacity: 1;
+  transform: scaleX(1);
+}
+
 .launcher-mode__name strong {
   font: 800 15px/1 Inter, Arial, sans-serif;
   text-transform: uppercase;
@@ -853,6 +886,11 @@
     padding: 11px;
   }
 
+  .launcher-shell--control .launcher-mode__name::after,
+  .launcher-shell--control .launcher-mode.is-selected .launcher-mode__name::after {
+    width: 96px;
+  }
+
   .launcher-mode__number {
     font-size: 9px;
   }
@@ -875,6 +913,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .launcher-shell--control .launcher-mode {
+    transition: none;
+  }
+
+  .launcher-shell--control .launcher-mode__name::after {
     transition: none;
   }
 

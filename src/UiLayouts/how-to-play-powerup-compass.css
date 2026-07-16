@@ -1,5 +1,7 @@
 .powerup-compass {
   position: relative;
+  isolation: isolate;
+  counter-reset: powerup-chip;
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: minmax(220px, 0.72fr) minmax(0, 1.28fr);
@@ -10,6 +12,19 @@
     radial-gradient(circle at 14% 18%, rgba(0, 229, 160, 0.12), transparent 34%),
     linear-gradient(135deg, rgba(20, 28, 31, 0.98), rgba(10, 13, 17, 0.98));
   overflow: hidden;
+}
+
+.powerup-compass::before {
+  position: absolute;
+  top: 0;
+  left: -18%;
+  width: 36%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(114, 255, 213, 0.95), transparent);
+  box-shadow: 0 0 18px rgba(0, 229, 160, 0.48);
+  content: "";
+  pointer-events: none;
+  animation: powerup-compass-scan 5.2s ease-in-out infinite;
 }
 
 .powerup-compass::after {
@@ -25,7 +40,23 @@
   pointer-events: none;
 }
 
-.powerup-compass__intro { align-self: center; }
+.powerup-compass__intro {
+  position: relative;
+  align-self: center;
+  padding-left: 18px;
+}
+
+.powerup-compass__intro::before {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #72ffd5, rgba(94, 183, 255, 0.18));
+  box-shadow: 0 0 16px rgba(0, 229, 160, 0.34);
+  content: "";
+}
 
 .powerup-compass__intro h3 {
   margin: 7px 0 10px;
@@ -53,6 +84,8 @@
 .powerup-compass__combo strong { color: #72ffd5; }
 
 .powerup-compass__grid {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
@@ -73,6 +106,9 @@
 
 .powerup-chip {
   --chip-color: 94, 183, 255;
+  counter-increment: powerup-chip;
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-columns: 52px minmax(0, 1fr);
   gap: 11px;
@@ -82,6 +118,27 @@
   border: 1px solid rgba(var(--chip-color), 0.2);
   border-radius: 10px;
   background: linear-gradient(100deg, rgba(var(--chip-color), 0.1), rgba(255, 255, 255, 0.025));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  transition: border-color 180ms ease, background-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.powerup-chip::after {
+  position: absolute;
+  top: 9px;
+  right: 10px;
+  color: rgba(var(--chip-color), 0.72);
+  content: counter(powerup-chip, decimal-leading-zero);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.powerup-chip:hover {
+  border-color: rgba(var(--chip-color), 0.52);
+  background: linear-gradient(100deg, rgba(var(--chip-color), 0.17), rgba(255, 255, 255, 0.04));
+  box-shadow: 0 10px 24px rgba(var(--chip-color), 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  transform: translateY(-2px);
 }
 
 .powerup-chip--attack { --chip-color: 255, 95, 87; }
@@ -121,5 +178,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .powerup-chip img { filter: none; }
+  .powerup-compass::before,
+  .powerup-chip,
+  .powerup-chip img { animation: none; filter: none; transition: none; }
+}
+
+@keyframes powerup-compass-scan {
+  0%, 15% { transform: translateX(0); opacity: 0; }
+  28% { opacity: 1; }
+  78% { opacity: 1; }
+  92%, 100% { transform: translateX(380%); opacity: 0; }
 }

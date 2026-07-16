@@ -424,6 +424,60 @@ game.applyOnlineSnapshot({
   activePlayerIds: [1, 2],
 });
 
+const remotePickupTransitionCalls = calls.slice(placementCalls.length + movedBombCalls.length + idSwapCalls.length + pendingRollbackCalls.length);
+
+game.applyOnlineSnapshot({
+  serverTimeMs: 125,
+  serverTick: 3,
+  frameId: 3,
+  ackedInputSeq: { 1: 0, 2: 0, 3: 0, 4: 0 },
+  mode: "match-result",
+  breakableTiles: [],
+  powerUps: [{
+    type: "speed-up",
+    tile: { x: 2, y: 1 },
+    revealed: true,
+    collected: true,
+  }],
+  players: {
+    ...basePlayers,
+    1: {
+      ...basePlayers[1],
+      tile: { x: 3, y: 1 },
+      position: { x: 90, y: 30 },
+    },
+    2: {
+      ...basePlayers[2],
+      alive: false,
+    },
+  },
+  bombs: [],
+  flames: [],
+  nextBombId: 2,
+  score: { 1: 1, 2: 0, 3: 0, 4: 0 },
+  roundNumber: 1,
+  roundTimeMs: 59775,
+  paused: false,
+  roundOutcome: { winner: 1, reason: "elimination" },
+  matchWinner: null,
+  animationClockMs: 125,
+  suddenDeathActive: true,
+  suddenDeathTickMs: 675,
+  suddenDeathIndex: 1,
+  showDangerOverlay: false,
+  showBombPreview: false,
+  selectedCharacterIndex: { 1: 0, 2: 1, 3: 0, 4: 0 },
+  activePlayerIds: [1, 2],
+});
+
+const localPreviousTilePickupCalls = calls.slice(
+  placementCalls.length
+  + movedBombCalls.length
+  + idSwapCalls.length
+  + pendingRollbackCalls.length
+  + remotePickupTransitionCalls.length,
+);
+
 const expected = [
   "bombPlace",
   "bombExplode",
@@ -481,6 +535,8 @@ const pass = placementCalls.length === 1
   && idSwapCalls.includes("bombPlace")
   && idSwapCalls.includes("bombExplode")
   && pendingRollbackCalls.length === 0
+  && remotePickupTransitionCalls.filter((key) => key === "powerCollect").length === 0
+  && localPreviousTilePickupCalls.filter((key) => key === "powerCollect").length === 1
   && expected.every((key) => calls.includes(key))
   && roundEndManifestPass
   && shieldBlockManifestPass
@@ -492,6 +548,8 @@ console.log(JSON.stringify({
   movedBombCalls,
   idSwapCalls,
   pendingRollbackCalls,
+  remotePickupTransitionCalls,
+  localPreviousTilePickupCalls,
   calls,
   expected,
   suddenDeathAlarmManifestPass,

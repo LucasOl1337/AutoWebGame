@@ -1,4 +1,3 @@
-import "./bot-short-fuse-lab.css";
 import { runBotShortFuseLabScenario } from "../Engine/bot-short-fuse-lab-scenario";
 import type { Direction } from "../Gameplay/types";
 
@@ -44,6 +43,16 @@ root.innerHTML = `
     </div>
 
     <div class="fuse-lab__decision">
+      <div class="fuse-lab__telemetry" aria-label="Leitura visual do orçamento do pavio">
+        <div class="fuse-lab__dial" data-budget-dial style="--budget-ratio: 0" aria-hidden="true">
+          <strong data-budget-percent>—</strong><small>FUSE</small>
+        </div>
+        <div class="fuse-lab__telemetry-copy">
+          <span data-budget-state>ORÇAMENTO EM LEITURA</span>
+          <strong data-budget-read>Calculando rota</strong>
+          <p data-budget-note>O anel compara passos disponíveis e passos exigidos.</p>
+        </div>
+      </div>
       <span data-status>ANALISANDO</span>
       <h2 data-intention>Revalidando a rota</h2>
       <p data-reason>A política mede fuse, velocidade e reserva antes de atacar.</p>
@@ -99,6 +108,9 @@ function renderSnapshot(): void {
   const movementLabel = observed.decision.direction
     ? `Avançar ${directionLabels[observed.decision.direction]} · sem bomba`
     : "Aguardar · sem bomba";
+  const budgetRatio = Math.min(1, observed.budget.maxEscapeSteps / Math.max(1, observed.requiredEscapeSteps));
+  const budgetPercent = Math.round(budgetRatio * 100);
+  const budgetShortfall = observed.requiredEscapeSteps - observed.budget.maxEscapeSteps;
 
   getElement("[data-bot]").textContent = observed.botLabel;
   getElement("[data-bot-marker]").textContent = observed.botLabel.replace("Bot ", "");
@@ -114,6 +126,16 @@ function renderSnapshot(): void {
   getElement("[data-before]").textContent = `${formatSeconds(observed.legacyFuseMs)} · ${observed.legacyMaxEscapeSteps} passos · ${observed.referenceBeforeDecision.placeBomb ? "PLANTAVA" : "RECUSAVA"}`;
   getElement("[data-after]").textContent = `${formatSeconds(observed.budget.fuseMs)} · ${observed.budget.maxEscapeSteps} passos · ${refusesBomb ? "RECUSA" : "PLANTA"}`;
   getElement("[data-peer]").textContent = `${formatSeconds(peer.budget.fuseMs)} · ${peer.budget.maxEscapeSteps} passos · ${peer.decision.placeBomb ? "PLANTA" : "RECUSA"}`;
+  getElement("[data-budget-dial]").style.setProperty("--budget-ratio", String(budgetRatio));
+  getElement("[data-budget-percent]").textContent = `${budgetPercent}%`;
+  getElement("[data-budget-state]").textContent = budgetShortfall > 0 ? "ROTA ACIMA DO FUSE" : "ROTA DENTRO DO FUSE";
+  getElement("[data-budget-state]").dataset.state = budgetShortfall > 0 ? "critical" : "viable";
+  getElement("[data-budget-read]").textContent = budgetShortfall > 0
+    ? `${observed.budget.maxEscapeSteps}/${observed.requiredEscapeSteps} passos cobertos`
+    : `${observed.budget.maxEscapeSteps}/${observed.requiredEscapeSteps} passos cobertos · margem ${observed.budget.maxEscapeSteps - observed.requiredEscapeSteps}`;
+  getElement("[data-budget-note]").textContent = budgetShortfall > 0
+    ? `Faltam ${budgetShortfall} passo${budgetShortfall === 1 ? "" : "s"} para a fuga ser segura.`
+    : "A reserva permite plantar e sair antes da explosão.";
   getElement("[data-budget-caption]").textContent = `${observed.budget.usableEscapeMs} ms úteis: a rota segura começa no passo ${observed.requiredEscapeSteps}.`;
   getElement("[data-budget-bar]").style.setProperty("--budget-ratio", `${observed.budget.maxEscapeSteps / observed.requiredEscapeSteps}`);
   getElement("[data-status]").textContent = refusesBomb ? "BOMBA RECUSADA" : "BOMBA AUTORIZADA";

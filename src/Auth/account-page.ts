@@ -1,4 +1,5 @@
 import "./account-page.css";
+import "./account-session-beacon.css";
 import type { PlayerAccount } from "../NetCode/account";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "./account-credentials";
 import { resolveAccountReturnPath } from "./account-return";
@@ -144,6 +145,26 @@ export class AccountPage {
           <section class="account-session" data-account-panel hidden aria-labelledby="account-session-title">
             <p class="account-overline"><span></span> SESSÃO ATIVA</p>
             <h2 id="account-session-title">Conta pronta para jogar.</h2>
+            <section class="account-session__beacon" aria-label="Prontidão para a arena">
+              <div class="account-session__beacon-head">
+                <span>LEITURA DE PRONTIDÃO</span>
+                <strong>READY / 03</strong>
+              </div>
+              <div class="account-session__beacon-grid">
+                <div class="account-session__beacon-item is-live">
+                  <span class="account-session__beacon-mark" aria-hidden="true">✓</span>
+                  <span><strong>Sessão</strong><small>PROTEGIDA</small></span>
+                </div>
+                <div class="account-session__beacon-item is-live">
+                  <span class="account-session__beacon-mark" aria-hidden="true">✓</span>
+                  <span><strong>Perfil</strong><small>SINCRONIZADO</small></span>
+                </div>
+                <div class="account-session__beacon-item is-live">
+                  <span class="account-session__beacon-mark" aria-hidden="true">✓</span>
+                  <span><strong>Arena</strong><small>DISPONÍVEL</small></span>
+                </div>
+              </div>
+            </section>
             <dl>
               <div><dt>Username</dt><dd data-account-name></dd></div>
               <div><dt>E-mail</dt><dd data-account-email></dd></div>

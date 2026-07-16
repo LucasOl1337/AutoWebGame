@@ -477,7 +477,7 @@ export async function loadGameAssets(arenaThemeId?: string | null): Promise<Game
     loadImage(assetUrl("/Assets/UiLayouts/power-shield.png")),
     loadImage(assetUrl("/Assets/UiLayouts/power-bomb-pass.png")),
     loadImage(assetUrl("/Assets/UiLayouts/power-kick.png")),
-    loadImage(assetUrl("/Assets/UiLayouts/power-short-fuse.png")),
+    loadImage(assetUrl("/Assets/UiLayouts/power-short-fuse-v2.png")),
   ]);
   const playerSprites: Partial<Record<PlayerId, DirectionalSprites>> = {
     1: playerOne,

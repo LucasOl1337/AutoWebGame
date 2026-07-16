@@ -151,6 +151,9 @@ const KICK_SLIDE_MAX_TILES = 3;
 const KICK_FUSE_PENALTY_MS_PER_TILE = 250;
 const KICK_FUSE_MIN_MS = 450;
 const KICK_IMPACT_FEEDBACK_MS = 220;
+const EXPLOSION_SCREEN_SHAKE_MS = 160;
+const EXPLOSION_SCREEN_SHAKE_AMPLITUDE_PX = 4;
+const EXPLOSION_SCREEN_SHAKE_AMPLITUDE_MAX_PX = 6;
 const DEMOLITION_COMBO_MIN_CRATES = 2;
 const DEMOLITION_COMBO_DROP_TYPES: readonly SkillPowerUpType[] = [
   "bomb-up",
@@ -210,6 +213,9 @@ const SKILL_FRAME_MS = 100;
 const DEATH_FRAME_MS = 90;
 const CRATE_BREAK_DURATION_MS = 220;
 const POWER_UP_SPAWN_POP_MS = 120;
+const POWER_UP_REVEAL_HALO_MS = 260;
+const POWER_UP_REVEAL_HALO_START_RADIUS = 12;
+const POWER_UP_REVEAL_HALO_END_RADIUS = 26;
 const FLAME_DISSIPATE_TAIL_MS = 120;
 const SPAWN_PROTECTION_MS = 2200;
 const PERFECT_START_WINDOW_MS = 320;
@@ -227,6 +233,8 @@ const SHIELD_GUARD_MS = 600;
 const SHIELD_BREAKAWAY_BOOST_MS = 520;
 const DANGER_OVERLAY_MAX_ETA_MS = BOMB_FUSE_MS + 600;
 const HUD_CRITICAL_DANGER_MS = 1_200;
+const DANGER_OVERLAY_PULSE_FAST_MS = 220;
+const DANGER_OVERLAY_PULSE_SLOW_MS = 420;
 const MATCH_RESULT_RESTART_DELAY_MS = 900;
 const CANVAS_BACKBUFFER_SCALE = 2;
 const CANVAS_VIEWPORT_PADDING = 32;
@@ -489,6 +497,9 @@ export class GameApp {
   private animationClockMs = 0;
   private crateBreakAnimations: CrateBreakAnimation[] = [];
   private bombKickImpactFeedback: BombKickImpactFeedback[] = [];
+  /** Presentation-only camera impact; not part of online simulation snapshots. */
+  private screenShakeMs = 0;
+  private screenShakeAmplitudePx = 0;
   private powerUpRevealStartedAtMs = new Map<PowerUpState, number>();
   private powerUpPickupNotices: PowerUpPickupNotice[] = [];
   private pickupChains: Record<PlayerId, PickupChainState> = createPlayerRecord(() => createPickupChainState());
@@ -1023,7 +1034,7 @@ export class GameApp {
       previousRoundOutcome: next.previousRoundOutcome,
       previousSuddenDeathActive: next.previousSuddenDeathActive,
       next,
-      didCollectRemotePowerUp: (powerUps) => this.didCollectRemotePowerUp(powerUps),
+      didCollectRemotePowerUp: (powerUps) => this.didCollectRemotePowerUp(powerUps, next.players),
       playSound: (name) => this.soundManager.playOneShot(name),
     });
   }
@@ -1035,15 +1046,24 @@ export class GameApp {
     return this.onlinePendingInputs.some((pending) => pending.input.bombPressed);
   }
 
-  private didCollectRemotePowerUp(nextPowerUps: PowerUpState[]): boolean {
+  private didCollectRemotePowerUp(
+    nextPowerUps: PowerUpState[],
+    nextPlayers: Record<PlayerId, PlayerState>,
+  ): boolean {
     const previousCollected = new Set(
       this.arena.powerUps
         .filter((powerUp) => powerUp.collected)
         .map((powerUp) => `${powerUp.type}:${tileKey(powerUp.tile.x, powerUp.tile.y)}`),
     );
+    const previousLocalTile = this.players[this.onlineLocalPlayerId]?.tile;
+    const nextLocalTile = nextPlayers[this.onlineLocalPlayerId]?.tile;
     return nextPowerUps.some((powerUp) => (
       powerUp.collected
       && !previousCollected.has(`${powerUp.type}:${tileKey(powerUp.tile.x, powerUp.tile.y)}`)
+      && (
+        (previousLocalTile?.x === powerUp.tile.x && previousLocalTile.y === powerUp.tile.y)
+        || (nextLocalTile?.x === powerUp.tile.x && nextLocalTile.y === powerUp.tile.y)
+      )
     ));
   }
 
@@ -2093,6 +2113,8 @@ export class GameApp {
     this.flames = [];
     this.magicBeams = [];
     this.crateBreakAnimations = [];
+    this.screenShakeMs = 0;
+    this.screenShakeAmplitudePx = 0;
     this.powerUpRevealStartedAtMs.clear();
     this.powerUpPickupNotices = [];
     this.pickupChains = createPlayerRecord(() => createPickupChainState());
@@ -3101,6 +3123,7 @@ export class GameApp {
     const [bomb] = this.bombs.splice(index, 1);
     this.players[bomb.ownerId].activeBombs = Math.max(0, this.players[bomb.ownerId].activeBombs - 1);
     this.soundManager.playOneShot("bombExplode");
+    this.triggerExplosionScreenShake();
     const flameTiles = new Set<string>();
     const brokenCrateKeys: string[] = [];
     const range = bomb.flameRange;
@@ -3139,6 +3162,28 @@ export class GameApp {
     });
     this.soundManager.playOneShot("flames");
     this.resolvePlayerDeathsAtTileKeys(flameTiles, bomb.ownerId);
+  }
+
+  private triggerExplosionScreenShake(): void {
+    const stackedAmplitude = this.screenShakeMs > 0
+      ? Math.min(EXPLOSION_SCREEN_SHAKE_AMPLITUDE_MAX_PX, this.screenShakeAmplitudePx + 1)
+      : EXPLOSION_SCREEN_SHAKE_AMPLITUDE_PX;
+    this.screenShakeAmplitudePx = stackedAmplitude;
+    this.screenShakeMs = EXPLOSION_SCREEN_SHAKE_MS;
+  }
+
+  private getScreenShakeOffset(): PixelCoord {
+    if (this.screenShakeMs <= 0 || this.screenShakeAmplitudePx <= 0) {
+      return { x: 0, y: 0 };
+    }
+    const intensity = Math.min(1, this.screenShakeMs / EXPLOSION_SCREEN_SHAKE_MS);
+    const amplitude = this.screenShakeAmplitudePx * intensity;
+    // Deterministic presentation offset from the animation clock (not simulation RNG).
+    const phase = this.animationClockMs;
+    return {
+      x: Math.sin(phase * 0.073) * amplitude,
+      y: Math.cos(phase * 0.091) * amplitude,
+    };
   }
 
   private armBombAtTile(tile: TileCoord, queue?: number[]): void {
@@ -3231,6 +3276,13 @@ export class GameApp {
   }
 
   private updateVisualEffects(deltaMs: number): void {
+    if (this.screenShakeMs > 0) {
+      this.screenShakeMs = Math.max(0, this.screenShakeMs - deltaMs);
+      if (this.screenShakeMs <= 0) {
+        this.screenShakeAmplitudePx = 0;
+      }
+    }
+
     for (const playerId of this.activePlayerIds) {
       advancePickupChain(this.pickupChains[playerId], deltaMs);
     }
@@ -3678,10 +3730,14 @@ export class GameApp {
 
   private render(): void {
     this.ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    this.ctx.save();
+    const shakeOffset = this.getScreenShakeOffset();
+    this.ctx.translate(shakeOffset.x, shakeOffset.y);
     this.renderBackdrop();
 
     if (this.mode === "menu") {
       this.renderMenu();
+      this.ctx.restore();
       return;
     }
 
@@ -3693,6 +3749,7 @@ export class GameApp {
       if (this.isAnyCharacterMenuOpen()) {
         this.renderCharacterSelectionOverlay();
       }
+      this.ctx.restore();
       return;
     }
 
@@ -3700,6 +3757,7 @@ export class GameApp {
     if (this.isAnyCharacterMenuOpen()) {
       this.renderCharacterSelectionOverlay();
     }
+    this.ctx.restore();
   }
 
   private buildBackdropCache(): HTMLCanvasElement {
@@ -4742,6 +4800,23 @@ export class GameApp {
       this.ctx.fillRect(screenX + 5, screenY + 5, TILE_SIZE - 10, TILE_SIZE - 10);
       this.ctx.strokeStyle = stroke;
       this.ctx.strokeRect(screenX + 5.5, screenY + 5.5, TILE_SIZE - 11, TILE_SIZE - 11);
+
+      const urgency = 1 - Math.min(1, tile.etaMs / DANGER_OVERLAY_MAX_ETA_MS);
+      const pulsePeriodMs = DANGER_OVERLAY_PULSE_SLOW_MS
+        - urgency * (DANGER_OVERLAY_PULSE_SLOW_MS - DANGER_OVERLAY_PULSE_FAST_MS);
+      const pulse = 0.5 + 0.5 * Math.sin((this.animationClockMs / pulsePeriodMs) * Math.PI * 2);
+      const markerY = screenY + TILE_SIZE - 7 - Math.round(pulse * (TILE_SIZE - 14));
+      this.ctx.save();
+      this.ctx.globalAlpha = 0.36 + urgency * 0.34 + pulse * 0.18;
+      this.ctx.strokeStyle = stroke;
+      this.ctx.lineWidth = 1.5;
+      this.ctx.beginPath();
+      this.ctx.moveTo(screenX + 9, screenY + TILE_SIZE - 9);
+      this.ctx.lineTo(screenX + TILE_SIZE - 9, screenY + 9);
+      this.ctx.stroke();
+      this.ctx.fillStyle = stroke;
+      this.ctx.fillRect(screenX + TILE_SIZE - 7, markerY, 3, 3);
+      this.ctx.restore();
     }
   }
 
@@ -4992,11 +5067,13 @@ export class GameApp {
   private drawPowerUp(powerUp: PowerUpState): void {
     const x = powerUp.tile.x * TILE_SIZE;
     const y = powerUp.tile.y * TILE_SIZE;
+    const definition = getPowerUpDefinition(powerUp.type);
     const revealStartedAtMs = this.powerUpRevealStartedAtMs.get(powerUp);
     const revealElapsedMs = revealStartedAtMs === undefined
       ? POWER_UP_SPAWN_POP_MS
       : Math.max(0, this.animationClockMs - revealStartedAtMs);
     const revealProgress = Math.min(1, revealElapsedMs / POWER_UP_SPAWN_POP_MS);
+    const revealHaloProgress = Math.min(1, revealElapsedMs / POWER_UP_REVEAL_HALO_MS);
     const revealPeakProgress = 0.58;
     const popScale = revealProgress < revealPeakProgress
       ? 0.72 + (0.36 * Math.sin((revealProgress / revealPeakProgress) * Math.PI * 0.5))
@@ -5005,6 +5082,27 @@ export class GameApp {
       ));
 
     this.ctx.save();
+    if (revealStartedAtMs !== undefined && revealHaloProgress < 1) {
+      const haloFade = 1 - revealHaloProgress;
+      const centerX = x + TILE_SIZE * 0.5;
+      const centerY = y + TILE_SIZE * 0.5;
+      const haloRadius = POWER_UP_REVEAL_HALO_START_RADIUS
+        + (POWER_UP_REVEAL_HALO_END_RADIUS - POWER_UP_REVEAL_HALO_START_RADIUS) * revealHaloProgress;
+
+      this.ctx.save();
+      this.ctx.globalAlpha = 0.72 * haloFade;
+      this.ctx.strokeStyle = definition.tint;
+      this.ctx.lineWidth = 1.5;
+      this.ctx.beginPath();
+      this.ctx.arc(centerX, centerY, haloRadius, 0, Math.PI * 2);
+      this.ctx.stroke();
+      this.ctx.globalAlpha = 0.34 * haloFade;
+      this.ctx.lineWidth = 1;
+      this.ctx.beginPath();
+      this.ctx.arc(centerX, centerY, Math.max(8, haloRadius - 5), 0, Math.PI * 2);
+      this.ctx.stroke();
+      this.ctx.restore();
+    }
     if (popScale !== 1) {
       this.ctx.translate(x + TILE_SIZE * 0.5, y + TILE_SIZE * 0.5);
       this.ctx.scale(popScale, popScale);
@@ -5025,7 +5123,6 @@ export class GameApp {
       this.ctx.restore();
       return;
     }
-    const definition = getPowerUpDefinition(powerUp.type);
 
     this.ctx.fillStyle = CANVAS_UI_PANEL_BG_STRONG;
     this.ctx.fillRect(x + 8, y + 8, 16, 16);
@@ -5125,6 +5222,24 @@ export class GameApp {
     const dissipateScale = 0.9 + alpha * 0.1;
     const centerX = x + TILE_SIZE * 0.5;
     const centerY = y + TILE_SIZE * 0.5;
+    if (flame.style === "toxic") {
+      const auraPulse = 0.72 + 0.28 * (0.5 + 0.5 * Math.sin(
+        this.animationClockMs / 110 + flame.tile.x * 0.7 + flame.tile.y * 0.45,
+      ));
+      this.ctx.save();
+      this.ctx.globalAlpha = alpha * (0.34 + auraPulse * 0.18);
+      this.ctx.fillStyle = "rgba(76, 255, 166, 0.34)";
+      this.ctx.beginPath();
+      this.ctx.arc(centerX, centerY, 15 + auraPulse * 3.5, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.globalAlpha = alpha * (0.56 + auraPulse * 0.22);
+      this.ctx.strokeStyle = "rgba(169, 255, 204, 0.9)";
+      this.ctx.lineWidth = 1 + auraPulse * 0.9;
+      this.ctx.beginPath();
+      this.ctx.arc(centerX, centerY, 16.5 + auraPulse * 3, 0, Math.PI * 2);
+      this.ctx.stroke();
+      this.ctx.restore();
+    }
     if (this.assets.props.flame && (!flame.style || flame.style === "normal")) {
       this.ctx.save();
       this.ctx.globalAlpha = alpha;
@@ -5931,6 +6046,7 @@ export class GameApp {
     this.ctx.fillRect(40, 164, CANVAS_WIDTH - 80, 120);
     this.ctx.strokeStyle = CANVAS_UI_BORDER_STRONG;
     this.ctx.strokeRect(40, 164, CANVAS_WIDTH - 80, 120);
+    this.drawCenterOverlayTelemetryFrame(showVictoryEmblem, showStalemateEmblem);
     if (victoryEmblem) {
       this.ctx.drawImage(victoryEmblem, 67, 176, 55, 78);
     } else if (stalemateEmblem) {
@@ -5948,6 +6064,42 @@ export class GameApp {
       this.ctx.font = "700 10px Inter";
       this.ctx.fillText(footer, textCenterX, 270);
     }
+  }
+
+  private drawCenterOverlayTelemetryFrame(showVictoryEmblem: boolean, showStalemateEmblem: boolean): void {
+    const accent = showVictoryEmblem
+      ? CANVAS_UI_SUCCESS
+      : showStalemateEmblem
+        ? CANVAS_UI_DANGER
+        : CANVAS_UI_GOLD;
+    const railX = 56;
+    const railWidth = CANVAS_WIDTH - 112;
+    const segmentCount = 8;
+    const segmentGap = 4;
+    const segmentWidth = Math.floor((railWidth - (segmentCount - 1) * segmentGap) / segmentCount);
+
+    this.ctx.save();
+    this.ctx.fillStyle = accent;
+    this.ctx.globalAlpha = showVictoryEmblem || showStalemateEmblem ? 0.9 : 0.45;
+    this.ctx.fillRect(48, 170, CANVAS_WIDTH - 96, 2);
+    this.ctx.fillRect(48, 276, CANVAS_WIDTH - 96, 2);
+
+    this.ctx.globalAlpha = showVictoryEmblem ? 0.95 : showStalemateEmblem ? 0.62 : 0.26;
+    for (let index = 0; index < segmentCount; index += 1) {
+      const segmentX = railX + index * (segmentWidth + segmentGap);
+      this.ctx.fillRect(segmentX, 278, segmentWidth, 2);
+    }
+
+    this.ctx.globalAlpha = 0.76;
+    this.ctx.fillRect(40, 164, 12, 2);
+    this.ctx.fillRect(40, 164, 2, 12);
+    this.ctx.fillRect(CANVAS_WIDTH - 52, 164, 12, 2);
+    this.ctx.fillRect(CANVAS_WIDTH - 42, 164, 2, 12);
+    this.ctx.fillRect(40, 282, 12, 2);
+    this.ctx.fillRect(40, 272, 2, 12);
+    this.ctx.fillRect(CANVAS_WIDTH - 52, 282, 12, 2);
+    this.ctx.fillRect(CANVAS_WIDTH - 42, 272, 2, 12);
+    this.ctx.restore();
   }
 
   private renderGameToText(): string {
@@ -5971,6 +6123,7 @@ export class GameApp {
         tile: { ...effect.tile },
         elapsedMs: Math.round(effect.elapsedMs),
       }));
+    const screenShakeOffset = this.getScreenShakeOffset();
     const suddenDeathHud = this.getSuddenDeathHudState();
     const centerOverlay = this.getCenterOverlayState();
     const copy = SITE_COPY[this.language].canvas;
@@ -6137,6 +6290,14 @@ export class GameApp {
         remaining: this.arena.breakable.size,
         visibleBreakables,
         breakEffects: crateBreakEffects,
+      },
+      screenShake: {
+        remainingMs: Math.round(this.screenShakeMs),
+        amplitudePx: this.screenShakeAmplitudePx,
+        offset: {
+          x: Math.round(screenShakeOffset.x * 1000) / 1000,
+          y: Math.round(screenShakeOffset.y * 1000) / 1000,
+        },
       },
       powerups: this.arena.powerUps
         .filter((powerUp) => powerUp.revealed && !powerUp.collected)

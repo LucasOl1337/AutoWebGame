@@ -2,6 +2,7 @@
 .experience-seat-strip:has(.experience-seat-pill--loading) {
   --entry-sequencer-line: rgba(255, 255, 255, 0.12);
   --entry-active-rgb: 244, 184, 74;
+  --entry-runner-size: clamp(28px, 7vw, 72px);
   position: relative;
   isolation: isolate;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -25,8 +26,25 @@
   box-shadow: 0 0 18px rgba(var(--accent-rgb), 0.14);
 }
 
+.experience-seat-strip:has(.experience-seat-pill--loading)::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: calc(50% - 1px);
+  left: 8%;
+  width: var(--entry-runner-size);
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.95), transparent);
+  box-shadow: 0 0 12px rgba(var(--accent-rgb), 0.72);
+  opacity: 0;
+  pointer-events: none;
+  animation: arena-entry-runner 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
 .experience-seat-strip:has(.experience-seat-pill--loading) .experience-seat-pill--loading {
   position: relative;
+  z-index: 1;
   min-height: 92px;
   padding: 18px 18px 16px 54px;
   border-color: rgba(255, 255, 255, 0.12);
@@ -105,6 +123,13 @@
   70%, 100% { box-shadow: 0 0 0 12px rgba(var(--entry-active-rgb), 0), 0 0 24px rgba(var(--entry-active-rgb), 0.18); }
 }
 
+@keyframes arena-entry-runner {
+  0%, 8% { left: 8%; opacity: 0; }
+  20% { opacity: 0.88; }
+  78% { opacity: 0.88; }
+  100% { left: calc(92% - var(--entry-runner-size)); opacity: 0; }
+}
+
 @media (max-width: 760px) {
   .experience-seat-strip:has(.experience-seat-pill--loading) {
     gap: 7px;
@@ -112,6 +137,10 @@
   }
 
   .experience-seat-strip:has(.experience-seat-pill--loading)::before {
+    display: none;
+  }
+
+  .experience-seat-strip:has(.experience-seat-pill--loading)::after {
     display: none;
   }
 
@@ -132,5 +161,9 @@
   .experience-seat-strip:has(.experience-seat-pill--loading) .experience-seat-pill--loading[data-state="active"]::before {
     animation: none;
     transition: none;
+  }
+
+  .experience-seat-strip:has(.experience-seat-pill--loading)::after {
+    animation: none;
   }
 }
