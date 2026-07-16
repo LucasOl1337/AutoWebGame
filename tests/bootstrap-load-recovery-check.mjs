@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 
-const source = await readFile(new URL("../src/UiLayouts/main.ts", import.meta.url), "utf8");
+const source = await readFile(new URL("../src/UiLayouts/legacy-bootstrap.ts", import.meta.url), "utf8");
 const css = await readFile(new URL("../src/UiLayouts/main.css", import.meta.url), "utf8");
 
 const checks = {

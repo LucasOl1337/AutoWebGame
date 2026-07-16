@@ -41,7 +41,7 @@ const surpriseUrl = new URL(buildArenaThemeUrl("surprise", "https://bomba.test/p
 
 const css = await readFile(new URL("../src/UiLayouts/main.css", import.meta.url), "utf8");
 const sessionClient = await readFile(new URL("../src/NetCode/session-client.ts", import.meta.url), "utf8");
-const mainTs = await readFile(new URL("../src/UiLayouts/main.ts", import.meta.url), "utf8");
+const mainTs = await readFile(new URL("../src/UiLayouts/legacy-bootstrap.ts", import.meta.url), "utf8");
 
 const checks = {
   hasThemeLibraryOptions: ARENA_THEME_LIBRARY.length >= 6,
