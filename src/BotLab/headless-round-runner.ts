@@ -8,12 +8,15 @@ import {
   type Mode,
   type PlayerId,
   type RoundOutcome,
+  type TileCoord,
 } from "../Gameplay/types";
 import type { OnlineGameSnapshot, OnlineInputState } from "../NetCode/protocol";
 import { FIXED_STEP_MS } from "../PersonalConfig/config";
+import { sha256Canonical } from "../Shared/canonical-json";
 
 export type HeadlessRoundStatus = "complete" | "timeout" | "error";
-export type HeadlessPolicyMode = "built-in" | "external";
+export type HeadlessPolicyMode = "built-in" | "external" | "registered";
+export type HeadlessRegisteredPolicyScript = "neutral-v1" | "waypoint-v1";
 
 export interface HeadlessPolicyContext {
   playerId: PlayerId;
@@ -27,32 +30,44 @@ export interface HeadlessRoundPolicy {
   playerId: PlayerId;
   mode: HeadlessPolicyMode;
   decide?: (context: HeadlessPolicyContext) => OnlineInputState;
+  scriptId?: HeadlessRegisteredPolicyScript;
+  scriptConfig?: Readonly<{ route?: readonly TileCoord[]; variant?: number }>;
+  configHash?: `sha256:${string}`;
 }
 
 export interface HeadlessRoundRunConfig {
   build: string;
   ruleset: string;
   arena: ArenaDefinition;
-  randomness: HeadlessDeterministicRandomnessConfig;
+  randomness: HeadlessRandomnessConfig;
   activePlayerIds: PlayerId[];
   characterSelections?: Partial<Record<PlayerId, number>>;
   policies: HeadlessRoundPolicy[];
   maxSteps?: number;
   timeoutMs?: number;
   allowUnsafeInlineExternalPolicies?: boolean;
+  traceMode?: "snapshot-trace-v1";
 }
 
-export interface HeadlessDeterministicRandomnessConfig {
+export type HeadlessRandomnessConfig = Readonly<{
   randomnessMode: "deterministic";
   expectedInitialStateHash: `sha256:${string}`;
-}
+} | {
+  randomnessMode: "seeded";
+  requestedSeed: string;
+  rngAlgorithm: "arena-seed-hash";
+  rngVersion: "arena-runtime.v1";
+  expectedInitialStateHash: `sha256:${string}`;
+}>;
 
-export interface HeadlessDeterministicRandomnessReceipt extends HeadlessDeterministicRandomnessConfig {
+export interface HeadlessDeterministicRandomnessReceipt {
+  randomnessMode: "deterministic" | "seeded";
+  expectedInitialStateHash: `sha256:${string}`;
   effectiveInitialStateHash: `sha256:${string}`;
-  requestedSeed: null;
-  effectiveSeed: null;
-  rngAlgorithm: null;
-  rngVersion: null;
+  requestedSeed: string | null;
+  effectiveSeed: string | null;
+  rngAlgorithm: "arena-seed-hash" | null;
+  rngVersion: "arena-runtime.v1" | null;
 }
 
 export interface ArenaReceiptIdentity {
@@ -66,6 +81,9 @@ export interface HeadlessPolicyReceipt {
   playerId: PlayerId;
   mode: HeadlessPolicyMode;
   appliedVia: "startServerAuthoritativeMatch.botPlayerIds" | "setServerPlayerInput";
+  scriptId?: HeadlessRegisteredPolicyScript;
+  scriptHash?: `sha256:${string}`;
+  configHash?: `sha256:${string}`;
 }
 
 export interface HeadlessReceiptProvenance {
@@ -138,16 +156,67 @@ export interface HeadlessRoundReceipt {
   score: MatchScore | null;
   terminalProof: HeadlessTerminalProof;
   limitations: string[];
+  trace: Readonly<{
+    scriptId: "snapshot-trace-v1";
+    scriptHash: `sha256:${string}`;
+    entries: readonly HeadlessSnapshotTraceEntry[];
+  }> | null;
   error?: string;
+}
+
+export interface HeadlessSnapshotTraceEntry {
+  readonly step: number;
+  readonly players: Readonly<Record<PlayerId, Readonly<{ alive: boolean; tile: TileCoord }>>>;
+  readonly powerUps: readonly Readonly<{ type: string; tile: TileCoord; revealed: boolean; collected: boolean }>[];
+  readonly suddenDeathActive: boolean;
+  readonly suddenDeathClosedTiles: readonly string[];
 }
 
 interface ExecutablePolicy extends HeadlessPolicyReceipt {
   decide?: (context: HeadlessPolicyContext) => OnlineInputState;
+  scriptConfig?: Readonly<{ route?: readonly TileCoord[]; variant?: number }>;
 }
+
+const REGISTERED_POLICY_ARTIFACTS = deepFreeze({
+  "neutral-v1": {
+    artifact: "headless-registered-policy.v1",
+    scriptId: "neutral-v1",
+    input: "neutral-online-input",
+    config: "none",
+  },
+  "waypoint-v1": {
+    artifact: "headless-registered-policy.v1",
+    scriptId: "waypoint-v1",
+    input: "route-and-integer-variant",
+    routing: "axis-priority-with-400-step-waypoints",
+    portals: "outward-edge-direction-derived-from-snapshot-arena-grid",
+    bombing: "after-step-600-every-120-steps-when-unowned",
+  },
+} as const);
+
+const REGISTERED_POLICY_HASHES = deepFreeze({
+  "neutral-v1": "sha256:5d24b6f22e92ddd0621913e18b53af58f23a15180534ebaca6f0a1a277b80b4f",
+  "waypoint-v1": "sha256:7701a427660306ff94bb561cb3e416c19bc878715baa722b11cb76ed8fc817c4",
+} as const);
+
+const SNAPSHOT_TRACE_ARTIFACT = deepFreeze({
+  artifact: "snapshot-trace.v1",
+  canonicalization: "strict-canonical-json.v1",
+  digest: "sha256-webcrypto",
+  projection: {
+    step: "non-negative-simulation-step",
+    players: "player-id-to-alive-and-integer-tile",
+    powerUps: "type-tile-revealed-collected-in-runtime-order",
+    suddenDeathActive: "boolean",
+    suddenDeathClosedTiles: "runtime-ordered-tile-keys",
+  },
+} as const);
+
+const SNAPSHOT_TRACE_ARTIFACT_HASH = "sha256:75dc1674d467423bb26dd0aed6747798fda2ad908ad3687263ec7186eff234f3" as const;
 
 interface ParsedRunConfig {
   metadata: Readonly<{ build: string; ruleset: string }>;
-  randomness: HeadlessDeterministicRandomnessConfig;
+  randomness: HeadlessRandomnessConfig;
   arena: ArenaDefinition;
   activePlayerIds: readonly PlayerId[];
   characterSelections: Readonly<Record<PlayerId, number>>;
@@ -155,6 +224,7 @@ interface ParsedRunConfig {
   maxSteps: number;
   timeoutMs: number;
   allowUnsafeInlineExternalPolicies: boolean;
+  traceMode?: "snapshot-trace-v1";
 }
 
 interface ReceiptContext {
@@ -191,58 +261,6 @@ function deepFreeze<T>(value: T, seen = new WeakSet<object>()): T {
 
 function cloneFrozen<T>(value: T): T {
   return deepFreeze(cloneWithPlatform(value));
-}
-
-function assertWellFormedUnicode(value: string): void {
-  for (let index = 0; index < value.length; index += 1) {
-    const unit = value.charCodeAt(index);
-    if (unit >= 0xd800 && unit <= 0xdbff) {
-      const next = value.charCodeAt(index + 1);
-      if (!(next >= 0xdc00 && next <= 0xdfff)) {
-        throw new Error("Unicode contains an unpaired surrogate and cannot be canonicalized");
-      }
-      index += 1;
-    } else if (unit >= 0xdc00 && unit <= 0xdfff) {
-      throw new Error("Unicode contains an unpaired surrogate and cannot be canonicalized");
-    }
-  }
-}
-
-function canonicalJson(value: unknown): string {
-  if (typeof value === "string") {
-    assertWellFormedUnicode(value);
-    return JSON.stringify(value);
-  }
-  if (value === null || typeof value === "boolean") {
-    return JSON.stringify(value);
-  }
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) throw new Error("Initial state contains a non-finite number");
-    return JSON.stringify(value);
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => canonicalJson(item ?? null)).join(",")}]`;
-  }
-  if (typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    return `{${Object.keys(record)
-      .filter((key) => record[key] !== undefined)
-      .sort()
-      .map((key) => {
-        assertWellFormedUnicode(key);
-        return `${JSON.stringify(key)}:${canonicalJson(record[key])}`;
-      })
-      .join(",")}}`;
-  }
-  throw new Error(`Initial state contains unsupported ${typeof value}`);
-}
-
-async function sha256Canonical(value: unknown): Promise<`sha256:${string}`> {
-  if (!globalThis.crypto?.subtle) throw new Error("SHA-256 is unavailable in this runtime");
-  const bytes = new TextEncoder().encode(canonicalJson(value));
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
-  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-  return `sha256:${hex}`;
 }
 
 /**
@@ -323,6 +341,12 @@ function requiredString(value: unknown, label: string): string {
   return value.trim();
 }
 
+function requiredSha256(value: unknown, label: string): `sha256:${string}` {
+  const digest = requiredString(value, label);
+  if (!/^sha256:[0-9a-f]{64}$/.test(digest)) throw new Error(`${label} must be sha256:<64 lowercase hex>`);
+  return digest as `sha256:${string}`;
+}
+
 function parsePositiveInteger(value: unknown, fallback: number, label: string): number {
   const resolved = value === undefined ? fallback : value;
   if (!Number.isInteger(resolved) || (resolved as number) <= 0) {
@@ -339,10 +363,10 @@ function parsePositiveNumber(value: unknown, fallback: number, label: string): n
   return resolved;
 }
 
-function parseRandomness(value: unknown): HeadlessDeterministicRandomnessConfig {
+function parseRandomness(value: unknown): HeadlessRandomnessConfig {
   const randomness = asRecord(value, "randomness");
-  if (randomness.randomnessMode !== "deterministic") {
-    throw new Error("randomness.randomnessMode must be deterministic; seeded mode is not implemented");
+  if (randomness.randomnessMode !== "deterministic" && randomness.randomnessMode !== "seeded") {
+    throw new Error("randomness.randomnessMode must be deterministic or seeded");
   }
   const expectedInitialStateHash = requiredString(
     randomness.expectedInitialStateHash,
@@ -351,10 +375,19 @@ function parseRandomness(value: unknown): HeadlessDeterministicRandomnessConfig 
   if (!/^sha256:[0-9a-f]{64}$/.test(expectedInitialStateHash)) {
     throw new Error("randomness.expectedInitialStateHash must be sha256:<64 lowercase hex>");
   }
-  return deepFreeze({
-    randomnessMode: "deterministic",
-    expectedInitialStateHash: expectedInitialStateHash as `sha256:${string}`,
-  });
+  if (randomness.randomnessMode === "seeded") {
+    if (randomness.rngAlgorithm !== "arena-seed-hash" || randomness.rngVersion !== "arena-runtime.v1") {
+      throw new Error("seeded randomness requires arena-seed-hash arena-runtime.v1");
+    }
+    return deepFreeze({
+      randomnessMode: "seeded",
+      requestedSeed: requiredString(randomness.requestedSeed, "randomness.requestedSeed"),
+      rngAlgorithm: "arena-seed-hash",
+      rngVersion: "arena-runtime.v1",
+      expectedInitialStateHash: expectedInitialStateHash as `sha256:${string}`,
+    });
+  }
+  return deepFreeze({ randomnessMode: "deterministic", expectedInitialStateHash: expectedInitialStateHash as `sha256:${string}` });
 }
 
 function parseArena(value: unknown): ArenaDefinition {
@@ -402,6 +435,85 @@ function parseCharacterSelections(value: unknown): Readonly<Record<PlayerId, num
   return deepFreeze(result);
 }
 
+function createRegisteredPolicy(
+  scriptId: HeadlessRegisteredPolicyScript,
+  value: unknown,
+): NonNullable<ExecutablePolicy["decide"]> {
+  if (scriptId === "neutral-v1") {
+    if (value !== undefined && Object.keys(asRecord(value, "scriptConfig")).length > 0) {
+      throw new Error("neutral-v1 does not accept scriptConfig");
+    }
+    return () => ({
+      direction: null,
+      bombPressed: false,
+      detonatePressed: false,
+      skillPressed: false,
+      skillHeld: false,
+    });
+  }
+  const config = asRecord(value, "scriptConfig");
+  if (!Array.isArray(config.route) || config.route.length === 0) throw new Error("waypoint-v1 requires a non-empty route");
+  const route = config.route.map((value, index) => {
+    const tile = asRecord(value, `scriptConfig.route[${index}]`);
+    if (!Number.isInteger(tile.x) || !Number.isInteger(tile.y)) throw new Error(`scriptConfig.route[${index}] must be an integer tile`);
+    return { x: tile.x as number, y: tile.y as number };
+  });
+  const variant = config.variant;
+  if (!Number.isInteger(variant)) throw new Error("waypoint-v1 requires an integer variant");
+  return ({ playerId, step, snapshot }) => {
+    const player = snapshot.players[playerId];
+    const target = route[Math.floor(step / 400) % route.length];
+    const deltaX = target.x - player.tile.x;
+    const deltaY = target.y - player.tile.y;
+    const horizontalFirst = target.y === 0
+      || target.y === snapshot.arena.grid.height - 1
+      || (variant as number) % 2 === 1;
+    const direction = deltaX === 0 && deltaY === 0
+      ? registeredPortalExitDirection(target, snapshot.arena.grid)
+      : registeredDirectionFor(deltaX, deltaY, horizontalFirst);
+    const ownedBomb = snapshot.bombs.some((bomb) => bomb.ownerId === playerId);
+    return {
+      direction,
+      bombPressed: !ownedBomb && step >= 600 && step % 120 === 0,
+      detonatePressed: false,
+      skillPressed: false,
+      skillHeld: false,
+    };
+  };
+}
+
+function registeredPortalExitDirection(
+  tile: Readonly<TileCoord>,
+  grid: Readonly<{ width: number; height: number }>,
+): OnlineInputState["direction"] {
+  if (tile.y === 0) return "up";
+  if (tile.y === grid.height - 1) return "down";
+  if (tile.x === 0) return "left";
+  if (tile.x === grid.width - 1) return "right";
+  return null;
+}
+
+function registeredDirectionFor(deltaX: number, deltaY: number, horizontalFirst: boolean): OnlineInputState["direction"] {
+  if (horizontalFirst && deltaX !== 0) return deltaX > 0 ? "right" : "left";
+  if (deltaY !== 0) return deltaY > 0 ? "down" : "up";
+  if (deltaX !== 0) return deltaX > 0 ? "right" : "left";
+  return null;
+}
+
+export async function getRegisteredPolicyArtifactHash(
+  scriptId: HeadlessRegisteredPolicyScript,
+): Promise<`sha256:${string}`> {
+  return sha256Canonical(REGISTERED_POLICY_ARTIFACTS[scriptId]);
+}
+
+export async function verifyRegisteredPolicyArtifact(
+  scriptId: HeadlessRegisteredPolicyScript,
+  expectedHash: `sha256:${string}`,
+): Promise<void> {
+  const effectiveHash = await getRegisteredPolicyArtifactHash(scriptId);
+  if (effectiveHash !== expectedHash) throw new Error(`registered policy ${scriptId} artifact hash mismatch`);
+}
+
 function parsePolicies(value: unknown, activePlayerIds: readonly PlayerId[]): readonly ExecutablePolicy[] {
   if (!Array.isArray(value)) throw new Error("policies must be an array");
   const activePlayers = new Set(activePlayerIds);
@@ -417,12 +529,28 @@ function parsePolicies(value: unknown, activePlayerIds: readonly PlayerId[]): re
     const playerId = policy.playerId as PlayerId;
     if (!activePlayers.has(playerId)) throw new Error(`policy ${id} targets an inactive player`);
     if (policiesByPlayer.has(playerId)) throw new Error(`multiple policies target player ${playerId}`);
-    if (policy.mode !== "built-in" && policy.mode !== "external") {
+    if (policy.mode !== "built-in" && policy.mode !== "external" && policy.mode !== "registered") {
       throw new Error(`invalid mode for policy ${id}: ${String(policy.mode)}`);
     }
     const mode = policy.mode as HeadlessPolicyMode;
     if (mode === "external" && typeof policy.decide !== "function") {
       throw new Error(`external policy ${id} requires decide()`);
+    }
+    let registered: Pick<ExecutablePolicy, "decide" | "scriptId" | "scriptHash" | "scriptConfig" | "configHash"> | null = null;
+    if (mode === "registered") {
+      const scriptId = policy.scriptId;
+      if (scriptId !== "neutral-v1" && scriptId !== "waypoint-v1") {
+        throw new Error(`registered policy ${id} has an unknown scriptId`);
+      }
+      registered = {
+        scriptId,
+        scriptHash: REGISTERED_POLICY_HASHES[scriptId],
+        decide: createRegisteredPolicy(scriptId, policy.scriptConfig),
+        ...(policy.scriptConfig === undefined
+          ? {}
+          : { scriptConfig: cloneWithPlatform(policy.scriptConfig) as ExecutablePolicy["scriptConfig"] }),
+        configHash: requiredSha256(policy.configHash, `registered policy ${id} configHash`),
+      };
     }
     policyIds.add(id);
     policiesByPlayer.add(playerId);
@@ -436,6 +564,7 @@ function parsePolicies(value: unknown, activePlayerIds: readonly PlayerId[]): re
       ...(mode === "external"
         ? { decide: policy.decide as ExecutablePolicy["decide"] }
         : {}),
+      ...(registered ?? {}),
     };
   });
   for (const playerId of activePlayers) {
@@ -454,21 +583,33 @@ function parseConfig(value: unknown): ParsedRunConfig {
     build: requiredString(config.build, "build"),
     ruleset: requiredString(config.ruleset, "ruleset"),
   });
+  if (config.traceMode !== undefined && config.traceMode !== "snapshot-trace-v1") throw new Error("traceMode is invalid");
+  const randomness = parseRandomness(config.randomness);
+  const arena = parseArena(config.arena);
   return {
     metadata,
-    randomness: parseRandomness(config.randomness),
-    arena: parseArena(config.arena),
+    randomness,
+    arena: randomness.randomnessMode === "seeded"
+      ? deepFreeze({ ...arena, randomSeed: randomness.requestedSeed })
+      : arena,
     activePlayerIds,
     characterSelections: parseCharacterSelections(config.characterSelections),
     policies: parsePolicies(config.policies, activePlayerIds),
     maxSteps: parsePositiveInteger(config.maxSteps, DEFAULT_MAX_STEPS, "maxSteps"),
     timeoutMs: parsePositiveNumber(config.timeoutMs, DEFAULT_TIMEOUT_MS, "timeoutMs"),
     allowUnsafeInlineExternalPolicies: config.allowUnsafeInlineExternalPolicies === true,
+    ...(config.traceMode ? { traceMode: "snapshot-trace-v1" as const } : {}),
   };
 }
 
 function policyReceipts(policies: readonly ExecutablePolicy[]): HeadlessPolicyReceipt[] {
-  return policies.map(({ id, playerId, mode, appliedVia }) => ({ id, playerId, mode, appliedVia }));
+  return policies.map(({ id, playerId, mode, appliedVia, scriptId, scriptHash, configHash }) => ({
+    id,
+    playerId,
+    mode,
+    appliedVia,
+    ...(scriptId && scriptHash && configHash ? { scriptId, scriptHash, configHash } : {}),
+  }));
 }
 
 function arenaIdentity(arena: Pick<ArenaDefinition, "id" | "version" | "themeId">): ArenaReceiptIdentity {
@@ -552,7 +693,7 @@ function contextFromInitialSnapshot(
     .map((policy) => policy.playerId)
     .sort();
   const observedBuiltIns = [...snapshot.botPlayerIds].sort();
-  const policiesVerified = config.policies.every((policy) => policy.mode === "built-in")
+  const policiesVerified = config.policies.every((policy) => policy.mode !== "external")
     && expectedBuiltIns.length === observedBuiltIns.length
     && expectedBuiltIns.every((playerId, index) => playerId === observedBuiltIns[index]);
   const arenaVerified = claimedArena !== null && sameArenaIdentity(claimedArena, effectiveArena);
@@ -568,10 +709,10 @@ function contextFromInitialSnapshot(
     randomness: {
       ...config.randomness,
       effectiveInitialStateHash,
-      requestedSeed: null,
-      effectiveSeed: null,
-      rngAlgorithm: null,
-      rngVersion: null,
+      requestedSeed: config.randomness.randomnessMode === "seeded" ? config.randomness.requestedSeed : null,
+      effectiveSeed: config.randomness.randomnessMode === "seeded" ? snapshot.arena.randomSeed ?? null : null,
+      rngAlgorithm: config.randomness.randomnessMode === "seeded" ? config.randomness.rngAlgorithm : null,
+      rngVersion: config.randomness.randomnessMode === "seeded" ? config.randomness.rngVersion : null,
     },
     provenance: {
       ...context.provenance,
@@ -590,8 +731,8 @@ function contextFromInitialSnapshot(
     reproducibility: {
       status: reasons.length === 0 ? "verified" : "unverified",
       scope: "declared-identity-and-semantic-initial-state",
-      deterministicPolicyPath: config.policies.every((policy) => policy.mode === "built-in"),
-      timeoutEnforced: config.policies.every((policy) => policy.mode === "built-in"),
+      deterministicPolicyPath: config.policies.every((policy) => policy.mode !== "external"),
+      timeoutEnforced: config.policies.every((policy) => policy.mode !== "external"),
       reasons,
     },
   });
@@ -645,6 +786,39 @@ function safeErrorMessage(error: unknown): string {
   }
 }
 
+function snapshotTraceEntry(snapshot: Readonly<OnlineGameSnapshot>, step: number): HeadlessSnapshotTraceEntry {
+  const players = ALL_PLAYER_IDS.reduce((result, playerId) => {
+    result[playerId] = { alive: snapshot.players[playerId].alive, tile: { ...snapshot.players[playerId].tile } };
+    return result;
+  }, {} as Record<PlayerId, { alive: boolean; tile: TileCoord }>);
+  return deepFreeze({
+    step,
+    players,
+    powerUps: snapshot.powerUps.map((powerUp) => ({
+      type: powerUp.type,
+      tile: { ...powerUp.tile },
+      revealed: powerUp.revealed,
+      collected: powerUp.collected,
+    })),
+    suddenDeathActive: snapshot.suddenDeathActive,
+    suddenDeathClosedTiles: [...snapshot.suddenDeathClosedTiles],
+  });
+}
+
+export async function getSnapshotTraceArtifactHash(): Promise<`sha256:${string}`> {
+  return sha256Canonical(SNAPSHOT_TRACE_ARTIFACT);
+}
+
+export async function verifySnapshotTraceArtifact(expectedHash: `sha256:${string}`): Promise<void> {
+  const effectiveHash = await getSnapshotTraceArtifactHash();
+  if (effectiveHash !== expectedHash) throw new Error("snapshot trace artifact hash mismatch");
+}
+
+async function snapshotTraceArtifactHash(): Promise<`sha256:${string}`> {
+  await verifySnapshotTraceArtifact(SNAPSHOT_TRACE_ARTIFACT_HASH);
+  return SNAPSHOT_TRACE_ARTIFACT_HASH;
+}
+
 export function runHeadlessRound(config: HeadlessRoundRunConfig): Promise<HeadlessRoundReceipt>;
 export async function runHeadlessRound(config: unknown): Promise<HeadlessRoundReceipt> {
   const startedAt = clockNow();
@@ -653,6 +827,8 @@ export async function runHeadlessRound(config: unknown): Promise<HeadlessRoundRe
   let steps = 0;
   let initialSnapshot: OnlineGameSnapshot | null = null;
   let lastSnapshot: OnlineGameSnapshot | null = null;
+  const traceEntries: HeadlessSnapshotTraceEntry[] = [];
+  let traceScriptHash: `sha256:${string}` | null = null;
 
   const receipt = (
     status: HeadlessRoundStatus,
@@ -681,12 +857,28 @@ export async function runHeadlessRound(config: unknown): Promise<HeadlessRoundRe
       score: lastSnapshot ? { ...lastSnapshot.score } : null,
       terminalProof: createTerminalProof(initialSnapshot, lastSnapshot, parsedConfig?.activePlayerIds ?? []),
       limitations: context.limitations,
+      trace: parsedConfig?.traceMode === "snapshot-trace-v1" && traceScriptHash
+        ? deepFreeze({ scriptId: "snapshot-trace-v1" as const, scriptHash: traceScriptHash, entries: [...traceEntries] })
+        : null,
       ...(error ? { error } : {}),
     };
   };
 
   try {
     parsedConfig = parseConfig(config);
+    if (parsedConfig.traceMode === "snapshot-trace-v1") traceScriptHash = await snapshotTraceArtifactHash();
+    for (const policy of parsedConfig.policies) {
+      if (policy.mode !== "registered") continue;
+      await verifyRegisteredPolicyArtifact(policy.scriptId!, policy.scriptHash!);
+      const effectiveConfigHash = await sha256Canonical({
+        scriptId: policy.scriptId,
+        scriptHash: policy.scriptHash,
+        ...(policy.scriptConfig === undefined ? {} : { scriptConfig: policy.scriptConfig }),
+      });
+      if (effectiveConfigHash !== policy.configHash) {
+        throw new Error(`registered policy ${policy.id} registry/config hash mismatch`);
+      }
+    }
     context = contextFromConfig(parsedConfig);
     const hasExternalPolicies = parsedConfig.policies.some((policy) => policy.mode === "external");
     if (hasExternalPolicies && !parsedConfig.allowUnsafeInlineExternalPolicies) {
@@ -707,6 +899,7 @@ export async function runHeadlessRound(config: unknown): Promise<HeadlessRoundRe
     );
     initialSnapshot = cloneFrozen(game.exportOnlineSnapshot());
     lastSnapshot = initialSnapshot;
+    if (parsedConfig.traceMode === "snapshot-trace-v1") traceEntries.push(snapshotTraceEntry(initialSnapshot, 0));
     const effectiveInitialStateHash = await sha256Canonical(initialSemanticState(initialSnapshot));
     context = contextFromInitialSnapshot(context, parsedConfig, initialSnapshot, effectiveInitialStateHash);
     if (initialSnapshot.mode !== "match" || initialSnapshot.roundOutcome !== null) {
@@ -721,7 +914,7 @@ export async function runHeadlessRound(config: unknown): Promise<HeadlessRoundRe
       if (wallClockExpired()) return receipt("timeout", "wall-clock");
 
       for (const policy of parsedConfig.policies) {
-        if (policy.mode !== "external") continue;
+        if (policy.mode === "built-in") continue;
         const observation = cloneFrozen(lastSnapshot);
         const input = policy.decide?.({
           playerId: policy.playerId,
@@ -729,7 +922,7 @@ export async function runHeadlessRound(config: unknown): Promise<HeadlessRoundRe
           elapsedMs: steps * FIXED_STEP_MS,
           snapshot: observation,
         });
-        if (!input) throw new Error(`external policy ${policy.id} returned no input`);
+        if (!input) throw new Error(`${policy.mode} policy ${policy.id} returned no input`);
         game.setServerPlayerInput(policy.playerId, input);
       }
       if (wallClockExpired()) return receipt("timeout", "wall-clock");
@@ -737,6 +930,7 @@ export async function runHeadlessRound(config: unknown): Promise<HeadlessRoundRe
       game.advanceServerSimulation(FIXED_STEP_MS);
       steps += 1;
       lastSnapshot = cloneFrozen(game.exportOnlineSnapshot());
+      if (parsedConfig.traceMode === "snapshot-trace-v1") traceEntries.push(snapshotTraceEntry(lastSnapshot, steps));
       if (wallClockExpired()) return receipt("timeout", "wall-clock");
       if (lastSnapshot.roundOutcome !== null) {
         const proof = createTerminalProof(initialSnapshot, lastSnapshot, parsedConfig.activePlayerIds);

@@ -10,6 +10,7 @@ import {
   validateArenaDefinition,
 } from "../src/Arenas/arena";
 import { ARENA_THEME_LIBRARY } from "../src/Arenas/arena-theme-library";
+import { createCanonicalArenaCatalogResponse } from "../src/Arenas/canonical-arena-worker";
 import { CHARACTER_ROSTER_MANIFEST } from "../src/Characters/Animations/character-roster-manifest";
 import {
   canReuseCurrentRoomForQuickMatch,
@@ -135,6 +136,9 @@ function getStaticAssetCacheControl(pathname, contentType, status = 200) {
   }
   if (contentType.includes("text/html")) {
     return "no-store";
+  }
+  if (pathname.startsWith("/Assets/TileMaps/canonical/")) {
+    return IMMUTABLE_STATIC_CACHE_CONTROL;
   }
   if (HASHED_VITE_ASSET_RE.test(pathname)) {
     return IMMUTABLE_STATIC_CACHE_CONTROL;
@@ -395,6 +399,18 @@ export default {
 
     if (url.pathname === "/health") {
       return Response.json({ ok: true });
+    }
+
+    if (url.pathname === "/api/arena/catalog/cidadela-arcana/r1") {
+      if (request.method !== "GET" && request.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
+      const response = await createCanonicalArenaCatalogResponse(
+        "cidadela-arcana",
+        "r1",
+        request.headers.get("if-none-match"),
+      );
+      return request.method === "HEAD"
+        ? new Response(null, { status: response.status, headers: response.headers })
+        : response;
     }
 
     const labRoute = resolveLabProxyRoute(url.pathname, request.method);

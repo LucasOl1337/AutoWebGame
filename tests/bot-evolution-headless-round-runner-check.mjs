@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 
-const { runHeadlessRound } = await import("../output/esm/BotLab/headless-round-runner.js");
+const runner = await import("../output/esm/BotLab/headless-round-runner.js");
+const {
+  getRegisteredPolicyArtifactHash,
+  getSnapshotTraceArtifactHash,
+  runHeadlessRound,
+  verifyRegisteredPolicyArtifact,
+  verifySnapshotTraceArtifact,
+} = runner;
 const { createDefaultArenaDefinition } = await import("../output/esm/Arenas/arena.js");
+const { sha256Canonical } = await import("../output/esm/Shared/canonical-json.js");
 
 const neutralInput = Object.freeze({
   direction: null,
@@ -116,13 +124,18 @@ assert.match(mismatched.error ?? "", /randomness_mismatch/);
 const fakeSeeded = await runHeadlessRound(createBuiltInConfig({
   randomness: {
     randomnessMode: "seeded",
-    requestedSeed: "not-really-applied",
-    expectedInitialStateHash: BUILT_IN_INITIAL_STATE_HASH,
+    requestedSeed: "seeded-run-v1",
+    rngAlgorithm: "arena-seed-hash",
+    rngVersion: "arena-runtime.v1",
+    expectedInitialStateHash: `sha256:${"0".repeat(64)}`,
   },
 }));
 assert.equal(fakeSeeded.status, "error");
-assert.equal(fakeSeeded.randomness, null);
-assert.match(fakeSeeded.error ?? "", /seeded mode is not implemented/);
+assert.equal(fakeSeeded.randomness.requestedSeed, "seeded-run-v1");
+assert.equal(fakeSeeded.randomness.effectiveSeed, "seeded-run-v1");
+assert.equal(fakeSeeded.randomness.rngAlgorithm, "arena-seed-hash");
+assert.equal(fakeSeeded.randomness.rngVersion, "arena-runtime.v1");
+assert.match(fakeSeeded.error ?? "", /randomness_mismatch/);
 
 const legacySeed = await runHeadlessRound(createBuiltInConfig({
   seed: "must-not-be-accepted-as-applied",
@@ -131,6 +144,115 @@ const legacySeed = await runHeadlessRound(createBuiltInConfig({
 assert.equal(legacySeed.status, "error");
 assert.equal(legacySeed.randomness, null);
 assert.match(legacySeed.error ?? "", /seed.*not supported/i);
+
+const registeredMismatch = await runHeadlessRound(createBuiltInConfig({
+  policies: [
+    { id: "registered-1", playerId: 1, mode: "registered", scriptId: "neutral-v1", configHash: `sha256:${"0".repeat(64)}` },
+    { id: "registered-2", playerId: 2, mode: "registered", scriptId: "neutral-v1", configHash: `sha256:${"0".repeat(64)}` },
+  ],
+}));
+assert.equal(registeredMismatch.status, "error");
+assert.equal(registeredMismatch.steps, 0);
+assert.match(registeredMismatch.error ?? "", /registry\/config hash mismatch/i);
+
+const neutralArtifactHash = await getRegisteredPolicyArtifactHash("neutral-v1");
+await assert.rejects(
+  verifyRegisteredPolicyArtifact("neutral-v1", `sha256:${"0".repeat(64)}`),
+  /artifact hash mismatch/i,
+);
+const neutralConfigHash = "sha256:b00955e80fc35858f039a15c65863ea13f5273dc553a98ca34d69191715eaaf7";
+const registeredArtifact = await runHeadlessRound(createBuiltInConfig({
+  randomness: {
+    randomnessMode: "deterministic",
+    expectedInitialStateHash: `sha256:${"0".repeat(64)}`,
+  },
+  policies: [
+    { id: "registered-1", playerId: 1, mode: "registered", scriptId: "neutral-v1", configHash: neutralConfigHash },
+    { id: "registered-2", playerId: 2, mode: "registered", scriptId: "neutral-v1", configHash: neutralConfigHash },
+  ],
+}));
+assert.equal(registeredArtifact.status, "error");
+assert.equal(registeredArtifact.policies[0].scriptHash, neutralArtifactHash);
+assert.equal(registeredArtifact.policies[0].configHash, neutralConfigHash);
+
+const traceArtifactHash = await getSnapshotTraceArtifactHash();
+assert.equal(traceArtifactHash, "sha256:75dc1674d467423bb26dd0aed6747798fda2ad908ad3687263ec7186eff234f3");
+await verifySnapshotTraceArtifact(traceArtifactHash);
+await assert.rejects(
+  verifySnapshotTraceArtifact(`sha256:${"0".repeat(64)}`),
+  /trace artifact hash mismatch/i,
+);
+const semanticallyMutatedTraceArtifactHash = await sha256Canonical({
+  artifact: "snapshot-trace.v1",
+  canonicalization: "strict-canonical-json.v1",
+  digest: "sha256-webcrypto",
+  projection: {
+    step: "non-negative-simulation-step",
+    players: "player-id-to-alive-and-integer-tile",
+    powerUps: "type-tile-revealed-collected-in-runtime-order",
+    suddenDeathActive: "boolean",
+    suddenDeathClosedTiles: "sorted-tile-keys",
+  },
+});
+assert.notEqual(semanticallyMutatedTraceArtifactHash, traceArtifactHash);
+await assert.rejects(
+  verifySnapshotTraceArtifact(semanticallyMutatedTraceArtifactHash),
+  /trace artifact hash mismatch/i,
+);
+
+const sevenBySevenArena = {
+  ...createDefaultArenaDefinition(),
+  id: "waypoint-seven-by-seven",
+  version: "waypoint-7x7-v1",
+  grid: { width: 7, height: 7 },
+  tiles: { solid: [], breakable: [] },
+  spawns: [
+    { playerId: 1, tile: { x: 3, y: 5 }, direction: "down" },
+    { playerId: 2, tile: { x: 5, y: 1 }, direction: "left" },
+    { playerId: 3, tile: { x: 1, y: 5 }, direction: "up" },
+    { playerId: 4, tile: { x: 5, y: 5 }, direction: "up" },
+  ],
+};
+const waypointScriptConfig = { route: [{ x: 3, y: 6 }], variant: 0 };
+const waypointArtifactHash = await getRegisteredPolicyArtifactHash("waypoint-v1");
+const waypointConfigHash = await sha256Canonical({
+  scriptId: "waypoint-v1",
+  scriptHash: waypointArtifactHash,
+  scriptConfig: waypointScriptConfig,
+});
+const sevenBySevenBase = {
+  build: "waypoint-grid-test",
+  ruleset: "classic-v1",
+  arena: sevenBySevenArena,
+  activePlayerIds: [1, 2],
+  policies: [
+    { id: "waypoint-1", playerId: 1, mode: "registered", scriptId: "waypoint-v1", scriptConfig: waypointScriptConfig, configHash: waypointConfigHash },
+    { id: "neutral-2", playerId: 2, mode: "registered", scriptId: "neutral-v1", configHash: neutralConfigHash },
+  ],
+  maxSteps: 120,
+  timeoutMs: 10_000,
+  traceMode: "snapshot-trace-v1",
+};
+const sevenBySevenProbe = await runHeadlessRound({
+  ...sevenBySevenBase,
+  randomness: { randomnessMode: "deterministic", expectedInitialStateHash: `sha256:${"0".repeat(64)}` },
+});
+assert.equal(sevenBySevenProbe.status, "error");
+const sevenBySeven = await runHeadlessRound({
+  ...sevenBySevenBase,
+  randomness: {
+    randomnessMode: "deterministic",
+    expectedInitialStateHash: sevenBySevenProbe.randomness.effectiveInitialStateHash,
+  },
+});
+assert.equal(sevenBySeven.status, "timeout");
+assert.equal(sevenBySeven.arena.id, "waypoint-seven-by-seven");
+assert.equal(sevenBySeven.trace.scriptHash, traceArtifactHash);
+assert.ok(sevenBySeven.trace.entries.some((entry, index, entries) => (
+  entry.players[1].tile.x === 3
+  && entry.players[1].tile.y === 0
+  && entries.slice(0, index).some((earlier) => earlier.players[1].tile.x === 3 && earlier.players[1].tile.y === 6)
+)), "waypoint-v1 must derive the south portal edge from the 7x7 runtime grid");
 
 const malformedUnicodeArena = createDefaultArenaDefinition();
 malformedUnicodeArena.id = `broken-${String.fromCharCode(0xd800)}`;

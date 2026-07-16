@@ -129,6 +129,8 @@ export interface ArenaDefinition {
   version: string;
   createdAt: string;
   updatedAt: string;
+  /** Optional deterministic content seed used by headless publication matrices. */
+  randomSeed?: string;
 }
 
 export interface ArenaValidationIssue {

@@ -359,6 +359,7 @@ function createPowerUpsFromBreakables(breakable: Set<string>, config: ArenaRunti
     "kick-up",
   ];
   const powerUps: PowerUpState[] = [];
+  const distributionSeed = config.randomSeed ?? config.version;
   const breakableKeys = [...breakable].sort();
   const pairMap = new Map<string, { tile: TileCoord; mirroredTile: TileCoord; mirroredExists: boolean }>();
 
@@ -380,14 +381,14 @@ function createPowerUpsFromBreakables(breakable: Set<string>, config: ArenaRunti
     .map(([pairKey, pair]) => ({
       pairKey,
       pair,
-      order: hashToUnit(`${config.version}|${pairKey}|order`),
+      order: hashToUnit(`${distributionSeed}|${pairKey}|order`),
     }))
     .sort((a, b) => (a.order - b.order) || a.pairKey.localeCompare(b.pairKey));
 
   const dropPairCount = Math.floor(pairEntries.length * BREAKABLE_POWERUP_DROP_RATE);
   for (let index = 0; index < dropPairCount; index += 1) {
     const { pairKey, pair } = pairEntries[index];
-    const typeIndex = Math.floor(hashToUnit(`${config.version}|${pairKey}|type`) * dropPool.length);
+    const typeIndex = Math.floor(hashToUnit(`${distributionSeed}|${pairKey}|type`) * dropPool.length);
     const type = dropPool[Math.max(0, Math.min(dropPool.length - 1, typeIndex))];
     powerUps.push({
       tile: { ...pair.tile },

@@ -1,0 +1,24 @@
+.canonical-arena-preview {
+  box-sizing: border-box;
+  width: min(100%, 552px, calc((100svh - 82px) * 23 / 19 + 22px));
+  margin: 18px auto 0;
+  padding: 10px;
+  border: 1px solid rgba(34, 211, 238, 0.42);
+  border-radius: 14px;
+  background: #07111f;
+}
+
+.canonical-arena-preview > img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 23 / 19;
+  object-fit: contain;
+}
+
+.canonical-arena-preview > figcaption {
+  margin-top: 8px;
+  color: #b8c8db;
+  font-size: 0.78rem;
+  text-align: center;
+}

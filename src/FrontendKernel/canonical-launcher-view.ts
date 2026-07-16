@@ -5,11 +5,17 @@ import type {
   FrontendSnapshot,
   IdentitySnapshot,
 } from "./frontend-kernel";
+import { deriveArenaMapThumbnailSvg } from "../Arenas/canonical-arena-catalog";
+import {
+  preloadCanonicalArenaMap,
+  type CanonicalArenaPreloadResult,
+} from "../Arenas/canonical-arena-client";
 import {
   characterSelectionClickIntent,
   characterSelectionInputIntent,
   renderCanonicalCharacterSelection,
 } from "./CharacterSelection/canonical-character-selection-view";
+import "./canonical-arena-preview.css";
 import "./canonical-launcher.css";
 import "./canonical-launcher-signal-grid.css";
 
@@ -28,6 +34,9 @@ export class CanonicalLauncherView {
   private renderedRoute: string | null = null;
   private pendingCharacterFocus: string | null = null;
   private pendingConfirmationKey: string | null = null;
+  private arenaPreload: AbortController | null = null;
+  private arenaPreview: Extract<CanonicalArenaPreloadResult, { status: "ready" }> | null = null;
+  private arenaPreviewObjectUrl: string | null = null;
 
   constructor(
     private readonly root: HTMLElement,
@@ -45,17 +54,32 @@ export class CanonicalLauncherView {
     this.root.addEventListener("keyup", this.handleKeyup);
     this.unsubscribe = this.kernel.subscribe((snapshot) => this.render(snapshot));
     this.render(this.kernel.getSnapshot());
+    const arenaPreload = new AbortController();
+    this.arenaPreload = arenaPreload;
+    void preloadCanonicalArenaMap({ signal: arenaPreload.signal }).then((result) => {
+      if (arenaPreload.signal.aborted || this.arenaPreload !== arenaPreload) return;
+      document.documentElement.dataset.canonicalArenaCatalog = result.status;
+      document.documentElement.dataset.canonicalArenaRef = `${result.ref.id}@${result.ref.revision}`;
+      if (result.status === "ready") {
+        this.arenaPreview = result;
+        this.renderArenaPreview();
+      }
+    });
   }
 
   dispose(): void {
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.arenaPreload?.abort();
+    this.arenaPreload = null;
+    this.arenaPreview = null;
     this.root.removeEventListener("click", this.handleClick);
     this.root.removeEventListener("input", this.handleInput);
     this.root.removeEventListener("keydown", this.handleKeydown);
     this.root.removeEventListener("keyup", this.handleKeyup);
     this.root.classList.remove("canonical-launcher-root");
     this.root.replaceChildren();
+    this.releaseArenaPreviewObjectUrl();
     this.renderedRoute = null;
     document.body.classList.remove("canonical-launcher-active");
   }
@@ -191,6 +215,7 @@ export class CanonicalLauncherView {
       : snapshot.screen === "character-selection"
         ? renderCanonicalCharacterSelection(snapshot)
         : this.renderSecondary(snapshot);
+    this.renderArenaPreview();
     this.renderedRoute = snapshot.route;
 
     if (focusedInput) {
@@ -227,6 +252,43 @@ export class CanonicalLauncherView {
     } else if (previousRoute !== null && previousRoute !== snapshot.route) {
       this.root.querySelector<HTMLElement>("[data-route-heading]")?.focus();
     }
+  }
+
+  private renderArenaPreview(): void {
+    this.root.querySelector("[data-canonical-arena-preview]")?.remove();
+    this.releaseArenaPreviewObjectUrl();
+    const launcher = this.root.querySelector(".canonical-launcher");
+    if (!this.arenaPreview || !launcher) return;
+    const figure = document.createElement("figure");
+    figure.className = "canonical-arena-preview";
+    figure.dataset.canonicalArenaPreview = this.arenaPreview.renderMode;
+    figure.dataset.degraded = String(this.arenaPreview.renderMode === "procedural");
+    figure.dataset.fallbackUsed = String(this.arenaPreview.fallback !== null);
+    const image = document.createElement("img");
+    if (this.arenaPreview.renderMode === "procedural") {
+      this.arenaPreviewObjectUrl = URL.createObjectURL(new Blob(
+        [deriveArenaMapThumbnailSvg(this.arenaPreview.map)],
+        { type: "image/svg+xml;charset=utf-8" },
+      ));
+      image.src = this.arenaPreviewObjectUrl;
+    } else {
+      image.src = this.arenaPreview.previewSource;
+    }
+    image.alt = `${this.arenaPreview.map.name} — ${this.arenaPreview.map.revision}`;
+    image.width = 552;
+    image.height = 456;
+    const caption = document.createElement("figcaption");
+    caption.textContent = this.arenaPreview.renderMode === "procedural"
+      ? "Cidadela Arcana — visual procedural de segurança"
+      : "Cidadela Arcana — preview canônico verificado";
+    figure.append(image, caption);
+    launcher.append(figure);
+  }
+
+  private releaseArenaPreviewObjectUrl(): void {
+    if (this.arenaPreviewObjectUrl === null) return;
+    URL.revokeObjectURL(this.arenaPreviewObjectUrl);
+    this.arenaPreviewObjectUrl = null;
   }
 
   private renderLauncher(snapshot: Extract<FrontendSnapshot, { screen: "launcher" }>): string {
